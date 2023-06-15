@@ -1,0 +1,29 @@
+{
+  "name": "resound-fe",
+  "version": "1.0.0",
+  "description": "resound front end",
+  "main": "main.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/calebjedhugo/resound-fe.git"
+  },
+  "keywords": [
+    "music",
+    "game"
+  ],
+  "author": "Caleb Hugo",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/calebjedhugo/resound-fe/issues"
+  },
+  "homepage": "https://github.com/calebjedhugo/resound-fe#readme",
+  "dependencies": {
+    "three": "^0.153.0"
+  },
+  "devDependencies": {
+    "vite": "^4.3.9"
+  }
+}
