@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/calebjedhugo/resound-fe#readme",
   "dependencies": {
+    "@reduxjs/toolkit": "^1.9.5",
     "three": "^0.153.0"
   },
   "devDependencies": {
