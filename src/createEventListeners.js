@@ -1,5 +1,5 @@
 import { motionActions } from './resoundModules/playerControls/motion/stateSlice';
-import store from './store';
+import store from 'reduxStore';
 
 const dispatchKeyboardActions = ({ code, type }) => {
 	let value;
