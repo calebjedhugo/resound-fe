@@ -1,5 +1,5 @@
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
-import playerControlsSlice from './resoundModules/playerControls/stateSlice';
+import playerControlsSlice from 'resoundModules/playerControls/stateSlice';
 
 const reducer = combineReducers({ playerControls: playerControlsSlice });
 
