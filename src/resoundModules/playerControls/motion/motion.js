@@ -11,22 +11,51 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+const vectorSpeed = 0.6;
+
 const controls = new FirstPersonControls(camera, renderer.domElement);
 controls.movementSpeed = 6;
-controls.lookSpeed = 0.3;
+controls.lookSpeed = vectorSpeed;
 controls.noFly = true;
 
-const motion = scene => {
+const updateBackForthPosition = cameraDirection => {
+	const { backward, forward } = store.getState().playerControls.motion;
+	if (backward && forward) return; // do nothing if moving in both directions.
+
+	if (backward) {
+		camera.position.addScaledVector(cameraDirection, -vectorSpeed);
+	}
+	if (forward) {
+		camera.position.addScaledVector(cameraDirection, vectorSpeed);
+	}
+};
+
+const updateLateralPosition = cameraDirection => {
 	const { latLeft, latRight } = store.getState().playerControls.motion;
 
 	if (latLeft && latRight) return; // do nothing if moving in both directions.
+
+	const cameraSide = new THREE.Vector3();
+	cameraSide.crossVectors(camera.up, cameraDirection).normalize();
+
 	if (latLeft) {
-		camera.position.x -= 0.1;
+		camera.position.addScaledVector(cameraSide, vectorSpeed);
 	}
 	if (latRight) {
-		camera.position.x += 0.1;
+		camera.position.addScaledVector(cameraSide, -vectorSpeed);
 	}
+};
 
+const updateReduxMotion = () => {
+	const cameraDirection = new THREE.Vector3();
+	camera.getWorldDirection(cameraDirection);
+
+	updateLateralPosition(cameraDirection);
+	updateBackForthPosition(cameraDirection);
+};
+
+const motion = scene => {
+	updateReduxMotion();
 	controls.update(clock.getDelta());
 	renderer.render(scene, camera);
 	camera.position.y = fixedYPosition;

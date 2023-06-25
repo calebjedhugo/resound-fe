@@ -8,11 +8,17 @@ const dispatchKeyboardActions = ({ code, type }) => {
 	else return console.error('A non-keyboard event was sent to dispatchKeyboardActions');
 
 	switch (code) {
-		case 'KeyS':
+		case 'KeyA':
 			store.dispatch(motionActions.setLatLeft({ value }));
 			break;
-		case 'KeyF':
+		case 'KeyD':
 			store.dispatch(motionActions.setLatRight({ value }));
+			break;
+		case 'KeyW':
+			store.dispatch(motionActions.setForward({ value }));
+			break;
+		case 'KeyS':
+			store.dispatch(motionActions.setBackward({ value }));
 			break;
 		default:
 	}
