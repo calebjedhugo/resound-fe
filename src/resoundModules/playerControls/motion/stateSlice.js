@@ -7,6 +7,7 @@ const motionSlice = createSlice({
 		latRight: false,
 		forward: false,
 		backward: false,
+		mouseCentered: false,
 	},
 	reducers: {
 		setLatLeft: (state, { payload: { value } }) => {
@@ -20,6 +21,9 @@ const motionSlice = createSlice({
 		},
 		setBackward: (state, { payload: { value } }) => {
 			state.backward = value;
+		},
+		setMouseCentered: (state, { payload: { value } }) => {
+			state.mouseCentered = value;
 		},
 	},
 });

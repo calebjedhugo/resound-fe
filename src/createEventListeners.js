@@ -24,9 +24,27 @@ const dispatchKeyboardActions = ({ code, type }) => {
 	}
 };
 
+const dispatchMouseActions = ({ screenX, screenY }) => {
+	const { mouseCentered } = store.getState().playerControls.motion;
+	const screenCenter = [window.innerWidth / 2, window.innerHeight / 2];
+	const hypotMax = Math.min(...screenCenter) / 2; // use half the lesser of the half lengths as the point of "not centered"
+
+	if (
+		(Math.abs(screenX - screenCenter[0]) ^ 2) + (Math.abs(screenY - screenCenter[1]) ^ 2) >
+		(hypotMax ^ 2)
+	) {
+		if (mouseCentered) {
+			store.dispatch(motionActions.setMouseCentered({ value: false }));
+		}
+	} else if (!mouseCentered) {
+		store.dispatch(motionActions.setMouseCentered({ value: true }));
+	}
+};
+
 const createEventListeners = () => {
 	window.addEventListener('keydown', dispatchKeyboardActions);
 	window.addEventListener('keyup', dispatchKeyboardActions);
+	window.addEventListener('mousemove', dispatchMouseActions);
 };
 
 export default createEventListeners;
