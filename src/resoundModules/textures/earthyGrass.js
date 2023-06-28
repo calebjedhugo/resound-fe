@@ -1,4 +1,5 @@
 import { PlaneGeometry, ShaderMaterial, Mesh, TextureLoader } from 'three';
+
 // Create a floor geometry
 const floorGeometry = new PlaneGeometry(1000, 1000, 10, 10);
 floorGeometry.rotateX(-Math.PI / 2);
@@ -7,8 +8,8 @@ const textureLoader = new TextureLoader();
 const texture = textureLoader.load('/jpg/shadeGrass.jpeg');
 
 // Create a custom shader material for the floor
-var floorMaterial = new ShaderMaterial({
-	vertexShader: `
+const floorMaterial = new ShaderMaterial({
+  vertexShader: `
     varying vec2 vUv;
     varying float vOffset;
 
@@ -18,7 +19,7 @@ var floorMaterial = new ShaderMaterial({
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `,
-	fragmentShader: `
+  fragmentShader: `
     varying vec2 vUv;
     varying float vOffset;
     uniform sampler2D textureMap;
@@ -29,9 +30,9 @@ var floorMaterial = new ShaderMaterial({
       gl_FragColor = vec4(color, 1.0);
     }
   `,
-	uniforms: {
-		textureMap: { value: texture },
-	},
+  uniforms: {
+    textureMap: { value: texture },
+  },
 });
 
 // Create a floor mesh

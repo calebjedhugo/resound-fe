@@ -1,32 +1,36 @@
 {
-	"name": "resound-fe",
-	"version": "1.0.0",
-	"description": "resound front end",
-	"main": "main.js",
-	"scripts": {
-		"test": "test",
-		"start": "npx vite public --config vite.config.js"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/calebjedhugo/resound-fe.git"
-	},
-	"keywords": [
-		"music",
-		"game"
-	],
-	"author": "Caleb Hugo",
-	"license": "ISC",
-	"bugs": {
-		"url": "https://github.com/calebjedhugo/resound-fe/issues"
-	},
-	"homepage": "https://github.com/calebjedhugo/resound-fe#readme",
-	"dependencies": {
-		"@reduxjs/toolkit": "^1.9.5",
-		"three": "^0.153.0"
-	},
-	"devDependencies": {
-		"vite-jsconfig-paths": "^2.0.1",
-		"vite": "^4.3.9"
-	}
+  "name": "resound-fe",
+  "version": "1.0.0",
+  "description": "resound front end",
+  "main": "main.js",
+  "scripts": {
+    "test": "test",
+    "start": "npx vite public --config vite.config.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/calebjedhugo/resound-fe.git"
+  },
+  "keywords": [
+    "music",
+    "game"
+  ],
+  "author": "Caleb Hugo",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/calebjedhugo/resound-fe/issues"
+  },
+  "homepage": "https://github.com/calebjedhugo/resound-fe#readme",
+  "dependencies": {
+    "@reduxjs/toolkit": "^1.9.5",
+    "three": "^0.153.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.43.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-import": "^2.27.5",
+    "vite": "^4.3.9",
+    "vite-jsconfig-paths": "^2.0.1"
+  }
 }

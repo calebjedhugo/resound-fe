@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import WebGL from 'three/addons/capabilities/WebGL.js';
-import createEventListeners from './createEventListeners';
+import WebGL from 'isWebGLAvailable';
 import motion from 'resoundModules/playerControls/motion/motion';
 import earthyGrass from 'resoundModules/textures/earthyGrass';
+import createEventListeners from './createEventListeners';
 
 const scene = new THREE.Scene();
 
@@ -13,14 +13,14 @@ scene.add(cube);
 scene.add(earthyGrass);
 
 function animate() {
-	motion(scene);
-	requestAnimationFrame(animate);
+  motion(scene);
+  requestAnimationFrame(animate);
 }
 
 if (WebGL.isWebGLAvailable()) {
-	animate();
-	createEventListeners();
+  animate();
+  createEventListeners();
 } else {
-	const warning = WebGL.getWebGLErrorMessage();
-	document.getElementById('container').appendChild(warning);
+  const warning = WebGL.getWebGLErrorMessage();
+  document.getElementById('container').appendChild(warning);
 }
