@@ -28,7 +28,9 @@ const dispatchKeyboardActions = ({ code, type }) => {
 };
 
 const dispatchMouseActions = ({ screenX, screenY }) => {
+  store.dispatch(motionActions.setMousePosition([screenX, screenY]));
   const { mouseCentered, screenCenter } = store.getState().playerControls.motion;
+  // TODO: put this in a selector
   const hypotMax = Math.min(...screenCenter) / 2; // use half the lesser of the half lengths as the point of "not centered"
 
   if (

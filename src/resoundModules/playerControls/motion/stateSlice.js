@@ -9,6 +9,7 @@ const motionSlice = createSlice({
     backward: false,
     mouseCentered: false,
     screenCenter: [window.innerWidth / 2, window.innerHeight / 2],
+    mousePosition: [0, 0],
   },
   reducers: {
     setLatLeft: (state, { payload: { latLeft } }) => ({
@@ -31,7 +32,14 @@ const motionSlice = createSlice({
       ...state,
       mouseCentered,
     }),
-    setScreenCenter: (state, { payload: { screenCenter } }) => ({ ...state, screenCenter }),
+    setScreenCenter: (state, { payload: { screenCenter } }) => ({
+      ...state,
+      screenCenter,
+    }),
+    setMousePosition: (state, { payload: mousePosition }) => ({
+      ...state,
+      mousePosition,
+    }),
   },
 });
 
