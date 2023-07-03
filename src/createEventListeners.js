@@ -1,4 +1,5 @@
 import store from 'reduxStore';
+import { getHypotMax } from 'resoundModules/playerControls/motion/selectors';
 import { motionActions } from './resoundModules/playerControls/motion/stateSlice';
 
 const dispatchKeyboardActions = ({ code, type }) => {
@@ -30,8 +31,8 @@ const dispatchKeyboardActions = ({ code, type }) => {
 const dispatchMouseActions = ({ screenX, screenY }) => {
   store.dispatch(motionActions.setMousePosition([screenX, screenY]));
   const { mouseCentered, screenCenter } = store.getState().playerControls.motion;
-  // TODO: put this in a selector
-  const hypotMax = Math.min(...screenCenter) / 2; // use half the lesser of the half lengths as the point of "not centered"
+
+  const hypotMax = getHypotMax(store.getState());
 
   if (
     Math.abs(screenX - screenCenter[0]) ** 2 + Math.abs(screenY - screenCenter[1]) ** 2 >
