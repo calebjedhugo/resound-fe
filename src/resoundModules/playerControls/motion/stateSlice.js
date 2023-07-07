@@ -7,7 +7,7 @@ const motionSlice = createSlice({
     latRight: false,
     forward: false,
     backward: false,
-    mouseCentered: false,
+    mouseCentered: true,
     screenCenter: [window.innerWidth / 2, window.innerHeight / 2],
     mousePosition: [0, 0],
   },
