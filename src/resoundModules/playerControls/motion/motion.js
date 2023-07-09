@@ -1,6 +1,9 @@
 import store from 'reduxStore';
 import * as THREE from 'three';
-import { getHypotMax } from './selectors';
+import { getNextViewCenter, getView } from './selectors';
+import { motionActions } from './stateSlice';
+
+const { getState } = store;
 
 const fixedYPosition = 4;
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -13,7 +16,7 @@ document.body.appendChild(renderer.domElement);
 const vectorSpeed = 0.6;
 
 const updateBackForthPosition = (cameraDirection) => {
-  const { backward, forward } = store.getState().playerControls.motion;
+  const { backward, forward } = getState().playerControls.motion;
   if (backward && forward) return; // do nothing if moving in both directions.
 
   if (backward) {
@@ -25,7 +28,7 @@ const updateBackForthPosition = (cameraDirection) => {
 };
 
 const updateLateralPosition = (cameraDirection) => {
-  const { latLeft, latRight } = store.getState().playerControls.motion;
+  const { latLeft, latRight } = getState().playerControls.motion;
 
   if (latLeft && latRight) return; // do nothing if moving in both directions.
 
@@ -40,24 +43,19 @@ const updateLateralPosition = (cameraDirection) => {
   }
 };
 
-let incrementX = 0;
 const updateCameraDirection = () => {
-  const { screenCenter, mouseCentered, mousePosition } = store.getState().playerControls.motion;
-  const hypotMax = getHypotMax(store.getState());
+  const { mouseCentered } = getState().playerControls.motion;
 
+  // Condition here is for performance.
   if (!mouseCentered) {
-    incrementX += (Math.PI / 200) * ((screenCenter[0] - mousePosition[0]) / hypotMax);
+    store.dispatch(motionActions.setViewCenter(getNextViewCenter(getState())));
   }
 
-  const angleX = (Math.PI / 2) * ((screenCenter[0] - mousePosition[0]) / hypotMax);
-  const angleY = (Math.PI / 2) * ((screenCenter[1] - mousePosition[1]) / hypotMax);
+  const [viewX, viewY] = getView(getState());
 
   // Create quaternions for each rotation
-  const horizantal = new THREE.Quaternion().setFromAxisAngle(
-    new THREE.Vector3(0, 1, 0),
-    angleX + incrementX
-  );
-  const vertical = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angleY);
+  const horizantal = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), viewX);
+  const vertical = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), viewY);
 
   const mousePosRotation = horizantal.multiply(vertical);
 
