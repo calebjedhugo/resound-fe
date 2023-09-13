@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "resound front end",
   "main": "main.js",
+  "lint-staged": {
+    "*.js": "prettier --write"
+  },
   "scripts": {
     "test": "test",
     "start": "npx vite public --config vite.config.js"
@@ -30,6 +33,9 @@
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-import": "^2.27.5",
+    "husky": "^8.0.3",
+    "lint-staged": "^14.0.1",
+    "prettier": "^3.0.3",
     "vite": "^4.3.9",
     "vite-jsconfig-paths": "^2.0.1"
   }
