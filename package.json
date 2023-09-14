@@ -4,7 +4,7 @@
   "description": "resound front end",
   "main": "main.js",
   "lint-staged": {
-    "*.js": "prettier --write"
+    "**/*.{js,json}": "prettier --write"
   },
   "scripts": {
     "test": "test",
