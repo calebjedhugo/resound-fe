@@ -1,6 +1,11 @@
 import { createSelector } from '@reduxjs/toolkit';
 import { clamp } from 'three/src/math/MathUtils';
-import { CENTER_RANGE_PERC_X, CENTER_RANGE_PERC_Y, INCREMENT_DENOMINATOR } from './constants';
+import {
+  CENTER_MOTION_START_OFFSET,
+  CENTER_RANGE_PERC_X,
+  CENTER_RANGE_PERC_Y,
+  INCREMENT_DENOMINATOR,
+} from './constants';
 
 const getMotion = (state) => state.playerControls.motion;
 
@@ -32,7 +37,8 @@ const getIncrement = createSelector(
     const zeroBased = screenCenter[0] - mousePosition[0];
     const onTheLeft = zeroBased > 0;
     const xDistanceFromLine = Math.abs(screenCenter[0] - mousePosition[0]);
-    const absXIncrement = (xDistanceFromLine - xFixedRange) ** 2 / INCREMENT_DENOMINATOR;
+    const absXIncrement =
+      (xDistanceFromLine - xFixedRange + CENTER_MOTION_START_OFFSET) ** 2 / INCREMENT_DENOMINATOR;
     const xIncrement = onTheLeft ? absXIncrement : absXIncrement * -1;
     return [
       xIncrement,
