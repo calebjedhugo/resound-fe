@@ -1,6 +1,9 @@
 import store from 'reduxStore';
 import { getXFixedRange, getYFixedRange } from 'resoundModules/playerControls/motion/selectors';
+import { Piano } from 'resound-sound';
 import { motionActions } from './resoundModules/playerControls/motion/stateSlice';
+
+const piano = new Piano();
 
 const dispatchKeyboardActions = ({ code, type }) => {
   let value;
@@ -23,6 +26,28 @@ const dispatchKeyboardActions = ({ code, type }) => {
       break;
     case 'KeyS':
       store.dispatch(motionActions.setBackward({ backward: value }));
+      break;
+    case 'Space':
+      if (value)
+        piano.play({
+          tempo: 160,
+          data: [
+            { pitch: 'C4', length: '1/8' },
+            { pitch: 'C4', length: '1/8' },
+            { pitch: 'G4', length: '1/8' },
+            { pitch: 'G4', length: '1/8' },
+            { pitch: 'A4', length: '1/8' },
+            { pitch: 'A4', length: '1/8' },
+            { pitch: 'G4', length: '1/4' },
+            { pitch: 'F4', length: '1/8' },
+            { pitch: 'F4', length: '1/8' },
+            { pitch: 'E4', length: '1/8' },
+            { pitch: 'E4', length: '1/8' },
+            { pitch: 'D4', length: '1/8' },
+            { pitch: 'D4', length: '1/8' },
+            { pitch: 'C4', length: '1/4' },
+          ],
+        });
       break;
     default:
   }
