@@ -1,5 +1,5 @@
 import store from 'reduxStore';
-import { getHypotMax } from 'resoundModules/playerControls/motion/selectors';
+import { getXFixedRange, getYFixedRange } from 'resoundModules/playerControls/motion/selectors';
 import { motionActions } from './resoundModules/playerControls/motion/stateSlice';
 
 const dispatchKeyboardActions = ({ code, type }) => {
@@ -32,11 +32,14 @@ const dispatchMouseActions = ({ screenX, screenY }) => {
   store.dispatch(motionActions.setMousePosition([screenX, screenY]));
   const { mouseCentered, screenCenter } = store.getState().playerControls.motion;
 
-  const hypotMax = getHypotMax(store.getState());
+  const xFixedRange = getXFixedRange(store.getState());
+  const yFixedRange = getYFixedRange(store.getState());
 
   if (
-    Math.abs(screenX - screenCenter[0]) ** 2 + Math.abs(screenY - screenCenter[1]) ** 2 >
-    hypotMax ** 2
+    // Math.abs(screenX - screenCenter[0]) ** 2 + Math.abs(screenY - screenCenter[1]) ** 2 >
+    // hypotMax ** 2
+    Math.abs(screenX - screenCenter[0]) > xFixedRange ||
+    Math.abs(screenY - screenCenter[1] > yFixedRange)
   ) {
     if (mouseCentered) {
       store.dispatch(motionActions.setMouseCentered({ mouseCentered: false }));
