@@ -1,5 +1,6 @@
 import { createSelector } from '@reduxjs/toolkit';
 import { clamp } from 'three/src/math/MathUtils';
+import { CENTER_RANGE_PERC_X, INCREMENT_DENOMINATOR } from './constants';
 
 const getMotion = (state) => state.playerControls.motion;
 
@@ -14,7 +15,7 @@ const getViewCenter = createSelector(getMotion, ({ viewCenter }) => viewCenter);
 /** The distance from the center the mouse can be before the camera keeps moving. */
 const getHypotMax = createSelector(
   getScreenCenter,
-  (screenCenter) => Math.min(...screenCenter) * 0.75
+  (screenCenter) => Math.min(...screenCenter) * CENTER_RANGE_PERC_X
 );
 
 /** The amount which screenCenter should be incremented each animation frame. */
@@ -22,10 +23,17 @@ const getIncrement = createSelector(
   getScreenCenter,
   getMousePosition,
   getHypotMax,
-  (screenCenter, mousePosition, hypotMax) => [
-    (Math.PI / 200) * ((screenCenter[0] - mousePosition[0]) / hypotMax),
-    0, // Replace this with the obvious formula if we ever need to increment the Y axis.
-  ]
+  (screenCenter, mousePosition, hypotMax) => {
+    const zeroBased = screenCenter[0] - mousePosition[0];
+    const onTheLeft = zeroBased > 0;
+    const xDistanceFromLine = Math.abs(screenCenter[0] - mousePosition[0]);
+    const absXIncrement = (xDistanceFromLine - hypotMax) ** 2 / INCREMENT_DENOMINATOR;
+    const xIncrement = onTheLeft ? absXIncrement : absXIncrement * -1;
+    return [
+      xIncrement,
+      0, // Replace this with the obvious formula if we ever need to increment the Y axis.
+    ];
+  }
 );
 
 /** Gets the values for the camera's reference (central) angle to be rendered in the next frame. */
