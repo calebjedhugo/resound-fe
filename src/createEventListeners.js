@@ -1,7 +1,6 @@
-import store from 'reduxStore';
-import { getXFixedRange, getYFixedRange } from 'resoundModules/playerControls/motion/selectors';
-import { Piano } from 'resound-sound';
-import { motionActions } from './resoundModules/playerControls/motion/stateSlice';
+import gameState from 'core/GameState';
+import CameraController from 'core/CameraController';
+import Piano from 'audio/Piano';
 
 const piano = new Piano();
 
@@ -16,16 +15,16 @@ const dispatchKeyboardActions = ({ code, type }) => {
 
   switch (code) {
     case 'KeyA':
-      store.dispatch(motionActions.setLatLeft({ latLeft: value }));
+      gameState.input.keys.latLeft = value;
       break;
     case 'KeyD':
-      store.dispatch(motionActions.setLatRight({ latRight: value }));
+      gameState.input.keys.latRight = value;
       break;
     case 'KeyW':
-      store.dispatch(motionActions.setForward({ forward: value }));
+      gameState.input.keys.forward = value;
       break;
     case 'KeyS':
-      store.dispatch(motionActions.setBackward({ backward: value }));
+      gameState.input.keys.backward = value;
       break;
     case 'Space':
       if (value)
@@ -54,23 +53,21 @@ const dispatchKeyboardActions = ({ code, type }) => {
 };
 
 const dispatchMouseActions = ({ screenX, screenY }) => {
-  store.dispatch(motionActions.setMousePosition([screenX, screenY]));
-  const { mouseCentered, screenCenter } = store.getState().playerControls.motion;
+  gameState.input.mouse.position = [screenX, screenY];
+  const { centered: mouseCentered, screenCenter } = gameState.input.mouse;
 
-  const xFixedRange = getXFixedRange(store.getState());
-  const yFixedRange = getYFixedRange(store.getState());
+  const xFixedRange = CameraController.getXFixedRange(screenCenter);
+  const yFixedRange = CameraController.getYFixedRange(screenCenter);
 
   if (
-    // Math.abs(screenX - screenCenter[0]) ** 2 + Math.abs(screenY - screenCenter[1]) ** 2 >
-    // hypotMax ** 2
     Math.abs(screenX - screenCenter[0]) > xFixedRange ||
-    Math.abs(screenY - screenCenter[1] > yFixedRange)
+    Math.abs(screenY - screenCenter[1]) > yFixedRange
   ) {
     if (mouseCentered) {
-      store.dispatch(motionActions.setMouseCentered({ mouseCentered: false }));
+      gameState.input.mouse.centered = false;
     }
   } else if (!mouseCentered) {
-    store.dispatch(motionActions.setMouseCentered({ mouseCentered: true }));
+    gameState.input.mouse.centered = true;
   }
 };
 

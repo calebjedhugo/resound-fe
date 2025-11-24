@@ -1,9 +1,6 @@
-import store from 'reduxStore';
 import * as THREE from 'three';
-import { getNextViewCenter, getView } from './selectors';
-import { motionActions } from './stateSlice';
-
-const { getState } = store;
+import gameState from 'core/GameState';
+import CameraController from 'core/CameraController';
 
 const fixedYPosition = 4;
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -16,7 +13,7 @@ document.body.appendChild(renderer.domElement);
 const vectorSpeed = 0.6;
 
 const updateBackForthPosition = (cameraDirection) => {
-  const { backward, forward } = getState().playerControls.motion;
+  const { backward, forward } = gameState.input.keys;
   if (backward && forward) return; // do nothing if moving in both directions.
 
   if (backward) {
@@ -28,7 +25,7 @@ const updateBackForthPosition = (cameraDirection) => {
 };
 
 const updateLateralPosition = (cameraDirection) => {
-  const { latLeft, latRight } = getState().playerControls.motion;
+  const { latLeft, latRight } = gameState.input.keys;
 
   if (latLeft && latRight) return; // do nothing if moving in both directions.
 
@@ -44,14 +41,14 @@ const updateLateralPosition = (cameraDirection) => {
 };
 
 const updateCameraDirection = () => {
-  const { mouseCentered } = getState().playerControls.motion;
+  const { centered: mouseCentered } = gameState.input.mouse;
 
   // Condition here is for performance.
   if (!mouseCentered) {
-    store.dispatch(motionActions.setViewCenter(getNextViewCenter(getState())));
+    CameraController.updateViewCenter(gameState);
   }
 
-  const [viewX, viewY] = getView(getState());
+  const [viewX, viewY] = CameraController.getView(gameState);
 
   // Create quaternions for each rotation
   const horizantal = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), viewX);
@@ -61,20 +58,19 @@ const updateCameraDirection = () => {
 
   // Apply the rotation to the camera
   camera.setRotationFromQuaternion(mousePosRotation);
-  // camera.setRotationFromQuaternion(newCenterCameraDirection);
 };
 
-const updateReduxMotion = () => {
+const updateMotion = () => {
   const cameraDirection = new THREE.Vector3();
   camera.getWorldDirection(cameraDirection);
 
   updateLateralPosition(cameraDirection);
   updateBackForthPosition(cameraDirection);
-  updateCameraDirection(cameraDirection);
+  updateCameraDirection();
 };
 
 const motion = (scene) => {
-  updateReduxMotion();
+  updateMotion();
   renderer.render(scene, camera);
   camera.position.y = fixedYPosition;
 };

@@ -1,0 +1,66 @@
+{
+  "id": "test-001",
+  "name": "Test Puzzle",
+  "difficulty": 1,
+  "gridSize": 64,
+  "playerStart": {
+    "x": 32,
+    "y": 0,
+    "z": 32
+  },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 30, "y": 0, "z": 30 },
+      "song": {
+        "notes": ["C4", "E4", "G4", "E4"],
+        "rhythm": ["1/4", "1/4", "1/4", "1/4"]
+      }
+    },
+    {
+      "type": "creature",
+      "position": { "x": 34, "y": 0, "z": 30 },
+      "song": {
+        "notes": ["E4", "G4", "C5"],
+        "rhythm": ["1/4", "1/4", "1/2"]
+      }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 32, "y": 0, "z": 25 },
+      "song": {
+        "notes": ["C4", "E4", "G4"],
+        "rhythm": ["1/1", "1/1", "1/1"]
+      }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 28, "y": 0, "z": 28 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 36, "y": 0, "z": 28 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 28, "y": 0, "z": 27 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 36, "y": 0, "z": 27 }
+    },
+    {
+      "type": "ramp",
+      "position": { "x": 32, "y": 0, "z": 22 },
+      "direction": "north"
+    },
+    {
+      "type": "fountain",
+      "position": { "x": 32, "y": 0, "z": 18 },
+      "song": {
+        "notes": ["C4", "E4", "G4", "C5"],
+        "rhythm": ["1/1", "1/1", "1/1", "1/1"]
+      }
+    }
+  ]
+}
