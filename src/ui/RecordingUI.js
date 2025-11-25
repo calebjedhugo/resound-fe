@@ -87,7 +87,6 @@ class RecordingUI {
       border-radius: 50%;
       opacity: 0;
       transition: opacity 0.3s;
-      animation: pulse 1s infinite;
       z-index: 1;
     `;
 
@@ -193,7 +192,6 @@ class RecordingUI {
       // Position mic overlay at upper-right corner of active slot
       const activeSlotElement = this.inventorySlots[activeSlot];
       const slotWidth = 50; // px
-      const slotHeight = 50; // px
       const micSize = 32; // px
 
       // Calculate position: half in, half out of upper-right corner
@@ -209,8 +207,10 @@ class RecordingUI {
     // Show/hide recording indicator (red pulse)
     if (isRecording) {
       this.recordingIndicator.style.opacity = '1';
+      this.recordingIndicator.style.animation = 'pulse 1s infinite';
     } else {
       this.recordingIndicator.style.opacity = '0';
+      this.recordingIndicator.style.animation = 'none';
     }
   }
 
