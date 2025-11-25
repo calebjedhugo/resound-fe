@@ -28,7 +28,7 @@ const floorMaterial = new THREE.MeshStandardMaterial({
 });
 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
 floor.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-floor.position.y = 0;
+floor.position.set(96, 0, 96); // Center floor at grid center (32×3, 0, 32×3)
 scene.add(floor);
 
 // Add lighting
