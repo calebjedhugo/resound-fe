@@ -22,10 +22,6 @@ class RecordingUI {
       position: fixed;
       bottom: 20px;
       right: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 15px;
       z-index: 1000;
       font-family: monospace;
     `;
@@ -33,17 +29,18 @@ class RecordingUI {
     // Create inventory UI
     this.createInventoryUI();
 
-    // Create recording UI
+    // Create recording UI (mic overlay)
     this.createRecordingUI();
 
     document.body.appendChild(this.container);
   }
 
   createInventoryUI() {
-    const inventoryContainer = document.createElement('div');
-    inventoryContainer.style.cssText = `
+    this.inventoryContainer = document.createElement('div');
+    this.inventoryContainer.style.cssText = `
       display: flex;
       gap: 10px;
+      position: relative;
     `;
 
     // Create 5 inventory slots
@@ -56,74 +53,86 @@ class RecordingUI {
         border: 2px solid rgba(255, 255, 255, 0.3);
         border-radius: 4px;
         transition: all 0.2s;
+        position: relative;
       `;
       slot.dataset.index = i;
       this.inventorySlots.push(slot);
-      inventoryContainer.appendChild(slot);
+      this.inventoryContainer.appendChild(slot);
     }
 
-    this.container.appendChild(inventoryContainer);
+    this.container.appendChild(this.inventoryContainer);
   }
 
   createRecordingUI() {
-    const recordingContainer = document.createElement('div');
-    recordingContainer.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      opacity: 0;
-      transition: opacity 0.3s;
-    `;
-
-    // Microphone icon (SVG)
-    this.microphoneIcon = document.createElement('div');
-    this.microphoneIcon.style.cssText = `
-      position: relative;
-      width: 50px;
-      height: 50px;
-      font-size: 40px;
-      text-align: center;
-      line-height: 50px;
-    `;
-    this.microphoneIcon.innerHTML = '🎤';
-
-    // Creature count overlay
-    this.creatureCount = document.createElement('div');
-    this.creatureCount.style.cssText = `
+    // Mic overlay container - positioned absolutely over active slot
+    this.micOverlay = document.createElement('div');
+    this.micOverlay.style.cssText = `
       position: absolute;
-      top: -5px;
-      right: -5px;
-      background: rgba(255, 255, 255, 0.9);
-      color: black;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      font-size: 14px;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 32px;
+      height: 32px;
+      opacity: 0;
+      transition: opacity 0.3s, left 0.2s, top 0.2s;
+      pointer-events: none;
     `;
-    this.creatureCount.textContent = '0';
-    this.microphoneIcon.appendChild(this.creatureCount);
 
-    // Recording indicator (red dot)
+    // Red pulsing circle (background)
     this.recordingIndicator = document.createElement('div');
     this.recordingIndicator.style.cssText = `
-      width: 12px;
-      height: 12px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 32px;
+      height: 32px;
       background: #ff0000;
       border-radius: 50%;
       opacity: 0;
       transition: opacity 0.3s;
       animation: pulse 1s infinite;
+      z-index: 1;
     `;
 
-    recordingContainer.appendChild(this.microphoneIcon);
-    recordingContainer.appendChild(this.recordingIndicator);
+    // Microphone icon
+    this.microphoneIcon = document.createElement('div');
+    this.microphoneIcon.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 32px;
+      height: 32px;
+      font-size: 28px;
+      text-align: center;
+      line-height: 32px;
+      z-index: 2;
+    `;
+    this.microphoneIcon.innerHTML = '🎤';
 
-    this.container.appendChild(recordingContainer);
+    // Creature count badge (upper-left)
+    this.creatureCount = document.createElement('div');
+    this.creatureCount.style.cssText = `
+      position: absolute;
+      top: -8px;
+      left: -8px;
+      background: rgba(255, 255, 255, 0.9);
+      color: black;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      z-index: 3;
+    `;
+    this.creatureCount.textContent = '0';
+
+    // Assemble overlay
+    this.micOverlay.appendChild(this.recordingIndicator);
+    this.micOverlay.appendChild(this.microphoneIcon);
+    this.micOverlay.appendChild(this.creatureCount);
+
+    this.container.appendChild(this.micOverlay);
 
     // Add pulse animation
     const style = document.createElement('style');
@@ -134,8 +143,6 @@ class RecordingUI {
       }
     `;
     document.head.appendChild(style);
-
-    this.recordingContainer = recordingContainer;
   }
 
   /**
@@ -176,16 +183,30 @@ class RecordingUI {
   updateRecording() {
     const count = RecordingManager.getCreaturesInRangeCount();
     const isRecording = RecordingManager.isRecording();
+    const { activeSlot } = gameState.player;
 
-    // Show/hide recording UI based on creatures in range
+    // Show/hide mic overlay based on creatures in range
     if (count > 0) {
-      this.recordingContainer.style.opacity = '1';
+      this.micOverlay.style.opacity = '1';
       this.creatureCount.textContent = count;
+
+      // Position mic overlay at upper-right corner of active slot
+      const activeSlotElement = this.inventorySlots[activeSlot];
+      const slotWidth = 50; // px
+      const slotHeight = 50; // px
+      const micSize = 32; // px
+
+      // Calculate position: half in, half out of upper-right corner
+      const left = activeSlotElement.offsetLeft + slotWidth - micSize / 2;
+      const top = activeSlotElement.offsetTop - micSize / 2;
+
+      this.micOverlay.style.left = `${left}px`;
+      this.micOverlay.style.top = `${top}px`;
     } else {
-      this.recordingContainer.style.opacity = '0';
+      this.micOverlay.style.opacity = '0';
     }
 
-    // Show/hide recording indicator
+    // Show/hide recording indicator (red pulse)
     if (isRecording) {
       this.recordingIndicator.style.opacity = '1';
     } else {
