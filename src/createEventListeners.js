@@ -1,6 +1,7 @@
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import Random from 'audio/instruments/Random';
+import RecordingManager from 'core/RecordingManager';
 
 const randomInstrument = new Random();
 
@@ -31,56 +32,35 @@ const dispatchKeyboardActions = ({ code, type }) => {
       gameState.input.keys.running = value;
       break;
     case 'Space':
-      if (value)
-        randomInstrument.play({
-          tempo: 160,
-          data: [
-            // MEASURE 1: "Twinkle twinkle little star"
-            [
-              { pitch: 'C4', length: '1/8' },
-              { pitch: 'C2', length: '1/4' },
-            ],
-            { pitch: 'C4', length: '1/8' },
-            [
-              { pitch: 'G4', length: '1/8' },
-              { pitch: 'G2', length: '1/4' },
-            ],
-            { pitch: 'G4', length: '1/8' },
-            [
-              { pitch: 'A4', length: '1/8' },
-              { pitch: 'F2', length: '1/4' },
-            ],
-            { pitch: 'A4', length: '1/8' },
-            [
-              { pitch: 'G4', length: '1/4' },
-              { pitch: 'C2', length: '1/4' },
-            ],
-
-            // REST: Pause between measures
-            { pitch: undefined, length: '1/4' },
-
-            // MEASURE 2: "How I wonder what you are"
-            [
-              { pitch: 'F4', length: '1/8' },
-              { pitch: 'F2', length: '1/4' },
-            ],
-            { pitch: 'F4', length: '1/8' },
-            [
-              { pitch: 'E4', length: '1/8' },
-              { pitch: 'C2', length: '1/4' },
-            ],
-            { pitch: 'E4', length: '1/8' },
-            [
-              { pitch: 'D4', length: '1/8' },
-              { pitch: 'G2', length: '1/4' },
-            ],
-            { pitch: 'D4', length: '1/8' },
-            [
-              { pitch: 'C4', length: '1/4' },
-              { pitch: 'C2', length: '1/4' },
-            ],
-          ],
-        });
+      break;
+    case 'KeyR':
+      // Recording toggle
+      if (value) {
+        // Keydown - start recording
+        if (!RecordingManager.isRecording()) {
+          RecordingManager.startRecording();
+        }
+      } else {
+        // Keyup - stop recording
+        if (RecordingManager.isRecording()) {
+          RecordingManager.stopRecording();
+        }
+      }
+      break;
+    case 'ArrowLeft':
+      // Cycle inventory slot left
+      if (value) {
+        gameState.player.activeSlot =
+          (gameState.player.activeSlot - 1 + gameState.player.maxInventorySize) %
+          gameState.player.maxInventorySize;
+      }
+      break;
+    case 'ArrowRight':
+      // Cycle inventory slot right
+      if (value) {
+        gameState.player.activeSlot =
+          (gameState.player.activeSlot + 1) % gameState.player.maxInventorySize;
+      }
       break;
     default:
   }

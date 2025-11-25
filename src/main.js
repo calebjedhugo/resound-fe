@@ -11,6 +11,7 @@ import ProgressManager from 'core/ProgressManager';
 
 import MainMenu from 'ui/MainMenu';
 import PauseMenu from 'ui/PauseMenu';
+import RecordingUI from 'ui/RecordingUI';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
@@ -30,9 +31,10 @@ scene.add(directionalLight);
 // Entity manager
 const entityManager = new EntityManager(scene);
 
-// Menus
+// UI
 let mainMenu = null;
 let pauseMenu = null;
+const recordingUI = new RecordingUI();
 
 // State machine
 const stateMachine = new StateMachine(gameState);
@@ -71,7 +73,12 @@ function exitToMenu() {
 function update(deltaTime) {
   stateMachine.update(deltaTime);
   if (gameState.mode === 'PLAYING') {
+    // Update musical clock
+    if (gameState.musicalClock) {
+      gameState.musicalClock.update(deltaTime);
+    }
     entityManager.update(deltaTime);
+    recordingUI.update();
   }
 }
 

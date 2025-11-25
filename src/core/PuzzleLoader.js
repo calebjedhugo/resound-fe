@@ -37,6 +37,10 @@ class PuzzleLoader {
     // Clear existing entities
     entityManager.clear();
 
+    // Initialize musical clock with puzzle tempo
+    const tempo = puzzleData.tempo || 120; // Default 120 BPM
+    gameState.initMusicalClock(tempo);
+
     // Create floor first (based on puzzle grid size)
     const floor = new Floor(puzzleData.gridSize);
     entityManager.add(floor);
@@ -61,9 +65,7 @@ class PuzzleLoader {
 
       switch (entityData.type) {
         case 'creature':
-          entity = new Creature(scaledPosition, {
-            song: entityData.song,
-          });
+          entity = new Creature(scaledPosition, entityData.data || {});
           break;
         case 'gate':
           entity = new Gate(scaledPosition, {

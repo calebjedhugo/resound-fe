@@ -1,10 +1,29 @@
 import * as THREE from 'three';
 import Entity from './Entity';
+import Random from 'audio/instruments/Random';
+import gameState from 'core/GameState';
+import { getDistance, getDistanceVolume } from 'core/utils';
+import { RECORDING_RANGE_PERCENTAGE } from 'core/constants';
 
 class Creature extends Entity {
   constructor(position, data = {}) {
     super('creature', position, data);
-    this.song = data.song || { notes: ['C4'], rhythm: ['1/4'] };
+
+    // Song data
+    this.song = data.song || [{ pitch: 'C4', length: '1/4' }];
+    this.interval = data.interval || 8; // Quarter notes between songs
+    this.audibleRange = data.audibleRange || 15; // World units
+    this.recordingRange = this.audibleRange * RECORDING_RANGE_PERCENTAGE;
+
+    // Create unique instrument for this creature
+    this.instrument = new Random(this.id);
+
+    // Singing timing (based on musical clock beats)
+    this.nextSingBeat = 0; // Starts singing immediately
+
+    // Recording state
+    this.isRecordable = false; // Is player in recording range?
+
     this.createMesh();
   }
 
@@ -22,9 +41,84 @@ class Creature extends Entity {
     this.mesh.position.set(this.position.x, this.position.y + 0.9, this.position.z);
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  update(deltaTime) {
-    // Will add movement and sound behavior in Phase 3
+  update() {
+    // Skip if no musical clock initialized
+    if (!gameState.musicalClock) return;
+
+    const currentBeat = gameState.musicalClock.getCurrentBeat();
+
+    // Check if it's time to sing (deterministic based on musical time)
+    if (currentBeat >= this.nextSingBeat && !this.instrument.playbackState.isPlaying) {
+      this.sing();
+      this.nextSingBeat = currentBeat + this.interval;
+    }
+
+    // Calculate distance to player
+    const distance = getDistance(this.position, gameState.player.position);
+
+    // Update volume based on distance (inverse square law)
+    if (distance <= this.audibleRange) {
+      const volume = getDistanceVolume(distance, this.audibleRange);
+      this.instrument.updateVolume(volume);
+
+      // Check if in recording range
+      this.isRecordable = distance <= this.recordingRange;
+    } else {
+      // Too far - silence
+      this.instrument.updateVolume(0);
+      this.isRecordable = false;
+    }
+
+    // Update creatures in range for recording UI
+    this.updateRecordingState();
+  }
+
+  /**
+   * Creature sings its song
+   */
+  sing() {
+    if (!gameState.musicalClock) return;
+
+    this.instrument.play({
+      data: this.song,
+      tempo: gameState.musicalClock.tempo,
+      basis: 4,
+    });
+  }
+
+  /**
+   * Update recording state in game state
+   */
+  updateRecordingState() {
+    const creaturesInRange = gameState.recording.creaturesInRange;
+
+    if (this.isRecordable) {
+      // Add to recording range if not already there
+      if (!creaturesInRange.includes(this)) {
+        creaturesInRange.push(this);
+      }
+    } else {
+      // Remove from recording range
+      const index = creaturesInRange.indexOf(this);
+      if (index !== -1) {
+        creaturesInRange.splice(index, 1);
+      }
+    }
+  }
+
+  dispose() {
+    // Stop any playing sounds
+    if (this.instrument) {
+      this.instrument.stop();
+    }
+
+    // Remove from recording range
+    const index = gameState.recording.creaturesInRange.indexOf(this);
+    if (index !== -1) {
+      gameState.recording.creaturesInRange.splice(index, 1);
+    }
+
+    super.dispose();
   }
 }
 

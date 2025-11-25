@@ -15,7 +15,8 @@ function sleep(ms) {
  * Handles playback state, pause/resume, and oscillator tracking
  */
 class Instrument {
-  constructor() {
+  constructor(id = null) {
+    this.id = id; // Identifier for this instrument (e.g., creature ID)
     this.context = audioContextManager.getContext();
 
     // Track all active oscillators so we can stop them
@@ -31,6 +32,12 @@ class Instrument {
       tempo: 120,
       basis: 4,
     };
+
+    // Recording callback for real-time capture
+    this.recordingCallback = null;
+
+    // Current volume multiplier (for distance-based volume)
+    this.volumeMultiplier = 1.0;
   }
 
   /**
@@ -166,6 +173,16 @@ class Instrument {
       return;
     }
 
+    // Emit to recording callback if recording
+    if (this.recordingCallback) {
+      this.recordingCallback({
+        pitch: note.pitch,
+        length: note.length,
+        timestamp: Date.now(),
+        source: this.id,
+      });
+    }
+
     // Create and play note
     this.startNote(note.pitch, duration);
     await sleep(duration);
@@ -179,6 +196,20 @@ class Instrument {
     const durations = notes.map((note) => getDuration(note.length, tempo, basis));
     const shortestDuration = Math.min(...durations);
 
+    // Emit to recording callback if recording
+    if (this.recordingCallback) {
+      notes.forEach((note) => {
+        if (note.pitch && note.pitch !== undefined && note.pitch !== null) {
+          this.recordingCallback({
+            pitch: note.pitch,
+            length: note.length,
+            timestamp: Date.now(),
+            source: this.id,
+          });
+        }
+      });
+    }
+
     // Start all notes (they clean themselves up)
     notes.forEach((note, i) => {
       if (note.pitch && note.pitch !== undefined && note.pitch !== null) {
@@ -188,6 +219,28 @@ class Instrument {
 
     // Wait for shortest note, then continue
     await sleep(shortestDuration);
+  }
+
+  /**
+   * Update volume for all active oscillators (for distance-based volume)
+   * Call this every frame from creature update()
+   * @param {number} volumeMultiplier - Volume multiplier (0.0 to 1.0)
+   */
+  updateVolume(volumeMultiplier) {
+    this.volumeMultiplier = volumeMultiplier;
+
+    const { currentTime } = this.context;
+
+    this.activeOscillators.forEach((oscillatorData) => {
+      const { gainNode } = oscillatorData;
+
+      try {
+        // Smooth ramp to prevent clicks (10ms transition)
+        gainNode.gain.setTargetAtTime(volumeMultiplier, currentTime, 0.01);
+      } catch (e) {
+        // Gain node might be disconnected
+      }
+    });
   }
 
   /**

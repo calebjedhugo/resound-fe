@@ -3,6 +3,7 @@
   "name": "Test Puzzle",
   "difficulty": 1,
   "gridSize": 64,
+  "tempo": 120,
   "playerStart": {
     "x": 32,
     "y": 0,
@@ -12,17 +13,28 @@
     {
       "type": "creature",
       "position": { "x": 30, "y": 0, "z": 30 },
-      "song": {
-        "notes": ["C4", "E4", "G4", "E4"],
-        "rhythm": ["1/4", "1/4", "1/4", "1/4"]
+      "data": {
+        "song": [
+          { "pitch": "C4", "length": "1/4" },
+          { "pitch": "E4", "length": "1/4" },
+          { "pitch": "G4", "length": "1/4" },
+          { "pitch": "E4", "length": "1/4" }
+        ],
+        "interval": 8,
+        "audibleRange": 15
       }
     },
     {
       "type": "creature",
       "position": { "x": 34, "y": 0, "z": 30 },
-      "song": {
-        "notes": ["E4", "G4", "C5"],
-        "rhythm": ["1/4", "1/4", "1/2"]
+      "data": {
+        "song": [
+          { "pitch": "E4", "length": "1/4" },
+          { "pitch": "G4", "length": "1/4" },
+          { "pitch": "C5", "length": "1/2" }
+        ],
+        "interval": 8,
+        "audibleRange": 15
       }
     },
     {
