@@ -5,6 +5,7 @@ import Wall from 'entities/Wall';
 import Ramp from 'entities/Ramp';
 import Floor from 'entities/Floor';
 import { WORLD_SCALE } from 'core/constants';
+import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 class PuzzleLoader {
   static async load(puzzleId) {
@@ -51,6 +52,9 @@ class PuzzleLoader {
       y: puzzleData.playerStart.y * WORLD_SCALE,
       z: puzzleData.playerStart.z * WORLD_SCALE,
     };
+
+    // Sync camera to player start position
+    syncCameraToPlayer(gameState.player.position);
 
     // Create entities
     puzzleData.entities.forEach((entityData) => {

@@ -80,6 +80,12 @@ const updateMotion = () => {
 
 const motion = (scene) => {
   updateMotion();
+
+  // Sync gameState.player.position with camera position
+  gameState.player.position.x = camera.position.x;
+  gameState.player.position.z = camera.position.z;
+  gameState.player.position.y = fixedYPosition;
+
   renderer.render(scene, camera);
   camera.position.y = fixedYPosition;
 };
