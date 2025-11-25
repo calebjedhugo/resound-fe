@@ -35,16 +35,12 @@ const dispatchKeyboardActions = ({ code, type }) => {
       break;
     case 'KeyR':
       // Recording toggle
-      if (value) {
+      if (value && !RecordingManager.isRecording()) {
         // Keydown - start recording
-        if (!RecordingManager.isRecording()) {
-          RecordingManager.startRecording();
-        }
-      } else {
+        RecordingManager.startRecording();
+      } else if (!value && RecordingManager.isRecording()) {
         // Keyup - stop recording
-        if (RecordingManager.isRecording()) {
-          RecordingManager.stopRecording();
-        }
+        RecordingManager.stopRecording();
       }
       break;
     case 'ArrowLeft':

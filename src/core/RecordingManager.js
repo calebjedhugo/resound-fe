@@ -66,7 +66,7 @@ class RecordingManager {
    */
   static processCapturedNotes() {
     const { capturedNotes, startTime } = gameState.recording;
-    const tempo = gameState.musicalClock.tempo;
+    const { tempo } = gameState.musicalClock;
 
     if (capturedNotes.length === 0) {
       return [];
