@@ -4,7 +4,7 @@ class GameState {
     this.currentPuzzle = null;
 
     this.player = {
-      position: { x: 0, y: 4, z: 0 },
+      position: { x: 0, y: 1.8, z: 0 },
       rotation: { x: 0, y: 0 },
       inventory: [],
       maxInventorySize: 5,
@@ -16,6 +16,7 @@ class GameState {
         backward: false,
         latLeft: false,
         latRight: false,
+        running: false,
       },
       mouse: {
         position: [0, 0],
@@ -33,7 +34,7 @@ class GameState {
 
   reset() {
     this.currentPuzzle = null;
-    this.player.position = { x: 0, y: 4, z: 0 };
+    this.player.position = { x: 0, y: 1.8, z: 0 };
     this.player.rotation = { x: 0, y: 0 };
     this.player.inventory = [];
     this.entities = [];

@@ -26,6 +26,10 @@ const dispatchKeyboardActions = ({ code, type }) => {
     case 'KeyS':
       gameState.input.keys.backward = value;
       break;
+    case 'ShiftLeft':
+    case 'ShiftRight':
+      gameState.input.keys.running = value;
+      break;
     case 'Space':
       if (value)
         piano.play({

@@ -10,9 +10,15 @@ class Gate extends Entity {
   }
 
   createMesh() {
-    // Simple rectangular gate for now - will improve in Phase 3 with musical notation
-    const geometry = new THREE.BoxGeometry(2, 3, 0.2);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+    // Doorway-sized gate
+    const geometry = new THREE.BoxGeometry(1.5, 3, 0.3);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffaa00,
+      roughness: 0.4,
+      metalness: 0.6,
+      emissive: 0x331100,
+      emissiveIntensity: 0.3,
+    });
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.position.set(this.position.x, this.position.y + 1.5, this.position.z);
   }

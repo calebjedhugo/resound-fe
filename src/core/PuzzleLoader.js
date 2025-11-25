@@ -4,6 +4,9 @@ import Fountain from 'entities/Fountain';
 import Wall from 'entities/Wall';
 import Ramp from 'entities/Ramp';
 
+// World scale: 1 grid unit = 3 world units
+const WORLD_SCALE = 3;
+
 class PuzzleLoader {
   static async load(puzzleId) {
     try {
@@ -35,34 +38,45 @@ class PuzzleLoader {
     // Clear existing entities
     entityManager.clear();
 
-    // Set player start position
-    gameState.player.position = { ...puzzleData.playerStart };
+    // Set player start position (scaled)
+    gameState.player.position = {
+      x: puzzleData.playerStart.x * WORLD_SCALE,
+      y: puzzleData.playerStart.y * WORLD_SCALE,
+      z: puzzleData.playerStart.z * WORLD_SCALE,
+    };
 
     // Create entities
     puzzleData.entities.forEach((entityData) => {
       let entity = null;
 
+      // Scale the position from grid coordinates to world coordinates
+      const scaledPosition = {
+        x: entityData.position.x * WORLD_SCALE,
+        y: entityData.position.y * WORLD_SCALE,
+        z: entityData.position.z * WORLD_SCALE,
+      };
+
       switch (entityData.type) {
         case 'creature':
-          entity = new Creature(entityData.position, {
+          entity = new Creature(scaledPosition, {
             song: entityData.song,
           });
           break;
         case 'gate':
-          entity = new Gate(entityData.position, {
+          entity = new Gate(scaledPosition, {
             song: entityData.song,
           });
           break;
         case 'fountain':
-          entity = new Fountain(entityData.position, {
+          entity = new Fountain(scaledPosition, {
             song: entityData.song,
           });
           break;
         case 'wall':
-          entity = new Wall(entityData.position);
+          entity = new Wall(scaledPosition);
           break;
         case 'ramp':
-          entity = new Ramp(entityData.position, {
+          entity = new Ramp(scaledPosition, {
             direction: entityData.direction,
           });
           break;

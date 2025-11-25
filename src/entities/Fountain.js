@@ -10,11 +10,17 @@ class Fountain extends Entity {
   }
 
   createMesh() {
-    // Simple cylinder fountain for now - will improve in Phase 3
-    const geometry = new THREE.CylinderGeometry(1, 1, 2, 16);
-    const material = new THREE.MeshBasicMaterial({ color: 0x0088ff });
+    // Landmark-sized fountain
+    const geometry = new THREE.CylinderGeometry(1.5, 1.5, 2.5, 16);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x0088ff,
+      roughness: 0.3,
+      metalness: 0.4,
+      emissive: 0x001144,
+      emissiveIntensity: 0.4,
+    });
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + 1, this.position.z);
+    this.mesh.position.set(this.position.x, this.position.y + 1.25, this.position.z);
   }
 
   update(deltaTime) {

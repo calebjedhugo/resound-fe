@@ -2,25 +2,33 @@ import * as THREE from 'three';
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 
-const fixedYPosition = 4;
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const fixedYPosition = 1.8; // Player height in meters
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
 camera.position.y = fixedYPosition;
 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const vectorSpeed = 0.6;
+const baseSpeed = 0.067; // 4 units/sec ÷ 60 fps = 0.067 units/frame
+const runMultiplier = 2; // Running is 2x walk speed (8 units/sec)
+
+const getSpeed = () => {
+  const { running } = gameState.input.keys;
+  return running ? baseSpeed * runMultiplier : baseSpeed;
+};
 
 const updateBackForthPosition = (cameraDirection) => {
   const { backward, forward } = gameState.input.keys;
   if (backward && forward) return; // do nothing if moving in both directions.
 
+  const speed = getSpeed();
+
   if (backward) {
-    camera.position.addScaledVector(cameraDirection, -vectorSpeed);
+    camera.position.addScaledVector(cameraDirection, -speed);
   }
   if (forward) {
-    camera.position.addScaledVector(cameraDirection, vectorSpeed);
+    camera.position.addScaledVector(cameraDirection, speed);
   }
 };
 
@@ -29,14 +37,15 @@ const updateLateralPosition = (cameraDirection) => {
 
   if (latLeft && latRight) return; // do nothing if moving in both directions.
 
+  const speed = getSpeed();
   const cameraSide = new THREE.Vector3();
   cameraSide.crossVectors(camera.up, cameraDirection).normalize();
 
   if (latLeft) {
-    camera.position.addScaledVector(cameraSide, vectorSpeed);
+    camera.position.addScaledVector(cameraSide, speed);
   }
   if (latRight) {
-    camera.position.addScaledVector(cameraSide, -vectorSpeed);
+    camera.position.addScaledVector(cameraSide, -speed);
   }
 };
 
@@ -75,5 +84,11 @@ const motion = (scene) => {
   camera.position.y = fixedYPosition;
 };
 
-export { camera };
+const syncCameraToPlayer = (position) => {
+  camera.position.x = position.x;
+  camera.position.z = position.z;
+  camera.position.y = fixedYPosition;
+};
+
+export { camera, syncCameraToPlayer };
 export default motion;

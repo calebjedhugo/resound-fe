@@ -9,11 +9,15 @@ class Ramp extends Entity {
   }
 
   createMesh() {
-    // Simple sloped box ramp for now - will improve in Phase 3
-    const geometry = new THREE.BoxGeometry(2, 0.5, 2);
-    const material = new THREE.MeshBasicMaterial({ color: 0x88ff88 });
+    // Grid-cell-sized ramp (3 units to fill 1 grid cell at 3x scale)
+    const geometry = new THREE.BoxGeometry(3, 1, 3);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x88ff88,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + 0.25, this.position.z);
+    this.mesh.position.set(this.position.x, this.position.y + 0.5, this.position.z);
 
     // Rotate based on direction
     const rotations = {

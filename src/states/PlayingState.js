@@ -1,3 +1,5 @@
+import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
+
 class PlayingState {
   constructor(gameState, entityManager, motion) {
     this.gameState = gameState;
@@ -7,7 +9,8 @@ class PlayingState {
 
   enter() {
     console.log('Entering Playing State');
-    // Puzzle should already be loaded by this point
+    // Sync camera to player start position
+    syncCameraToPlayer(this.gameState.player.position);
   }
 
   update(deltaTime) {

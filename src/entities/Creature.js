@@ -9,11 +9,17 @@ class Creature extends Entity {
   }
 
   createMesh() {
-    // Simple sphere creature for now - will improve in Phase 3 with dynamic visuals
-    const geometry = new THREE.SphereGeometry(0.5, 16, 16);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    // Simple sphere creature - human-sized
+    const geometry = new THREE.SphereGeometry(0.9, 16, 16);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x00ff00,
+      roughness: 0.5,
+      metalness: 0.2,
+      emissive: 0x003300, // Slight glow
+      emissiveIntensity: 0.2,
+    });
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + 0.5, this.position.z);
+    this.mesh.position.set(this.position.x, this.position.y + 0.9, this.position.z);
   }
 
   update(deltaTime) {
