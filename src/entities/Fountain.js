@@ -23,6 +23,7 @@ class Fountain extends Entity {
     this.mesh.position.set(this.position.x, this.position.y + 1.25, this.position.z);
   }
 
+  // eslint-disable-next-line class-methods-use-this, no-unused-vars
   update(deltaTime) {
     // Will add celebration animation and "singing along" in Phase 3
   }

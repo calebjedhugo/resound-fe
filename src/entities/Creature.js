@@ -22,6 +22,7 @@ class Creature extends Entity {
     this.mesh.position.set(this.position.x, this.position.y + 0.9, this.position.z);
   }
 
+  // eslint-disable-next-line class-methods-use-this
   update(deltaTime) {
     // Will add movement and sound behavior in Phase 3
   }

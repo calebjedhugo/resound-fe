@@ -28,7 +28,7 @@ class CameraController {
   }
 
   static getNextViewCenter(gameState) {
-    const { mouse, screenCenter } = gameState.input.mouse;
+    const { screenCenter } = gameState.input.mouse;
     const { viewCenter } = gameState.camera;
     const { centered: mouseCentered } = gameState.input.mouse;
     const { position: mousePosition } = gameState.input.mouse;

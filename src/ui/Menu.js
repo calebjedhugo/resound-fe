@@ -21,10 +21,6 @@ class Menu {
     this.visible = false;
   }
 
-  render() {
-    // Override in subclasses
-  }
-
   clear() {
     this.element.innerHTML = '';
   }

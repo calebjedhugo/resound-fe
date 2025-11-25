@@ -18,10 +18,6 @@ class Wall extends Entity {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.position.set(this.position.x, this.position.y + 1.25, this.position.z);
   }
-
-  update(deltaTime) {
-    // Walls don't update
-  }
 }
 
 export default Wall;

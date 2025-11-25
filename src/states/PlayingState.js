@@ -8,7 +8,6 @@ class PlayingState {
   }
 
   enter() {
-    console.log('Entering Playing State');
     // Sync camera to player start position
     syncCameraToPlayer(this.gameState.player.position);
   }
@@ -18,10 +17,6 @@ class PlayingState {
     if (this.entityManager) {
       this.entityManager.update(deltaTime);
     }
-  }
-
-  render() {
-    // 3D rendering is handled by motion.js for now
   }
 
   exit() {

@@ -23,6 +23,7 @@ class Gate extends Entity {
     this.mesh.position.set(this.position.x, this.position.y + 1.5, this.position.z);
   }
 
+  // eslint-disable-next-line no-unused-vars, class-methods-use-this
   update(deltaTime) {
     // Will add chord detection and opening animation in Phase 3
   }

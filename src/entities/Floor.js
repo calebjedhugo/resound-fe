@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import Entity from './Entity';
 import { WORLD_SCALE } from 'core/constants';
+import Entity from './Entity';
 
 class Floor extends Entity {
   constructor(gridSize) {
@@ -22,10 +22,6 @@ class Floor extends Entity {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
-  }
-
-  update(deltaTime) {
-    // Floor doesn't update
   }
 }
 

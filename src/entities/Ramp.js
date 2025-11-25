@@ -28,10 +28,6 @@ class Ramp extends Entity {
     };
     this.mesh.rotation.y = rotations[this.direction] || 0;
   }
-
-  update(deltaTime) {
-    // Ramps don't update
-  }
 }
 
 export default Ramp;

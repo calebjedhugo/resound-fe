@@ -15,15 +15,6 @@ class Entity {
     this.active = true;
   }
 
-  update(deltaTime) {
-    // Override in subclasses
-  }
-
-  render() {
-    // Override in subclasses if needed
-    // Most rendering is automatic via Three.js
-  }
-
   dispose() {
     // Cleanup Three.js resources
     if (this.mesh) {

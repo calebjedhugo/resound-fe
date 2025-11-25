@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import WebGL from 'isWebGLAvailable';
 import motion from 'resoundModules/playerControls/motion/motion';
-import createEventListeners from './createEventListeners';
 
 import gameState from 'core/GameState';
 import GameLoop from 'core/GameLoop';
@@ -15,6 +14,7 @@ import PauseMenu from 'ui/PauseMenu';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
+import createEventListeners from './createEventListeners';
 
 // Three.js scene
 const scene = new THREE.Scene();

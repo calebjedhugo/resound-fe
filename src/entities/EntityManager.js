@@ -48,7 +48,7 @@ class EntityManager {
 
   update(deltaTime) {
     this.entities.forEach((entity) => {
-      if (entity.active) {
+      if (entity.active && entity.update) {
         entity.update(deltaTime);
       }
     });
