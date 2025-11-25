@@ -1,7 +1,6 @@
 import { getFrequency } from '../lib/noteFrequencies';
-import { getDuration } from '../lib/duration';
-import audioContextManager from '../lib/AudioContextManager';
 import { applyEnvelope } from '../lib/Envelope';
+import Instrument from './Instrument';
 
 /**
  * Random waveform selection (weighted toward smoother sounds)
@@ -46,82 +45,18 @@ function generateRandomHarmonics() {
 }
 
 /**
- * Sleep utility
- */
-function sleep(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-/**
  * Random instrument with randomized timbre
  * Generates interesting, tonal sounds with consistent timbre
  */
-class Random {
+class Random extends Instrument {
   constructor() {
-    this.context = audioContextManager.getContext();
+    super();
 
     // Randomize timbre ONCE (stays constant for this instance)
     this.waveform = generateRandomWaveform();
     this.filterCutoff = generateRandomFilterCutoff();
     this.envelope = generateRandomEnvelope();
     this.harmonics = generateRandomHarmonics();
-  }
-
-  /**
-   * Play sequence of notes/chords
-   * @param {Object} params
-   * @param {Array} params.data - Array of notes or chords
-   * @param {number} params.tempo - BPM
-   * @param {number} params.basis - Beat note (4 = quarter note)
-   */
-  async play({ data = [], tempo = 120, basis = 4 }) {
-    for (const element of data) {
-      if (Array.isArray(element)) {
-        // CHORD: Play multiple notes simultaneously
-        await this.playChord(element, tempo, basis);
-      } else {
-        // SINGLE NOTE: Play one note
-        await this.playNote(element, tempo, basis);
-      }
-    }
-  }
-
-  /**
-   * Play a single note
-   */
-  async playNote(note, tempo, basis) {
-    const duration = getDuration(note.length, tempo, basis);
-
-    // Check for REST
-    if (!note.pitch || note.pitch === undefined || note.pitch === null) {
-      await sleep(duration);
-      return;
-    }
-
-    // Create and play note
-    this.startNote(note.pitch, duration);
-    await sleep(duration);
-  }
-
-  /**
-   * Play multiple notes simultaneously (chord)
-   * Waits for SHORTEST note, then continues (allows bass sustain)
-   */
-  async playChord(notes, tempo, basis) {
-    const durations = notes.map((note) => getDuration(note.length, tempo, basis));
-    const shortestDuration = Math.min(...durations);
-
-    // Start all notes (they clean themselves up)
-    notes.forEach((note, i) => {
-      if (note.pitch && note.pitch !== undefined && note.pitch !== null) {
-        this.startNote(note.pitch, durations[i]);
-      }
-    });
-
-    // Wait for shortest note, then continue
-    await sleep(shortestDuration);
   }
 
   /**
@@ -155,6 +90,9 @@ class Random {
     oscillator.start(currentTime);
     oscillator.stop(currentTime + duration / 1000);
 
+    // Track this oscillator so it can be stopped during pause
+    this.trackOscillator(oscillator, gainNode, duration);
+
     // Add harmonics for richness
     this.harmonics.forEach(({ multiple, volume }) => {
       const harmonic = this.context.createOscillator();
@@ -169,6 +107,9 @@ class Random {
 
       harmonic.start(currentTime);
       harmonic.stop(currentTime + duration / 1000);
+
+      // Track harmonic oscillators too
+      this.trackOscillator(harmonic, harmonicGain, duration);
     });
   }
 }

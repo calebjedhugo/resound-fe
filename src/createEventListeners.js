@@ -111,4 +111,6 @@ const createEventListeners = () => {
   window.addEventListener('mousemove', dispatchMouseActions);
 };
 
+// Export the instrument instance so other modules can control playback
+export { randomInstrument };
 export default createEventListeners;

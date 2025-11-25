@@ -1,4 +1,5 @@
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
+import { randomInstrument } from 'createEventListeners';
 
 class PlayingState {
   constructor(gameState, entityManager, motion) {
@@ -10,6 +11,11 @@ class PlayingState {
   enter() {
     // Sync camera to player start position
     syncCameraToPlayer(this.gameState.player.position);
+
+    // Resume music if it was paused
+    if (randomInstrument.playbackState.isPaused) {
+      randomInstrument.resume();
+    }
   }
 
   update(deltaTime) {
@@ -20,7 +26,8 @@ class PlayingState {
   }
 
   exit() {
-    console.log('Exiting Playing State');
+    // Pause any playing music when leaving play state
+    randomInstrument.pause();
   }
 }
 
