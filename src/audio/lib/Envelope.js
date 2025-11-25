@@ -10,9 +10,19 @@
  * @param {number} duration - Total note duration in milliseconds
  */
 export function applyEnvelope(gainNode, currentTime, envelope, duration) {
-  const { attack, decay, sustain, release } = envelope;
+  let { attack, decay, release } = envelope;
+  const { sustain } = envelope;
   const { gain } = gainNode;
   const durationSeconds = duration / 1000;
+
+  // Scale envelope times if they exceed note duration
+  const totalEnvelopeTime = attack + decay + release;
+  if (totalEnvelopeTime > durationSeconds) {
+    const scale = durationSeconds / totalEnvelopeTime;
+    attack *= scale;
+    decay *= scale;
+    release *= scale;
+  }
 
   // Start at 0
   gain.setValueAtTime(0, currentTime);
