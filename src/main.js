@@ -40,14 +40,12 @@ const stateMachine = new StateMachine(gameState);
 // Game functions
 async function startPuzzle(puzzleId) {
   try {
-    console.log(`Loading puzzle: ${puzzleId}`);
     const puzzleData = await PuzzleLoader.load(puzzleId);
     PuzzleLoader.parse(puzzleData, entityManager, gameState);
     gameState.currentPuzzle = puzzleData;
     stateMachine.setState('PLAYING');
   } catch (error) {
     console.error('Failed to load puzzle:', error);
-    alert(`Failed to load puzzle: ${error.message}`);
   }
 }
 
@@ -117,8 +115,6 @@ async function initializeGame() {
   // Start game loop
   const gameLoop = new GameLoop(update, render);
   gameLoop.start();
-
-  console.log('Resound initialized');
 }
 
 // Start the game
