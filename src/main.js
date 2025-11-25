@@ -19,18 +19,6 @@ import PausedState from 'states/PausedState';
 // Three.js scene
 const scene = new THREE.Scene();
 
-// Create dirt floor (192x192 for 64 grid × 3 scale)
-const floorGeometry = new THREE.PlaneGeometry(192, 192, 64, 64);
-const floorMaterial = new THREE.MeshStandardMaterial({
-  color: 0x8b7355, // Earthy brown
-  roughness: 0.8,
-  metalness: 0.1,
-});
-const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-floor.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-floor.position.set(96, 0, 96); // Center floor at grid center (32×3, 0, 32×3)
-scene.add(floor);
-
 // Add lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);

@@ -3,9 +3,8 @@ import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import Wall from 'entities/Wall';
 import Ramp from 'entities/Ramp';
-
-// World scale: 1 grid unit = 3 world units
-const WORLD_SCALE = 3;
+import Floor from 'entities/Floor';
+import { WORLD_SCALE } from 'core/constants';
 
 class PuzzleLoader {
   static async load(puzzleId) {
@@ -37,6 +36,10 @@ class PuzzleLoader {
   static parse(puzzleData, entityManager, gameState) {
     // Clear existing entities
     entityManager.clear();
+
+    // Create floor first (based on puzzle grid size)
+    const floor = new Floor(puzzleData.gridSize);
+    entityManager.add(floor);
 
     // Set player start position (scaled)
     gameState.player.position = {
