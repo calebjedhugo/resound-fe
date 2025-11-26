@@ -1,5 +1,5 @@
+import Metronome from 'audio/instruments/Metronome';
 import MusicalClock from './MusicalClock';
-import Metronome from './Metronome';
 
 class GameState {
   constructor() {

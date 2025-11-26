@@ -1,16 +1,16 @@
-import audioContextManager from 'audio/lib/AudioContextManager';
+import audioContextManager from '../lib/AudioContextManager';
 
 // Metronome volume (0.0 to 1.0)
 const METRONOME_VOLUME = 0.5;
 
 /**
- * Metronome - Plays a click on every beat for debugging timing
+ * Metronome - Plays a click on every beat for timing reference
  */
 class Metronome {
   constructor() {
     this.context = audioContextManager.getContext();
     this.lastBeatClicked = -1;
-    this.enabled = true;
+    this.enabled = false; // Off by default
   }
 
   /**
