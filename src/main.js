@@ -95,11 +95,9 @@ async function nextPuzzle() {
 function update(deltaTime) {
   stateMachine.update(deltaTime);
   if (gameState.mode === 'PLAYING') {
-    // Update musical clock
+    // Update musical clock (includes metronome)
     if (gameState.musicalClock) {
       gameState.musicalClock.update(deltaTime);
-      // Update metronome (clicks on every beat)
-      gameState.metronome.update(gameState.musicalClock.getCurrentBeat());
     }
     entityManager.update(deltaTime);
     recordingUI.update();
@@ -123,9 +121,9 @@ function handleKeyDown(event) {
   }
 
   // Toggle metronome with 'M' key
-  if (event.code === 'KeyM' && gameState.mode === 'PLAYING') {
-    gameState.metronome.toggle();
-    console.log(`Metronome ${gameState.metronome.enabled ? 'enabled' : 'disabled'}`);
+  if (event.code === 'KeyM' && gameState.mode === 'PLAYING' && gameState.musicalClock) {
+    gameState.musicalClock.toggleMetronome();
+    console.log(`Metronome ${gameState.musicalClock.metronomeEnabled ? 'enabled' : 'disabled'}`);
   }
 }
 

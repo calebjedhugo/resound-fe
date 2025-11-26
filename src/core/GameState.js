@@ -1,5 +1,4 @@
-import Metronome from 'audio/instruments/Metronome';
-import MusicalClock from './MusicalClock';
+import MusicalClock from 'audio/lib/MusicalClock';
 
 class GameState {
   constructor() {
@@ -8,7 +7,6 @@ class GameState {
 
     // Musical timing (set when puzzle loads)
     this.musicalClock = null;
-    this.metronome = new Metronome();
 
     this.player = {
       position: { x: 0, y: 1.8, z: 0 },
@@ -51,7 +49,6 @@ class GameState {
   reset() {
     this.currentPuzzle = null;
     this.musicalClock = null;
-    this.metronome.reset();
     this.player.position = { x: 0, y: 1.8, z: 0 };
     this.player.rotation = { x: 0, y: 0 };
     this.player.inventory = [null, null, null, null, null];
