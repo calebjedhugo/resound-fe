@@ -40,6 +40,7 @@ module.exports = {
     'class-methods-use-this': 'warn',
     'import/prefer-default-export': 'off',
     'no-await-in-loop': 'off',
+    'lines-between-class-members': 'off',
     'no-restricted-syntax': [
       'error',
       {

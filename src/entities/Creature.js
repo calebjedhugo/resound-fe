@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import Random from 'audio/instruments/Random';
 import gameState from 'core/GameState';
+import ListeningManager from 'core/ListeningManager';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import { RECORDING_RANGE_PERCENTAGE } from 'core/constants';
 import Entity from './Entity';
@@ -23,6 +24,11 @@ class Creature extends Entity {
     // Create unique instrument for this creature
     this.instrument = new Random(this.id);
     this.instrument.sourcePosition = this.position; // Set source position for listening
+
+    // Set up note callback to emit to ListeningManager (for gates/fountains)
+    this.instrument.noteCallback = (noteEvent) => {
+      ListeningManager.emitNote(noteEvent);
+    };
 
     // Singing timing (based on musical clock beats)
     this.nextSingBeat = 0; // Starts singing immediately
@@ -96,7 +102,7 @@ class Creature extends Entity {
    * Update recording state in game state
    */
   updateRecordingState() {
-    const creaturesInRange = gameState.recording.creaturesInRange;
+    const { creaturesInRange } = gameState.recording;
 
     if (this.isRecordable) {
       // Add to recording range if not already there

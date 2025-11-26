@@ -1,4 +1,3 @@
-import ListeningManager from 'core/ListeningManager';
 import { getDuration } from '../lib/duration';
 import audioContextManager from '../lib/AudioContextManager';
 
@@ -34,8 +33,8 @@ class Instrument {
       basis: 4,
     };
 
-    // Recording callback for real-time capture
-    this.recordingCallback = null;
+    // Note callback for real-time note events (recording, listening, etc.)
+    this.noteCallback = null;
 
     // Current volume multiplier (for distance-based volume)
     this.volumeMultiplier = 1.0;
@@ -177,21 +176,17 @@ class Instrument {
       return;
     }
 
-    const noteEvent = {
-      pitch: note.pitch,
-      length: note.length,
-      timestamp: Date.now(),
-      source: this.id,
-      sourcePosition: this.sourcePosition,
-    };
-
-    // Emit to recording callback if recording
-    if (this.recordingCallback) {
-      this.recordingCallback(noteEvent);
+    // Emit note event to callback (for recording, listening, etc.)
+    if (this.noteCallback) {
+      const noteEvent = {
+        pitch: note.pitch,
+        length: note.length,
+        timestamp: Date.now(),
+        source: this.id,
+        sourcePosition: this.sourcePosition,
+      };
+      this.noteCallback(noteEvent);
     }
-
-    // Emit to listening manager (for gates/fountains)
-    ListeningManager.emitNote(noteEvent);
 
     // Create and play note
     this.startNote(note.pitch, duration);
@@ -206,26 +201,21 @@ class Instrument {
     const durations = notes.map((note) => getDuration(note.length, tempo, basis));
     const shortestDuration = Math.min(...durations);
 
-    // Emit notes to recording callback and listening manager
-    notes.forEach((note) => {
-      if (note.pitch && note.pitch !== undefined && note.pitch !== null) {
-        const noteEvent = {
-          pitch: note.pitch,
-          length: note.length,
-          timestamp: Date.now(),
-          source: this.id,
-          sourcePosition: this.sourcePosition,
-        };
-
-        // Emit to recording callback if recording
-        if (this.recordingCallback) {
-          this.recordingCallback(noteEvent);
+    // Emit note events to callback (for recording, listening, etc.)
+    if (this.noteCallback) {
+      notes.forEach((note) => {
+        if (note.pitch && note.pitch !== undefined && note.pitch !== null) {
+          const noteEvent = {
+            pitch: note.pitch,
+            length: note.length,
+            timestamp: Date.now(),
+            source: this.id,
+            sourcePosition: this.sourcePosition,
+          };
+          this.noteCallback(noteEvent);
         }
-
-        // Emit to listening manager (for gates/fountains)
-        ListeningManager.emitNote(noteEvent);
-      }
-    });
+      });
+    }
 
     // Start all notes (they clean themselves up)
     notes.forEach((note, i) => {

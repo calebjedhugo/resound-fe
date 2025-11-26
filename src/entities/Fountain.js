@@ -29,6 +29,11 @@ class Fountain extends Entity {
     this.instrument = new FountainInstrument(this.id);
     this.instrument.sourcePosition = this.position;
 
+    // Set up note callback to emit to ListeningManager (for gates/fountains)
+    this.instrument.noteCallback = (noteEvent) => {
+      ListeningManager.emitNote(noteEvent);
+    };
+
     this.createMesh();
 
     // Register with ListeningManager

@@ -1,4 +1,5 @@
 import Piano from 'audio/instruments/Piano';
+import ListeningManager from './ListeningManager';
 import gameState from './GameState';
 
 /**
@@ -6,8 +7,14 @@ import gameState from './GameState';
  */
 class PlaybackManager {
   static playerInstrument = new Piano('player');
-
   static isPlaying = false;
+
+  // Set up note callback to emit to ListeningManager
+  static {
+    this.playerInstrument.noteCallback = (noteEvent) => {
+      ListeningManager.emitNote(noteEvent);
+    };
+  }
 
   /**
    * Play the song from the active inventory slot

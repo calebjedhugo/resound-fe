@@ -22,9 +22,19 @@ class RecordingManager {
     gameState.recording.capturedNotes = [];
 
     // Attach recording callbacks to all creatures in range
+    // Save their original callbacks so we can restore them
     creaturesInRange.forEach((creature) => {
-      creature.instrument.recordingCallback = (note) => {
+      // Store original callback
+      creature.instrument.savedNoteCallback = creature.instrument.noteCallback;
+
+      // Chain our recording with the original callback
+      creature.instrument.noteCallback = (note) => {
+        // Capture for recording
         gameState.recording.capturedNotes.push(note);
+        // Also call original callback (for ListeningManager)
+        if (creature.instrument.savedNoteCallback) {
+          creature.instrument.savedNoteCallback(note);
+        }
       };
     });
   }
@@ -36,10 +46,11 @@ class RecordingManager {
   static stopRecording() {
     if (!gameState.recording.isRecording) return;
 
-    // Clear recording callbacks
+    // Restore original callbacks
     const { creaturesInRange } = gameState.recording;
     creaturesInRange.forEach((creature) => {
-      creature.instrument.recordingCallback = null;
+      creature.instrument.noteCallback = creature.instrument.savedNoteCallback;
+      delete creature.instrument.savedNoteCallback;
     });
 
     // Process captured notes
