@@ -14,12 +14,7 @@
       "type": "creature",
       "position": { "x": 30, "y": 0, "z": 30 },
       "data": {
-        "song": [
-          { "pitch": "C4", "length": "1/4" },
-          { "pitch": "E4", "length": "1/4" },
-          { "pitch": "G4", "length": "1/4" },
-          { "pitch": "E4", "length": "1/4" }
-        ],
+        "song": [{ "pitch": "C4", "length": "1/1" }],
         "interval": 8,
         "audibleRange": 15
       }
@@ -28,11 +23,7 @@
       "type": "creature",
       "position": { "x": 34, "y": 0, "z": 30 },
       "data": {
-        "song": [
-          { "pitch": "E4", "length": "1/4" },
-          { "pitch": "G4", "length": "1/4" },
-          { "pitch": "C5", "length": "1/2" }
-        ],
+        "song": [{ "pitch": "E4", "length": "1/1" }],
         "interval": 8,
         "audibleRange": 15
       }
@@ -40,11 +31,7 @@
     {
       "type": "gate",
       "position": { "x": 32, "y": 0, "z": 25 },
-      "song": [
-        { "pitch": "C4", "length": "1/1" },
-        { "pitch": "E4", "length": "1/1" },
-        { "pitch": "G4", "length": "1/1" }
-      ]
+      "song": [{ "pitch": "C4", "length": "1/1" }]
     },
     {
       "type": "wall",
@@ -71,10 +58,10 @@
       "type": "fountain",
       "position": { "x": 32, "y": 0, "z": 18 },
       "song": [
-        { "pitch": "C4", "length": "1/1" },
-        { "pitch": "E4", "length": "1/1" },
-        { "pitch": "G4", "length": "1/1" },
-        { "pitch": "C5", "length": "1/1" }
+        [
+          { "pitch": "C4", "length": "1/1" },
+          { "pitch": "E4", "length": "1/1" }
+        ]
       ]
     }
   ]
