@@ -31,7 +31,9 @@ class Creature extends Entity {
     };
 
     // Singing timing (based on musical clock beats)
-    this.nextSingBeat = 0; // Starts singing immediately
+    // Initialize to next beat boundary to prevent drift
+    const currentBeat = gameState.musicalClock?.getCurrentBeat() || 0;
+    this.nextSingBeat = Math.ceil(currentBeat); // Next integer beat
 
     // Recording state
     this.isRecordable = false; // Is player in recording range?
@@ -62,7 +64,8 @@ class Creature extends Entity {
     // Check if it's time to sing (deterministic based on musical time)
     if (currentBeat >= this.nextSingBeat && !this.instrument.playbackState.isPlaying) {
       this.sing();
-      this.nextSingBeat = currentBeat + this.interval;
+      // Maintain schedule to prevent drift
+      this.nextSingBeat += this.interval;
     }
 
     // Calculate distance to player

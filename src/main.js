@@ -98,6 +98,8 @@ function update(deltaTime) {
     // Update musical clock
     if (gameState.musicalClock) {
       gameState.musicalClock.update(deltaTime);
+      // Update metronome (clicks on every beat)
+      gameState.metronome.update(gameState.musicalClock.getCurrentBeat());
     }
     entityManager.update(deltaTime);
     recordingUI.update();
@@ -110,7 +112,7 @@ function render() {
   motion(scene);
 }
 
-// Keyboard handler for pause
+// Keyboard handler for pause and metronome
 function handleKeyDown(event) {
   if (event.code === 'Escape') {
     if (gameState.mode === 'PLAYING') {
@@ -118,6 +120,12 @@ function handleKeyDown(event) {
     } else if (gameState.mode === 'PAUSED') {
       resumeGame();
     }
+  }
+
+  // Toggle metronome with 'M' key
+  if (event.code === 'KeyM' && gameState.mode === 'PLAYING') {
+    gameState.metronome.toggle();
+    console.log(`Metronome ${gameState.metronome.enabled ? 'enabled' : 'disabled'}`);
   }
 }
 

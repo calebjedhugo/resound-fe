@@ -46,8 +46,9 @@ class Instrument {
   /**
    * Play sequence of notes/chords
    * Supports pause/resume by tracking position
+   * Supports optional offset property on notes for timing adjustments
    * @param {Object} params
-   * @param {Array} params.data - Array of notes or chords
+   * @param {Array} params.data - Array of notes or chords (each can have optional offset in ms)
    * @param {number} params.tempo - BPM
    * @param {number} params.basis - Beat note (4 = quarter note)
    */
@@ -66,8 +67,28 @@ class Instrument {
     // Start from beginning (or resume from saved position if resuming)
     const startIndex = this.playbackState.currentIndex;
 
-    // Play through the data array
-    for (let i = startIndex; i < data.length; i += 1) {
+    // Pre-compute play schedule based on offsets
+    const playSchedule = [];
+    let naturalTime = 0; // Natural position based on cumulative durations
+
+    for (let i = 0; i < data.length; i += 1) {
+      const element = data[i];
+      const offset = this.getElementOffset(element);
+      const duration = this.getElementDuration(element, tempo, basis);
+
+      playSchedule.push({
+        element,
+        playTime: naturalTime + offset, // Actual play time = natural + offset
+        duration,
+      });
+
+      naturalTime += duration; // Advance natural time by duration
+    }
+
+    // Execute play schedule
+    let elapsedTime = 0;
+
+    for (let i = startIndex; i < playSchedule.length; i += 1) {
       // Check if we should stop (pause was called)
       if (this.playbackState.shouldStop) {
         this.playbackState.currentIndex = i; // Save position
@@ -77,14 +98,24 @@ class Instrument {
         return;
       }
 
-      const element = data[i];
+      const { element, playTime } = playSchedule[i];
 
+      // Sleep until it's time to play this note
+      const waitTime = playTime - elapsedTime;
+      if (waitTime > 0) {
+        await sleep(waitTime);
+      }
+
+      // Update elapsed time to scheduled play time
+      elapsedTime = playTime;
+
+      // Play the note/chord (without sleeping)
       if (Array.isArray(element)) {
         // CHORD: Play multiple notes simultaneously
-        await this.playChord(element, tempo, basis);
+        this.playChordImmediate(element, tempo, basis);
       } else {
         // SINGLE NOTE: Play one note
-        await this.playNote(element, tempo, basis);
+        this.playNoteImmediate(element, tempo, basis);
       }
     }
 
@@ -93,6 +124,102 @@ class Instrument {
     this.playbackState.isPaused = false;
     this.playbackState.currentIndex = 0;
     this.playbackState.currentData = null;
+  }
+
+  /**
+   * Get offset from a note or chord element
+   * @param {Object|Array} element - Note or chord
+   * @returns {number} Offset in milliseconds
+   */
+  // eslint-disable-next-line class-methods-use-this
+  getElementOffset(element) {
+    if (Array.isArray(element)) {
+      // Chord - use offset from first note
+      return element[0]?.offset || 0;
+    }
+    // Single note
+    return element.offset || 0;
+  }
+
+  /**
+   * Get duration of a note or chord element
+   * @param {Object|Array} element - Note or chord
+   * @param {number} tempo - BPM
+   * @param {number} basis - Beat note
+   * @returns {number} Duration in milliseconds
+   */
+  // eslint-disable-next-line class-methods-use-this
+  getElementDuration(element, tempo, basis) {
+    if (Array.isArray(element)) {
+      // Chord - return shortest duration
+      const durations = element.map((note) => getDuration(note.length, tempo, basis));
+      return Math.min(...durations);
+    }
+    // Single note
+    return getDuration(element.length, tempo, basis);
+  }
+
+  /**
+   * Play a single note immediately (without sleeping)
+   * @param {Object} note - Note data
+   * @param {number} tempo - BPM
+   * @param {number} basis - Beat note (4 = quarter note)
+   */
+  playNoteImmediate(note, tempo, basis) {
+    const duration = getDuration(note.length, tempo, basis);
+
+    // Check for REST
+    if (!note.pitch || note.pitch === undefined || note.pitch === null) {
+      return;
+    }
+
+    // Emit note event to callback (for recording, listening, etc.)
+    if (this.noteCallback) {
+      const noteEvent = {
+        pitch: note.pitch,
+        length: note.length,
+        timestamp: Date.now(),
+        source: this.id,
+        sourcePosition: this.sourcePosition,
+      };
+      this.noteCallback(noteEvent);
+    }
+
+    // Create and play note (Web Audio schedules it)
+    this.startNote(note.pitch, duration);
+  }
+
+  /**
+   * Play multiple notes simultaneously (chord) immediately (without sleeping)
+   * @param {Array} notes - Array of note objects
+   * @param {number} tempo - BPM
+   * @param {number} basis - Beat note (4 = quarter note)
+   */
+  playChordImmediate(notes, tempo, basis) {
+    const durations = notes.map((note) => getDuration(note.length, tempo, basis));
+
+    // Emit note events to callback (for recording, listening, etc.)
+    if (this.noteCallback) {
+      notes.forEach((note) => {
+        if (note.pitch && note.pitch !== undefined && note.pitch !== null) {
+          const noteEvent = {
+            pitch: note.pitch,
+            length: note.length,
+            timestamp: Date.now(),
+            source: this.id,
+            sourcePosition: this.sourcePosition,
+          };
+          this.noteCallback(noteEvent);
+        }
+      });
+    }
+
+    // Start all notes (Web Audio schedules them)
+    notes.forEach((note, i) => {
+      if (note.pitch && note.pitch !== undefined && note.pitch !== null) {
+        this.startNote(note.pitch, durations[i]);
+      }
+    });
   }
 
   /**

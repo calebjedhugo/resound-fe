@@ -1,4 +1,5 @@
 import Piano from 'audio/instruments/Piano';
+import { PLAYBACK_BEAT_TOLERANCE } from './constants';
 import ListeningManager from './ListeningManager';
 import gameState from './GameState';
 
@@ -36,16 +37,64 @@ class PlaybackManager {
     // Set player position for listening
     this.playerInstrument.sourcePosition = position;
 
-    // Play the recorded song
-    this.playSong(recording.data, recording.tempo);
+    // Calculate quantized start timing
+    const { musicalClock } = gameState;
+    const timeSinceLastBeat = musicalClock.getTimeSinceLastBeat();
+
+    let startDelay = 0;
+    let noteOffset = 0;
+
+    if (timeSinceLastBeat < PLAYBACK_BEAT_TOLERANCE) {
+      // Within tolerance - start immediately, snap subsequent notes to grid
+      startDelay = 0;
+      noteOffset = -timeSinceLastBeat; // Negative offset to catch up to grid
+    } else {
+      // Outside tolerance - wait for next beat
+      startDelay = musicalClock.getTimeUntilNextBeat();
+      noteOffset = 0; // Already on grid after waiting
+    }
+
+    // Clone song data and inject offsets for quantization
+    const quantizedData = this.injectOffsets(recording.data, noteOffset);
+
+    // Play the recorded song with quantized timing
+    this.playSong(quantizedData, recording.tempo, startDelay);
+  }
+
+  /**
+   * Deep clone song data and inject offsets for beat quantization
+   * @param {Array} songData - Original song data
+   * @param {number} offset - Offset to apply to all notes after the first (in ms)
+   * @returns {Array} Cloned song data with offsets
+   */
+  static injectOffsets(songData, offset) {
+    return songData.map((element, index) => {
+      // First note: no offset (plays immediately at natural time)
+      // Other notes: apply offset to snap to grid
+      const noteOffset = index === 0 ? 0 : offset;
+
+      if (Array.isArray(element)) {
+        // Chord - clone and add offset to each note
+        return element.map((note) => ({
+          ...note,
+          offset: noteOffset,
+        }));
+      }
+      // Single note - clone and add offset
+      return {
+        ...element,
+        offset: noteOffset,
+      };
+    });
   }
 
   /**
    * Play a song (array of notes/chords)
    * @param {Array} songData - Array of notes or chords
    * @param {number} tempo - Tempo in BPM
+   * @param {number} startDelay - Milliseconds to wait before starting (default 0)
    */
-  static playSong(songData, tempo) {
+  static playSong(songData, tempo, startDelay = 0) {
     if (songData.length === 0) {
       console.warn('Empty song data');
       return;
@@ -53,18 +102,21 @@ class PlaybackManager {
 
     this.isPlaying = true;
 
-    // Use the Instrument.play() method
-    this.playerInstrument.play({
-      data: songData,
-      tempo,
-      basis: 4,
-    });
+    // Wait for startDelay, then begin playback
+    setTimeout(() => {
+      // Play the song (offsets already injected into songData)
+      this.playerInstrument.play({
+        data: songData,
+        tempo,
+        basis: 4,
+      });
+    }, startDelay);
 
     // Calculate total duration to reset isPlaying flag
     const totalDuration = this.calculateSongDuration(songData, tempo);
     setTimeout(() => {
       this.isPlaying = false;
-    }, totalDuration);
+    }, startDelay + totalDuration);
   }
 
   /**

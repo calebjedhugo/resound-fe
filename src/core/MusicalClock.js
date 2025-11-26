@@ -58,6 +58,26 @@ class MusicalClock {
   msToBeats(ms) {
     return (ms / 1000) * this.beatsPerSecond;
   }
+
+  /**
+   * Get time since the last beat in milliseconds
+   * @returns {number} Milliseconds since last beat
+   */
+  getTimeSinceLastBeat() {
+    const fractionalBeat = this.currentBeat % 1;
+    const msPerBeat = (60 / this.tempo) * 1000;
+    return fractionalBeat * msPerBeat;
+  }
+
+  /**
+   * Get time until the next beat in milliseconds
+   * @returns {number} Milliseconds until next beat
+   */
+  getTimeUntilNextBeat() {
+    const fractionalBeat = this.currentBeat % 1;
+    const msPerBeat = (60 / this.tempo) * 1000;
+    return (1 - fractionalBeat) * msPerBeat;
+  }
 }
 
 export default MusicalClock;
