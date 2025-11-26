@@ -30,6 +30,11 @@ class ProgressManager {
     }
   }
 
+  static markPuzzleComplete(puzzleId) {
+    // Alias for markComplete
+    this.markComplete(puzzleId);
+  }
+
   static isComplete(puzzleId) {
     const progress = this.load();
     return progress.completedPuzzles.includes(puzzleId);
@@ -42,6 +47,16 @@ class ProgressManager {
   static getCompletedCount() {
     const progress = this.load();
     return progress.completedPuzzles.length;
+  }
+
+  /**
+   * Get the next unsolved puzzle from a list
+   * @param {Array} puzzles - Array of puzzle objects with { id, ... }
+   * @returns {Object|null} Next unsolved puzzle or null if all complete
+   */
+  static getNextUnsolvedPuzzle(puzzles) {
+    const progress = this.load();
+    return puzzles.find((puzzle) => !progress.completedPuzzles.includes(puzzle.id)) || null;
   }
 }
 

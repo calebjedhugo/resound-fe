@@ -12,6 +12,7 @@ import ProgressManager from 'core/ProgressManager';
 import MainMenu from 'ui/MainMenu';
 import PauseMenu from 'ui/PauseMenu';
 import RecordingUI from 'ui/RecordingUI';
+import DebugUI from 'ui/DebugUI';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
@@ -35,6 +36,7 @@ const entityManager = new EntityManager(scene);
 let mainMenu = null;
 let pauseMenu = null;
 const recordingUI = new RecordingUI();
+const debugUI = new DebugUI();
 
 // State machine
 const stateMachine = new StateMachine(gameState);
@@ -69,6 +71,26 @@ function exitToMenu() {
   stateMachine.setState('MENU');
 }
 
+async function nextPuzzle() {
+  // Get puzzle list
+  const puzzles = await PuzzleLoader.loadPuzzleList();
+
+  // Find next unsolved puzzle
+  const nextUnsolved = ProgressManager.getNextUnsolvedPuzzle(puzzles);
+
+  if (nextUnsolved) {
+    // Clear current puzzle
+    gameState.reset();
+    entityManager.clear();
+
+    // Start next puzzle
+    await startPuzzle(nextUnsolved.id);
+  } else {
+    // All puzzles complete - return to menu
+    exitToMenu();
+  }
+}
+
 // Game loop callbacks
 function update(deltaTime) {
   stateMachine.update(deltaTime);
@@ -79,6 +101,7 @@ function update(deltaTime) {
     }
     entityManager.update(deltaTime);
     recordingUI.update();
+    debugUI.update();
   }
 }
 
@@ -105,7 +128,7 @@ async function initializeGame() {
 
   // Create menus
   mainMenu = new MainMenu(puzzles, startPuzzle, ProgressManager);
-  pauseMenu = new PauseMenu(resumeGame, exitToMenu);
+  pauseMenu = new PauseMenu(resumeGame, exitToMenu, nextPuzzle);
 
   // Register states
   stateMachine.registerState('MENU', new MenuState(gameState, mainMenu));

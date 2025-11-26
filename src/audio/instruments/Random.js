@@ -67,12 +67,17 @@ class Random extends Instrument {
     const frequency = getFrequency(pitch);
     const { currentTime } = this.context;
 
-    // Create gain node for this note
-    const gainNode = this.context.createGain();
-    gainNode.connect(this.context.destination);
+    // Volume control (distance-based)
+    const volumeGain = this.context.createGain();
+    volumeGain.gain.value = this.volumeMultiplier;
+    volumeGain.connect(this.context.destination);
+
+    // Envelope gain node (ADSR)
+    const envelopeGain = this.context.createGain();
+    envelopeGain.connect(volumeGain);
 
     // Apply ADSR envelope
-    applyEnvelope(gainNode, currentTime, this.envelope, duration);
+    applyEnvelope(envelopeGain, currentTime, this.envelope, duration);
 
     // Create fundamental oscillator
     const oscillator = this.context.createOscillator();
@@ -84,14 +89,14 @@ class Random extends Instrument {
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(this.filterCutoff, currentTime);
     oscillator.connect(filter);
-    filter.connect(gainNode);
+    filter.connect(envelopeGain);
 
     // Start fundamental
     oscillator.start(currentTime);
     oscillator.stop(currentTime + duration / 1000);
 
     // Track this oscillator so it can be stopped during pause
-    this.trackOscillator(oscillator, gainNode, duration);
+    this.trackOscillator(oscillator, volumeGain, duration);
 
     // Add harmonics for richness
     this.harmonics.forEach(({ multiple, volume }) => {
@@ -103,13 +108,13 @@ class Random extends Instrument {
       harmonicGain.gain.setValueAtTime(volume, currentTime);
 
       harmonic.connect(harmonicGain);
-      harmonicGain.connect(gainNode);
+      harmonicGain.connect(envelopeGain);
 
       harmonic.start(currentTime);
       harmonic.stop(currentTime + duration / 1000);
 
       // Track harmonic oscillators too
-      this.trackOscillator(harmonic, harmonicGain, duration);
+      this.trackOscillator(harmonic, volumeGain, duration);
     });
   }
 }

@@ -1,22 +1,28 @@
 import * as THREE from 'three';
-import Entity from './Entity';
 import Random from 'audio/instruments/Random';
 import gameState from 'core/GameState';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import { RECORDING_RANGE_PERCENTAGE } from 'core/constants';
+import Entity from './Entity';
 
 class Creature extends Entity {
   constructor(position, data = {}) {
     super('creature', position, data);
 
+    // Validate required data
+    if (!data.song || !Array.isArray(data.song) || data.song.length === 0) {
+      throw new Error('Creature requires a song array');
+    }
+
     // Song data
-    this.song = data.song || [{ pitch: 'C4', length: '1/4' }];
+    this.song = data.song;
     this.interval = data.interval || 8; // Quarter notes between songs
     this.audibleRange = data.audibleRange || 15; // World units
     this.recordingRange = this.audibleRange * RECORDING_RANGE_PERCENTAGE;
 
     // Create unique instrument for this creature
     this.instrument = new Random(this.id);
+    this.instrument.sourcePosition = this.position; // Set source position for listening
 
     // Singing timing (based on musical clock beats)
     this.nextSingBeat = 0; // Starts singing immediately

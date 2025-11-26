@@ -2,6 +2,7 @@ import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import Random from 'audio/instruments/Random';
 import RecordingManager from 'core/RecordingManager';
+import PlaybackManager from 'core/PlaybackManager';
 
 const randomInstrument = new Random();
 
@@ -32,6 +33,10 @@ const dispatchKeyboardActions = ({ code, type }) => {
       gameState.input.keys.running = value;
       break;
     case 'Space':
+      // Playback from active inventory slot
+      if (value) {
+        PlaybackManager.playActiveSlot();
+      }
       break;
     case 'KeyR':
       // Recording toggle

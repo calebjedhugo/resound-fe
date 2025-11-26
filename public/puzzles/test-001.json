@@ -40,10 +40,11 @@
     {
       "type": "gate",
       "position": { "x": 32, "y": 0, "z": 25 },
-      "song": {
-        "notes": ["C4", "E4", "G4"],
-        "rhythm": ["1/1", "1/1", "1/1"]
-      }
+      "song": [
+        { "pitch": "C4", "length": "1/1" },
+        { "pitch": "E4", "length": "1/1" },
+        { "pitch": "G4", "length": "1/1" }
+      ]
     },
     {
       "type": "wall",
@@ -69,10 +70,12 @@
     {
       "type": "fountain",
       "position": { "x": 32, "y": 0, "z": 18 },
-      "song": {
-        "notes": ["C4", "E4", "G4", "C5"],
-        "rhythm": ["1/1", "1/1", "1/1", "1/1"]
-      }
+      "song": [
+        { "pitch": "C4", "length": "1/1" },
+        { "pitch": "E4", "length": "1/1" },
+        { "pitch": "G4", "length": "1/1" },
+        { "pitch": "C5", "length": "1/1" }
+      ]
     }
   ]
 }
