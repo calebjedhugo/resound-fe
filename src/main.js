@@ -40,6 +40,7 @@ const debugUI = new DebugUI();
 
 // State machine
 const stateMachine = new StateMachine(gameState);
+gameState.stateMachine = stateMachine;
 
 // Game functions
 async function startPuzzle(puzzleId) {

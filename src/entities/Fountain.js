@@ -101,7 +101,7 @@ class Fountain extends Entity {
   /**
    * Activate the fountain (correct song was played)
    */
-  activate() {
+  async activate() {
     if (this.isActivated) return;
 
     this.isActivated = true;
@@ -112,22 +112,40 @@ class Fountain extends Entity {
     this.mesh.material.color.setHex(0x00ffff); // Cyan when activated
     this.mesh.material.emissive.setHex(0x004444);
     this.mesh.material.emissiveIntensity = 1.0; // Bright glow
+    this.mesh.material.needsUpdate = true; // Force material update
+
+    // Mute all other sounds so fountain plays alone
+    const savedVolumes = new Map();
+    gameState.entities.forEach((entity) => {
+      if (entity.instrument && entity.id !== this.id) {
+        savedVolumes.set(entity.id, entity.instrument.volume);
+        entity.instrument.updateVolume(0);
+      }
+    });
 
     // Play the solution song with Fountain instrument
-    this.instrument.play({
+    await this.instrument.play({
       data: this.requiredSong,
       tempo: gameState.musicalClock?.tempo || 120,
       basis: 4,
     });
 
-    // Mark puzzle as complete after playing song
+    // Restore creature volumes
+    savedVolumes.forEach((volume, entityId) => {
+      const entity = gameState.entities.find((e) => e.id === entityId);
+      if (entity && entity.instrument) {
+        entity.instrument.updateVolume(volume);
+      }
+    });
+
+    // Mark puzzle as complete
     if (gameState.currentPuzzle) {
       ProgressManager.markPuzzleComplete(gameState.currentPuzzle.id);
 
-      // Pause game after a brief delay (let song finish)
-      setTimeout(() => {
-        gameState.mode = 'PAUSED';
-      }, 2000);
+      // Pause game using state machine
+      if (gameState.stateMachine) {
+        gameState.stateMachine.setState('PAUSED');
+      }
     }
   }
 

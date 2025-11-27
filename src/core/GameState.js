@@ -8,6 +8,9 @@ class GameState {
     // Musical timing (set when puzzle loads)
     this.musicalClock = null;
 
+    // State machine reference (set during initialization)
+    this.stateMachine = null;
+
     this.player = {
       position: { x: 0, y: 1.8, z: 0 },
       rotation: { x: 0, y: 0 },

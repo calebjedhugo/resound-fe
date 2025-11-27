@@ -103,6 +103,7 @@ class Gate extends Entity {
     this.mesh.material.emissiveIntensity = 0.5;
     this.mesh.material.transparent = true;
     this.mesh.material.opacity = 0.3; // Semi-transparent when open
+    this.mesh.material.needsUpdate = true; // Force material update
   }
 
   dispose() {
