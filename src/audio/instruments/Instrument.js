@@ -119,6 +119,10 @@ class Instrument {
       }
     }
 
+    // Wait for the last note to finish before resetting state
+    const lastNoteDuration = playSchedule[playSchedule.length - 1].duration;
+    await sleep(lastNoteDuration);
+
     // Finished playing - reset state
     this.playbackState.isPlaying = false;
     this.playbackState.isPaused = false;
