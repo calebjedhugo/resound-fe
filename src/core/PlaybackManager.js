@@ -10,9 +10,13 @@ class PlaybackManager {
   static playerInstrument = new Piano('player');
   static isPlaying = false;
 
-  // Set up note callback to emit to ListeningManager
+  // Set up note callback to emit to ListeningManager and track current note
   static {
     this.playerInstrument.noteCallback = (noteEvent) => {
+      // Track current note for harmony analysis
+      this.playerInstrument.currentNote = noteEvent;
+
+      // Emit to listening manager
       ListeningManager.emitNote(noteEvent);
     };
   }

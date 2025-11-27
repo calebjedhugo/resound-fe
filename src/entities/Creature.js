@@ -2,8 +2,16 @@ import * as THREE from 'three';
 import Random from 'audio/instruments/Random';
 import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
+import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
+import PlaybackManager from 'core/PlaybackManager';
 import { getDistance, getDistanceVolume } from 'core/utils';
-import { RECORDING_RANGE_PERCENTAGE } from 'core/constants';
+import {
+  RECORDING_RANGE_PERCENTAGE,
+  DEFAULT_CREATURE_MAX_SPEED,
+  CREATURE_DECELERATION,
+  ATTRACTION_FORCE_STRENGTH,
+  REPULSION_FORCE_STRENGTH,
+} from 'core/constants';
 import Entity from './Entity';
 
 class Creature extends Entity {
@@ -21,12 +29,24 @@ class Creature extends Entity {
     this.audibleRange = data.audibleRange || 15; // World units
     this.recordingRange = this.audibleRange * RECORDING_RANGE_PERCENTAGE;
 
+    // Movement properties
+    this.maxSpeed = data.maxSpeed || DEFAULT_CREATURE_MAX_SPEED;
+    this.velocity = { x: 0, z: 0 };
+    this.forces = []; // Accumulated forces from sound sources
+
+    // Track current note being sung (for harmony analysis)
+    this.currentNote = null;
+
     // Create unique instrument for this creature
     this.instrument = new Random(this.id);
     this.instrument.sourcePosition = this.position; // Set source position for listening
 
-    // Set up note callback to emit to ListeningManager (for gates/fountains)
+    // Set up note callback to emit to ListeningManager (for gates/fountains/creatures)
     this.instrument.noteCallback = (noteEvent) => {
+      // Track current note for harmony analysis
+      this.currentNote = noteEvent;
+
+      // Emit to listening manager
       ListeningManager.emitNote(noteEvent);
     };
 
@@ -39,6 +59,9 @@ class Creature extends Entity {
     this.isRecordable = false; // Is player in recording range?
 
     this.createMesh();
+
+    // Register as listener for harmony-based movement
+    ListeningManager.registerListener(this);
   }
 
   createMesh() {
@@ -55,7 +78,7 @@ class Creature extends Entity {
     this.mesh.position.set(this.position.x, this.position.y + 0.9, this.position.z);
   }
 
-  update() {
+  update(deltaTime) {
     // Skip if no musical clock initialized
     if (!gameState.musicalClock) return;
 
@@ -86,6 +109,12 @@ class Creature extends Entity {
 
     // Update creatures in range for recording UI
     this.updateRecordingState();
+
+    // Calculate forces from nearby playing sources (continuous while harmonies exist)
+    this.calculateForces();
+
+    // Apply force-based movement
+    this.updateMovement(deltaTime);
   }
 
   /**
@@ -121,6 +150,165 @@ class Creature extends Entity {
     }
   }
 
+  /**
+   * Callback when a note is played nearby (from ListeningManager)
+   * Used only for logging/debug - force calculation happens in calculateForces()
+   * @param {Object} noteEvent - { pitch, length, timestamp, source, sourcePosition }
+   */
+  onNoteCaptured(noteEvent) {
+    // Ignore own notes
+    if (noteEvent.source === this.id) return;
+
+    // Only log if we're currently singing and can react
+    if (!this.currentNote || !this.instrument.playbackState.isPlaying) return;
+
+    // Check if source is within audible range
+    const distance = getDistance(this.position, noteEvent.sourcePosition);
+    if (distance > this.audibleRange) return;
+
+    // Calculate harmony for logging
+    const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, noteEvent.pitch);
+    const harmony = HarmonyAnalyzer.classifyInterval(interval);
+
+    // Log player-creature harmonies to gameState for DebugUI
+    if (noteEvent.source === 'player') {
+      const harmonyEvent = {
+        creature: this.id,
+        creaturePitch: this.currentNote.pitch,
+        playerPitch: noteEvent.pitch,
+        harmony,
+        interval,
+        timestamp: Date.now(),
+      };
+      gameState.harmonyLog.push(harmonyEvent);
+      // Keep only last 5 harmonies
+      if (gameState.harmonyLog.length > 5) {
+        gameState.harmonyLog.shift();
+      }
+    }
+  }
+
+  /**
+   * Calculate forces from all nearby playing sources
+   * Called every frame to continuously apply forces while harmonies exist
+   */
+  calculateForces() {
+    // Clear forces from previous frame
+    this.forces = [];
+
+    // Only react if we're currently singing
+    if (!this.currentNote || !this.instrument.playbackState.isPlaying) {
+      return;
+    }
+
+    // Helper to add force from a source
+    const addForceFromSource = (sourceNote, sourcePosition) => {
+      // Check if within audible range
+      const distance = getDistance(this.position, sourcePosition);
+      if (distance > this.audibleRange) return;
+
+      // Calculate harmony
+      const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, sourceNote.pitch);
+      const harmony = HarmonyAnalyzer.classifyInterval(interval);
+
+      // Add force based on harmony
+      if (harmony === 'consonant') {
+        // Attraction force toward the sound source
+        const direction = {
+          x: sourcePosition.x - this.position.x,
+          z: sourcePosition.z - this.position.z,
+        };
+        const magnitude = Math.sqrt(direction.x ** 2 + direction.z ** 2);
+
+        if (magnitude > 0) {
+          this.forces.push({
+            x: (direction.x / magnitude) * ATTRACTION_FORCE_STRENGTH,
+            z: (direction.z / magnitude) * ATTRACTION_FORCE_STRENGTH,
+          });
+        }
+      } else if (harmony === 'dissonant') {
+        // Repulsion force away from the sound source
+        const direction = {
+          x: this.position.x - sourcePosition.x,
+          z: this.position.z - sourcePosition.z,
+        };
+        const magnitude = Math.sqrt(direction.x ** 2 + direction.z ** 2);
+
+        if (magnitude > 0) {
+          this.forces.push({
+            x: (direction.x / magnitude) * REPULSION_FORCE_STRENGTH,
+            z: (direction.z / magnitude) * REPULSION_FORCE_STRENGTH,
+          });
+        }
+      }
+      // 'perfect' = no force added
+    };
+
+    // Check all entities for active sound sources
+    gameState.entities.forEach((entity) => {
+      // Skip self
+      if (entity.id === this.id) return;
+
+      // Skip if entity doesn't have an instrument or isn't playing
+      if (!entity.instrument || !entity.instrument.playbackState.isPlaying) return;
+
+      // Skip if no current note
+      if (!entity.currentNote) return;
+
+      addForceFromSource(entity.currentNote, entity.position);
+    });
+
+    // Also check player's playback
+    const playerInstrument = PlaybackManager.getPlayerInstrument();
+
+    if (playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
+      addForceFromSource(playerInstrument.currentNote, gameState.player.position);
+    }
+  }
+
+  /**
+   * Update creature movement based on accumulated forces
+   * @param {number} deltaTime - Time elapsed in seconds
+   */
+  updateMovement(deltaTime) {
+    // Sum all forces
+    const totalForce = this.forces.reduce(
+      (sum, force) => ({
+        x: sum.x + force.x,
+        z: sum.z + force.z,
+      }),
+      { x: 0, z: 0 }
+    );
+
+    // Apply force to velocity
+    this.velocity.x += totalForce.x * deltaTime;
+    this.velocity.z += totalForce.z * deltaTime;
+
+    // Apply deceleration
+    this.velocity.x *= CREATURE_DECELERATION;
+    this.velocity.z *= CREATURE_DECELERATION;
+
+    // Clamp to max speed
+    const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2);
+    if (speed > this.maxSpeed) {
+      const scale = this.maxSpeed / speed;
+      this.velocity.x *= scale;
+      this.velocity.z *= scale;
+    }
+
+    // Update position
+    this.position.x += this.velocity.x * deltaTime;
+    this.position.z += this.velocity.z * deltaTime;
+
+    // Update mesh position
+    this.mesh.position.set(this.position.x, this.position.y + 0.9, this.position.z);
+
+    // Update instrument source position for audio
+    this.instrument.sourcePosition = this.position;
+
+    // Forces are cleared at the start of calculateForces(), not here
+  }
+
   dispose() {
     // Stop any playing sounds
     if (this.instrument) {
@@ -132,6 +320,9 @@ class Creature extends Entity {
     if (index !== -1) {
       gameState.recording.creaturesInRange.splice(index, 1);
     }
+
+    // Unregister from listening manager
+    ListeningManager.unregisterListener(this);
 
     super.dispose();
   }

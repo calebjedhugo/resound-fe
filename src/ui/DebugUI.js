@@ -46,6 +46,20 @@ class DebugUI {
 
     let html = '<strong>DEBUG INFO</strong><br/><br/>';
 
+    // Show harmony detections
+    if (gameState.harmonyLog && gameState.harmonyLog.length > 0) {
+      html += '<strong>Player-Creature Harmonies:</strong><br/>';
+      gameState.harmonyLog.forEach((h) => {
+        let harmonyColor = '#ffff00'; // perfect (yellow)
+        if (h.harmony === 'consonant') harmonyColor = '#00ff00'; // green
+        if (h.harmony === 'dissonant') harmonyColor = '#ff0000'; // red
+        html += `<span style="color: ${harmonyColor}">🎵 ${h.creature}: ${h.creaturePitch} + ${
+          h.playerPitch
+        } = ${h.harmony.toUpperCase()} (${h.interval})</span><br/>`;
+      });
+      html += '<br/>';
+    }
+
     // Show inventory contents
     html += '<strong>Inventory:</strong><br/>';
     gameState.player.inventory.forEach((slot, index) => {

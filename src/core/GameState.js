@@ -47,6 +47,9 @@ class GameState {
       startTime: null,
       capturedNotes: [],
     };
+
+    // Harmony detection log (for debug UI)
+    this.harmonyLog = [];
   }
 
   reset() {
