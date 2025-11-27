@@ -49,8 +49,8 @@ function generateRandomHarmonics() {
  * Generates interesting, tonal sounds with consistent timbre
  */
 class Random extends Instrument {
-  constructor() {
-    super();
+  constructor(id) {
+    super(id);
 
     // Randomize timbre ONCE (stays constant for this instance)
     this.waveform = generateRandomWaveform();
