@@ -1,0 +1,24 @@
+{
+  "puzzles": [
+    {
+      "id": "test-001",
+      "name": "First Steps",
+      "difficulty": 1
+    },
+    {
+      "id": "test-002",
+      "name": "Opening Gates",
+      "difficulty": 1
+    },
+    {
+      "id": "test-003",
+      "name": "Harmonic Motion",
+      "difficulty": 2
+    },
+    {
+      "id": "test-004",
+      "name": "Complex Harmony",
+      "difficulty": 2
+    }
+  ]
+}

@@ -102,9 +102,18 @@ class PuzzleLoader {
   }
 
   static async loadPuzzleList() {
-    // For now, return a hardcoded list
-    // In the future, this could fetch from a server or read a manifest file
-    return [{ id: 'test-001', name: 'Test Puzzle', difficulty: 1 }];
+    try {
+      const response = await fetch('/puzzles/manifest.json');
+      if (!response.ok) {
+        throw new Error(`Failed to load puzzle manifest: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.puzzles;
+    } catch (error) {
+      console.error('Error loading puzzle list:', error);
+      // Fallback to empty list
+      return [];
+    }
   }
 }
 

@@ -1,0 +1,236 @@
+{
+  "id": "test-004",
+  "name": "Complex Harmony",
+  "difficulty": 2,
+  "gridSize": 64,
+  "tempo": 120,
+  "playerStart": {
+    "x": 32,
+    "y": 0,
+    "z": 50
+  },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 28, "y": 0, "z": 48 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/1" }],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "creature",
+      "position": { "x": 36, "y": 0, "z": 48 },
+      "data": {
+        "song": [{ "pitch": "E4", "length": "1/1" }],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 22, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 23, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 24, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 25, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 26, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 27, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 28, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 29, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 30, "y": 0, "z": 42 }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 32, "y": 0, "z": 42 },
+      "song": [
+        [
+          { "pitch": "C4", "length": "1/1" },
+          { "pitch": "E4", "length": "1/1" }
+        ]
+      ]
+    },
+    {
+      "type": "wall",
+      "position": { "x": 34, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 35, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 36, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 37, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 38, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 39, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 40, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 41, "y": 0, "z": 42 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 42, "y": 0, "z": 42 }
+    },
+    {
+      "type": "creature",
+      "position": { "x": 28, "y": 0, "z": 36 },
+      "data": {
+        "song": [{ "pitch": "G4", "length": "1/1" }],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "creature",
+      "position": { "x": 36, "y": 0, "z": 36 },
+      "data": {
+        "song": [{ "pitch": "B4", "length": "1/1" }],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 22, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 23, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 24, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 25, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 26, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 27, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 28, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 29, "y": 0, "z": 30 }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 30, "y": 0, "z": 30 },
+      "song": [
+        [
+          { "pitch": "G4", "length": "1/1" },
+          { "pitch": "B4", "length": "1/1" }
+        ]
+      ]
+    },
+    {
+      "type": "wall",
+      "position": { "x": 31, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 33, "y": 0, "z": 30 }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 34, "y": 0, "z": 30 },
+      "song": [
+        [
+          { "pitch": "C4", "length": "1/1" },
+          { "pitch": "G4", "length": "1/1" }
+        ]
+      ]
+    },
+    {
+      "type": "wall",
+      "position": { "x": 35, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 36, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 37, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 38, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 39, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 40, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 41, "y": 0, "z": 30 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 42, "y": 0, "z": 30 }
+    },
+    {
+      "type": "fountain",
+      "position": { "x": 32, "y": 0, "z": 20 },
+      "song": [
+        [
+          { "pitch": "C4", "length": "1/1" },
+          { "pitch": "E4", "length": "1/1" },
+          { "pitch": "G4", "length": "1/1" },
+          { "pitch": "B4", "length": "1/1" }
+        ]
+      ]
+    }
+  ]
+}

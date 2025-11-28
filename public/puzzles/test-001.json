@@ -1,18 +1,18 @@
 {
   "id": "test-001",
-  "name": "Test Puzzle",
+  "name": "First Steps",
   "difficulty": 1,
   "gridSize": 64,
   "tempo": 120,
   "playerStart": {
     "x": 32,
     "y": 0,
-    "z": 32
+    "z": 35
   },
   "entities": [
     {
       "type": "creature",
-      "position": { "x": 24, "y": 0, "z": 30 },
+      "position": { "x": 30, "y": 0, "z": 30 },
       "data": {
         "song": [{ "pitch": "C4", "length": "1/1" }],
         "interval": 8,
@@ -20,49 +20,9 @@
       }
     },
     {
-      "type": "creature",
-      "position": { "x": 40, "y": 0, "z": 30 },
-      "data": {
-        "song": [{ "pitch": "E4", "length": "1/1" }],
-        "interval": 8,
-        "audibleRange": 15
-      }
-    },
-    {
-      "type": "gate",
-      "position": { "x": 32, "y": 0, "z": 25 },
-      "song": [{ "pitch": "C4", "length": "1/1" }]
-    },
-    {
-      "type": "wall",
-      "position": { "x": 28, "y": 0, "z": 28 }
-    },
-    {
-      "type": "wall",
-      "position": { "x": 36, "y": 0, "z": 28 }
-    },
-    {
-      "type": "wall",
-      "position": { "x": 28, "y": 0, "z": 27 }
-    },
-    {
-      "type": "wall",
-      "position": { "x": 36, "y": 0, "z": 27 }
-    },
-    {
-      "type": "ramp",
-      "position": { "x": 32, "y": 0, "z": 22 },
-      "direction": "north"
-    },
-    {
       "type": "fountain",
-      "position": { "x": 32, "y": 0, "z": 18 },
-      "song": [
-        [
-          { "pitch": "C4", "length": "1/1" },
-          { "pitch": "E4", "length": "1/1" }
-        ]
-      ]
+      "position": { "x": 32, "y": 0, "z": 20 },
+      "song": [{ "pitch": "C4", "length": "1/1" }]
     }
   ]
 }
