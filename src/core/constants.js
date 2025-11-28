@@ -15,6 +15,12 @@ export const PLAYBACK_BEAT_TOLERANCE = 50;
 // Default max speed matches player running speed (8 units/sec)
 export const DEFAULT_CREATURE_MAX_SPEED = 8.0;
 
+// Default creature size (radius in world units)
+export const DEFAULT_CREATURE_SIZE = 0.9;
+
+// Player size (radius in world units, for force calculations)
+export const PLAYER_SIZE = 0.5;
+
 // Deceleration factor applied each frame (0-1)
 // Lower = faster deceleration. Applied as: velocity *= factor
 export const CREATURE_DECELERATION = 0.85;

@@ -8,6 +8,8 @@ import { getDistance, getDistanceVolume } from 'core/utils';
 import {
   RECORDING_RANGE_PERCENTAGE,
   DEFAULT_CREATURE_MAX_SPEED,
+  DEFAULT_CREATURE_SIZE,
+  PLAYER_SIZE,
   CREATURE_DECELERATION,
   ATTRACTION_FORCE_STRENGTH,
   REPULSION_FORCE_STRENGTH,
@@ -28,6 +30,9 @@ class Creature extends Entity {
     this.interval = data.interval || 8; // Quarter notes between songs
     this.audibleRange = data.audibleRange || 15; // World units
     this.recordingRange = this.audibleRange * RECORDING_RANGE_PERCENTAGE;
+
+    // Physical properties
+    this.size = data.size || DEFAULT_CREATURE_SIZE; // Radius in world units
 
     // Movement properties
     this.maxSpeed = data.maxSpeed || DEFAULT_CREATURE_MAX_SPEED;
@@ -65,8 +70,8 @@ class Creature extends Entity {
   }
 
   createMesh() {
-    // Simple sphere creature - human-sized
-    const geometry = new THREE.SphereGeometry(0.9, 16, 16);
+    // Simple sphere creature
+    const geometry = new THREE.SphereGeometry(this.size, 16, 16);
     const material = new THREE.MeshStandardMaterial({
       color: 0x00ff00,
       roughness: 0.5,
@@ -75,7 +80,7 @@ class Creature extends Entity {
       emissiveIntensity: 0.2,
     });
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + 0.9, this.position.z);
+    this.mesh.position.set(this.position.x, this.position.y + this.size, this.position.z);
   }
 
   update(deltaTime) {
@@ -202,10 +207,14 @@ class Creature extends Entity {
     }
 
     // Helper to add force from a source
-    const addForceFromSource = (sourceNote, sourcePosition) => {
+    const addForceFromSource = (sourceNote, sourcePosition, sourceSize) => {
       // Check if within audible range
       const distance = getDistance(this.position, sourcePosition);
       if (distance > this.audibleRange) return;
+
+      // Skip if too close (prevents numerical instability and represents physical contact)
+      const minDistance = this.size + sourceSize;
+      if (distance < minDistance) return;
 
       // Calculate harmony
       const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, sourceNote.pitch);
@@ -255,14 +264,16 @@ class Creature extends Entity {
       // Skip if no current note
       if (!entity.currentNote) return;
 
-      addForceFromSource(entity.currentNote, entity.position);
+      // Use entity's size if available, otherwise use default
+      const entitySize = entity.size || DEFAULT_CREATURE_SIZE;
+      addForceFromSource(entity.currentNote, entity.position, entitySize);
     });
 
     // Also check player's playback
     const playerInstrument = PlaybackManager.getPlayerInstrument();
 
     if (playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
-      addForceFromSource(playerInstrument.currentNote, gameState.player.position);
+      addForceFromSource(playerInstrument.currentNote, gameState.player.position, PLAYER_SIZE);
     }
   }
 
@@ -301,7 +312,7 @@ class Creature extends Entity {
     this.position.z += this.velocity.z * deltaTime;
 
     // Update mesh position
-    this.mesh.position.set(this.position.x, this.position.y + 0.9, this.position.z);
+    this.mesh.position.set(this.position.x, this.position.y + this.size, this.position.z);
 
     // Update instrument source position for audio
     this.instrument.sourcePosition = this.position;
