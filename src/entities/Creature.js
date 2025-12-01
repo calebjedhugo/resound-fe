@@ -4,6 +4,7 @@ import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import PlaybackManager from 'core/PlaybackManager';
+import CollisionDetector from 'core/CollisionDetector';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
   RECORDING_RANGE_PERCENTAGE,
@@ -307,9 +308,25 @@ class Creature extends Entity {
       this.velocity.z *= scale;
     }
 
-    // Update position
-    this.position.x += this.velocity.x * deltaTime;
-    this.position.z += this.velocity.z * deltaTime;
+    // Store old position for collision checking
+    const oldX = this.position.x;
+    const oldZ = this.position.z;
+
+    // Calculate new position
+    const newX = this.position.x + this.velocity.x * deltaTime;
+    const newZ = this.position.z + this.velocity.z * deltaTime;
+
+    // Check collision at new position
+    const newPosition = { x: newX, y: this.position.y, z: newZ };
+    if (!CollisionDetector.checkCollision(newPosition, this.size, this.id)) {
+      // No collision - apply movement
+      this.position.x = newX;
+      this.position.z = newZ;
+    } else {
+      // Collision detected - stop movement
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+    }
 
     // Update mesh position
     this.mesh.position.set(this.position.x, this.position.y + this.size, this.position.z);

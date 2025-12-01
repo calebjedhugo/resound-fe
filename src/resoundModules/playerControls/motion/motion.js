@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
+import CollisionDetector from 'core/CollisionDetector';
 
 const fixedYPosition = 1.8; // Player height in meters
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -12,6 +13,7 @@ document.body.appendChild(renderer.domElement);
 
 const baseSpeed = 0.067; // 4 units/sec ÷ 60 fps = 0.067 units/frame
 const runMultiplier = 2; // Running is 2x walk speed (8 units/sec)
+const playerRadius = 0.4; // Player collision radius
 
 const getSpeed = () => {
   const { running } = gameState.input.keys;
@@ -73,8 +75,26 @@ const updateMotion = () => {
   const cameraDirection = new THREE.Vector3();
   camera.getWorldDirection(cameraDirection);
 
+  // Store old position for collision checking
+  const oldX = camera.position.x;
+  const oldZ = camera.position.z;
+
   updateLateralPosition(cameraDirection);
   updateBackForthPosition(cameraDirection);
+
+  // Check collision at new position
+  const newPosition = {
+    x: camera.position.x,
+    y: camera.position.y,
+    z: camera.position.z,
+  };
+
+  if (CollisionDetector.checkCollision(newPosition, playerRadius)) {
+    // Collision detected - revert to old position
+    camera.position.x = oldX;
+    camera.position.z = oldZ;
+  }
+
   updateCameraDirection();
 };
 

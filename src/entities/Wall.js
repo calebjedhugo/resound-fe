@@ -8,8 +8,8 @@ class Wall extends Entity {
   }
 
   createMesh() {
-    // Simple cube wall - 2.5 units tall (taller than 1.8 player)
-    const geometry = new THREE.BoxGeometry(1, 2.5, 1);
+    // Wall fills entire grid cell (3x3 world units) - 2.5 units tall (taller than 1.8 player)
+    const geometry = new THREE.BoxGeometry(3, 2.5, 3);
     const material = new THREE.MeshStandardMaterial({
       color: 0x808080,
       roughness: 0.9,

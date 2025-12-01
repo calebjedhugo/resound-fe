@@ -30,8 +30,8 @@ class Gate extends Entity {
   }
 
   createMesh() {
-    // Doorway-sized gate
-    const geometry = new THREE.BoxGeometry(1.5, 3, 0.3);
+    // Gate fills entire grid cell (3x3 world units) when closed
+    const geometry = new THREE.BoxGeometry(3, 3, 3);
     const material = new THREE.MeshStandardMaterial({
       color: 0xffaa00,
       roughness: 0.4,
