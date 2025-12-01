@@ -2,17 +2,17 @@
   "id": "test-001",
   "name": "First Steps",
   "difficulty": 1,
-  "gridSize": 64,
+  "gridSize": 15,
   "tempo": 120,
   "playerStart": {
-    "x": 32,
+    "x": 10,
     "y": 0,
-    "z": 35
+    "z": 13
   },
   "entities": [
     {
       "type": "creature",
-      "position": { "x": 30, "y": 0, "z": 30 },
+      "position": { "x": 8, "y": 0, "z": 8 },
       "data": {
         "song": [{ "pitch": "C4", "length": "1/1" }],
         "interval": 8,
@@ -21,7 +21,7 @@
     },
     {
       "type": "fountain",
-      "position": { "x": 32, "y": 0, "z": 20 },
+      "position": { "x": 8, "y": 0, "z": 2 },
       "song": [{ "pitch": "C4", "length": "1/1" }]
     }
   ]
