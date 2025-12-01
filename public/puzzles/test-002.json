@@ -57,6 +57,10 @@
       "position": { "x": 7, "y": 0, "z": 6 }
     },
     {
+      "type": "wall",
+      "position": { "x": 8, "y": 0, "z": 6 }
+    },
+    {
       "type": "gate",
       "position": { "x": 9, "y": 0, "z": 6 },
       "song": [
@@ -65,6 +69,10 @@
           { "pitch": "E4", "length": "1/1" }
         ]
       ]
+    },
+    {
+      "type": "wall",
+      "position": { "x": 10, "y": 0, "z": 6 }
     },
     {
       "type": "wall",
