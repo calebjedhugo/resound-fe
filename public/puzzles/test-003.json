@@ -70,14 +70,10 @@
       "type": "gate",
       "position": { "x": 10, "y": 0, "z": 8 },
       "song": [
-        [
-          { "pitch": "E4", "length": "1/2" },
-          { "pitch": "C4", "length": "1/2" }
-        ],
-        [
-          { "pitch": "F4", "length": "1/2" },
-          { "pitch": "B3", "length": "1/2" }
-        ]
+        { "pitch": "C4", "length": "1/2" },
+        { "pitch": "E4", "length": "1/2" },
+        { "pitch": "F4", "length": "1/2" },
+        { "pitch": "B3", "length": "1/2" }
       ]
     },
     {
@@ -116,14 +112,10 @@
       "type": "fountain",
       "position": { "x": 10, "y": 0, "z": 2 },
       "song": [
-        [
-          { "pitch": "B3", "length": "1/2" },
-          { "pitch": "F4", "length": "1/2" }
-        ],
-        [
-          { "pitch": "C4", "length": "1/2" },
-          { "pitch": "E4", "length": "1/2" }
-        ]
+        { "pitch": "B3", "length": "1/2" },
+        { "pitch": "F4", "length": "1/2" },
+        { "pitch": "E4", "length": "1/2" },
+        { "pitch": "C4", "length": "1/2" }
       ]
     }
   ]
