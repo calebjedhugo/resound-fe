@@ -46,6 +46,42 @@ class PuzzleLoader {
     const floor = new Floor(puzzleData.gridSize);
     entityManager.add(floor);
 
+    // Generate perimeter walls around the grid
+    const { gridSize } = puzzleData;
+    for (let i = 0; i < gridSize; i += 1) {
+      // Top edge (z = 0)
+      const topWall = new Wall({
+        x: i * WORLD_SCALE,
+        y: 0,
+        z: 0,
+      });
+      entityManager.add(topWall);
+
+      // Bottom edge (z = gridSize - 1)
+      const bottomWall = new Wall({
+        x: i * WORLD_SCALE,
+        y: 0,
+        z: (gridSize - 1) * WORLD_SCALE,
+      });
+      entityManager.add(bottomWall);
+
+      // Left edge (x = 0)
+      const leftWall = new Wall({
+        x: 0,
+        y: 0,
+        z: i * WORLD_SCALE,
+      });
+      entityManager.add(leftWall);
+
+      // Right edge (x = gridSize - 1)
+      const rightWall = new Wall({
+        x: (gridSize - 1) * WORLD_SCALE,
+        y: 0,
+        z: i * WORLD_SCALE,
+      });
+      entityManager.add(rightWall);
+    }
+
     // Set player start position (scaled)
     gameState.player.position = {
       x: puzzleData.playerStart.x * WORLD_SCALE,
