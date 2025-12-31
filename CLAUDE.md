@@ -16,7 +16,7 @@ IMPORTANT: Update this checklist when completing features. Mark items ✅ when d
 ✅ First-person movement and camera
 ✅ Recording system (5-slot inventory)
 ✅ Playback with beat quantization
-✅ Clap mechanic (delays creature songs)
+✅ Clap mechanic (displaces creature timing, quantized to 16th notes)
 ⚠️ Accidental overwrite prevention for recordings (basic, could improve)
 
 ### Audio Systems

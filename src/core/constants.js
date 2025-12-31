@@ -33,3 +33,15 @@ export const REPULSION_FORCE_STRENGTH = 15.0;
 // Harmony timing: notes must fall on same subdivision to be considered simultaneous
 // 16 = sixteenth notes, 8 = eighth notes, etc.
 export const HARMONY_TIMING_SUBDIVISION = 16;
+
+// Clap constants
+// Fixed range for clap effect (world units)
+// Matches typical recording range (50% of 15-unit audible range)
+export const CLAP_RANGE = 7.5;
+
+// Default beat displacement when creature is clapped (in beats)
+// 1/16 note = 0.0625 beats (can be overridden per puzzle/creature)
+export const DEFAULT_CLAP_DISPLACEMENT = 0.0625;
+
+// Visual feedback duration for clap effect (seconds)
+export const CLAP_VISUAL_FADE_DURATION = 0.3;

@@ -38,6 +38,9 @@ class PuzzleLoader {
     // Clear existing entities
     entityManager.clear();
 
+    // Store puzzle data in game state
+    gameState.currentPuzzle = puzzleData;
+
     // Initialize musical clock with puzzle tempo
     const tempo = puzzleData.tempo || 120; // Default 120 BPM
     gameState.initMusicalClock(tempo);

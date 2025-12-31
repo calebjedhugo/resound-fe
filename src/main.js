@@ -13,6 +13,8 @@ import MainMenu from 'ui/MainMenu';
 import PauseMenu from 'ui/PauseMenu';
 import RecordingUI from 'ui/RecordingUI';
 import DebugUI from 'ui/DebugUI';
+import ClapVisual from 'ui/ClapVisual';
+import ClapManager from 'core/ClapManager';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
@@ -37,6 +39,12 @@ let mainMenu = null;
 let pauseMenu = null;
 const recordingUI = new RecordingUI();
 const debugUI = new DebugUI();
+const clapVisual = new ClapVisual(scene);
+
+// Set up clap visual callback
+ClapManager.setVisualCallback((position, range) => {
+  clapVisual.show(position, range);
+});
 
 // State machine
 const stateMachine = new StateMachine(gameState);
@@ -69,6 +77,8 @@ function resumeGame() {
 function exitToMenu() {
   gameState.reset();
   entityManager.clear();
+  clapVisual.clear();
+  ClapManager.reset();
   stateMachine.setState('MENU');
 }
 
@@ -101,6 +111,7 @@ function update(deltaTime) {
       gameState.musicalClock.update(deltaTime);
     }
     entityManager.update(deltaTime);
+    clapVisual.update(deltaTime);
     recordingUI.update();
     debugUI.update();
   }

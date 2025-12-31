@@ -3,6 +3,7 @@ import CameraController from 'core/CameraController';
 import Random from 'audio/instruments/Random';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
+import ClapManager from 'core/ClapManager';
 
 const randomInstrument = new Random();
 
@@ -61,6 +62,12 @@ const dispatchKeyboardActions = ({ code, type }) => {
       if (value) {
         gameState.player.activeSlot =
           (gameState.player.activeSlot + 1) % gameState.player.maxInventorySize;
+      }
+      break;
+    case 'KeyC':
+      // Clap (quantized to 16th notes)
+      if (value) {
+        ClapManager.requestClap();
       }
       break;
     default:

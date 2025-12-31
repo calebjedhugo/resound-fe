@@ -6,28 +6,42 @@ This document defines the structure for Resound puzzle files.
 
 ```json
 {
-  "id": "string",           // Unique puzzle identifier (e.g., "puzzle-001")
-  "name": "string",         // Display name (e.g., "First Steps")
-  "difficulty": number,     // 1 (Easy), 2 (Medium), 3 (Hard)
-  "gridSize": number,       // Grid dimension (usually 64)
-  "playerStart": {          // Player starting position
+  "id": "string",                    // Unique puzzle identifier (e.g., "test-001")
+  "name": "string",                  // Display name (e.g., "First Steps")
+  "difficulty": number,              // 1 (Easy), 2 (Medium), 3 (Hard)
+  "gridSize": number,                // Grid dimension (typically 15-64)
+  "tempo": number,                   // BPM (typically 120)
+  "clapDisplacement": "string",      // OPTIONAL: Default beat displacement for claps (e.g., "1/8", "1/4")
+                                     // If omitted, uses system default (1/16)
+  "playerStart": {                   // Player starting position
     "x": number,
     "y": number,
     "z": number
   },
-  "entities": [             // Array of game entities
+  "entities": [                      // Array of game entities
     {
-      "type": "string",     // Entity type: "creature", "gate", "fountain", "wall", "ramp"
+      "type": "string",              // Entity type: "creature", "gate", "fountain", "wall", "ramp"
       "position": {
         "x": number,
         "y": number,
         "z": number
       },
-      "song": {             // For creatures, gates, and fountains
-        "notes": ["string"], // Array of notes (e.g., ["C4", "E4", "G4"])
-        "rhythm": ["string"] // Array of rhythms (e.g., ["1/4", "1/4", "1/2"])
+      "data": {                      // Entity-specific data (for creatures)
+        "song": [                    // Array of notes/chords
+          { "pitch": "string", "length": "string" }  // Single note
+          // OR
+          [{ "pitch": "string", "length": "string" }] // Chord
+        ],
+        "interval": number,          // Beats between song repetitions (creatures only)
+        "audibleRange": number,      // Audio range in world units (creatures only)
+        "clapDisplacement": "string" // OPTIONAL: Override puzzle default for this creature
       },
-      "direction": "string"  // For ramps: "north", "south", "east", "west"
+      "song": [                      // For gates and fountains (different format)
+        { "pitch": "string", "length": "string" }
+        // OR
+        [{ "pitch": "string", "length": "string" }] // Chord
+      ],
+      "direction": "string"          // For ramps: "north", "south", "east", "west"
     }
   ]
 }

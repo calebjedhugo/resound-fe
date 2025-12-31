@@ -137,6 +137,40 @@ class Creature extends Entity {
   }
 
   /**
+   * Stop current song (if playing)
+   */
+  stopSong() {
+    if (this.instrument) {
+      this.instrument.stop();
+    }
+  }
+
+  /**
+   * Handle being clapped - stop current song and displace timing
+   * @param {number} displacement - Beat displacement amount
+   */
+  handleClap(displacement) {
+    // Stop current song immediately
+    this.stopSong();
+
+    // Displace next sing time by the specified amount
+    this.nextSingBeat += displacement;
+
+    // Visual feedback - make creature flash or glow
+    if (this.mesh && this.mesh.material) {
+      const originalEmissive = this.mesh.material.emissive.getHex();
+      this.mesh.material.emissive.setHex(0xffffff); // Flash white
+
+      // Fade back to original after 100ms
+      setTimeout(() => {
+        if (this.mesh && this.mesh.material) {
+          this.mesh.material.emissive.setHex(originalEmissive);
+        }
+      }, 100);
+    }
+  }
+
+  /**
    * Update recording state in game state
    */
   updateRecordingState() {
