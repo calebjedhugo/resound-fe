@@ -3,24 +3,24 @@
   "name": "Creature Test - Two Creatures Harmony",
   "difficulty": 1,
   "gridSize": 20,
-  "tempo": 120,
-  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "tempo": 480,
+  "playerStart": { "x": 10, "y": 0, "z": 5 },
   "entities": [
     {
       "type": "creature",
-      "position": { "x": 5, "y": 0, "z": 0 },
+      "position": { "x": 5, "y": 0, "z": 5 },
       "data": {
-        "song": [{ "pitch": "C4", "length": "1/2" }],
-        "interval": 2,
+        "song": [{ "pitch": "C4", "length": "1/1" }],
+        "interval": 1,
         "audibleRange": 30
       }
     },
     {
       "type": "creature",
-      "position": { "x": 10, "y": 0, "z": 0 },
+      "position": { "x": 15, "y": 0, "z": 5 },
       "data": {
-        "song": [{ "pitch": "E4", "length": "1/2" }],
-        "interval": 2,
+        "song": [{ "pitch": "E4", "length": "1/1" }],
+        "interval": 1,
         "audibleRange": 30
       }
     }

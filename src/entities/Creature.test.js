@@ -15,209 +15,292 @@ import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import PlaybackManager from 'core/PlaybackManager';
 
 /**
- * NOTE: Creature movement tests are skipped because they require precise timing
- * coordination between creature instrument playback and player instrument playback
- * that is difficult to achieve with Jest fake timers.
+ * Creature movement tests using real timers
  *
- * The movement system requires:
- * 1. Creature actively singing (isPlaying && currentNote set)
- * 2. Player actively playing (isPlaying && currentNote set on playerInstrument)
- * 3. Both instruments playing simultaneously during a tick() update
+ * WHY REAL TIMERS: Movement requires detecting simultaneous playback - both
+ * the creature AND player must have active notes at the same moment. With fake
+ * timers, jest.runAllTimersAsync() resolves all pending setTimeout callbacks
+ * at once, causing notes to start and end before the entity update loop runs.
+ * It's difficult to orchestrate both instruments into an "actively playing"
+ * state during the same update cycle.
  *
- * With Jest's runAllTimersAsync(), by the time advanceBeats() completes, both
- * instruments have finished their async play() calls (isPlaying = false).
+ * With real timers, small delays in realTimeUpdate() let instrument callbacks
+ * fire naturally between entity updates, creating genuine note overlap.
  *
- * The movement logic IS tested manually and works in the actual game.
- * See HarmonyAnalyzer tests below for unit tests of the underlying interval classification.
+ * These tests use high BPM (480) for faster execution - a whole note is 500ms.
  */
-describe.skip('Creature movement from consonance/dissonance', () => {
+describe('Creature movement from consonance/dissonance', () => {
+  // Helper to run game loop updates with real timers
+  const realTimeUpdate = async (testCtx, durationMs, stepMs = 16) => {
+    const steps = Math.ceil(durationMs / stepMs);
+    const entityManager = testCtx.getEntityManager();
+
+    for (let i = 0; i < steps; i += 1) {
+      const dt = stepMs / 1000;
+
+      // Update musical clock
+      const clock = testCtx.getMusicalClock();
+      if (clock) {
+        clock.update(dt);
+      }
+
+      // Update all entities
+      entityManager.update(dt);
+
+      // Small real delay to let instrument timers fire
+      // eslint-disable-next-line no-promise-executor-return
+      await new Promise((resolve) => setTimeout(resolve, stepMs));
+    }
+  };
+
+  // Helper to start player instrument playback (works with real timers)
+  // Uses high BPM (480) and whole note for faster test execution
+  const startPlayerPlayback = async (testCtx, pitch) => {
+    const playerInstrument = PlaybackManager.getPlayerInstrument();
+    playerInstrument.sourcePosition = testCtx.getPlayerPosition();
+    playerInstrument.play({
+      data: [{ pitch, length: '1/1' }],
+      tempo: 480,
+      basis: 4,
+    });
+    PlaybackManager.isPlaying = true;
+    // Wait for instrument to start
+    // eslint-disable-next-line no-promise-executor-return
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  };
+
+  beforeEach(() => {
+    // Switch to real timers for movement tests
+    jest.useRealTimers();
+    // Reset PlaybackManager state
+    PlaybackManager.isPlaying = false;
+    PlaybackManager.playerInstrument.currentNote = null;
+    // Stop any playing instruments
+    PlaybackManager.playerInstrument.stop?.();
+  });
+
+  afterEach(() => {
+    // Stop any playback and reset state
+    PlaybackManager.isPlaying = false;
+    PlaybackManager.playerInstrument.currentNote = null;
+    PlaybackManager.playerInstrument.stop?.();
+    // Restore fake timers for other tests
+    jest.useFakeTimers();
+  });
+
   describe('attraction from consonant intervals', () => {
     it('moves toward player when player plays consonant interval (major 3rd)', async () => {
       ctx.loadPuzzle('creature-consonance');
-      ctx.setInventorySlot(0, [{ pitch: 'E4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      // Start playback immediately and run long enough to cover multiple singing cycles
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeLessThan(originalX);
-    });
+    }, 10000);
 
     it('moves toward player when player plays consonant interval (minor 3rd)', async () => {
       ctx.loadPuzzle('creature-consonance');
-      ctx.setInventorySlot(0, [{ pitch: 'Eb4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'Eb4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeLessThan(originalX);
-    });
+    }, 10000);
 
     it('moves toward player when player plays consonant interval (major 6th)', async () => {
       ctx.loadPuzzle('creature-consonance');
-      ctx.setInventorySlot(0, [{ pitch: 'A4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'A4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeLessThan(originalX);
-    });
+    }, 10000);
   });
 
   describe('repulsion from dissonant intervals', () => {
     it('moves away from player when player plays dissonant interval (minor 2nd)', async () => {
       ctx.loadPuzzle('creature-dissonance');
-      ctx.setInventorySlot(0, [{ pitch: 'C#4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'C#4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
-    });
+    }, 10000);
 
     it('moves away from player when player plays dissonant interval (tritone)', async () => {
       ctx.loadPuzzle('creature-dissonance');
-      ctx.setInventorySlot(0, [{ pitch: 'F#4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'F#4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
-    });
+    }, 10000);
 
     it('moves away from player when player plays dissonant interval (major 7th)', async () => {
       ctx.loadPuzzle('creature-dissonance');
-      ctx.setInventorySlot(0, [{ pitch: 'B4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'B4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
-    });
+    }, 10000);
   });
 
   describe('no movement from perfect intervals', () => {
     it('does not move when player plays unison (same pitch)', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'C4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
-    });
+    }, 10000);
 
     it('does not move when player plays octave', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
-      ctx.setInventorySlot(0, [{ pitch: 'C5', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'C5');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
-    });
+    }, 10000);
 
     it('does not move when player plays perfect 5th', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
-      ctx.setInventorySlot(0, [{ pitch: 'G4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'G4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
-    });
+    }, 10000);
 
     it('does not move when player plays perfect 4th', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
-      ctx.setInventorySlot(0, [{ pitch: 'F4', length: '1/1' }]);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      await startPlayerPlayback(ctx, 'F4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
-    });
+    }, 10000);
   });
 
   describe('only reacting while singing', () => {
     it('does not move when creature is not singing', async () => {
+      // Use singing-timing fixture: interval=8, so creature sings at beat 0, then not until beat 8
+      // At 480 BPM, a quarter note is 125ms, 8 beats is 1000ms
       ctx.loadPuzzle('creature-singing-timing');
 
-      await ctx.advanceBeats(3);
+      // Advance past the first song (D4 quarter note = 125ms at 480 BPM)
+      await realTimeUpdate(ctx, 200);
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.setInventorySlot(0, [{ pitch: 'C#4', length: '1/4' }]);
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      // Now creature is resting (not singing until beat 8)
+      await startPlayerPlayback(ctx, 'C#4');
+      await realTimeUpdate(ctx, 400);
 
+      // Should not move since creature isn't singing
       expect(creature.position.x).toBeCloseTo(originalX, 1);
-    });
+    }, 10000);
 
     it('moves when creature is actively singing', async () => {
-      ctx.loadPuzzle('creature-consonance');
-      ctx.setInventorySlot(0, [{ pitch: 'C#4', length: '1/1' }]);
+      ctx.loadPuzzle('creature-dissonance');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
+      // C#4 against C4 = minor 2nd = dissonant = repulsion
+      await startPlayerPlayback(ctx, 'C#4');
+      await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
-    });
+    }, 10000);
   });
 });
 
 /**
- * NOTE: Creature-to-creature harmony tests are also skipped due to the same timing issues.
+ * Creature-to-creature harmony tests using real timers
  */
-describe.skip('Creature-to-creature harmony', () => {
+describe('Creature-to-creature harmony', () => {
+  // Helper to run game loop updates with real timers
+  const realTimeUpdate = async (testCtx, durationMs, stepMs = 16) => {
+    const steps = Math.ceil(durationMs / stepMs);
+    const entityManager = testCtx.getEntityManager();
+
+    for (let i = 0; i < steps; i += 1) {
+      const dt = stepMs / 1000;
+
+      const clock = testCtx.getMusicalClock();
+      if (clock) {
+        clock.update(dt);
+      }
+
+      entityManager.update(dt);
+      // eslint-disable-next-line no-promise-executor-return
+      await new Promise((resolve) => setTimeout(resolve, stepMs));
+    }
+  };
+
+  beforeEach(() => {
+    jest.useRealTimers();
+    PlaybackManager.isPlaying = false;
+    PlaybackManager.playerInstrument.currentNote = null;
+    PlaybackManager.playerInstrument.stop?.();
+  });
+
+  afterEach(() => {
+    PlaybackManager.isPlaying = false;
+    PlaybackManager.playerInstrument.currentNote = null;
+    PlaybackManager.playerInstrument.stop?.();
+    jest.useFakeTimers();
+  });
+
   it('creatures react to each other when singing simultaneously', async () => {
     ctx.loadPuzzle('creature-two-creatures-harmony');
-
-    await ctx.advanceBeats(2);
 
     const creatures = ctx.getCreatures();
     const creature1 = creatures.find((c) => c.data.song[0].pitch === 'C4');
@@ -226,11 +309,15 @@ describe.skip('Creature-to-creature harmony', () => {
     const original1X = creature1.position.x;
     const original2X = creature2.position.x;
 
-    await ctx.advanceBeats(1);
+    // Both creatures sing at beat 0 with half notes (1000ms)
+    // C4 + E4 = major 3rd = consonant = attraction toward each other
+    await realTimeUpdate(ctx, 400);
 
+    // Creature1 (C4) should move toward creature2 (positive x)
+    // Creature2 (E4) should move toward creature1 (negative x)
     expect(creature1.position.x).toBeGreaterThan(original1X);
     expect(creature2.position.x).toBeLessThan(original2X);
-  });
+  }, 10000);
 });
 
 describe('Creature singing at correct intervals', () => {

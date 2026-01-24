@@ -3,12 +3,12 @@
   "name": "Creature Test - Singing Timing",
   "difficulty": 1,
   "gridSize": 10,
-  "tempo": 120,
-  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "tempo": 480,
+  "playerStart": { "x": 2, "y": 0, "z": 2 },
   "entities": [
     {
       "type": "creature",
-      "position": { "x": 1, "y": 0, "z": 0 },
+      "position": { "x": 3, "y": 0, "z": 2 },
       "data": {
         "song": [{ "pitch": "D4", "length": "1/4" }],
         "interval": 8,
