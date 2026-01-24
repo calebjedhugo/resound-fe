@@ -21,6 +21,14 @@ npm run lint       # ESLint
 
 ---
 
+## Testing
+
+**Read [`docs/TESTING.md`](docs/TESTING.md)** before writing or modifying tests.
+
+Tests are integration-style: test behaviors through public APIs, mock only browser APIs.
+
+---
+
 ## Code Style
 
 - ESLint (Airbnb base) + Prettier, Husky runs lint-staged on commit
@@ -86,4 +94,4 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 
 ---
 
-*Last Updated: 2025-01-24*
+*Last Updated: 2026-01-24*

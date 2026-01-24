@@ -21,6 +21,12 @@ module.exports = {
         'import/no-extraneous-dependencies': 'off',
       },
     },
+    {
+      files: ['**/__tests__/**/*.js', '**/*.test.js'],
+      globals: {
+        ctx: 'readonly',
+      },
+    },
   ],
   settings: {
     'import/resolver': {
@@ -37,7 +43,8 @@ module.exports = {
     'no-console': ['warn', { allow: ['warn', 'error'] }],
     'no-unused-vars': 'warn',
     'no-param-reassign': ['error', { props: false }],
-    'class-methods-use-this': 'warn',
+    'class-methods-use-this': 'off',
+    'max-classes-per-file': 'off',
     'import/prefer-default-export': 'off',
     'no-await-in-loop': 'off',
     'lines-between-class-members': 'off',

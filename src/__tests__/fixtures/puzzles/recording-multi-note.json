@@ -1,0 +1,23 @@
+{
+  "id": "recording-multi-note",
+  "name": "Recording Test - Multi Note",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 5, "y": 0, "z": 5 },
+      "data": {
+        "song": [
+          { "pitch": "C4", "length": "1/4" },
+          { "pitch": "E4", "length": "1/4" },
+          { "pitch": "G4", "length": "1/4" }
+        ],
+        "interval": 1,
+        "audibleRange": 20
+      }
+    }
+  ]
+}

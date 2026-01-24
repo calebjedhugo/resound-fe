@@ -1,0 +1,28 @@
+{
+  "id": "recording-two-creatures",
+  "name": "Recording Test - Two Creatures",
+  "difficulty": 1,
+  "gridSize": 20,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 0 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/4" }],
+        "interval": 4,
+        "audibleRange": 6
+      }
+    },
+    {
+      "type": "creature",
+      "position": { "x": 6, "y": 0, "z": 0 },
+      "data": {
+        "song": [{ "pitch": "G4", "length": "1/4" }],
+        "interval": 4,
+        "audibleRange": 20
+      }
+    }
+  ]
+}
