@@ -47,32 +47,6 @@ This document defines the structure for Resound puzzle files.
 }
 ```
 
-## Entity Types
-
-### Creature
-- `type`: "creature"
-- `position`: {x, y, z}
-- `song`: Monophonic melody with notes and rhythm
-
-### Gate
-- `type`: "gate"
-- `position`: {x, y, z}
-- `song`: Polyphonic chord with notes and rhythm
-
-### Fountain
-- `type`: "fountain"
-- `position`: {x, y, z}
-- `song`: Polyphonic chord with notes and rhythm (puzzle completion)
-
-### Wall
-- `type`: "wall"
-- `position`: {x, y, z}
-
-### Ramp
-- `type`: "ramp"
-- `position`: {x, y, z}
-- `direction`: "north" | "south" | "east" | "west"
-
 ## Note Format
 Notes should be in scientific pitch notation:
 - Format: `[Note][Accidental]?[Octave]`
