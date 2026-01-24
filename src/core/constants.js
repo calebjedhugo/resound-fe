@@ -39,8 +39,8 @@ export const HARMONY_TIMING_SUBDIVISION = 16;
 // Matches typical recording range (50% of 15-unit audible range)
 export const CLAP_RANGE = 7.5;
 
-// Default beat displacement when creature is clapped (in beats)
-// 1/16 note = 0.0625 beats (can be overridden per puzzle/creature)
+// Default displacement when creature is clapped (fraction of whole note)
+// 1/16 = sixteenth note, 1/8 = eighth note, etc. (can be overridden per puzzle/creature)
 export const DEFAULT_CLAP_DISPLACEMENT = 0.0625;
 
 // Visual feedback duration for clap effect (seconds)

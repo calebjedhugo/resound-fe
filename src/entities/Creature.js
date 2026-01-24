@@ -147,14 +147,16 @@ class Creature extends Entity {
 
   /**
    * Handle being clapped - stop current song and displace timing
-   * @param {number} displacement - Beat displacement amount
+   * @param {number} displacement - Displacement as fraction of whole note (e.g., 0.0625 = 1/16)
    */
   handleClap(displacement) {
     // Stop current song immediately
     this.stopSong();
 
-    // Displace next sing time by the specified amount
-    this.nextSingBeat += displacement;
+    // Convert displacement from whole-note fraction to quarter-note beats
+    // (MusicalClock counts in quarter notes, so multiply by 4)
+    const displacementInBeats = displacement * 4;
+    this.nextSingBeat += displacementInBeats;
 
     // Visual feedback - make creature flash or glow
     if (this.mesh && this.mesh.material) {

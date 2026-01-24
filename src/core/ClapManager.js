@@ -9,8 +9,9 @@ import gameState from './GameState';
 class ClapManager {
   static clapInstrument = new Clap('player-clap');
   static isClapping = false;
-  static nextClapBeat = -1; // Track next allowed clap time (quantized to 16th notes)
+  static nextClapBeat = -1; // Track next allowed clap time
   static pendingClap = false; // Track if a clap is pending (waiting for quantization)
+  static targetBeat = -1; // The beat boundary we're waiting for (quantized to displacement grid)
   static clapVisualCallback = null; // Callback for visual feedback
 
   /**
@@ -22,7 +23,7 @@ class ClapManager {
   }
 
   /**
-   * Request a clap (will be quantized to next 16th note)
+   * Request a clap (will be quantized to displacement grid)
    */
   static requestClap() {
     if (!gameState.musicalClock) {
@@ -30,10 +31,24 @@ class ClapManager {
       return;
     }
 
-    // If already pending, ignore (one clap per 16th note)
+    // If already pending, ignore
     if (this.pendingClap) {
       return;
     }
+
+    // Get displacement from puzzle (fraction of whole note)
+    const displacement = this.parseDisplacement(
+      gameState.currentPuzzle?.clapDisplacement || DEFAULT_CLAP_DISPLACEMENT
+    );
+
+    // Convert to beat grid size (displacement * 4 = beats)
+    const gridSizeInBeats = displacement * 4;
+
+    // Capture target beat now (quantized to displacement grid)
+    const currentBeat = gameState.musicalClock.getCurrentBeat();
+    const gridPosition = currentBeat / gridSizeInBeats;
+    const nextGridLine = Math.ceil(gridPosition);
+    this.targetBeat = nextGridLine * gridSizeInBeats;
 
     // Mark clap as pending
     this.pendingClap = true;
@@ -49,12 +64,10 @@ class ClapManager {
     }
 
     const currentBeat = gameState.musicalClock.getCurrentBeat();
-    const currentSixteenthBeat = currentBeat * 4; // Convert to 16th note subdivisions
-    const nextSixteenthBeat = Math.ceil(currentSixteenthBeat);
 
-    // Check if we've reached the next 16th note boundary
-    if (currentSixteenthBeat >= nextSixteenthBeat - 0.01) {
-      // Close enough to boundary (within 1% of 16th note)
+    // Check if we've reached the target beat boundary
+    // Use small tolerance (1% of a 16th note = 0.0025 beats)
+    if (currentBeat >= this.targetBeat - 0.0025) {
       this.executeClap();
       this.pendingClap = false;
     }
@@ -147,6 +160,7 @@ class ClapManager {
     this.isClapping = false;
     this.nextClapBeat = -1;
     this.pendingClap = false;
+    this.targetBeat = -1;
   }
 }
 

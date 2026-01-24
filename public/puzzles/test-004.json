@@ -4,6 +4,7 @@
   "difficulty": 2,
   "gridSize": 64,
   "tempo": 120,
+  "clapDisplacement": 0.25,
   "playerStart": {
     "x": 32,
     "y": 0,
