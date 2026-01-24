@@ -1,0 +1,20 @@
+{
+  "id": "clap-custom-displacement",
+  "name": "Clap Test - Custom Displacement",
+  "difficulty": 1,
+  "gridSize": 3,
+  "tempo": 120,
+  "clapDisplacement": 0.25,
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 0, "y": 0, "z": 1 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/4" }],
+        "interval": 4,
+        "audibleRange": 10
+      }
+    }
+  ]
+}

@@ -22,6 +22,11 @@ import recordingOutOfRange from '../fixtures/puzzles/recording-out-of-range.json
 import recordingTwoCreatures from '../fixtures/puzzles/recording-two-creatures.json';
 import recordingChord from '../fixtures/puzzles/recording-chord.json';
 import recordingLongInterval from '../fixtures/puzzles/recording-long-interval.json';
+import clapBasic from '../fixtures/puzzles/clap-basic.json';
+import clapOutOfRange from '../fixtures/puzzles/clap-out-of-range.json';
+import clapCustomDisplacement from '../fixtures/puzzles/clap-custom-displacement.json';
+import clapPerCreatureDisplacement from '../fixtures/puzzles/clap-per-creature-displacement.json';
+import clapTwoCreatures from '../fixtures/puzzles/clap-two-creatures.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -31,6 +36,11 @@ const TEST_PUZZLES = {
   'recording-two-creatures': recordingTwoCreatures,
   'recording-chord': recordingChord,
   'recording-long-interval': recordingLongInterval,
+  'clap-basic': clapBasic,
+  'clap-out-of-range': clapOutOfRange,
+  'clap-custom-displacement': clapCustomDisplacement,
+  'clap-per-creature-displacement': clapPerCreatureDisplacement,
+  'clap-two-creatures': clapTwoCreatures,
 };
 
 /**

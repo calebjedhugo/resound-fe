@@ -1,0 +1,30 @@
+{
+  "id": "clap-per-creature-displacement",
+  "name": "Clap Test - Per Creature Displacement",
+  "difficulty": 1,
+  "gridSize": 3,
+  "tempo": 120,
+  "clapDisplacement": 0.125,
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 1, "y": 0, "z": 0 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/4" }],
+        "interval": 4,
+        "audibleRange": 10,
+        "clapDisplacement": 0.5
+      }
+    },
+    {
+      "type": "creature",
+      "position": { "x": -1, "y": 0, "z": 0 },
+      "data": {
+        "song": [{ "pitch": "E4", "length": "1/4" }],
+        "interval": 4,
+        "audibleRange": 10
+      }
+    }
+  ]
+}
