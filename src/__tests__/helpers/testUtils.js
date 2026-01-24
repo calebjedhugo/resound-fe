@@ -27,6 +27,21 @@ import clapOutOfRange from '../fixtures/puzzles/clap-out-of-range.json';
 import clapCustomDisplacement from '../fixtures/puzzles/clap-custom-displacement.json';
 import clapPerCreatureDisplacement from '../fixtures/puzzles/clap-per-creature-displacement.json';
 import clapTwoCreatures from '../fixtures/puzzles/clap-two-creatures.json';
+import playbackBasic from '../fixtures/puzzles/playback-basic.json';
+import playbackMultiNote from '../fixtures/puzzles/playback-multi-note.json';
+import listeningGateBasic from '../fixtures/puzzles/listening-gate-basic.json';
+import listeningFountainBasic from '../fixtures/puzzles/listening-fountain-basic.json';
+import listeningGateOutOfRange from '../fixtures/puzzles/listening-gate-out-of-range.json';
+import listeningGateWrongSong from '../fixtures/puzzles/listening-gate-wrong-song.json';
+import listeningGateMultiNote from '../fixtures/puzzles/listening-gate-multi-note.json';
+import listeningFountainMultiNote from '../fixtures/puzzles/listening-fountain-multi-note.json';
+import creatureMovementBasic from '../fixtures/puzzles/creature-movement-basic.json';
+import creatureConsonance from '../fixtures/puzzles/creature-consonance.json';
+import creatureDissonance from '../fixtures/puzzles/creature-dissonance.json';
+import creaturePerfectInterval from '../fixtures/puzzles/creature-perfect-interval.json';
+import creatureAudibleRange from '../fixtures/puzzles/creature-audible-range.json';
+import creatureSingingTiming from '../fixtures/puzzles/creature-singing-timing.json';
+import creatureTwoCreaturesHarmony from '../fixtures/puzzles/creature-two-creatures-harmony.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -41,6 +56,21 @@ const TEST_PUZZLES = {
   'clap-custom-displacement': clapCustomDisplacement,
   'clap-per-creature-displacement': clapPerCreatureDisplacement,
   'clap-two-creatures': clapTwoCreatures,
+  'playback-basic': playbackBasic,
+  'playback-multi-note': playbackMultiNote,
+  'listening-gate-basic': listeningGateBasic,
+  'listening-fountain-basic': listeningFountainBasic,
+  'listening-gate-out-of-range': listeningGateOutOfRange,
+  'listening-gate-wrong-song': listeningGateWrongSong,
+  'listening-gate-multi-note': listeningGateMultiNote,
+  'listening-fountain-multi-note': listeningFountainMultiNote,
+  'creature-movement-basic': creatureMovementBasic,
+  'creature-consonance': creatureConsonance,
+  'creature-dissonance': creatureDissonance,
+  'creature-perfect-interval': creaturePerfectInterval,
+  'creature-audible-range': creatureAudibleRange,
+  'creature-singing-timing': creatureSingingTiming,
+  'creature-two-creatures-harmony': creatureTwoCreaturesHarmony,
 };
 
 /**

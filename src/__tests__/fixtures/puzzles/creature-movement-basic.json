@@ -1,0 +1,19 @@
+{
+  "id": "creature-movement-basic",
+  "name": "Creature Test - Basic Movement",
+  "difficulty": 1,
+  "gridSize": 20,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 8, "y": 0, "z": 5 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/2" }],
+        "interval": 4,
+        "audibleRange": 30
+      }
+    }
+  ]
+}

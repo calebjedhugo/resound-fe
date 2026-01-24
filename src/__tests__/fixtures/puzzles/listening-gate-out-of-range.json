@@ -1,0 +1,16 @@
+{
+  "id": "listening-gate-out-of-range",
+  "name": "Listening Test - Gate Out of Range",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "entities": [
+    {
+      "type": "gate",
+      "position": { "x": 8, "y": 0, "z": 8 },
+      "song": [{ "pitch": "C4", "length": "1/4" }],
+      "audibleRange": 5
+    }
+  ]
+}

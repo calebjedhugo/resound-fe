@@ -1,0 +1,19 @@
+{
+  "id": "listening-gate-wrong-song",
+  "name": "Listening Test - Gate Wrong Song",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": [
+    {
+      "type": "gate",
+      "position": { "x": 5, "y": 0, "z": 4 },
+      "song": [
+        { "pitch": "E4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" }
+      ],
+      "audibleRange": 15
+    }
+  ]
+}

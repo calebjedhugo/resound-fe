@@ -34,6 +34,12 @@ class MockOscillatorNode {
       linearRampToValueAtTime: jest.fn(),
       exponentialRampToValueAtTime: jest.fn(),
     };
+    this.detune = {
+      value: 0,
+      setValueAtTime: jest.fn(),
+      linearRampToValueAtTime: jest.fn(),
+      exponentialRampToValueAtTime: jest.fn(),
+    };
     this.type = 'sine';
     this.onended = null;
   }
@@ -370,6 +376,7 @@ const mockThree = {
   SphereGeometry: MockGeometry,
   BoxGeometry: MockGeometry,
   PlaneGeometry: MockGeometry,
+  CylinderGeometry: MockGeometry,
   MeshStandardMaterial: MockMaterial,
   MeshBasicMaterial: MockMaterial,
   AmbientLight: MockMesh,

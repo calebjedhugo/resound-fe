@@ -1,0 +1,19 @@
+{
+  "id": "creature-audible-range",
+  "name": "Creature Test - Audible Range",
+  "difficulty": 1,
+  "gridSize": 30,
+  "tempo": 120,
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 5, "y": 0, "z": 0 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/4" }],
+        "interval": 4,
+        "audibleRange": 10
+      }
+    }
+  ]
+}

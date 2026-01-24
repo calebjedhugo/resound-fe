@@ -178,6 +178,7 @@ module.exports = {
   SphereGeometry: Geometry,
   BoxGeometry: Geometry,
   PlaneGeometry: Geometry,
+  CylinderGeometry: Geometry,
   MeshStandardMaterial: Material,
   MeshBasicMaterial: Material,
   AmbientLight: Mesh,

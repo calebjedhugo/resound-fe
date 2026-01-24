@@ -1,0 +1,9 @@
+{
+  "id": "playback-basic",
+  "name": "Playback Test - Basic",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": []
+}

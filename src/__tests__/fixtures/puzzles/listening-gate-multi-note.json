@@ -1,0 +1,20 @@
+{
+  "id": "listening-gate-multi-note",
+  "name": "Listening Test - Gate Multi-Note Song",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": [
+    {
+      "type": "gate",
+      "position": { "x": 5, "y": 0, "z": 4 },
+      "song": [
+        { "pitch": "C4", "length": "1/4" },
+        { "pitch": "E4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" }
+      ],
+      "audibleRange": 15
+    }
+  ]
+}

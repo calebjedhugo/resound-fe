@@ -1,0 +1,19 @@
+{
+  "id": "creature-consonance",
+  "name": "Creature Test - Consonance (Attraction)",
+  "difficulty": 1,
+  "gridSize": 20,
+  "tempo": 120,
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 5, "y": 0, "z": 0 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/2" }],
+        "interval": 2,
+        "audibleRange": 30
+      }
+    }
+  ]
+}

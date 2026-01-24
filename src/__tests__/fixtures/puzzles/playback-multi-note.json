@@ -1,0 +1,9 @@
+{
+  "id": "playback-multi-note",
+  "name": "Playback Test - Multi Note",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": []
+}

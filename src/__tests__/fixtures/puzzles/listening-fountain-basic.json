@@ -1,0 +1,16 @@
+{
+  "id": "listening-fountain-basic",
+  "name": "Listening Test - Fountain Basic",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": [
+    {
+      "type": "fountain",
+      "position": { "x": 5, "y": 0, "z": 4 },
+      "song": [{ "pitch": "C4", "length": "1/4" }],
+      "audibleRange": 15
+    }
+  ]
+}
