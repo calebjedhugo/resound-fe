@@ -23,7 +23,7 @@ npm run lint       # ESLint
 
 ## Testing
 
-**Read [`docs/TESTING.md`](docs/TESTING.md)** before writing or modifying tests.
+**Read [`TESTING.md`](TESTING.md)** before writing or modifying tests.
 
 Tests are integration-style: test behaviors through public APIs, mock only browser APIs.
 
