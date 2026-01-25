@@ -83,7 +83,7 @@ Existing puzzle format. Uses all defaults.
 
 - `pitch` uses format: `[A-G][#b]?[0-8]` (e.g., `C4`, `F#5`, `Bb3`)
 - `length` uses fractions: `1/1`, `1/2`, `1/4`, `1/8`, `1/16`, `1/32`
-- Dotted rhythms: `3/8` (dotted quarter), `3/16` (dotted eighth)
+- Dotted rhythms: add `dotted: true` to the note object (see below)
 
 ### Rest Object
 
@@ -94,6 +94,20 @@ Existing puzzle format. Uses all defaults.
 ```
 
 Rule: If `pitch` property is absent, the object is a rest.
+
+### Dotted Notes
+
+Add `dotted: true` to indicate a dotted duration. This makes intent explicit for rendering (draw the dot) and avoids ambiguity with raw fraction math.
+
+```js
+{ pitch: "C4", length: "1/4", dotted: true }   // dotted quarter (1/4 + 1/8)
+{ pitch: "E4", length: "1/2", dotted: true }   // dotted half (1/2 + 1/4)
+{ length: "1/4", dotted: true }                // dotted quarter rest
+```
+
+The `dotted` flag means "this duration is 1.5x the written length." The renderer draws an augmentation dot. The audio system multiplies duration by 1.5.
+
+**IMPORTANT:** Do not use raw fractions for dotted values (e.g., `"3/8"` for dotted quarter). While mathematically correct, the renderer cannot distinguish a dotted quarter from a true 3/8 duration, and the dot would not be drawn.
 
 ### Chord
 
@@ -109,23 +123,36 @@ Array of simultaneous notes:
 
 All notes in a chord share the same length (use first note's length if they differ).
 
+**Parser note:** A song's `notes` array contains a mix of note objects, rest objects, and chord arrays. The parser MUST use `Array.isArray()` on each element to distinguish a chord `[noteObj, noteObj]` from the enclosing sequence. This is a nested-array-in-array pattern - handle it explicitly.
+
 ### Percussion Notes
 
 For percussion clef, use staff position instead of pitch:
 
 ```js
 {
-  position: 1,      // 1-8, position on staff (1 = bottom line)
-  length: "1/4"
-}
-// or
-{
-  position: "8",    // string also accepted
+  position: 1,      // 1-9, staff position (see mapping below)
   length: "1/4"
 }
 ```
 
 Percussion notes render with X noteheads. This distinguishes them from rests.
+
+**Staff position mapping (5 lines + 4 spaces = 9 positions):**
+
+| Position | Location | Common GM Percussion |
+|----------|----------|---------------------|
+| 1 | Bottom line | Bass drum |
+| 2 | First space | |
+| 3 | Second line | Snare |
+| 4 | Second space | |
+| 5 | Middle line | Hi-hat (closed) |
+| 6 | Third space | |
+| 7 | Fourth line | Crash cymbal |
+| 8 | Top space | |
+| 9 | Top line | Ride cymbal |
+
+Positions use integers 1-9. Odd numbers are lines, even numbers are spaces.
 
 ---
 
@@ -156,13 +183,15 @@ When no clef is specified:
 
 ### Supported Clefs
 
-| Clef | Description | Middle line |
-|------|-------------|-------------|
-| `"treble"` | G clef | B4 |
-| `"bass"` | F clef | D3 |
-| `"alto"` | C clef (viola) | C4 |
-| `"tenor"` | C clef (cello/trombone) | C4 |
-| `"percussion"` | Neutral clef | N/A |
+| Clef | Description | Middle line pitch | C4 placement |
+|------|-------------|-------------------|--------------|
+| `"treble"` | G clef | B4 | 1 ledger line below |
+| `"bass"` | F clef | D3 | 1 ledger line above |
+| `"alto"` | C clef | C4 | 3rd line (middle) |
+| `"tenor"` | C clef | C4 | 4th line |
+| `"percussion"` | Neutral clef | N/A | N/A |
+
+Note: Alto and tenor are both C clefs but differ in which staff line C4 sits on. The clef symbol is visually centered on the C4 line.
 
 ### Key Signatures
 
@@ -192,7 +221,7 @@ const renderer = new NotationRenderer({
   scale: 1.0,           // Scaling factor (optional)
 });
 
-// Render notation
+// Render notation (replaces previous output - clears then draws)
 const svg = renderer.render(songData);
 
 // Update playback position (beat number, zero-indexed)
@@ -207,6 +236,8 @@ renderer.clear();
 // Get SVG element (if not using container)
 const svgElement = renderer.getSvgElement();
 ```
+
+`render()` always replaces previous output (clear + draw). It does not append. Call `render()` again with new data to re-render.
 
 ### Playback Position
 
@@ -224,12 +255,50 @@ Visual indication:
 ```js
 import {
   parseNoteData,      // Normalize any input format to canonical structure
-  validateNoteData,   // Check for errors, return { valid: boolean, errors: [] }
+  validateNoteData,   // Validate data, return { valid, errors }
   inferClef,          // Get inferred clef for a note array
   parseFraction,      // "1/4" -> { numerator: 1, denominator: 4 }
   fractionToBeats,    // "1/4" -> 1.0 (in 4/4 time)
 } from 'notation';
 ```
+
+### Validation Errors
+
+`validateNoteData()` returns an object with structured errors:
+
+```js
+const result = validateNoteData(songData);
+// {
+//   valid: false,
+//   errors: [
+//     {
+//       type: "invalid_pitch",
+//       message: "Invalid pitch 'X4' at note index 2",
+//       path: "notes[2].pitch",
+//       value: "X4"
+//     },
+//     {
+//       type: "invalid_length",
+//       message: "Invalid length '1/3' at note index 5",
+//       path: "notes[5].length",
+//       value: "1/3"
+//     }
+//   ]
+// }
+```
+
+Error types:
+
+| Type | Meaning |
+|------|---------|
+| `invalid_pitch` | Pitch string doesn't match `[A-G][#b]?[0-8]` |
+| `invalid_length` | Length is not a recognized fraction |
+| `invalid_position` | Percussion position outside 1-9 range |
+| `invalid_clef` | Clef value not in supported list |
+| `invalid_key_signature` | Key signature not recognized |
+| `invalid_time_signature` | Time signature not a 2-element array of positive integers |
+| `empty_notes` | Notes array is empty |
+| `mixed_pitched_unpitched` | A single voice contains both pitched notes and percussion positions (validated per-voice; a score with a treble voice + percussion voice is valid) |
 
 ---
 
@@ -322,10 +391,11 @@ The renderer outputs structured SVG with semantic classes for styling:
 
 ### Staff Layout
 
-- Staff line spacing: 10px (configurable via `scale`)
-- Staff height: 40px (4 spaces × 10px)
+- **Note step spacing:** 10px per diatonic step (e.g., E4 to F4 = 10px)
+- **Staff line spacing:** 20px between adjacent lines (every other diatonic step is a line)
+- **Staff height:** 80px (4 line-gaps × 20px)
 - Margin above/below for ledger lines: 60px each
-- Multi-voice staves stack vertically with 20px gap
+- Multi-voice staves stack vertically with 40px gap
 
 ### Note Positioning
 
@@ -348,7 +418,28 @@ D4 (space below) → y = 100
 C4 (ledger -1) → y = 110
 ```
 
-Formula for treble clef: `y = (71 - midiNumber) * 5` where middle C (C4) = MIDI 60.
+**Formula (treble clef):**
+
+1. Compute diatonic position: `diatonicPos = octave * 7 + noteIndex`
+   where C=0, D=1, E=2, F=3, G=4, A=5, B=6
+2. Compute Y: `y = (39 - diatonicPos) * 10`
+
+Examples:
+- C4: `diatonicPos = 4*7 + 0 = 28`, `y = (39-28)*10 = 110` (1 ledger line below)
+- E4: `diatonicPos = 4*7 + 2 = 30`, `y = (39-30)*10 = 90` (bottom line)
+- B4: `diatonicPos = 4*7 + 6 = 34`, `y = (39-34)*10 = 50` (middle line)
+- F5: `diatonicPos = 5*7 + 3 = 38`, `y = (39-38)*10 = 10` (top line)
+
+**IMPORTANT:** Do not use MIDI note numbers for staff positioning. MIDI is chromatic (C#/Db occupy a position), but staff notation is diatonic (C# and C share a staff position, with an accidental). Always convert pitch to diatonic position first.
+
+For other clefs, adjust the reference constant (the diatonic position of the note at y=0, i.e., the space above the top staff line):
+
+| Clef | Constant | Derivation |
+|------|----------|------------|
+| Treble | 39 | G5 (space above top line) = 5×7 + 4 |
+| Bass | 27 | B3 (space above top line) = 3×7 + 6 |
+| Alto | 33 | A4 (space above top line) = 4×7 + 5 |
+| Tenor | 31 | F4 (space above top line) = 4×7 + 3 |
 
 ### Horizontal Spacing
 
@@ -370,6 +461,7 @@ Eighth notes and smaller are beamed when:
 1. Within the same beat (required)
 2. Not crossing a beat boundary (break beam at beat)
 3. Maximum 4 notes per beam group
+4. **Unmetered mode: no beaming.** When `timeSignature` is null, all notes render with individual flags. This is musically defensible (chant/recitative traditions) and avoids heuristic beat guessing. A future option could enable heuristic beaming.
 
 Beam angle follows note contour (rises toward higher notes).
 
@@ -761,12 +853,13 @@ Create JSON files in `__tests__/fixtures/songs/` for reusable test data:
   { "pitch": "B4", "length": "1/2" }
 ]
 
-// percussion.json
+// percussion.json - positions 1-9 (odd=lines, even=spaces)
 [
   { "position": 5, "length": "1/4" },
   { "position": 5, "length": "1/8" },
   { "position": 5, "length": "1/8" },
-  { "position": 1, "length": "1/4" }
+  { "position": 1, "length": "1/4" },
+  { "position": 9, "length": "1/2" }
 ]
 ```
 
@@ -873,6 +966,19 @@ const percussionClef = `M 0 0 L 0 40 M 10 0 L 10 40`;
 
 ## Gotchas and Edge Cases
 
+### Cross-Barline Notes
+
+When a note's duration extends past a bar line (e.g., a half note starting on beat 3 of 4/4), the renderer must handle the overflow. Proper notation uses ties to split the note across the barline.
+
+**Phase 1 behavior (no ties):** Render the note at its full visual width. Place the bar line at the correct beat position. The note will visually extend past the bar line. This is technically incorrect notation but is a known limitation until ties are implemented.
+
+**Phase 2 behavior (with ties):** Split the note into two tied notes at the bar line boundary. A half note on beat 3 of 4/4 becomes a tied quarter + quarter. This requires:
+1. Detecting when a note's cumulative duration crosses a bar line
+2. Splitting it into two note objects connected by a tie arc
+3. The tie arc is a curved path from the first note head to the second
+
+**IMPORTANT:** Ties should be prioritized early since cross-barline notes are common in real music. Consider bumping ties into Phase 4 alongside bar lines rather than deferring to "Future Considerations."
+
 ### Enharmonic Equivalents
 
 `C#` and `Db` are the same pitch but display differently based on key:
@@ -882,16 +988,18 @@ const percussionClef = `M 0 0 L 0 40 M 10 0 L 10 40`;
 
 ### Accidental Memory
 
-In metered music, accidentals apply for the entire measure:
+**Metered mode:** Accidentals apply for the entire measure:
 - If first C4 is C#4, subsequent C4s in that measure are also sharp
 - Reset accidentals at bar lines
 - Display courtesy accidentals for clarity (configurable)
+
+**Unmetered mode (no bar lines):** Accidentals apply to the immediately following note of the same pitch only. This avoids unbounded state and matches the convention used in some contemporary scores. Every subsequent occurrence of the same pitch must re-state its accidental.
 
 ### Beaming Edge Cases
 
 - Don't beam across bar lines
 - Don't beam rests (break beam, rest stands alone)
-- Dotted rhythms: beam the undotted portion
+- Dotted notes: a dotted eighth (`{ length: "1/8", dotted: true }`) beams normally with other eighths; the dot is drawn after the note head but does not affect beam grouping
 
 ### Chord Stem Direction
 
@@ -910,7 +1018,7 @@ When notes span both sides of the middle line:
 
 Not in scope for initial implementation, but keep in mind:
 
-- **Ties** - Connecting notes across bar lines
+- **Ties** - Connecting notes across bar lines (see "Cross-Barline Notes" in Gotchas - consider promoting to Phase 4)
 - **Slurs** - Phrasing curves
 - **Dynamics** - p, f, crescendo, etc.
 - **Articulations** - Staccato, accent, tenuto
@@ -921,5 +1029,6 @@ Not in scope for initial implementation, but keep in mind:
 
 ---
 
-*Spec Version: 1.0*
+*Spec Version: 1.3*
 *Created: 2026-01-25*
+*Revised: 2026-01-25 - v1.1: Diatonic positioning, staff spacing, dotted notes, percussion mapping, clef table, validation errors, cross-barline handling, chord parsing. v1.2: Alto/tenor reference constants. v1.3: Unmetered beaming rule, unmetered accidental scope, per-voice validation, render() replace semantics.*
