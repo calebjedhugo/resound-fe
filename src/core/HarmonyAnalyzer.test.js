@@ -1,267 +1,145 @@
 /**
- * HarmonyAnalyzer Tests
+ * HarmonyAnalyzer Integration Tests
  *
- * These tests cover the HarmonyAnalyzer utility class which analyzes
- * harmonic relationships between notes for creature behavior.
+ * These tests validate how harmony analysis affects creature behavior.
+ * HarmonyAnalyzer determines whether creatures move toward (consonant),
+ * away (dissonant), or stay still (perfect/none) based on harmonic intervals.
  *
- * Tests cover:
- * - Invalid pitch notation handling
- * - Note overlap detection with musical clock
- * - Full harmony analysis between sound sources
+ * Tests use the standard test context API with fake timers.
  */
 
-import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
-import { HARMONY_TIMING_SUBDIVISION } from 'core/constants';
-import MusicalClock from 'audio/lib/MusicalClock';
+describe('Creature reaction to harmonic intervals', () => {
+  /**
+   * Helper to set up player playback of a specific pitch
+   * Uses the test context API instead of direct PlaybackManager manipulation
+   */
+  const setupPlayerSong = (pitch) => {
+    // Create a song with the specified pitch at 480 BPM (whole note = 500ms)
+    const song = [{ pitch, length: '1/1' }];
+    ctx.setInventorySlot(0, song);
+    ctx.setActiveSlot(0);
+  };
 
-describe('HarmonyAnalyzer', () => {
-  describe('pitchToMidi', () => {
-    it('converts standard pitches correctly', () => {
-      expect(HarmonyAnalyzer.pitchToMidi('C4')).toBe(60);
-      expect(HarmonyAnalyzer.pitchToMidi('A4')).toBe(69);
-      expect(HarmonyAnalyzer.pitchToMidi('C5')).toBe(72);
-    });
+  describe('creature does not react when notes do not overlap in time', () => {
+    it('creature stays still when player plays after creature finishes singing', async () => {
+      // creature-singing-timing has interval=8, so creature sings at beat 0,
+      // then rests until beat 8. At 480 BPM, a quarter note is 125ms.
+      ctx.loadPuzzle('creature-singing-timing');
 
-    it('handles sharps correctly', () => {
-      expect(HarmonyAnalyzer.pitchToMidi('C#4')).toBe(61);
-      expect(HarmonyAnalyzer.pitchToMidi('F#4')).toBe(66);
-    });
+      // Advance past the creature's first song (D4 quarter note at 480 BPM = 125ms)
+      await ctx.advanceBeats(2);
 
-    it('handles flats correctly', () => {
-      expect(HarmonyAnalyzer.pitchToMidi('Db4')).toBe(61);
-      expect(HarmonyAnalyzer.pitchToMidi('Bb4')).toBe(70);
-    });
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      const originalX = creature.position.x;
 
-    it('returns middle C (60) for invalid pitch notation', () => {
-      // Spy on console.error to verify it is called
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      // Now play a dissonant note (minor 2nd: D4 vs D#4)
+      // Creature should NOT react since it's not currently singing
+      setupPlayerSong('D#4');
+      ctx.holdKey('space');
+      await ctx.advanceBeats(4);
 
-      expect(HarmonyAnalyzer.pitchToMidi('invalid')).toBe(60);
-      expect(consoleSpy).toHaveBeenCalledWith('Invalid pitch notation: invalid');
-
-      expect(HarmonyAnalyzer.pitchToMidi('X4')).toBe(60);
-      expect(consoleSpy).toHaveBeenCalledWith('Invalid pitch notation: X4');
-
-      expect(HarmonyAnalyzer.pitchToMidi('C')).toBe(60);
-      expect(consoleSpy).toHaveBeenCalledWith('Invalid pitch notation: C');
-
-      expect(HarmonyAnalyzer.pitchToMidi('')).toBe(60);
-      expect(consoleSpy).toHaveBeenCalledWith('Invalid pitch notation: ');
-
-      consoleSpy.mockRestore();
+      // Creature should not have moved
+      expect(creature.position.x).toBeCloseTo(originalX, 1);
     });
   });
 
-  describe('notesOverlap', () => {
-    // Create a real MusicalClock for testing
-    // At 120 BPM: 500ms per beat, so msToBeats(500) = 1 beat
-    const createClock = (tempo = 120) => new MusicalClock(tempo);
+  describe('creature reacts based on interval quality', () => {
+    it('creature moves toward player when hearing major third (consonant)', async () => {
+      ctx.loadPuzzle('creature-consonance');
 
-    it('returns false when musicalClock is null', () => {
-      const note1 = { pitch: 'C4', timestamp: 1000 };
-      const note2 = { pitch: 'E4', timestamp: 1000 };
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      const originalX = creature.position.x;
 
-      expect(HarmonyAnalyzer.notesOverlap(note1, note2, null)).toBe(false);
+      // Creature sings C4, player plays E4 = major 3rd = consonant = attraction
+      setupPlayerSong('E4');
+      ctx.holdKey('space');
+      await ctx.advanceBeats(4);
+
+      expect(creature.position.x).toBeLessThan(originalX);
     });
 
-    it('returns false when musicalClock is undefined', () => {
-      const note1 = { pitch: 'C4', timestamp: 1000 };
-      const note2 = { pitch: 'E4', timestamp: 1000 };
+    it('creature moves away from player when hearing minor second (dissonant)', async () => {
+      ctx.loadPuzzle('creature-dissonance');
 
-      expect(HarmonyAnalyzer.notesOverlap(note1, note2, undefined)).toBe(false);
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      const originalX = creature.position.x;
+
+      // Creature sings C4, player plays C#4 = minor 2nd = dissonant = repulsion
+      setupPlayerSong('C#4');
+      ctx.holdKey('space');
+      await ctx.advanceBeats(4);
+
+      expect(creature.position.x).toBeGreaterThan(originalX);
     });
 
-    it('returns true when notes occur at the same timestamp', () => {
-      const clock = createClock(120); // 120 BPM = 500ms per beat
-      const note1 = { pitch: 'C4', timestamp: 1000 };
-      const note2 = { pitch: 'E4', timestamp: 1000 };
+    it('creature stays still when hearing perfect fifth', async () => {
+      ctx.loadPuzzle('creature-perfect-interval');
 
-      expect(HarmonyAnalyzer.notesOverlap(note1, note2, clock)).toBe(true);
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      const originalX = creature.position.x;
+
+      // Creature sings C4, player plays G4 = perfect 5th = no movement
+      setupPlayerSong('G4');
+      ctx.holdKey('space');
+      await ctx.advanceBeats(4);
+
+      expect(creature.position.x).toBeCloseTo(originalX, 1);
     });
 
-    it('returns true when notes are within the same subdivision', () => {
-      const clock = createClock(120); // 120 BPM = 500ms per beat
-      // Subdivision threshold = 1/16 beat = 0.0625 beats
-      // At 500ms per beat, 0.0625 beats = 31.25ms
+    it('creature stays still when hearing unison', async () => {
+      ctx.loadPuzzle('creature-perfect-interval');
 
-      const note1 = { pitch: 'C4', timestamp: 1000 };
-      const note2 = { pitch: 'E4', timestamp: 1020 }; // 20ms apart = 0.04 beats
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      const originalX = creature.position.x;
 
-      expect(HarmonyAnalyzer.notesOverlap(note1, note2, clock)).toBe(true);
+      // Creature sings C4, player plays C4 = unison = no movement
+      setupPlayerSong('C4');
+      ctx.holdKey('space');
+      await ctx.advanceBeats(4);
+
+      expect(creature.position.x).toBeCloseTo(originalX, 1);
     });
 
-    it('returns false when notes are in different subdivisions', () => {
-      const clock = createClock(120); // 120 BPM = 500ms per beat
-      // Subdivision threshold = 1/16 beat = 0.0625 beats
-      // At 500ms per beat, 0.0625 beats = 31.25ms
+    it('creature stays still when hearing octave', async () => {
+      ctx.loadPuzzle('creature-perfect-interval');
 
-      const note1 = { pitch: 'C4', timestamp: 1000 };
-      const note2 = { pitch: 'E4', timestamp: 1100 }; // 100ms apart = 0.2 beats
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      const originalX = creature.position.x;
 
-      expect(HarmonyAnalyzer.notesOverlap(note1, note2, clock)).toBe(false);
-    });
+      // Creature sings C4, player plays C5 = octave = no movement
+      setupPlayerSong('C5');
+      ctx.holdKey('space');
+      await ctx.advanceBeats(4);
 
-    it('considers subdivision threshold based on HARMONY_TIMING_SUBDIVISION constant', () => {
-      // The threshold is 1/HARMONY_TIMING_SUBDIVISION = 1/16 = 0.0625 beats
-      const clock = createClock(120); // 120 BPM = 500ms per beat
-      const expectedThreshold = 1 / HARMONY_TIMING_SUBDIVISION;
-
-      // Just under threshold (should overlap)
-      const beatDiffUnder = expectedThreshold - 0.01;
-      const msUnder = beatDiffUnder * 500;
-      const note1 = { pitch: 'C4', timestamp: 1000 };
-      const note2 = { pitch: 'E4', timestamp: 1000 + msUnder };
-      expect(HarmonyAnalyzer.notesOverlap(note1, note2, clock)).toBe(true);
-
-      // Just over threshold (should not overlap)
-      const beatDiffOver = expectedThreshold + 0.01;
-      const msOver = beatDiffOver * 500;
-      const note3 = { pitch: 'G4', timestamp: 1000 + msOver };
-      expect(HarmonyAnalyzer.notesOverlap(note1, note3, clock)).toBe(false);
+      expect(creature.position.x).toBeCloseTo(originalX, 1);
     });
   });
 
-  describe('analyzeHarmony', () => {
-    // Use a real MusicalClock at 120 BPM
-    // At 120 BPM: 500ms per beat, threshold is 0.0625 beats = 31.25ms
-    const createClock = () => new MusicalClock(120);
+  describe('creatures react to each other based on harmony', () => {
+    it('two creatures singing consonant interval move toward each other', async () => {
+      // Two creatures: one sings C4, one sings E4 (major 3rd = consonant)
+      ctx.loadPuzzle('creature-two-creatures-harmony');
 
-    it('returns "none" when notes do not overlap in time', () => {
-      const clock = createClock();
-      // Notes 100ms apart = 0.2 beats, well beyond 0.0625 beat threshold
-      const source1 = { pitch: 'C4', timestamp: 0 };
-      const source2 = { pitch: 'E4', timestamp: 100 };
+      const creatures = ctx.getCreatures();
+      const creatureC4 = creatures.find((c) => c.data.song[0].pitch === 'C4');
+      const creatureE4 = creatures.find((c) => c.data.song[0].pitch === 'E4');
 
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('none');
-    });
+      const originalC4X = creatureC4.position.x;
+      const originalE4X = creatureE4.position.x;
 
-    it('returns "consonant" when consonant intervals dominate', () => {
-      const clock = createClock();
-      // Same timestamp = overlapping
-      const source1 = { pitch: 'C4', timestamp: 0 };
-      const source2 = { pitch: 'E4', timestamp: 0 }; // Major 3rd = consonant
+      // Both creatures sing at beat 0 with whole notes
+      // C4 + E4 = major 3rd = consonant = attraction toward each other
+      await ctx.advanceBeats(4);
 
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('consonant');
-    });
-
-    it('returns "dissonant" when dissonant intervals dominate', () => {
-      const clock = createClock();
-      const source1 = { pitch: 'C4', timestamp: 0 };
-      const source2 = { pitch: 'C#4', timestamp: 0 }; // Minor 2nd = dissonant
-
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('dissonant');
-    });
-
-    it('returns "perfect" when all intervals are perfect', () => {
-      const clock = createClock();
-      const source1 = { pitch: 'C4', timestamp: 0 };
-      const source2 = { pitch: 'G4', timestamp: 0 }; // Perfect 5th
-
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('perfect');
-    });
-
-    it('returns "perfect" when consonant and dissonant counts are tied', () => {
-      const clock = createClock();
-      // Use arrays to create a tie
-      const source1 = [
-        { pitch: 'C4', timestamp: 0 },
-        { pitch: 'D4', timestamp: 0 },
-      ];
-      const source2 = [
-        { pitch: 'E4', timestamp: 0 }, // C4-E4 = major 3rd (consonant), D4-E4 = major 2nd (dissonant)
-      ];
-
-      // C4-E4 = 4 semitones = consonant
-      // D4-E4 = 2 semitones = dissonant
-      // Tie = 'perfect'
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('perfect');
-    });
-
-    it('accepts single notes as objects (not arrays)', () => {
-      const clock = createClock();
-      const source1 = { pitch: 'C4', timestamp: 0 };
-      const source2 = { pitch: 'A4', timestamp: 0 }; // Major 6th = consonant
-
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('consonant');
-    });
-
-    it('accepts arrays of notes', () => {
-      const clock = createClock();
-      const source1 = [{ pitch: 'C4', timestamp: 0 }];
-      const source2 = [{ pitch: 'Ab4', timestamp: 0 }]; // Minor 6th = consonant
-
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('consonant');
-    });
-
-    it('analyzes all intervals between multi-note sources', () => {
-      const clock = createClock();
-      // Source 1: C4, E4 (C major chord partial)
-      // Source 2: G4
-      // Intervals: C4-G4 = P5 (perfect), E4-G4 = m3 (consonant)
-      // 1 consonant > 0 dissonant = consonant
-      const source1 = [
-        { pitch: 'C4', timestamp: 0 },
-        { pitch: 'E4', timestamp: 0 },
-      ];
-      const source2 = [{ pitch: 'G4', timestamp: 0 }];
-
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('consonant');
-    });
-
-    it('determines majority when multiple intervals exist', () => {
-      const clock = createClock();
-      // Create a scenario with more dissonant than consonant intervals
-      // Source 1: C4
-      // Source 2: C#4, D4, F#4 (all dissonant against C4)
-      // C4-C#4 = m2 (dissonant)
-      // C4-D4 = M2 (dissonant)
-      // C4-F#4 = tritone (dissonant)
-      // 3 dissonant > 0 consonant = dissonant
-      const source1 = [{ pitch: 'C4', timestamp: 0 }];
-      const source2 = [
-        { pitch: 'C#4', timestamp: 0 },
-        { pitch: 'D4', timestamp: 0 },
-        { pitch: 'F#4', timestamp: 0 },
-      ];
-
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('dissonant');
-    });
-
-    it('determines majority with mixed consonant and dissonant', () => {
-      const clock = createClock();
-      // Source 1: C4
-      // Source 2: E4, F4, A4
-      // C4-E4 = M3 (consonant)
-      // C4-F4 = P4 (perfect)
-      // C4-A4 = M6 (consonant)
-      // 2 consonant, 0 dissonant, 1 perfect = consonant wins
-      const source1 = [{ pitch: 'C4', timestamp: 0 }];
-      const source2 = [
-        { pitch: 'E4', timestamp: 0 },
-        { pitch: 'F4', timestamp: 0 },
-        { pitch: 'A4', timestamp: 0 },
-      ];
-
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('consonant');
-    });
-
-    it('uses first note of each source for timing check', () => {
-      const clock = createClock();
-      // Notes are in arrays but only first notes' timestamps are used
-      const source1 = [
-        { pitch: 'C4', timestamp: 0 },
-        { pitch: 'E4', timestamp: 5000 }, // This timestamp is ignored for overlap check
-      ];
-      const source2 = [
-        { pitch: 'G4', timestamp: 0 },
-        { pitch: 'B4', timestamp: 5000 }, // This timestamp is ignored for overlap check
-      ];
-
-      // Since first notes overlap (both at timestamp 0), harmony is analyzed
-      // C4-G4 = P5 (perfect), C4-B4 = M7 (dissonant)
-      // E4-G4 = m3 (consonant), E4-B4 = P5 (perfect)
-      // 1 consonant, 1 dissonant, 2 perfect = tie = 'perfect'
-      expect(HarmonyAnalyzer.analyzeHarmony(source1, source2, clock)).toBe('perfect');
+      // Both creatures should move toward each other
+      expect(creatureC4.position.x).toBeGreaterThan(originalC4X);
+      expect(creatureE4.position.x).toBeLessThan(originalE4X);
     });
   });
 });

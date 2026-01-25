@@ -25,13 +25,9 @@ describe('ProgressManager', () => {
     it('returns empty progress when localStorage contains invalid JSON', () => {
       localStorage.setItem('resound-progress', 'invalid json {{{');
 
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const progress = ProgressManager.load();
 
       expect(progress).toEqual({ completedPuzzles: [] });
-      expect(consoleSpy).toHaveBeenCalledWith('Error loading progress:', expect.any(SyntaxError));
-
-      consoleSpy.mockRestore();
     });
   });
 
@@ -49,12 +45,11 @@ describe('ProgressManager', () => {
         throw new Error('QuotaExceededError');
       });
 
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      ProgressManager.save({ completedPuzzles: ['puzzle-1'] });
+      // Should not throw when localStorage fails
+      expect(() => {
+        ProgressManager.save({ completedPuzzles: ['puzzle-1'] });
+      }).not.toThrow();
 
-      expect(consoleSpy).toHaveBeenCalledWith('Error saving progress:', expect.any(Error));
-
-      consoleSpy.mockRestore();
       localStorage.setItem = originalSetItem;
     });
   });

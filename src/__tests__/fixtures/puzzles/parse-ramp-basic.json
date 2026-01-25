@@ -1,0 +1,15 @@
+{
+  "id": "parse-ramp-basic",
+  "name": "Parse Test - Ramp Entity",
+  "difficulty": 1,
+  "gridSize": 5,
+  "tempo": 120,
+  "playerStart": { "x": 2, "y": 0, "z": 2 },
+  "entities": [
+    {
+      "type": "ramp",
+      "position": { "x": 2, "y": 0, "z": 2 },
+      "direction": "north"
+    }
+  ]
+}

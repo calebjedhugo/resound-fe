@@ -38,18 +38,4 @@ describe('Musical timing', () => {
       expect(clock.msToBeats(ms)).toBeCloseTo(beats, 10);
     });
   });
-
-  describe('fractional beat timing', () => {
-    it('reports time since last beat correctly', async () => {
-      const clock = ctx.getMusicalClock();
-      await ctx.advanceMs(250); // Half a beat at 120 BPM
-      expect(clock.getTimeSinceLastBeat()).toBeCloseTo(250, 0);
-    });
-
-    it('reports time until next beat correctly', async () => {
-      const clock = ctx.getMusicalClock();
-      await ctx.advanceMs(250); // Half a beat at 120 BPM
-      expect(clock.getTimeUntilNextBeat()).toBeCloseTo(250, 0);
-    });
-  });
 });

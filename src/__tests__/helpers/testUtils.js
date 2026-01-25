@@ -42,6 +42,9 @@ import creaturePerfectInterval from '../fixtures/puzzles/creature-perfect-interv
 import creatureAudibleRange from '../fixtures/puzzles/creature-audible-range.json';
 import creatureSingingTiming from '../fixtures/puzzles/creature-singing-timing.json';
 import creatureTwoCreaturesHarmony from '../fixtures/puzzles/creature-two-creatures-harmony.json';
+import parseWallBasic from '../fixtures/puzzles/parse-wall-basic.json';
+import parseRampBasic from '../fixtures/puzzles/parse-ramp-basic.json';
+import parseUnknownEntity from '../fixtures/puzzles/parse-unknown-entity.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -71,6 +74,9 @@ const TEST_PUZZLES = {
   'creature-audible-range': creatureAudibleRange,
   'creature-singing-timing': creatureSingingTiming,
   'creature-two-creatures-harmony': creatureTwoCreaturesHarmony,
+  'parse-wall-basic': parseWallBasic,
+  'parse-ramp-basic': parseRampBasic,
+  'parse-unknown-entity': parseUnknownEntity,
 };
 
 /**
@@ -474,6 +480,44 @@ function createTestContext(options = {}) {
       const fountain =
         typeof fountainOrId === 'string' ? entityManager.get(fountainOrId) : fountainOrId;
       return fountain?.isActivated || false;
+    },
+
+    // --- Playback ---
+
+    /**
+     * Start player playback for a song (for test setup)
+     * @param {Object} song - Song object with data array
+     * @param {number} tempo - Tempo in BPM (default: puzzle tempo)
+     */
+    startPlayerPlayback(song, tempo) {
+      const playerInstrument = PlaybackManager.getPlayerInstrument();
+      playerInstrument.sourcePosition = this.getPlayerPosition();
+      playerInstrument.play({
+        data: song.data || song,
+        tempo: tempo || gameState.musicalClock?.tempo || 120,
+        basis: 4,
+      });
+      PlaybackManager.isPlaying = true;
+    },
+
+    /**
+     * Stop player playback and reset state
+     */
+    stopPlayerPlayback() {
+      PlaybackManager.isPlaying = false;
+      const playerInstrument = PlaybackManager.getPlayerInstrument();
+      playerInstrument.currentNote = null;
+      playerInstrument.stop?.();
+    },
+
+    /**
+     * Reset playback state (for test cleanup)
+     */
+    resetPlaybackState() {
+      PlaybackManager.isPlaying = false;
+      const playerInstrument = PlaybackManager.getPlayerInstrument();
+      playerInstrument.currentNote = null;
+      playerInstrument.stop?.();
     },
 
     // --- Recording ---

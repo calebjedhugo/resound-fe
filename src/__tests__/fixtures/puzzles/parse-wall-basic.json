@@ -1,0 +1,14 @@
+{
+  "id": "parse-wall-basic",
+  "name": "Parse Test - Wall Entity",
+  "difficulty": 1,
+  "gridSize": 5,
+  "tempo": 120,
+  "playerStart": { "x": 2, "y": 0, "z": 2 },
+  "entities": [
+    {
+      "type": "wall",
+      "position": { "x": 3, "y": 0, "z": 3 }
+    }
+  ]
+}

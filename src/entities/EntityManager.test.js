@@ -1,105 +1,68 @@
 /**
  * EntityManager Tests
  *
- * Tests entity lifecycle management: add, remove, get, getByType, getAll, update, clear
- * These are integration tests that verify EntityManager behavior using the global ctx.
+ * Tests entity lifecycle behaviors: how entities appear/disappear from the game world,
+ * and how removal affects game behavior (e.g., removed creatures stop singing).
+ * Uses global ctx from setupTests.js.
  */
 
-import gameState from 'core/GameState';
-
 describe('EntityManager', () => {
-  // Uses global ctx from setupTests.js - no local entityManager needed
-
   describe('remove(entityId)', () => {
-    it('removes entity from scene when entity has a mesh', () => {
-      // Add a creature (which has a mesh)
+    it('removed creature no longer appears in game world', () => {
       ctx.loadPuzzle('recording-basic');
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const creatureId = creature.id;
 
-      // Verify creature is in scene
       const testEntityManager = ctx.getEntityManager();
       expect(testEntityManager.get(creatureId)).toBe(creature);
 
-      // Remove the creature
       testEntityManager.remove(creatureId);
 
-      // Verify creature is no longer accessible
       expect(testEntityManager.get(creatureId)).toBeUndefined();
     });
 
-    it('calls dispose on the entity when removed', () => {
+    it('removed creature is excluded from world entity list', () => {
       ctx.loadPuzzle('recording-basic');
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const creatureId = creature.id;
 
-      // Spy on dispose
-      const disposeSpy = jest.spyOn(creature, 'dispose');
+      const testEntityManager = ctx.getEntityManager();
+      expect(testEntityManager.getAll()).toContain(creature);
 
-      // Remove the creature
-      ctx.getEntityManager().remove(creatureId);
+      testEntityManager.remove(creatureId);
 
-      // Verify dispose was called
-      expect(disposeSpy).toHaveBeenCalled();
+      expect(testEntityManager.getAll()).not.toContain(creature);
     });
 
-    it('removes entity from gameState.entities when removed', () => {
+    it('removed creature is excluded from creature queries', () => {
       ctx.loadPuzzle('recording-basic');
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const creatureId = creature.id;
 
-      // Verify creature is in gameState.entities
-      expect(gameState.entities).toContain(creature);
+      const testEntityManager = ctx.getEntityManager();
+      expect(testEntityManager.getByType('creature')).toContain(creature);
 
-      // Remove the creature
-      ctx.getEntityManager().remove(creatureId);
+      testEntityManager.remove(creatureId);
 
-      // Verify creature is no longer in gameState.entities
-      expect(gameState.entities).not.toContain(creature);
+      expect(testEntityManager.getByType('creature')).not.toContain(creature);
     });
 
-    it('does nothing when removing non-existent entity', () => {
+    it('removing non-existent entity leaves game world unchanged', () => {
       ctx.loadPuzzle('recording-basic');
       const testEntityManager = ctx.getEntityManager();
       const initialCount = testEntityManager.getAll().length;
 
-      // Remove a non-existent entity - should not throw
       testEntityManager.remove('non-existent-id');
 
-      // Verify entity count unchanged
       expect(testEntityManager.getAll().length).toBe(initialCount);
-    });
-
-    it('handles removing entity without mesh', () => {
-      const testEntityManager = ctx.getEntityManager();
-
-      // Create a minimal entity without a mesh
-      const entityWithoutMesh = {
-        id: 'test-entity-no-mesh',
-        type: 'test',
-        active: true,
-        mesh: null,
-        dispose: jest.fn(),
-      };
-
-      // Add it manually
-      testEntityManager.add(entityWithoutMesh);
-      expect(testEntityManager.get('test-entity-no-mesh')).toBe(entityWithoutMesh);
-
-      // Remove it - should not throw even without mesh
-      testEntityManager.remove('test-entity-no-mesh');
-
-      // Verify entity is removed and dispose was called
-      expect(testEntityManager.get('test-entity-no-mesh')).toBeUndefined();
-      expect(entityWithoutMesh.dispose).toHaveBeenCalled();
     });
   });
 
   describe('get(entityId)', () => {
-    it('returns entity by id', () => {
+    it('retrieves creature by its unique identifier', () => {
       ctx.loadPuzzle('recording-basic');
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
@@ -108,28 +71,49 @@ describe('EntityManager', () => {
       expect(retrieved).toBe(creature);
     });
 
-    it('returns undefined for non-existent id', () => {
+    it('returns undefined when querying for non-existent entity', () => {
       ctx.loadPuzzle('recording-basic');
       const retrieved = ctx.getEntityManager().get('non-existent-id');
       expect(retrieved).toBeUndefined();
     });
   });
 
+  describe('getByType(type)', () => {
+    it('queries all creatures in the game world', () => {
+      ctx.loadPuzzle('recording-two-creatures');
+      const testEntityManager = ctx.getEntityManager();
+
+      const creatures = testEntityManager.getByType('creature');
+
+      expect(creatures.length).toBeGreaterThanOrEqual(2);
+      creatures.forEach((entity) => {
+        expect(entity.type).toBe('creature');
+      });
+    });
+
+    it('returns empty list when no gates exist in puzzle', () => {
+      ctx.loadPuzzle('recording-basic');
+      const testEntityManager = ctx.getEntityManager();
+
+      const gates = testEntityManager.getByType('gate');
+
+      expect(Array.isArray(gates)).toBe(true);
+      expect(gates.length).toBe(0);
+    });
+  });
+
   describe('getAll()', () => {
-    it('returns all entities as an array', () => {
+    it('lists all entities present in game world', () => {
       ctx.loadPuzzle('recording-two-creatures');
       const testEntityManager = ctx.getEntityManager();
 
       const allEntities = testEntityManager.getAll();
 
-      // Should return an array
       expect(Array.isArray(allEntities)).toBe(true);
-      // Should contain all creatures from the puzzle
       expect(allEntities.length).toBeGreaterThanOrEqual(2);
     });
 
-    it('returns empty array when no entities exist', () => {
-      // Fresh ctx entity manager with no puzzle loaded = no entities
+    it('returns empty list when game world has no entities', () => {
       const testEntityManager = ctx.getEntityManager();
       const allEntities = testEntityManager.getAll();
 
@@ -137,86 +121,74 @@ describe('EntityManager', () => {
       expect(allEntities.length).toBe(0);
     });
 
-    it('reflects current state after add/remove operations', () => {
+    it('loading puzzle populates game world with entities', () => {
+      const testEntityManager = ctx.getEntityManager();
+      expect(testEntityManager.getAll().length).toBe(0);
+
+      ctx.loadPuzzle('recording-two-creatures');
+
+      expect(testEntityManager.getAll().length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('entity count decreases when creature is removed', () => {
       ctx.loadPuzzle('recording-basic');
       const testEntityManager = ctx.getEntityManager();
+      const creatures = ctx.getCreatures();
       const initialCount = testEntityManager.getAll().length;
 
-      // Add a minimal entity
-      const newEntity = {
-        id: 'new-entity',
-        type: 'test',
-        active: true,
-        mesh: null,
-        dispose: jest.fn(),
-      };
-      testEntityManager.add(newEntity);
+      testEntityManager.remove(creatures[0].id);
 
-      expect(testEntityManager.getAll().length).toBe(initialCount + 1);
-
-      // Remove it
-      testEntityManager.remove('new-entity');
-
-      expect(testEntityManager.getAll().length).toBe(initialCount);
+      expect(testEntityManager.getAll().length).toBe(initialCount - 1);
     });
   });
 
   describe('update(deltaTime)', () => {
-    it('updates only active entities', async () => {
-      ctx.loadPuzzle('recording-basic');
+    it('removed creatures no longer emit notes during update', async () => {
+      ctx.loadPuzzle('creature-singing-timing');
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
-
-      // Deactivate the creature
-      creature.active = false;
-
-      // Spy on update
-      const updateSpy = jest.spyOn(creature, 'update');
-
-      // Run entity manager update
-      ctx.getEntityManager().update(0.016);
-
-      // Verify update was NOT called on inactive entity
-      expect(updateSpy).not.toHaveBeenCalled();
-    });
-
-    it('updates active entities with deltaTime', async () => {
-      ctx.loadPuzzle('recording-basic');
-      const creatures = ctx.getCreatures();
-      const creature = creatures[0];
-
-      // Spy on update
-      const updateSpy = jest.spyOn(creature, 'update');
-
-      // Run entity manager update
-      ctx.getEntityManager().update(0.016);
-
-      // Verify update was called with deltaTime
-      expect(updateSpy).toHaveBeenCalledWith(0.016);
-    });
-
-    it('handles entities without update method gracefully', () => {
       const testEntityManager = ctx.getEntityManager();
 
-      // Add an entity without update method
-      const entityWithoutUpdate = {
-        id: 'no-update-entity',
-        type: 'test',
-        active: true,
-        mesh: null,
-        dispose: jest.fn(),
-        // No update method
-      };
+      // Place player in audible range to hear the creature
+      ctx.setPlayerPosition({ x: creature.position.x, z: creature.position.z + 5 });
 
-      testEntityManager.add(entityWithoutUpdate);
+      // Remove the creature from the entity manager
+      testEntityManager.remove(creature.id);
 
-      // Should not throw
-      expect(() => testEntityManager.update(0.016)).not.toThrow();
+      // Clear any notes emitted during setup
+      ctx.clearEmittedNotes();
+
+      // Advance time past the sing interval - creature would normally sing
+      await ctx.advanceBeats(creature.interval + 1);
+
+      // Removed creature should not emit any notes
+      const emittedNotes = ctx.getEmittedNotes();
+      expect(emittedNotes.length).toBe(0);
+    });
+
+    it('active creatures emit notes when updated over time', async () => {
+      ctx.loadPuzzle('creature-singing-timing');
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+
+      // Place player in audible range to hear the creature
+      ctx.setPlayerPosition({ x: creature.position.x, z: creature.position.z + 5 });
+
+      // Clear any notes emitted during setup
+      ctx.clearEmittedNotes();
+
+      // Advance time past the sing interval - creature should sing
+      await ctx.advanceBeats(creature.interval + 1);
+
+      // Creature should have emitted notes
+      const emittedNotes = ctx.getEmittedNotes();
+      expect(emittedNotes.length).toBeGreaterThan(0);
+      expect(emittedNotes[0].pitch).toBe('D4');
     });
   });
 
   describe('clear()', () => {
-    it('removes all entities from the manager', () => {
+    it('clearing removes all entities from game world', () => {
       ctx.loadPuzzle('recording-two-creatures');
       const testEntityManager = ctx.getEntityManager();
 
@@ -227,26 +199,29 @@ describe('EntityManager', () => {
       expect(testEntityManager.getAll().length).toBe(0);
     });
 
-    it('disposes all entities when clearing', () => {
-      ctx.loadPuzzle('recording-basic');
+    it('cleared entities are no longer retrievable by id', () => {
+      ctx.loadPuzzle('recording-two-creatures');
       const testEntityManager = ctx.getEntityManager();
       const creatures = ctx.getCreatures();
-      const disposeSpy = jest.spyOn(creatures[0], 'dispose');
+      const creatureIds = creatures.map((c) => c.id);
 
       testEntityManager.clear();
 
-      expect(disposeSpy).toHaveBeenCalled();
+      creatureIds.forEach((id) => {
+        expect(testEntityManager.get(id)).toBeUndefined();
+      });
     });
 
-    it('clears gameState.entities when clearing', () => {
-      ctx.loadPuzzle('recording-basic');
+    it('cleared game world has no creatures to query', () => {
+      ctx.loadPuzzle('recording-two-creatures');
       const testEntityManager = ctx.getEntityManager();
 
-      expect(gameState.entities.length).toBeGreaterThan(0);
+      // Verify creatures exist before clear
+      expect(testEntityManager.getByType('creature').length).toBeGreaterThan(0);
 
       testEntityManager.clear();
 
-      expect(gameState.entities.length).toBe(0);
+      expect(testEntityManager.getByType('creature').length).toBe(0);
     });
   });
 });

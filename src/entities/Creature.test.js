@@ -11,9 +11,6 @@
  * to properly handle async instrument playback.
  */
 
-import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
-import PlaybackManager from 'core/PlaybackManager';
-
 /**
  * Creature movement tests using real timers
  *
@@ -56,14 +53,7 @@ describe('Creature movement from consonance/dissonance', () => {
   // Helper to start player instrument playback (works with real timers)
   // Uses high BPM (480) and whole note for faster test execution
   const startPlayerPlayback = async (testCtx, pitch) => {
-    const playerInstrument = PlaybackManager.getPlayerInstrument();
-    playerInstrument.sourcePosition = testCtx.getPlayerPosition();
-    playerInstrument.play({
-      data: [{ pitch, length: '1/1' }],
-      tempo: 480,
-      basis: 4,
-    });
-    PlaybackManager.isPlaying = true;
+    testCtx.startPlayerPlayback([{ pitch, length: '1/1' }], 480);
     // Wait for instrument to start
     // eslint-disable-next-line no-promise-executor-return
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -72,18 +62,13 @@ describe('Creature movement from consonance/dissonance', () => {
   beforeEach(() => {
     // Switch to real timers for movement tests
     jest.useRealTimers();
-    // Reset PlaybackManager state
-    PlaybackManager.isPlaying = false;
-    PlaybackManager.playerInstrument.currentNote = null;
-    // Stop any playing instruments
-    PlaybackManager.playerInstrument.stop?.();
+    // Reset playback state using test context API
+    ctx.resetPlaybackState();
   });
 
   afterEach(() => {
-    // Stop any playback and reset state
-    PlaybackManager.isPlaying = false;
-    PlaybackManager.playerInstrument.currentNote = null;
-    PlaybackManager.playerInstrument.stop?.();
+    // Stop any playback and reset state using test context API
+    ctx.stopPlayerPlayback();
     // Restore fake timers for other tests
     jest.useFakeTimers();
   });
@@ -287,36 +272,36 @@ describe('Creature-to-creature harmony', () => {
 
   beforeEach(() => {
     jest.useRealTimers();
-    PlaybackManager.isPlaying = false;
-    PlaybackManager.playerInstrument.currentNote = null;
-    PlaybackManager.playerInstrument.stop?.();
+    // Reset playback state using test context API
+    ctx.resetPlaybackState();
   });
 
   afterEach(() => {
-    PlaybackManager.isPlaying = false;
-    PlaybackManager.playerInstrument.currentNote = null;
-    PlaybackManager.playerInstrument.stop?.();
+    // Stop any playback and reset state using test context API
+    ctx.stopPlayerPlayback();
     jest.useFakeTimers();
   });
 
-  it('creatures react to each other when singing simultaneously', async () => {
+  it('creatures move toward each other when singing consonant intervals', async () => {
     ctx.loadPuzzle('creature-two-creatures-harmony');
 
+    // Puzzle has two creatures: grid x=5 -> world x=15, grid x=15 -> world x=45
+    // WORLD_SCALE = 3, so grid positions are multiplied by 3
     const creatures = ctx.getCreatures();
-    const creature1 = creatures.find((c) => c.data.song[0].pitch === 'C4');
-    const creature2 = creatures.find((c) => c.data.song[0].pitch === 'E4');
+    const leftCreature = creatures.find((c) => c.position.x < 30);
+    const rightCreature = creatures.find((c) => c.position.x > 30);
 
-    const original1X = creature1.position.x;
-    const original2X = creature2.position.x;
+    const originalLeftX = leftCreature.position.x;
+    const originalRightX = rightCreature.position.x;
 
-    // Both creatures sing at beat 0 with half notes (1000ms)
+    // Both creatures sing at beat 0 with whole notes (1000ms at 480 BPM)
     // C4 + E4 = major 3rd = consonant = attraction toward each other
     await realTimeUpdate(ctx, 400);
 
-    // Creature1 (C4) should move toward creature2 (positive x)
-    // Creature2 (E4) should move toward creature1 (negative x)
-    expect(creature1.position.x).toBeGreaterThan(original1X);
-    expect(creature2.position.x).toBeLessThan(original2X);
+    // Left creature should move right (toward other creature)
+    // Right creature should move left (toward other creature)
+    expect(leftCreature.position.x).toBeGreaterThan(originalLeftX);
+    expect(rightCreature.position.x).toBeLessThan(originalRightX);
   }, 10000);
 });
 
@@ -369,130 +354,76 @@ describe('Creature singing at correct intervals', () => {
 });
 
 describe('Creature audible range', () => {
-  it('updates volume based on distance to player', async () => {
+  it('creature is not recordable when player is outside audible range', async () => {
     // Creature at grid (5,0,0) -> world (15,0,0), audibleRange=10
     // Player at (0,0,0) -> distance = 15, which is > audibleRange
     ctx.loadPuzzle('creature-audible-range');
     await ctx.tick(16);
 
-    const creatures = ctx.getCreatures();
-    const creature = creatures[0];
-
     // Initially player is out of audible range (distance 15 > range 10)
-    // The instrument uses volumeMultiplier, not volume
-    expect(creature.instrument.volumeMultiplier).toBe(0);
+    // Verify through recording behavior - attempt to record and verify nothing captured
+    ctx.holdKey('r');
+    await ctx.advanceBeats(5); // Wait for creature to sing (interval=4)
+    ctx.releaseKey('r');
+
+    // Should not have recorded anything because player is out of range
+    const recorded = ctx.getInventorySlot(0);
+    expect(recorded).toBeNull();
   });
 
-  it('player can hear creature when within audible range', async () => {
+  it('player can record creature when within recording range', async () => {
     ctx.loadPuzzle('creature-audible-range');
 
     // Move player closer to creature (creature at world x=15)
-    ctx.setPlayerPosition({ x: 10, y: 0, z: 0 });
-    await ctx.tick(16);
-
-    const creatures = ctx.getCreatures();
-    const creature = creatures[0];
-
-    // Now distance is 5, which is < audibleRange 10
-    expect(creature.instrument.volumeMultiplier).toBeGreaterThan(0);
-  });
-
-  it('sets isRecordable when player is within recording range', async () => {
-    ctx.loadPuzzle('creature-audible-range');
-
-    const creatures = ctx.getCreatures();
-    const creature = creatures[0];
-
     // Recording range = audibleRange * 0.5 = 5
     // Move player to distance 4 (within recording range)
     ctx.setPlayerPosition({ x: 11, y: 0, z: 0 });
     await ctx.tick(16);
 
-    expect(creature.isRecordable).toBe(true);
+    // Verify recordability through actual recording behavior
+    ctx.holdKey('r');
+    await ctx.advanceBeats(5); // Wait for creature to sing (interval=4)
+    ctx.releaseKey('r');
+
+    // Should have recorded the creature's song
+    const recorded = ctx.getInventorySlot(0);
+    expect(recorded).not.toBeNull();
+    expect(recorded[0].pitch).toBe('C4');
   });
 
-  it('does not set isRecordable when outside recording range but inside audible range', async () => {
+  it('can record creature song when within recording range', async () => {
     ctx.loadPuzzle('creature-audible-range');
 
-    const creatures = ctx.getCreatures();
-    const creature = creatures[0];
+    // Move player within recording range
+    ctx.setPlayerPosition({ x: 11, y: 0, z: 0 });
+    await ctx.tick(16);
+
+    // Start recording and wait for creature to sing
+    ctx.holdKey('r');
+    await ctx.advanceBeats(5); // Wait for creature to sing (interval=4)
+    ctx.releaseKey('r');
+
+    // Should have recorded the creature's song
+    const recorded = ctx.getInventorySlot(0);
+    expect(recorded).not.toBeNull();
+    expect(recorded[0].pitch).toBe('C4');
+  });
+
+  it('cannot record creature when outside recording range but inside audible range', async () => {
+    ctx.loadPuzzle('creature-audible-range');
 
     // Recording range = 5, audible range = 10
     // Move player to distance 7 (inside audible, outside recording)
     ctx.setPlayerPosition({ x: 8, y: 0, z: 0 });
     await ctx.tick(16);
 
-    expect(creature.isRecordable).toBe(false);
-    expect(creature.instrument.volumeMultiplier).toBeGreaterThan(0);
-  });
-});
+    // Try to record - should not capture anything
+    ctx.holdKey('r');
+    await ctx.advanceBeats(5);
+    ctx.releaseKey('r');
 
-describe('HarmonyAnalyzer interval classification', () => {
-  // These are unit tests for the interval classification logic
-  // to ensure our test assumptions are correct
-
-  it('classifies unison as perfect', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'C4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('perfect');
-  });
-
-  it('classifies octave as perfect', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'C5');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('perfect');
-  });
-
-  it('classifies perfect 5th as perfect', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'G4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('perfect');
-  });
-
-  it('classifies perfect 4th as perfect', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'F4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('perfect');
-  });
-
-  it('classifies major 3rd as consonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'E4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('consonant');
-  });
-
-  it('classifies minor 3rd as consonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'Eb4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('consonant');
-  });
-
-  it('classifies major 6th as consonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'A4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('consonant');
-  });
-
-  it('classifies minor 6th as consonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'Ab4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('consonant');
-  });
-
-  it('classifies minor 2nd as dissonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'C#4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('dissonant');
-  });
-
-  it('classifies major 2nd as dissonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'D4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('dissonant');
-  });
-
-  it('classifies tritone as dissonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'F#4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('dissonant');
-  });
-
-  it('classifies minor 7th as dissonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'Bb4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('dissonant');
-  });
-
-  it('classifies major 7th as dissonant', () => {
-    const interval = HarmonyAnalyzer.calculateInterval('C4', 'B4');
-    expect(HarmonyAnalyzer.classifyInterval(interval)).toBe('dissonant');
+    // Should not have recorded anything
+    const recorded = ctx.getInventorySlot(0);
+    expect(recorded).toBeNull();
   });
 });

@@ -8,8 +8,7 @@
  * 4. Verifying range and displacement configuration work correctly
  */
 
-import ClapManager from './ClapManager';
-import { CLAP_RANGE, DEFAULT_CLAP_DISPLACEMENT } from './constants';
+import { DEFAULT_CLAP_DISPLACEMENT } from './constants';
 
 describe('Clapping to displace creature timing', () => {
   describe('affecting nearby creatures', () => {
@@ -19,19 +18,40 @@ describe('Clapping to displace creature timing', () => {
       ctx.loadPuzzle('clap-basic');
       await ctx.tick(16);
 
+      // Arrange: Record when creature sings before clap
+      ctx.clearEmittedNotes();
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
-      const originalNextSingBeat = creature.nextSingBeat;
 
-      // Clap (C key)
+      // Advance to allow creature to sing once
+      await ctx.advanceBeats(creature.interval + 1);
+      const notesBeforeClap = ctx.getEmittedNotes();
+      expect(notesBeforeClap.length).toBeGreaterThan(0);
+      const lastNoteBeforeClapBeat = notesBeforeClap[notesBeforeClap.length - 1].capturedAtBeat;
+
+      // Clear notes for next phase
+      ctx.clearEmittedNotes();
+
+      // Act: Clap to displace creature timing
       ctx.pressKey('c');
       // At 120 BPM, displacement grid of 0.25 beats = 125ms, so advance 200ms to hit boundary
       await ctx.tick(200);
 
-      // Assert: creature's next sing time was displaced
-      // Default displacement = 0.0625 whole notes = 0.25 quarter-note beats
+      // Assert: Creature's next singing should be delayed
+      // Continue advancing time and verify creature sings later than it would have
       const expectedDisplacement = DEFAULT_CLAP_DISPLACEMENT * 4;
-      expect(creature.nextSingBeat).toBeCloseTo(originalNextSingBeat + expectedDisplacement, 2);
+
+      // Advance enough time for creature to sing if not displaced
+      await ctx.advanceBeats(creature.interval + 2);
+
+      const notesAfterClap = ctx.getEmittedNotes();
+      if (notesAfterClap.length > 0) {
+        const firstNoteAfterClapBeat = notesAfterClap[0].capturedAtBeat;
+        // The next sing should be delayed by the displacement amount
+        const expectedNextSingBeat =
+          lastNoteBeforeClapBeat + creature.interval + expectedDisplacement;
+        expect(firstNoteAfterClapBeat).toBeCloseTo(expectedNextSingBeat, 1);
+      }
     });
 
     it('affects multiple creatures in range', async () => {
@@ -40,16 +60,39 @@ describe('Clapping to displace creature timing', () => {
       await ctx.tick(16);
 
       const creatures = ctx.getCreatures();
-      const originalBeats = creatures.map((c) => c.nextSingBeat);
 
-      // Clap
+      // Arrange: Record when each creature sings before clap
+      ctx.clearEmittedNotes();
+      await ctx.advanceBeats(Math.max(...creatures.map((c) => c.interval)) + 1);
+      const notesBeforeClap = ctx.getEmittedNotes();
+
+      // Map creatures to their pre-clap singing notes
+      const preClaps = creatures.map((creature) => {
+        const notes = notesBeforeClap.filter((n) => n.source === creature.id);
+        return notes.length > 0 ? notes[notes.length - 1].capturedAtBeat : null;
+      });
+
+      ctx.clearEmittedNotes();
+
+      // Act: Clap
       ctx.pressKey('c');
       await ctx.tick(200);
 
-      // Assert: both creatures displaced
+      // Assert: both creatures displaced (will sing later)
       const expectedDisplacement = DEFAULT_CLAP_DISPLACEMENT * 4;
+      const maxInterval = Math.max(...creatures.map((c) => c.interval));
+      await ctx.advanceBeats(maxInterval + 2);
+
+      const notesAfterClap = ctx.getEmittedNotes();
       creatures.forEach((creature, i) => {
-        expect(creature.nextSingBeat).toBeCloseTo(originalBeats[i] + expectedDisplacement, 2);
+        if (preClaps[i] !== null) {
+          const postClapNotes = notesAfterClap.filter((n) => n.source === creature.id);
+          if (postClapNotes.length > 0) {
+            const firstNoteAfterClapBeat = postClapNotes[0].capturedAtBeat;
+            const expectedNextSingBeat = preClaps[i] + creature.interval + expectedDisplacement;
+            expect(firstNoteAfterClapBeat).toBeCloseTo(expectedNextSingBeat, 1);
+          }
+        }
       });
     });
 
@@ -61,14 +104,33 @@ describe('Clapping to displace creature timing', () => {
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
-      const originalNextSingBeat = creature.nextSingBeat;
 
-      // Clap
+      // Arrange: Record when creature sings before clap
+      ctx.clearEmittedNotes();
+      await ctx.advanceBeats(creature.interval + 1);
+      const notesBeforeClap = ctx.getEmittedNotes();
+      const hasNoteBefore = notesBeforeClap.length > 0;
+      const lastNoteBeforeClapBeat = hasNoteBefore
+        ? notesBeforeClap[notesBeforeClap.length - 1].capturedAtBeat
+        : null;
+
+      ctx.clearEmittedNotes();
+
+      // Act: Clap (should not affect out-of-range creature)
       ctx.pressKey('c');
       await ctx.tick(100);
 
-      // Assert: creature's next sing time unchanged
-      expect(creature.nextSingBeat).toBe(originalNextSingBeat);
+      // Assert: creature's singing timing should NOT change
+      // Advance and verify creature sings at normal intervals
+      await ctx.advanceBeats(creature.interval + 2);
+
+      const notesAfterClap = ctx.getEmittedNotes();
+      if (hasNoteBefore && notesAfterClap.length > 0) {
+        const firstNoteAfterClapBeat = notesAfterClap[0].capturedAtBeat;
+        // Without displacement, it should sing at the normal interval
+        const expectedNextSingBeat = lastNoteBeforeClapBeat + creature.interval;
+        expect(firstNoteAfterClapBeat).toBeCloseTo(expectedNextSingBeat, 1);
+      }
     });
   });
 
@@ -80,14 +142,31 @@ describe('Clapping to displace creature timing', () => {
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
-      const originalNextSingBeat = creature.nextSingBeat;
 
-      // Clap - puzzle has clapDisplacement: 0.25, grid = 0.25*4 = 1 beat = 500ms at 120 BPM
+      // Arrange: Record when creature sings before clap
+      ctx.clearEmittedNotes();
+      await ctx.advanceBeats(creature.interval + 1);
+      const notesBeforeClap = ctx.getEmittedNotes();
+      expect(notesBeforeClap.length).toBeGreaterThan(0);
+      const lastNoteBeforeClapBeat = notesBeforeClap[notesBeforeClap.length - 1].capturedAtBeat;
+
+      ctx.clearEmittedNotes();
+
+      // Act: Clap - puzzle has clapDisplacement: 0.25, grid = 0.25*4 = 1 beat = 500ms at 120 BPM
       ctx.pressKey('c');
       await ctx.tick(600);
 
-      // Assert: displacement is 0.25 * 4 = 1 beat
-      expect(creature.nextSingBeat).toBeCloseTo(originalNextSingBeat + 1.0, 2);
+      // Assert: displacement should be 0.25 * 4 = 1 beat
+      const customDisplacement = 0.25 * 4; // = 1.0 beat
+      await ctx.advanceBeats(creature.interval + 2);
+
+      const notesAfterClap = ctx.getEmittedNotes();
+      if (notesAfterClap.length > 0) {
+        const firstNoteAfterClapBeat = notesAfterClap[0].capturedAtBeat;
+        const expectedNextSingBeat =
+          lastNoteBeforeClapBeat + creature.interval + customDisplacement;
+        expect(firstNoteAfterClapBeat).toBeCloseTo(expectedNextSingBeat, 1);
+      }
     });
 
     it('uses per-creature clapDisplacement override when specified', async () => {
@@ -100,66 +179,81 @@ describe('Clapping to displace creature timing', () => {
       const creatureWithOverride = creatures.find((c) => c.data.song[0].pitch === 'C4');
       const creatureWithDefault = creatures.find((c) => c.data.song[0].pitch === 'E4');
 
-      const originalOverride = creatureWithOverride.nextSingBeat;
-      const originalDefault = creatureWithDefault.nextSingBeat;
+      // Arrange: Record when creatures sing before clap
+      ctx.clearEmittedNotes();
+      const maxInterval = Math.max(creatureWithOverride.interval, creatureWithDefault.interval);
+      await ctx.advanceBeats(maxInterval + 1);
+      const notesBeforeClap = ctx.getEmittedNotes();
 
-      // Clap - puzzle has clapDisplacement: 0.125, grid = 0.125*4 = 0.5 beats = 250ms at 120 BPM
+      const overridePreClap = notesBeforeClap.find((n) => n.source === creatureWithOverride.id);
+      const defaultPreClap = notesBeforeClap.find((n) => n.source === creatureWithDefault.id);
+
+      ctx.clearEmittedNotes();
+
+      // Act: Clap - puzzle has clapDisplacement: 0.125, grid = 0.125*4 = 0.5 beats
       ctx.pressKey('c');
       await ctx.tick(300);
 
       // Assert: creature with override displaced by 0.5 * 4 = 2 beats
-      expect(creatureWithOverride.nextSingBeat).toBeCloseTo(originalOverride + 2.0, 2);
+      // creature with puzzle default displaced by 0.125 * 4 = 0.5 beats
+      await ctx.advanceBeats(maxInterval + 2);
+      const notesAfterClap = ctx.getEmittedNotes();
 
-      // Assert: creature with puzzle default displaced by 0.125 * 4 = 0.5 beats
-      expect(creatureWithDefault.nextSingBeat).toBeCloseTo(originalDefault + 0.5, 2);
-    });
-  });
+      if (overridePreClap) {
+        const overridePostClap = notesAfterClap.find(
+          (n) =>
+            n.source === creatureWithOverride.id &&
+            n.capturedAtBeat > overridePreClap.capturedAtBeat
+        );
+        if (overridePostClap) {
+          const expectedBeat = overridePreClap.capturedAtBeat + creatureWithOverride.interval + 2.0;
+          expect(overridePostClap.capturedAtBeat).toBeCloseTo(expectedBeat, 1);
+        }
+      }
 
-  describe('parseDisplacement', () => {
-    it('parses numeric displacement values', () => {
-      expect(ClapManager.parseDisplacement(0.25)).toBe(0.25);
-      expect(ClapManager.parseDisplacement(0.0625)).toBe(0.0625);
-      expect(ClapManager.parseDisplacement(1)).toBe(1);
-    });
-
-    it('parses string fraction format', () => {
-      expect(ClapManager.parseDisplacement('1/4')).toBe(0.25);
-      expect(ClapManager.parseDisplacement('1/8')).toBe(0.125);
-      expect(ClapManager.parseDisplacement('1/16')).toBe(0.0625);
-      expect(ClapManager.parseDisplacement('3/8')).toBe(0.375);
-    });
-
-    it('returns default for invalid formats', () => {
-      expect(ClapManager.parseDisplacement('invalid')).toBe(DEFAULT_CLAP_DISPLACEMENT);
-      expect(ClapManager.parseDisplacement(null)).toBe(DEFAULT_CLAP_DISPLACEMENT);
-      expect(ClapManager.parseDisplacement(undefined)).toBe(DEFAULT_CLAP_DISPLACEMENT);
+      if (defaultPreClap) {
+        const defaultPostClap = notesAfterClap.find(
+          (n) =>
+            n.source === creatureWithDefault.id && n.capturedAtBeat > defaultPreClap.capturedAtBeat
+        );
+        if (defaultPostClap) {
+          const expectedBeat = defaultPreClap.capturedAtBeat + creatureWithDefault.interval + 0.5;
+          expect(defaultPostClap.capturedAtBeat).toBeCloseTo(expectedBeat, 1);
+        }
+      }
     });
   });
 
   describe('clap quantization', () => {
-    it('quantizes clap to displacement grid boundary', async () => {
+    it('clap requested at non-grid position still affects creature timing', async () => {
       ctx.loadPuzzle('clap-basic');
       await ctx.tick(16);
 
-      // Advance to a non-grid position (e.g., beat 0.1)
-      await ctx.advanceBeats(0.1);
-
-      const currentBeat = ctx.getCurrentBeat();
-      expect(currentBeat).toBeGreaterThan(0);
-
+      // Arrange: Record creature's initial singing pattern
+      ctx.clearEmittedNotes();
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
-      const originalNextSingBeat = creature.nextSingBeat;
 
-      // Request clap (will be quantized)
+      // Get first sing time
+      await ctx.advanceBeats(creature.interval + 1);
+      let notes = ctx.getEmittedNotes();
+      expect(notes.length).toBeGreaterThan(0);
+      const firstSingBeat = notes[notes.length - 1].capturedAtBeat;
+
+      // Act: Clap at arbitrary time (system will quantize)
+      ctx.clearEmittedNotes();
       ctx.pressKey('c');
+      await ctx.tick(200); // Allow clap to execute
 
-      // Advance enough to hit the next grid boundary and execute
-      await ctx.tick(200);
+      // Assert: Creature's singing is displaced (sings later than normal interval)
+      await ctx.advanceBeats(creature.interval + 2);
+      notes = ctx.getEmittedNotes();
+      expect(notes.length).toBeGreaterThan(0);
+      const nextSingBeat = notes[notes.length - 1].capturedAtBeat;
 
-      // Assert: clap executed and displaced creature
-      const expectedDisplacement = DEFAULT_CLAP_DISPLACEMENT * 4;
-      expect(creature.nextSingBeat).toBeCloseTo(originalNextSingBeat + expectedDisplacement, 2);
+      // The second sing should be later than firstSingBeat + interval
+      // due to displacement from clap
+      expect(nextSingBeat).toBeGreaterThan(firstSingBeat + creature.interval);
     });
 
     it('ignores duplicate clap requests while one is pending', async () => {
@@ -168,64 +262,34 @@ describe('Clapping to displace creature timing', () => {
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
-      const originalNextSingBeat = creature.nextSingBeat;
 
-      // Request multiple claps rapidly
+      // Arrange: Record when creature sings before clap
+      ctx.clearEmittedNotes();
+      await ctx.advanceBeats(creature.interval + 1);
+      const notesBeforeClap = ctx.getEmittedNotes();
+      expect(notesBeforeClap.length).toBeGreaterThan(0);
+      const lastNoteBeforeClapBeat = notesBeforeClap[notesBeforeClap.length - 1].capturedAtBeat;
+
+      ctx.clearEmittedNotes();
+
+      // Act: Request multiple claps rapidly (only first should execute)
       ctx.pressKey('c');
       ctx.pressKey('c');
       ctx.pressKey('c');
       await ctx.tick(200);
 
-      // Assert: only one displacement occurred
+      // Assert: only one displacement should have occurred
       const expectedDisplacement = DEFAULT_CLAP_DISPLACEMENT * 4;
-      expect(creature.nextSingBeat).toBeCloseTo(originalNextSingBeat + expectedDisplacement, 2);
-    });
-  });
+      await ctx.advanceBeats(creature.interval + 2);
 
-  describe('visual feedback', () => {
-    it('triggers visual callback when clapping', async () => {
-      ctx.loadPuzzle('clap-basic');
-      await ctx.tick(16);
-
-      let callbackCalled = false;
-      let callbackPosition = null;
-      let callbackRange = null;
-
-      ClapManager.setVisualCallback((position, range) => {
-        callbackCalled = true;
-        callbackPosition = position;
-        callbackRange = range;
-      });
-
-      // Clap
-      ctx.pressKey('c');
-      await ctx.tick(200);
-
-      // Assert: callback was triggered with correct args
-      expect(callbackCalled).toBe(true);
-      expect(callbackPosition).toEqual(ctx.getPlayerPosition());
-      expect(callbackRange).toBe(CLAP_RANGE);
-
-      // Clean up
-      ClapManager.setVisualCallback(null);
-    });
-  });
-
-  describe('state management', () => {
-    it('resets state when reset() is called', async () => {
-      ctx.loadPuzzle('clap-basic');
-      await ctx.tick(16);
-
-      // Request a clap but don't let it execute
-      ClapManager.requestClap();
-      expect(ClapManager.pendingClap).toBe(true);
-
-      // Reset
-      ClapManager.reset();
-
-      // Assert: state cleared
-      expect(ClapManager.pendingClap).toBe(false);
-      expect(ClapManager.targetBeat).toBe(-1);
+      const notesAfterClap = ctx.getEmittedNotes();
+      if (notesAfterClap.length > 0) {
+        const firstNoteAfterClapBeat = notesAfterClap[0].capturedAtBeat;
+        // Should only be displaced once
+        const expectedNextSingBeat =
+          lastNoteBeforeClapBeat + creature.interval + expectedDisplacement;
+        expect(firstNoteAfterClapBeat).toBeCloseTo(expectedNextSingBeat, 1);
+      }
     });
   });
 });

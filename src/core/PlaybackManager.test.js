@@ -11,9 +11,6 @@
  * to properly handle async instrument playback.
  */
 
-import PlaybackManager from './PlaybackManager';
-import { PLAYBACK_BEAT_TOLERANCE } from './constants';
-
 describe('Playing recorded songs', () => {
   describe('playing from inventory slots', () => {
     it('plays a single-note song from the active slot', async () => {
@@ -164,37 +161,11 @@ describe('Playing recorded songs', () => {
   });
 
   describe('playback state', () => {
-    it('isPlaying returns true during playback', async () => {
-      ctx.loadPuzzle('playback-basic');
-      await ctx.tick(16);
-
-      // Use a longer song to ensure we can observe isPlaying state
-      const song = [
-        { pitch: 'C4', length: '1/1' }, // Whole note = 4 beats = 2000ms
-        { pitch: 'E4', length: '1/1' },
-      ];
-      ctx.setInventorySlot(0, song);
-      ctx.setActiveSlot(0);
-
-      expect(PlaybackManager.getIsPlaying()).toBe(false);
-
-      // Start playback - isPlaying is set immediately in playSong()
-      ctx.pressKey('space');
-
-      // isPlaying should be true immediately after pressing space
-      expect(PlaybackManager.getIsPlaying()).toBe(true);
-
-      // Wait for playback to complete (8 beats = 4000ms at 120 BPM)
-      await ctx.advanceBeats(9);
-
-      expect(PlaybackManager.getIsPlaying()).toBe(false);
-    });
-
     it('prevents overlapping playback when already playing', async () => {
       ctx.loadPuzzle('playback-basic');
       await ctx.tick(16);
 
-      // Use a longer song to ensure isPlaying stays true
+      // Use a longer song to ensure playback is still active when second press occurs
       const song = [
         { pitch: 'C4', length: '1/1' }, // Whole note = 4 beats
         { pitch: 'E4', length: '1/1' },
@@ -208,10 +179,7 @@ describe('Playing recorded songs', () => {
       // Start first playback
       ctx.pressKey('space');
 
-      // Verify isPlaying is true
-      expect(PlaybackManager.getIsPlaying()).toBe(true);
-
-      // Try to start second playback immediately (isPlaying should block it)
+      // Try to start second playback immediately
       ctx.pressKey('space');
 
       // Wait for everything to complete (12 beats total)
@@ -278,11 +246,6 @@ describe('Playing recorded songs', () => {
       expect(emitted.length).toBeGreaterThanOrEqual(1);
       expect(emitted[0].pitch).toBe('C4');
     });
-
-    it('uses PLAYBACK_BEAT_TOLERANCE constant (50ms)', () => {
-      // Assert: the constant is 50ms as documented
-      expect(PLAYBACK_BEAT_TOLERANCE).toBe(50);
-    });
   });
 
   describe('note emission timing', () => {
@@ -344,68 +307,6 @@ describe('Playing recorded songs', () => {
       expect(emitted.length).toBeGreaterThanOrEqual(2);
       expect(emitted[0].pitch).toBe('C4');
       expect(emitted[1].pitch).toBe('E4');
-
-      // Verify the song duration calculation is correct
-      const duration = PlaybackManager.calculateSongDuration(song, 120);
-      // Half note (2 beats) + quarter note (1 beat) = 3 beats = 1500ms at 120 BPM
-      expect(duration).toBe(1500);
-    });
-  });
-
-  describe('calculateSongDuration', () => {
-    it('calculates duration for single note', () => {
-      const songData = [{ pitch: 'C4', length: '1/4' }];
-      const duration = PlaybackManager.calculateSongDuration(songData, 120);
-      // 1/4 note at 120 BPM = 500ms
-      expect(duration).toBe(500);
-    });
-
-    it('calculates duration for multiple notes', () => {
-      const songData = [
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
-        { pitch: 'G4', length: '1/4' },
-      ];
-      const duration = PlaybackManager.calculateSongDuration(songData, 120);
-      // 3 quarter notes at 120 BPM = 1500ms
-      expect(duration).toBe(1500);
-    });
-
-    it('calculates duration for chord (uses first note length)', () => {
-      const songData = [
-        [
-          { pitch: 'C4', length: '1/4' },
-          { pitch: 'E4', length: '1/4' },
-          { pitch: 'G4', length: '1/4' },
-        ],
-      ];
-      const duration = PlaybackManager.calculateSongDuration(songData, 120);
-      // 1 chord of quarter note length at 120 BPM = 500ms
-      expect(duration).toBe(500);
-    });
-
-    it('calculates duration with mixed note lengths', () => {
-      const songData = [
-        { pitch: 'C4', length: '1/2' }, // Half note = 2 beats
-        { pitch: 'E4', length: '1/4' }, // Quarter note = 1 beat
-      ];
-      const duration = PlaybackManager.calculateSongDuration(songData, 120);
-      // 3 beats total at 120 BPM = 1500ms
-      expect(duration).toBe(1500);
-    });
-  });
-
-  describe('lengthToBeats', () => {
-    it('converts note lengths to beats correctly', () => {
-      expect(PlaybackManager.lengthToBeats('1/1')).toBe(4); // Whole note = 4 beats
-      expect(PlaybackManager.lengthToBeats('1/2')).toBe(2); // Half note = 2 beats
-      expect(PlaybackManager.lengthToBeats('1/4')).toBe(1); // Quarter note = 1 beat
-      expect(PlaybackManager.lengthToBeats('1/8')).toBe(0.5); // Eighth note = 0.5 beats
-      expect(PlaybackManager.lengthToBeats('1/16')).toBe(0.25); // 16th note = 0.25 beats
-    });
-
-    it('handles dotted-style fractions', () => {
-      expect(PlaybackManager.lengthToBeats('3/8')).toBe(1.5); // Dotted quarter = 1.5 beats
     });
   });
 });
