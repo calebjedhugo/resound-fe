@@ -2,6 +2,8 @@
 
 Defines how tied notes affect audio playback. Tied notes produce a single continuous sound with no re-attack.
 
+> **Notation:** [SPEC-ties.md](../notation/SPEC-ties.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Overview

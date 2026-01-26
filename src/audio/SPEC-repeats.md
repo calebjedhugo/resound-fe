@@ -2,6 +2,8 @@
 
 Repeats and navigation markers control the order in which musical sections are played back. The audio system "unrolls" the repeat structure into a linear playback sequence before passing notes to `Instrument.play()`.
 
+> **Notation:** [SPEC-repeats.md](../notation/SPEC-repeats.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Overview

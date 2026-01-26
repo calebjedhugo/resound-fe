@@ -2,6 +2,8 @@
 
 Rendering specification for text annotations: tempo markings, expression text, rehearsal marks, and lyrics.
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-text-annotations.md](../audio/SPEC-text-annotations.md)
+
 ---
 
 ## Goals

@@ -2,6 +2,8 @@
 
 Complete repeat and navigation marking system for controlling visual notation and playback order. Covers repeat barlines, volta endings, segno/coda navigation, and D.C./D.S. directives.
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-repeats.md](../audio/SPEC-repeats.md)
+
 ---
 
 ## Goals

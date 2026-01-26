@@ -2,6 +2,8 @@
 
 Testing approach for the SVG notation renderer. Follows the project-wide [`TESTING.md`](../../TESTING.md) philosophy: test behaviors through public APIs, mock only browser APIs, never mock internal modules.
 
+> **Parent:** [SPEC.md](SPEC.md)
+
 ---
 
 ## What Gets Mocked

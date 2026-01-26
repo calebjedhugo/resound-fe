@@ -2,6 +2,8 @@
 
 How articulation marks modify note playback in the audio system. Articulations change duration, volume, and envelope shape -- they do not alter the underlying note data.
 
+> **Notation:** [SPEC-articulations.md](../notation/SPEC-articulations.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Overview

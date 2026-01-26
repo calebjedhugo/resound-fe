@@ -2,6 +2,8 @@
 
 Extends the notation library to render tuplet groups -- N notes in the space of M -- with correct spacing, beaming, brackets, and numbers.
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-tuplets.md](../audio/SPEC-tuplets.md)
+
 ---
 
 ## Goals

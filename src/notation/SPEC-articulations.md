@@ -2,6 +2,8 @@
 
 Rendering of musical articulation marks on staff notation. Articulations are visual symbols attached to notes that indicate how they should be performed (shortened, accented, held, etc.).
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-articulations.md](../audio/SPEC-articulations.md)
+
 ---
 
 ## Goals
@@ -431,6 +433,10 @@ When slurs are implemented: staccato marks under a slur indicate portato playing
 ### Articulation on Tied Notes
 
 When ties are implemented: articulations typically apply to the first note of a tie chain only. Do not render articulation marks on the tied-to (second) note.
+
+### Relationship to Dynamics
+
+Articulations are note-level expression (how a single note is attacked/sustained). See also [SPEC-dynamics.md](SPEC-dynamics.md) for passage-level volume markings (piano, forte, hairpins).
 
 ---
 

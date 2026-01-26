@@ -2,6 +2,8 @@
 
 Extends the audio playback system to handle tuplet timing -- N notes played in the duration of M.
 
+> **Notation:** [SPEC-tuplets.md](../notation/SPEC-tuplets.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Overview

@@ -2,6 +2,8 @@
 
 Rendering specification for musical slurs in the SVG notation system.
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-slurs.md](../audio/SPEC-slurs.md)
+
 ---
 
 ## Overview
@@ -426,7 +428,7 @@ Add to `__tests__/fixtures/songs/`:
 
 ### Slurs vs. Ties
 
-This is the most critical distinction:
+This is the most critical distinction. See [SPEC-ties.md](SPEC-ties.md) for the tie specification.
 
 | Feature | Tie | Slur |
 |---------|-----|------|

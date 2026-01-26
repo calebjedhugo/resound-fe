@@ -86,7 +86,7 @@ Suggested build sequence to enable incremental testing. See [`src/notation/SPEC.
 - ❌ `components/BarLine.js` - Measure dividers
 - ❌ `lib/beaming.js` - Beam grouping logic
 - ❌ `components/Beam.js` - Beam rendering
-- ❌ Ties ([`SPEC-ties.md`](src/notation/SPEC-ties.md)) - Tie arcs and duration merging
+- ❌ Ties ([notation](src/notation/SPEC-ties.md) · [audio](src/audio/SPEC-ties.md)) - Tie arcs and duration merging
 
 **Milestone: Fully metered notation with beaming and ties**
 
@@ -99,12 +99,12 @@ Suggested build sequence to enable incremental testing. See [`src/notation/SPEC.
 **Milestone: Complete core feature set**
 
 ### Phase 6: Extended Notation Features
-- ❌ Dynamics ([`SPEC-dynamics.md`](src/notation/SPEC-dynamics.md)) - Dynamic markings and hairpins
-- ❌ Articulations ([`SPEC-articulations.md`](src/notation/SPEC-articulations.md)) - Staccato, accent, fermata, etc.
-- ❌ Slurs ([`SPEC-slurs.md`](src/notation/SPEC-slurs.md)) - Legato phrasing arcs
-- ❌ Tuplets ([`SPEC-tuplets.md`](src/notation/SPEC-tuplets.md)) - Triplets and irregular groupings
-- ❌ Grace Notes ([`SPEC-grace-notes.md`](src/notation/SPEC-grace-notes.md)) - Acciaccatura and appoggiatura
-- ❌ Repeats ([`SPEC-repeats.md`](src/notation/SPEC-repeats.md)) - Repeat barlines, voltas, DC/DS
-- ❌ Text Annotations ([`SPEC-text-annotations.md`](src/notation/SPEC-text-annotations.md)) - Tempo, expression, rehearsal marks, lyrics
+- ❌ Dynamics ([notation](src/notation/SPEC-dynamics.md) · [audio](src/audio/SPEC-dynamics.md)) - Dynamic markings and hairpins
+- ❌ Articulations ([notation](src/notation/SPEC-articulations.md) · [audio](src/audio/SPEC-articulations.md)) - Staccato, accent, fermata, etc.
+- ❌ Slurs ([notation](src/notation/SPEC-slurs.md) · [audio](src/audio/SPEC-slurs.md)) - Legato phrasing arcs
+- ❌ Tuplets ([notation](src/notation/SPEC-tuplets.md) · [audio](src/audio/SPEC-tuplets.md)) - Triplets and irregular groupings
+- ❌ Grace Notes ([notation](src/notation/SPEC-grace-notes.md) · [audio](src/audio/SPEC-grace-notes.md)) - Acciaccatura and appoggiatura
+- ❌ Repeats ([notation](src/notation/SPEC-repeats.md) · [audio](src/audio/SPEC-repeats.md)) - Repeat barlines, voltas, DC/DS
+- ❌ Text Annotations ([notation](src/notation/SPEC-text-annotations.md) · [audio](src/audio/SPEC-text-annotations.md)) - Tempo, expression, rehearsal marks, lyrics
 
 **Milestone: Full notation feature set**

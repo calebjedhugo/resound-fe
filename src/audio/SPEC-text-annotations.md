@@ -2,6 +2,8 @@
 
 Audio playback behavior for text annotations. Only tempo-related annotations affect audio; expression, rehearsal marks, and lyrics are informational only.
 
+> **Notation:** [SPEC-text-annotations.md](../notation/SPEC-text-annotations.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Overview

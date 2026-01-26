@@ -2,6 +2,8 @@
 
 Defines how slurs affect audio playback behavior. This spec covers the data contract and sound behavior, not implementation details.
 
+> **Notation:** [SPEC-slurs.md](../notation/SPEC-slurs.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Overview

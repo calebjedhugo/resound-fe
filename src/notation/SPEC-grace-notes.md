@@ -2,6 +2,8 @@
 
 Small ornamental notes played before a main note. Adds expressive ornamentation to melodies without altering the rhythmic structure of the measure.
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-grace-notes.md](../audio/SPEC-grace-notes.md)
+
 ---
 
 ## Goals

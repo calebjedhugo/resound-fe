@@ -2,6 +2,8 @@
 
 How dynamic markings control volume and intensity during audio playback.
 
+> **Notation:** [SPEC-dynamics.md](../notation/SPEC-dynamics.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Overview

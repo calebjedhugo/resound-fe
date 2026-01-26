@@ -2,6 +2,8 @@
 
 Extends the notation renderer to display tie arcs connecting notes of the same pitch across durations.
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-ties.md](../audio/SPEC-ties.md)
+
 ---
 
 ## Goals
@@ -620,7 +622,7 @@ Ties and slurs look visually similar (curved arcs between notes) but have differ
 - **Tie:** Same pitch, notes merge into one sustained sound
 - **Slur:** Different pitches, notes played smoothly (legato)
 
-This spec covers ties only. Slurs are specified in SPEC-slurs.md and use a separate `slur` property with different matching logic (slurs can connect any pitches and span arbitrary note ranges). The SVG class is `.slur` to distinguish from `.tie`.
+This spec covers ties only. Slurs are specified in [SPEC-slurs.md](SPEC-slurs.md) and use a separate `slur` property with different matching logic (slurs can connect any pitches and span arbitrary note ranges). The SVG class is `.slur` to distinguish from `.tie`.
 
 ### Playback Position and Tied Notes
 

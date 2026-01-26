@@ -2,6 +2,8 @@
 
 Grace notes are ornamental notes played quickly before a main note. This spec defines how the audio system schedules and plays them.
 
+> **Notation:** [SPEC-grace-notes.md](../notation/SPEC-grace-notes.md) · **Parent:** [SPEC.md](../notation/SPEC.md)
+
 ---
 
 ## Data Structure

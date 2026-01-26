@@ -2,6 +2,8 @@
 
 Rendering of dynamic markings (volume indicators) and hairpins (gradual volume changes) in SVG staff notation.
 
+> **Parent:** [SPEC.md](SPEC.md) · **Audio:** [SPEC-dynamics.md](../audio/SPEC-dynamics.md)
+
 ---
 
 ## Goals
@@ -199,7 +201,7 @@ When rendering a grand staff (e.g., treble + bass voices):
 
 1. Staff lines
 2. Notes, rests, beams
-3. Articulations (future)
+3. Articulations (see [SPEC-articulations.md](SPEC-articulations.md) for note-level expression markings)
 4. Dynamics and hairpins
 
 ---
