@@ -52,3 +52,59 @@ Update this checklist when completing features. Mark items ✅ when done, ⚠️
 - ❌ Backend with authentication
 - ❌ Cloud progress sync (currently localStorage only)
 - ❌ Additional puzzles post-release
+
+## Notation Library Implementation Order
+
+Suggested build sequence to enable incremental testing. See [`src/notation/SPEC.md`](src/notation/SPEC.md) for full specification.
+
+### Phase 1: Core Data Handling
+- ❌ `lib/dataParser.js` - Normalize all input formats
+- ❌ `lib/notePositions.js` - Pitch to staff position
+- ❌ `lib/durationSymbols.js` - Length to note type
+- ❌ `lib/clefInference.js` - Auto-detect clef
+- ❌ `lib/keySignatures.js` - Key to accidentals
+
+### Phase 2: Basic Rendering
+- ❌ `lib/svgHelpers.js` - SVG utilities
+- ❌ `components/Staff.js` - Five lines
+- ❌ `components/Note.js` - Note heads and stems
+- ❌ `NotationRenderer.js` - Basic single-voice rendering
+
+**Milestone: Can render simple melodies**
+
+### Phase 3: Musical Elements
+- ❌ `components/Clef.js` - Clef symbols
+- ❌ `components/Rest.js` - Rest symbols
+- ❌ `components/LedgerLine.js` - Ledger lines
+- ❌ `components/Accidental.js` - Sharps, flats, naturals
+
+**Milestone: Can render any pitched melody with rests**
+
+### Phase 4: Notation Features
+- ❌ `components/KeySignature.js` - Key signature display
+- ❌ `components/TimeSignature.js` - Time signature display
+- ❌ `components/BarLine.js` - Measure dividers
+- ❌ `lib/beaming.js` - Beam grouping logic
+- ❌ `components/Beam.js` - Beam rendering
+- ❌ Ties ([`SPEC-ties.md`](src/notation/SPEC-ties.md)) - Tie arcs and duration merging
+
+**Milestone: Fully metered notation with beaming and ties**
+
+### Phase 5: Advanced Features
+- ❌ `components/Cursor.js` - Playback position
+- ❌ Multi-voice support in `NotationRenderer.js`
+- ❌ Chord rendering
+- ❌ Percussion clef and X noteheads
+
+**Milestone: Complete core feature set**
+
+### Phase 6: Extended Notation Features
+- ❌ Dynamics ([`SPEC-dynamics.md`](src/notation/SPEC-dynamics.md)) - Dynamic markings and hairpins
+- ❌ Articulations ([`SPEC-articulations.md`](src/notation/SPEC-articulations.md)) - Staccato, accent, fermata, etc.
+- ❌ Slurs ([`SPEC-slurs.md`](src/notation/SPEC-slurs.md)) - Legato phrasing arcs
+- ❌ Tuplets ([`SPEC-tuplets.md`](src/notation/SPEC-tuplets.md)) - Triplets and irregular groupings
+- ❌ Grace Notes ([`SPEC-grace-notes.md`](src/notation/SPEC-grace-notes.md)) - Acciaccatura and appoggiatura
+- ❌ Repeats ([`SPEC-repeats.md`](src/notation/SPEC-repeats.md)) - Repeat barlines, voltas, DC/DS
+- ❌ Text Annotations ([`SPEC-text-annotations.md`](src/notation/SPEC-text-annotations.md)) - Tempo, expression, rehearsal marks, lyrics
+
+**Milestone: Full notation feature set**

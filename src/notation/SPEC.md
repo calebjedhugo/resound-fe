@@ -51,6 +51,10 @@ Existing puzzle format. Uses all defaults.
 {
   timeSignature: [4, 4],       // default for all voices
   keySignature: "C",           // default for all voices
+  markers: [                   // optional, shared across all voices
+    { position: 4, marker: { barline: "repeat-start" } },
+    { position: 12, marker: { barline: "repeat-end" } }
+  ],
   voices: [
     {
       id: "melody",            // optional, defaults to index
@@ -71,6 +75,8 @@ Existing puzzle format. Uses all defaults.
   ]
 }
 ```
+
+An optional `markers` array can contain position-indexed markers (barlines, navigation, etc.) that apply across all voices. See SPEC-repeats.md for details.
 
 ### Note Object
 
@@ -105,7 +111,7 @@ Add `dotted: true` to indicate a dotted duration. This makes intent explicit for
 { length: "1/4", dotted: true }                // dotted quarter rest
 ```
 
-The `dotted` flag means "this duration is 1.5x the written length." The renderer draws an augmentation dot. The audio system multiplies duration by 1.5.
+The `dotted` flag means "this duration is 1.5x the written length." The renderer draws an augmentation dot. The caller is responsible for checking `dotted: true` and multiplying the result of `getDuration()` by 1.5. The `getDuration()` function itself only handles the base fraction.
 
 **IMPORTANT:** Do not use raw fractions for dotted values (e.g., `"3/8"` for dotted quarter). While mathematically correct, the renderer cannot distinguish a dotted quarter from a true 3/8 duration, and the dot would not be drawn.
 
@@ -121,7 +127,7 @@ Array of simultaneous notes:
 ]
 ```
 
-All notes in a chord share the same length (use first note's length if they differ).
+All notes in a chord should share the same length. If they differ, the shortest duration is used for scheduling purposes (matching existing `Instrument.playChord()` behavior).
 
 **Parser note:** A song's `notes` array contains a mix of note objects, rest objects, and chord arrays. The parser MUST use `Array.isArray()` on each element to distinguish a chord `[noteObj, noteObj]` from the enclosing sequence. This is a nested-array-in-array pattern - handle it explicitly.
 
@@ -245,6 +251,7 @@ The `setPlaybackPosition(beat, options)` method highlights the current note(s):
 
 - `beat`: Current beat position (float, e.g., `2.5` = halfway through beat 3)
 - `options.voiceId`: Optional voice ID to highlight (highlights all if omitted)
+- `options.repeatPass`: Optional pass number when repeats are active. Specifies which pass through a repeated section (see SPEC-repeats.md).
 
 Visual indication:
 - Current note gets a CSS class `note-active`
@@ -535,432 +542,11 @@ src/notation/
 
 ---
 
-## Testing Approach
+## Testing
 
-Follow the project's integration testing philosophy from `TESTING.md`.
+See [`SPEC-testing.md`](SPEC-testing.md) for the notation library's testing approach, including the test context helper (`createNotationContext()`), query helpers, example tests, and test fixtures.
 
-### What Gets Mocked
-
-**Mocked (external browser APIs):**
-- DOM (`document.createElement`, `document.getElementById`)
-- Potentially `requestAnimationFrame` if animation is added
-
-**Not mocked (tested as integrated units):**
-- All `lib/` modules
-- All `components/`
-- NotationRenderer
-- Data parsing and validation
-
-### Test Context
-
-Create a test helper similar to the game's `createTestContext()`:
-
-```js
-// src/notation/__tests__/helpers/testUtils.js
-
-export function createNotationContext() {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-
-  const renderer = new NotationRenderer({ container });
-
-  return {
-    renderer,
-    container,
-
-    // Render helpers
-    render(song) {
-      return renderer.render(song);
-    },
-
-    // Query helpers
-    getSvg() {
-      return container.querySelector('svg');
-    },
-    getNotes() {
-      return container.querySelectorAll('.note');
-    },
-    getRests() {
-      return container.querySelectorAll('.rest');
-    },
-    getActiveNote() {
-      return container.querySelector('.note-active');
-    },
-    getClef() {
-      return container.querySelector('.clef');
-    },
-    getKeySignature() {
-      return container.querySelector('.key-signature');
-    },
-    getTimeSignature() {
-      return container.querySelector('.time-signature');
-    },
-    getBarLines() {
-      return container.querySelectorAll('.bar-line');
-    },
-    getBeamGroups() {
-      return container.querySelectorAll('.beam-group');
-    },
-    getLedgerLines() {
-      return container.querySelectorAll('.ledger-line');
-    },
-
-    // Cleanup
-    destroy() {
-      renderer.clear();
-      container.remove();
-    }
-  };
-}
-```
-
-### Example Tests
-
-```js
-// NotationRenderer.test.js
-
-describe('NotationRenderer', () => {
-  let ctx;
-
-  beforeEach(() => {
-    ctx = createNotationContext();
-  });
-
-  afterEach(() => {
-    ctx.destroy();
-  });
-
-  describe('rendering simple melodies', () => {
-    it('renders one note per pitch in the song', () => {
-      ctx.render([
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
-        { pitch: 'G4', length: '1/4' }
-      ]);
-
-      expect(ctx.getNotes()).toHaveLength(3);
-    });
-
-    it('renders rests when pitch is omitted', () => {
-      ctx.render([
-        { pitch: 'C4', length: '1/4' },
-        { length: '1/4' },  // rest
-        { pitch: 'G4', length: '1/4' }
-      ]);
-
-      expect(ctx.getNotes()).toHaveLength(2);
-      expect(ctx.getRests()).toHaveLength(1);
-    });
-  });
-
-  describe('clef inference', () => {
-    it('uses treble clef when median pitch is C4 or above', () => {
-      ctx.render([
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
-        { pitch: 'G4', length: '1/4' }
-      ]);
-
-      expect(ctx.getClef().classList.contains('clef-treble')).toBe(true);
-    });
-
-    it('uses bass clef when median pitch is below C4', () => {
-      ctx.render([
-        { pitch: 'C3', length: '1/4' },
-        { pitch: 'E3', length: '1/4' },
-        { pitch: 'G3', length: '1/4' }
-      ]);
-
-      expect(ctx.getClef().classList.contains('clef-bass')).toBe(true);
-    });
-
-    it('uses percussion clef when no pitches are present', () => {
-      ctx.render([
-        { position: 1, length: '1/4' },
-        { position: 5, length: '1/4' }
-      ]);
-
-      expect(ctx.getClef().classList.contains('clef-percussion')).toBe(true);
-    });
-  });
-
-  describe('time signatures and bar lines', () => {
-    it('shows no bar lines when time signature is omitted', () => {
-      ctx.render([
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
-        { pitch: 'G4', length: '1/4' },
-        { pitch: 'C5', length: '1/4' }
-      ]);
-
-      expect(ctx.getBarLines()).toHaveLength(0);
-      expect(ctx.getTimeSignature()).toBeNull();
-    });
-
-    it('shows time signature and bar lines when specified', () => {
-      ctx.render({
-        timeSignature: [4, 4],
-        notes: [
-          { pitch: 'C4', length: '1/4' },
-          { pitch: 'E4', length: '1/4' },
-          { pitch: 'G4', length: '1/4' },
-          { pitch: 'C5', length: '1/4' },
-          // measure 2
-          { pitch: 'B4', length: '1/4' },
-          { pitch: 'G4', length: '1/4' },
-          { pitch: 'E4', length: '1/4' },
-          { pitch: 'C4', length: '1/4' }
-        ]
-      });
-
-      expect(ctx.getTimeSignature()).not.toBeNull();
-      expect(ctx.getBarLines().length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('beaming', () => {
-    it('beams eighth notes within the same beat', () => {
-      ctx.render({
-        timeSignature: [4, 4],
-        notes: [
-          { pitch: 'C4', length: '1/8' },
-          { pitch: 'D4', length: '1/8' },
-          { pitch: 'E4', length: '1/4' }
-        ]
-      });
-
-      expect(ctx.getBeamGroups()).toHaveLength(1);
-    });
-
-    it('breaks beams across beat boundaries', () => {
-      ctx.render({
-        timeSignature: [4, 4],
-        notes: [
-          { pitch: 'C4', length: '1/8' },
-          { pitch: 'D4', length: '1/8' },  // beat 1
-          { pitch: 'E4', length: '1/8' },
-          { pitch: 'F4', length: '1/8' }   // beat 2
-        ]
-      });
-
-      // Should have 2 beam groups, not 1 continuous beam
-      expect(ctx.getBeamGroups()).toHaveLength(2);
-    });
-  });
-
-  describe('playback position', () => {
-    it('highlights the note at the current beat', () => {
-      ctx.render([
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
-        { pitch: 'G4', length: '1/4' }
-      ]);
-
-      ctx.renderer.setPlaybackPosition(1); // second note
-
-      const active = ctx.getActiveNote();
-      expect(active).not.toBeNull();
-      expect(active.dataset.beat).toBe('1');
-    });
-
-    it('removes highlight when playback position is cleared', () => {
-      ctx.render([
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' }
-      ]);
-
-      ctx.renderer.setPlaybackPosition(0);
-      expect(ctx.getActiveNote()).not.toBeNull();
-
-      ctx.renderer.setPlaybackPosition(null);
-      expect(ctx.getActiveNote()).toBeNull();
-    });
-  });
-
-  describe('ledger lines', () => {
-    it('renders ledger lines for notes above the staff', () => {
-      ctx.render([{ pitch: 'A5', length: '1/4' }]);
-
-      expect(ctx.getLedgerLines().length).toBeGreaterThan(0);
-    });
-
-    it('renders ledger lines for notes below the staff', () => {
-      ctx.render([{ pitch: 'C4', length: '1/4' }]); // middle C needs 1 ledger
-
-      expect(ctx.getLedgerLines()).toHaveLength(1);
-    });
-  });
-
-  describe('multi-voice rendering', () => {
-    it('renders separate staves for each voice', () => {
-      ctx.render({
-        voices: [
-          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
-          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] }
-        ]
-      });
-
-      const staves = ctx.container.querySelectorAll('.staff');
-      expect(staves).toHaveLength(2);
-    });
-
-    it('allows different time signatures per voice', () => {
-      ctx.render({
-        timeSignature: [4, 4],
-        voices: [
-          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
-          { clef: 'bass', timeSignature: [3, 4], notes: [{ pitch: 'C3', length: '1/4' }] }
-        ]
-      });
-
-      const timeSigs = ctx.container.querySelectorAll('.time-signature');
-      expect(timeSigs).toHaveLength(2);
-      expect(timeSigs[0].textContent).toContain('4');
-      expect(timeSigs[1].textContent).toContain('3');
-    });
-  });
-});
-```
-
-### Test Fixtures
-
-Create JSON files in `__tests__/fixtures/songs/` for reusable test data:
-
-```js
-// simple-melody.json
-[
-  { "pitch": "C4", "length": "1/4" },
-  { "pitch": "D4", "length": "1/4" },
-  { "pitch": "E4", "length": "1/4" },
-  { "pitch": "F4", "length": "1/4" }
-]
-
-// with-rests.json
-[
-  { "pitch": "C4", "length": "1/4" },
-  { "length": "1/4" },
-  { "pitch": "E4", "length": "1/4" },
-  { "length": "1/4" }
-]
-
-// with-chords.json
-[
-  [
-    { "pitch": "C4", "length": "1/2" },
-    { "pitch": "E4", "length": "1/2" },
-    { "pitch": "G4", "length": "1/2" }
-  ],
-  { "pitch": "B4", "length": "1/2" }
-]
-
-// percussion.json - positions 1-9 (odd=lines, even=spaces)
-[
-  { "position": 5, "length": "1/4" },
-  { "position": 5, "length": "1/8" },
-  { "position": 5, "length": "1/8" },
-  { "position": 1, "length": "1/4" },
-  { "position": 9, "length": "1/2" }
-]
-```
-
----
-
-## Implementation Order
-
-Suggested build sequence to enable incremental testing:
-
-### Phase 1: Core Data Handling
-1. `lib/dataParser.js` - Normalize all input formats
-2. `lib/notePositions.js` - Pitch to staff position
-3. `lib/durationSymbols.js` - Length to note type
-4. `lib/clefInference.js` - Auto-detect clef
-5. `lib/keySignatures.js` - Key to accidentals
-
-### Phase 2: Basic Rendering
-6. `lib/svgHelpers.js` - SVG utilities
-7. `components/Staff.js` - Five lines
-8. `components/Note.js` - Note heads and stems
-9. `NotationRenderer.js` - Basic single-voice rendering
-
-**Milestone: Can render simple melodies**
-
-### Phase 3: Musical Elements
-10. `components/Clef.js` - Clef symbols
-11. `components/Rest.js` - Rest symbols
-12. `components/LedgerLine.js` - Ledger lines
-13. `components/Accidental.js` - Sharps, flats, naturals
-
-**Milestone: Can render any pitched melody with rests**
-
-### Phase 4: Notation Features
-14. `components/KeySignature.js` - Key signature display
-15. `components/TimeSignature.js` - Time signature display
-16. `components/BarLine.js` - Measure dividers
-17. `lib/beaming.js` - Beam grouping logic
-18. `components/Beam.js` - Beam rendering
-
-**Milestone: Fully metered notation with beaming**
-
-### Phase 5: Advanced Features
-19. `components/Cursor.js` - Playback position
-20. Multi-voice support in `NotationRenderer.js`
-21. Chord rendering
-22. Percussion clef and X noteheads
-
-**Milestone: Complete feature set**
-
----
-
-## SVG Symbol Paths
-
-Reference paths for musical symbols. These can be stored in `components/` or a shared `symbols.js` file.
-
-### Clefs
-
-```js
-// Treble clef (G clef) - simplified path
-const trebleClef = `M...`; // Complex bezier path
-
-// Bass clef (F clef)
-const bassClef = `M...`;
-
-// Percussion clef (two vertical lines)
-const percussionClef = `M 0 0 L 0 40 M 10 0 L 10 40`;
-```
-
-### Note Heads
-
-```js
-// Filled (quarter and smaller)
-// Ellipse: rx="6" ry="5" rotated ~20 degrees
-
-// Hollow (half note)
-// Ellipse with stroke, no fill
-
-// Whole note
-// Wider ellipse, hollow
-
-// X (percussion)
-// Two diagonal lines crossing
-```
-
-### Rests
-
-```js
-// Whole rest: filled rectangle hanging from line
-// Half rest: filled rectangle sitting on line
-// Quarter rest: squiggly vertical symbol
-// Eighth rest: flag-like curve
-// 16th rest: two flag-like curves
-```
-
-### Accidentals
-
-```js
-// Sharp: # symbol with vertical lines extending
-// Flat: b shape
-// Natural: square with extensions
-```
+Core principles follow the project-wide [`TESTING.md`](../../TESTING.md): test behaviors through public APIs, mock only browser APIs, never mock internal modules.
 
 ---
 
@@ -1014,21 +600,57 @@ When notes span both sides of the middle line:
 
 ---
 
-## Future Considerations
+## Canonical Parser Detection Order
 
-Not in scope for initial implementation, but keep in mind:
+When iterating a `notes` array, elements must be detected in this order. The first matching condition determines the element type:
 
-- **Ties** - Connecting notes across bar lines (see "Cross-Barline Notes" in Gotchas - consider promoting to Phase 4)
-- **Slurs** - Phrasing curves
-- **Dynamics** - p, f, crescendo, etc.
-- **Articulations** - Staccato, accent, tenuto
-- **Tuplets** - Triplets, quintuplets
-- **Grace notes** - Small ornamental notes
-- **Repeats** - Repeat signs, endings
-- **Text annotations** - Tempo markings, lyrics
+| Priority | Element Type | Detection Rule |
+|----------|-------------|----------------|
+| 1 | Chord | `Array.isArray(element)` |
+| 2 | Tuplet | Has `tuplet` property |
+| 3 | Barline | Has `barline` property |
+| 4 | Ending | Has `ending` property |
+| 5 | Navigation | Has `navigation` property |
+| 6 | Tempo marker | Has `tempo` property (object with bpm) |
+| 7 | Tempo change | Has `tempoChange` property |
+| 8 | Expression | Has `expression` property |
+| 9 | Rehearsal | Has `rehearsal` property |
+| 10 | Dynamic | Has `dynamic` property |
+| 11 | Hairpin | Has `hairpin` property |
+| 12 | Note | Has `pitch` or `position` property |
+| 13 | Rest | Has `length` but none of the above properties |
+
+**IMPORTANT:** All sub-specs that introduce new element types reference this canonical order. Do not define partial detection orders in individual specs -- always refer back to this table.
 
 ---
 
-*Spec Version: 1.3*
+## Future Feature Specs
+
+Each feature below has a full specification document covering data structures, API design, SVG rendering, testing approach, and gotchas. Audio behavior specs are in `src/audio/`.
+
+| Feature | Notation Spec | Audio Spec |
+|---------|---------------|------------|
+| **Ties** | [`SPEC-ties.md`](SPEC-ties.md) | [`audio/SPEC-ties.md`](../audio/SPEC-ties.md) |
+| **Slurs** | [`SPEC-slurs.md`](SPEC-slurs.md) | [`audio/SPEC-slurs.md`](../audio/SPEC-slurs.md) |
+| **Dynamics** | [`SPEC-dynamics.md`](SPEC-dynamics.md) | [`audio/SPEC-dynamics.md`](../audio/SPEC-dynamics.md) |
+| **Articulations** | [`SPEC-articulations.md`](SPEC-articulations.md) | [`audio/SPEC-articulations.md`](../audio/SPEC-articulations.md) |
+| **Tuplets** | [`SPEC-tuplets.md`](SPEC-tuplets.md) | [`audio/SPEC-tuplets.md`](../audio/SPEC-tuplets.md) |
+| **Grace Notes** | [`SPEC-grace-notes.md`](SPEC-grace-notes.md) | [`audio/SPEC-grace-notes.md`](../audio/SPEC-grace-notes.md) |
+| **Repeats** | [`SPEC-repeats.md`](SPEC-repeats.md) | [`audio/SPEC-repeats.md`](../audio/SPEC-repeats.md) |
+| **Text Annotations** | [`SPEC-text-annotations.md`](SPEC-text-annotations.md) | [`audio/SPEC-text-annotations.md`](../audio/SPEC-text-annotations.md) |
+
+**Priorities:** Ties should be promoted to Phase 4 alongside bar lines (cross-barline notes are common). Tuplets and dynamics are high-value additions after that.
+
+---
+
+*Spec Version: 1.7*
 *Created: 2026-01-25*
-*Revised: 2026-01-25 - v1.1: Diatonic positioning, staff spacing, dotted notes, percussion mapping, clef table, validation errors, cross-barline handling, chord parsing. v1.2: Alto/tenor reference constants. v1.3: Unmetered beaming rule, unmetered accidental scope, per-voice validation, render() replace semantics.*
+
+**Revision History:**
+- **v1.1** - Diatonic positioning, staff spacing, dotted notes, percussion mapping, clef table, validation errors, cross-barline handling, chord parsing.
+- **v1.2** - Alto/tenor reference constants.
+- **v1.3** - Unmetered beaming rule, unmetered accidental scope, per-voice validation, render() replace semantics.
+- **v1.4** - Detailed tuplet consideration with proposed data format and system impact.
+- **v1.5** - Extracted all future features into individual spec files with notation + audio pairs.
+- **v1.6** - Audit fixes: canonical parser detection order, pre-processing requirements, getDuration dotted note responsibility, resolvePlaybackOrder naming, chord duration clarification, markers array for multi-voice, fermata duration extension approach, repeatPass parameter, parseFraction independence, stale version references, dot Y positions, file structure additions.
+- **v1.7** - Restructured: extracted testing approach to SPEC-testing.md, moved implementation order to ROADMAP.md, removed placeholder SVG symbol paths.
