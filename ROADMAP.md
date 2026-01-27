@@ -58,35 +58,35 @@ Update this checklist when completing features. Mark items ✅ when done, ⚠️
 Suggested build sequence to enable incremental testing. See [`src/notation/SPEC.md`](src/notation/SPEC.md) for full specification.
 
 ### Phase 1: Core Data Handling
-- ❌ `lib/dataParser.js` - Normalize all input formats
-- ❌ `lib/notePositions.js` - Pitch to staff position
-- ❌ `lib/durationSymbols.js` - Length to note type
-- ❌ `lib/clefInference.js` - Auto-detect clef
-- ❌ `lib/keySignatures.js` - Key to accidentals
+- ✅ `lib/dataParser.js` - Normalize all input formats
+- ✅ `lib/notePositions.js` - Pitch to staff position
+- ✅ `lib/durationSymbols.js` - Length to note type
+- ✅ `lib/clefInference.js` - Auto-detect clef
+- ✅ `lib/keySignatures.js` - Key to accidentals
 
 ### Phase 2: Basic Rendering
-- ❌ `lib/svgHelpers.js` - SVG utilities
-- ❌ `components/Staff.js` - Five lines
-- ❌ `components/Note.js` - Note heads and stems
-- ❌ `NotationRenderer.js` - Basic single-voice rendering
+- ✅ `lib/svgHelpers.js` - SVG utilities
+- ✅ `components/Staff.js` - Five lines
+- ✅ `components/Note.js` - Note heads and stems
+- ✅ `NotationRenderer.js` - Basic single-voice rendering
 
 **Milestone: Can render simple melodies**
 
 ### Phase 3: Musical Elements
-- ❌ `components/Clef.js` - Clef symbols
-- ❌ `components/Rest.js` - Rest symbols
-- ❌ `components/LedgerLine.js` - Ledger lines
-- ❌ `components/Accidental.js` - Sharps, flats, naturals
+- ✅ `components/Clef.js` - Clef symbols
+- ✅ `components/Rest.js` - Rest symbols
+- ✅ `components/LedgerLine.js` - Ledger lines
+- ✅ `components/Accidental.js` - Sharps, flats, naturals
 
 **Milestone: Can render any pitched melody with rests**
 
 ### Phase 4: Notation Features
-- ❌ `components/KeySignature.js` - Key signature display
-- ❌ `components/TimeSignature.js` - Time signature display
-- ❌ `components/BarLine.js` - Measure dividers
-- ❌ `lib/beaming.js` - Beam grouping logic
-- ❌ `components/Beam.js` - Beam rendering
-- ❌ Ties ([notation](src/notation/SPEC-ties.md) · [audio](src/audio/SPEC-ties.md)) - Tie arcs and duration merging
+- ✅ `components/KeySignature.js` - Key signature display
+- ✅ `components/TimeSignature.js` - Time signature display
+- ✅ `components/BarLine.js` - Measure dividers
+- ✅ `lib/beaming.js` - Beam grouping logic
+- ✅ `components/Beam.js` - Beam rendering
+- ✅ Ties ([notation](src/notation/SPEC-ties.md) · [audio](src/audio/SPEC-ties.md)) - Tie arcs and duration merging
 
 **Milestone: Fully metered notation with beaming and ties**
 

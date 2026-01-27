@@ -409,17 +409,19 @@ function installMocks() {
   global.window.webkitAudioContext = MockAudioContext;
   global.window.localStorage = global.localStorage;
 
-  // Mock document for renderer
-  global.document = {
-    body: {
-      appendChild: jest.fn(),
-      removeChild: jest.fn(),
-    },
-    createElement: jest.fn(() => ({
-      style: {},
-      getContext: jest.fn(),
-    })),
-  };
+  // Mock document for renderer (skip if jsdom provides a real DOM)
+  if (typeof document === 'undefined' || !document.createElementNS) {
+    global.document = {
+      body: {
+        appendChild: jest.fn(),
+        removeChild: jest.fn(),
+      },
+      createElement: jest.fn(() => ({
+        style: {},
+        getContext: jest.fn(),
+      })),
+    };
+  }
 }
 
 /**

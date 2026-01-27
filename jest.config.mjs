@@ -19,6 +19,7 @@ export default {
     '^entities/(.*)$': '<rootDir>/src/entities/$1',
     '^ui/(.*)$': '<rootDir>/src/ui/$1',
     '^states/(.*)$': '<rootDir>/src/states/$1',
+    '^notation/(.*)$': '<rootDir>/src/notation/$1',
     '^resoundModules/(.*)$': '<rootDir>/src/resoundModules/$1',
     '^createEventListeners$': '<rootDir>/src/createEventListeners.js',
   },
