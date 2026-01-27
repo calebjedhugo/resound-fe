@@ -22,6 +22,21 @@ import { computeBeamGroups } from 'notation/lib/beaming';
 import { createBeams } from 'notation/components/Beam';
 import { resolveTies } from 'notation/lib/tieResolver';
 import { createTieArc } from 'notation/components/Tie';
+import { renderDynamic } from 'notation/components/Dynamic';
+import { renderHairpin } from 'notation/components/Hairpin';
+import { renderArticulations } from 'notation/components/Articulation';
+import { resolveSlurs } from 'notation/lib/slurGrouping';
+import { createSlurArc } from 'notation/components/Slur';
+import { getTupletNoteDuration } from 'notation/lib/tuplets';
+import { renderTupletBracket } from 'notation/components/TupletBracket';
+import { renderGraceNotes } from 'notation/components/GraceNote';
+import { renderRepeatBarline } from 'notation/components/RepeatBarline';
+import { renderEnding } from 'notation/components/Ending';
+import { renderNavigationMarker } from 'notation/components/NavigationMarker';
+import { renderTempoMarking, renderTempoChange } from 'notation/components/TempoMarking';
+import { renderExpressionText } from 'notation/components/ExpressionText';
+import { renderRehearsalMark } from 'notation/components/RehearsalMark';
+import { renderLyric, renderMelisma } from 'notation/components/Lyric';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DEFAULT_WIDTH = 800;
@@ -39,6 +54,26 @@ const MIDDLE_LINE_Y = 50;
 const HEAD_RX = 6;
 const HEAD_RY = 5;
 const STEM_LENGTH = 35;
+const DYNAMICS_Y = 110;
+
+/**
+ * Check if an element is a non-note marker (dynamic, hairpin, barline, etc.).
+ * Returns the marker type string, or null if it's a note/rest/chord.
+ */
+function getMarkerType(element) {
+  if (Array.isArray(element)) return null;
+  if (element.tuplet !== undefined) return 'tuplet';
+  if (element.barline !== undefined) return 'barline';
+  if (element.ending !== undefined) return 'ending';
+  if (element.navigation !== undefined) return 'navigation';
+  if (element.tempo !== undefined) return 'tempo';
+  if (element.tempoChange !== undefined) return 'tempoChange';
+  if (element.expression !== undefined) return 'expression';
+  if (element.rehearsal !== undefined) return 'rehearsal';
+  if (element.dynamic !== undefined) return 'dynamic';
+  if (element.hairpin !== undefined) return 'hairpin';
+  return null;
+}
 
 const ACCIDENTAL_TYPE_MAP = {
   '#': 'sharp',
@@ -158,9 +193,330 @@ export class NotationRenderer {
       const noteXPositions = new Map();
       let beatPosition = 0;
 
+      // Marker tracking for post-processing
+      const pendingDynamics = [];
+      const hairpinStarts = [];
+      const completedHairpins = [];
+
+      // Ending (volta) tracking
+      const endingData = [];
+      const activeEndings = new Map();
+
+      // Lyric tracking
+      const lyricData = [];
+
       // Notes
       for (let i = 0; i < voice.notes.length; i++) {
         const element = voice.notes[i];
+
+        // Detect inline markers (dynamics, hairpins, etc.)
+        const markerType = getMarkerType(element);
+        if (markerType === 'dynamic') {
+          pendingDynamics.push({ dynamic: element.dynamic, noteIndex: i });
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'hairpin') {
+          if (element.start) {
+            hairpinStarts.push({ type: element.hairpin, noteIndex: i });
+          }
+          if (element.stop && hairpinStarts.length > 0) {
+            const start = hairpinStarts.pop();
+            completedHairpins.push({
+              type: start.type,
+              startIndex: start.noteIndex,
+              stopIndex: i,
+              startX: start.startX,
+            });
+          }
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'tuplet') {
+          // Render tuplet group inline
+          const tupletRatio = element.tuplet;
+          const tupletNotes = element.notes;
+          const [actual, normal] = tupletRatio;
+
+          const tupletGroup = createGroup('tuplet-group', {
+            'data-tuplet': `${actual}:${normal}`,
+          });
+
+          const startX = cursorX;
+          let allBeamable = true;
+          let hasRest = false;
+          const tupletNoteData = [];
+          const tupletYPositions = [];
+
+          for (let ti = 0; ti < tupletNotes.length; ti += 1) {
+            const tEl = tupletNotes[ti];
+
+            if (Array.isArray(tEl)) {
+              // Chord inside tuplet
+              allBeamable = false; // simplify: chords don't beam in tuplets
+              const chordNotes = tEl.filter((n) => n.pitch);
+              if (chordNotes.length > 0) {
+                const chordLength = chordNotes[0].length;
+                const info = getDurationInfo(chordLength);
+                const yPositions = chordNotes.map((n) => pitchToStaffY(n.pitch, clef));
+                const distances = yPositions.map((y) => Math.abs(y - MIDDLE_LINE_Y));
+                const maxDistIdx = distances.indexOf(Math.max(...distances));
+                const stemDown = yPositions[maxDistIdx] <= MIDDLE_LINE_Y;
+
+                const chordGroup = createGroup(`chord note ${info.cssClass}`, {
+                  transform: `translate(${cursorX}, 0)`,
+                });
+                chordGroup.setAttribute('data-beat', String(beatPosition));
+
+                for (const noteY of yPositions) {
+                  const fill = info.filledHead ? 'currentColor' : 'none';
+                  chordGroup.appendChild(
+                    createEllipse(0, noteY, HEAD_RX, HEAD_RY, {
+                      class: 'note-head',
+                      fill,
+                      stroke: 'currentColor',
+                    })
+                  );
+                  tupletYPositions.push(noteY);
+                }
+
+                if (info.hasStem) {
+                  const minY = Math.min(...yPositions);
+                  const maxY = Math.max(...yPositions);
+                  const stemX = stemDown ? -HEAD_RX : HEAD_RX;
+                  const stemY1 = stemDown ? minY : maxY;
+                  const stemY2 = stemDown ? maxY + STEM_LENGTH : minY - STEM_LENGTH;
+                  chordGroup.appendChild(
+                    createLine(stemX, stemY1, stemX, stemY2, {
+                      class: 'note-stem',
+                      stroke: 'currentColor',
+                    })
+                  );
+                }
+
+                tupletGroup.appendChild(chordGroup);
+
+                const effectiveBeats = getTupletNoteDuration(
+                  chordLength,
+                  chordNotes[0].dotted || false,
+                  tupletRatio
+                );
+                this._noteData.push({
+                  element: chordGroup,
+                  beat: beatPosition,
+                  duration: effectiveBeats,
+                  x: cursorX,
+                  voiceId: voice.id,
+                });
+                beatPosition += effectiveBeats;
+                cursorX += info.spacing * (normal / actual);
+              }
+            } else if (!tEl.pitch && tEl.length) {
+              // Rest inside tuplet
+              hasRest = true;
+              allBeamable = false;
+              const restGroup = createRest({ length: tEl.length, x: cursorX });
+              restGroup.setAttribute('data-beat', String(beatPosition));
+              tupletGroup.appendChild(restGroup);
+
+              const info = getDurationInfo(tEl.length);
+              const effectiveBeats = getTupletNoteDuration(
+                tEl.length,
+                tEl.dotted || false,
+                tupletRatio
+              );
+              this._noteData.push({
+                element: restGroup,
+                beat: beatPosition,
+                duration: effectiveBeats,
+                x: cursorX,
+                voiceId: voice.id,
+              });
+              beatPosition += effectiveBeats;
+              cursorX += info.spacing * (normal / actual);
+            } else if (tEl.pitch) {
+              // Note inside tuplet
+              const noteY = pitchToStaffY(tEl.pitch, clef);
+              tupletYPositions.push(noteY);
+              const info = getDurationInfo(tEl.length);
+
+              // Check if beamable
+              if (info.beams < 1) allBeamable = false;
+
+              const noteGroup = createNote({
+                pitch: tEl.pitch,
+                length: tEl.length,
+                x: cursorX,
+                clef,
+                beamed: allBeamable && !hasRest,
+                stemDown: undefined,
+              });
+              noteGroup.setAttribute('data-beat', String(beatPosition));
+
+              // Articulations
+              if (tEl.articulation) {
+                const noteStemDown = noteY <= MIDDLE_LINE_Y;
+                const artGroup = renderArticulations({
+                  articulation: tEl.articulation,
+                  stemDown: noteStemDown,
+                });
+                if (artGroup) noteGroup.appendChild(artGroup);
+              }
+
+              tupletGroup.appendChild(noteGroup);
+              tupletNoteData.push({ x: cursorX, y: noteY, beams: info.beams });
+
+              // Ledger lines
+              const ledgerGroup = createLedgerLines({ x: cursorX, y: noteY });
+              if (ledgerGroup) tupletGroup.appendChild(ledgerGroup);
+
+              const effectiveBeats = getTupletNoteDuration(
+                tEl.length,
+                tEl.dotted || false,
+                tupletRatio
+              );
+              this._noteData.push({
+                element: noteGroup,
+                beat: beatPosition,
+                duration: effectiveBeats,
+                x: cursorX,
+                voiceId: voice.id,
+              });
+              beatPosition += effectiveBeats;
+              cursorX += info.spacing * (normal / actual);
+            }
+          }
+
+          const endX = cursorX;
+          const fullyBeamed = allBeamable && !hasRest && tupletNoteData.length >= 2;
+
+          // Beam tuplet notes as a single group if fully beamable
+          if (fullyBeamed && tupletNoteData.length >= 2) {
+            const avgY = tupletYPositions.reduce((a, b) => a + b, 0) / tupletYPositions.length;
+            const stemDown = avgY <= MIDDLE_LINE_Y;
+
+            const beamPaths = createBeams({
+              notes: tupletNoteData,
+              stemDown,
+            });
+            tupletGroup.appendChild(beamPaths);
+          }
+
+          // Tuplet bracket and number
+          const avgY =
+            tupletYPositions.length > 0
+              ? tupletYPositions.reduce((a, b) => a + b, 0) / tupletYPositions.length
+              : MIDDLE_LINE_Y;
+          const stemsDown = avgY <= MIDDLE_LINE_Y;
+          const bracketY = stemsDown ? 110 : -10;
+          const above = !stemsDown;
+
+          tupletGroup.appendChild(
+            renderTupletBracket({
+              actual,
+              startX,
+              endX,
+              y: bracketY,
+              above,
+              showBracket: !fullyBeamed,
+            })
+          );
+
+          staffGroup.appendChild(tupletGroup);
+
+          // Bar line tracking for tuplet
+          if (measureLength) {
+            const tupletBeats = tupletNotes.reduce((sum, tEl) => {
+              if (Array.isArray(tEl)) {
+                return (
+                  sum + getTupletNoteDuration(tEl[0].length, tEl[0].dotted || false, tupletRatio)
+                );
+              }
+              if (tEl.length) {
+                return sum + getTupletNoteDuration(tEl.length, tEl.dotted || false, tupletRatio);
+              }
+              return sum;
+            }, 0);
+            cumulativeBeats += tupletBeats;
+            while (cumulativeBeats >= measureLength - 0.001) {
+              cursorX += BAR_LINE_PADDING;
+              staffGroup.appendChild(createBarLine(cursorX));
+              cursorX += BAR_LINE_PADDING;
+              cumulativeBeats -= measureLength;
+            }
+            if (Math.abs(cumulativeBeats) < 0.001) {
+              cumulativeBeats = 0;
+            }
+          }
+
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'barline') {
+          cursorX += BAR_LINE_PADDING;
+          staffGroup.appendChild(renderRepeatBarline({ type: element.barline, x: cursorX }));
+          cursorX += element.barline === 'repeat-both' ? 20 : 15;
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'ending') {
+          if (element.ending.type === 'start') {
+            activeEndings.set(element.ending.number, { startX: cursorX });
+          } else if (element.ending.type === 'stop') {
+            const start = activeEndings.get(element.ending.number);
+            if (start) {
+              endingData.push({
+                number: element.ending.number,
+                startX: start.startX,
+                endX: cursorX,
+                isClosed: true,
+              });
+              activeEndings.delete(element.ending.number);
+            }
+          }
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'navigation') {
+          staffGroup.appendChild(renderNavigationMarker({ type: element.navigation, x: cursorX }));
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'tempo') {
+          staffGroup.appendChild(renderTempoMarking({ tempo: element.tempo, x: cursorX }));
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'tempoChange') {
+          staffGroup.appendChild(renderTempoChange({ type: element.tempoChange, x: cursorX }));
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'expression') {
+          staffGroup.appendChild(renderExpressionText({ text: element.expression, x: cursorX }));
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType === 'rehearsal') {
+          staffGroup.appendChild(renderRehearsalMark({ label: element.rehearsal, x: cursorX }));
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        if (markerType) {
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+
+        // Associate pending dynamics/hairpins with this note's x position
+        for (const pd of pendingDynamics) {
+          if (pd.x === undefined) pd.x = cursorX;
+        }
+        for (const hs of hairpinStarts) {
+          if (hs.startX === undefined) hs.startX = cursorX;
+        }
+        for (const ch of completedHairpins) {
+          if (ch.endX === undefined) ch.endX = cursorX;
+        }
 
         if (Array.isArray(element)) {
           const chordNotes = element.filter((n) => n.pitch);
@@ -170,6 +526,19 @@ export class NotationRenderer {
             const chordLength = chordNotes[0].length;
             const info = getDurationInfo(chordLength);
             const yPositions = chordNotes.map((n) => pitchToStaffY(n.pitch, clef));
+
+            // Grace notes on chord (from first note that has grace property)
+            const chordGrace = chordNotes.find((n) => n.grace);
+            if (chordGrace) {
+              const mainY = Math.min(...yPositions);
+              const graceResult = renderGraceNotes({
+                grace: chordGrace.grace,
+                mainX: cursorX,
+                mainY,
+                clef,
+              });
+              staffGroup.appendChild(graceResult.element);
+            }
 
             // Stem direction: note furthest from middle line
             const distances = yPositions.map((y) => Math.abs(y - MIDDLE_LINE_Y));
@@ -209,6 +578,20 @@ export class NotationRenderer {
                   stroke: 'currentColor',
                 })
               );
+            }
+
+            // Articulations on chord (from first note that has the property)
+            const chordArticulation = chordNotes.find((n) => n.articulation);
+            if (chordArticulation) {
+              const artGroup = renderArticulations({
+                articulation: chordArticulation.articulation,
+                stemDown,
+              });
+              if (artGroup) {
+                const artY = stemDown ? Math.min(...yPositions) : Math.max(...yPositions);
+                artGroup.setAttribute('transform', `translate(0, ${artY})`);
+                chordGroup.appendChild(artGroup);
+              }
             }
 
             staffGroup.appendChild(chordGroup);
@@ -351,6 +734,20 @@ export class NotationRenderer {
           if (element.length) {
             const restGroup = createRest({ length: element.length, x: cursorX });
             restGroup.setAttribute('data-beat', String(currentBeat));
+
+            // Fermata on rest
+            if (element.articulation) {
+              const artGroup = renderArticulations({
+                articulation: element.articulation,
+                stemDown: false,
+                isRest: true,
+              });
+              if (artGroup) {
+                artGroup.setAttribute('transform', `translate(${cursorX}, ${MIDDLE_LINE_Y})`);
+                staffGroup.appendChild(artGroup);
+              }
+            }
+
             target.appendChild(restGroup);
             const info = getDurationInfo(element.length);
             cursorX += info.spacing;
@@ -359,6 +756,17 @@ export class NotationRenderer {
           }
         } else {
           const noteY = pitchToStaffY(element.pitch, clef);
+
+          // Grace notes (render before the main note)
+          if (element.grace) {
+            const graceResult = renderGraceNotes({
+              grace: element.grace,
+              mainX: cursorX,
+              mainY: noteY,
+              clef,
+            });
+            target.appendChild(graceResult.element);
+          }
 
           // Accidental (render before note, to the left)
           const { accidental } = parsePitch(element.pitch);
@@ -381,6 +789,17 @@ export class NotationRenderer {
             stemDown: beamStemDown,
           });
           noteGroup.setAttribute('data-beat', String(currentBeat));
+
+          // Articulations on note
+          if (element.articulation) {
+            const noteStemDown = beamStemDown !== undefined ? beamStemDown : noteY <= MIDDLE_LINE_Y;
+            const artGroup = renderArticulations({
+              articulation: element.articulation,
+              stemDown: noteStemDown,
+            });
+            if (artGroup) noteGroup.appendChild(artGroup);
+          }
+
           target.appendChild(noteGroup);
 
           // Store note data for playback position
@@ -406,6 +825,11 @@ export class NotationRenderer {
           const ledgerGroup = createLedgerLines({ x: cursorX, y: noteY });
           if (ledgerGroup) {
             target.appendChild(ledgerGroup);
+          }
+
+          // Lyric tracking
+          if (element.lyric !== undefined) {
+            lyricData.push({ text: element.lyric, x: cursorX, noteIndex: i });
           }
 
           const info = getDurationInfo(element.length);
@@ -471,6 +895,135 @@ export class NotationRenderer {
           );
         }
         staffGroup.appendChild(tiesGroup);
+      }
+
+      // Slur rendering pass
+      const slurPairs = resolveSlurs(voice.notes);
+      if (slurPairs.length > 0) {
+        const slursGroup = createGroup('slurs');
+        for (const slurPair of slurPairs) {
+          const startX = noteXPositions.get(slurPair.startIndex);
+          const endX = noteXPositions.get(slurPair.stopIndex);
+          if (startX === undefined || endX === undefined) continue;
+
+          // Determine Y positions
+          const startEl = voice.notes[slurPair.startIndex];
+          const endEl = voice.notes[slurPair.stopIndex];
+          const startPitch = Array.isArray(startEl) ? startEl[0].pitch : startEl.pitch;
+          const endPitch = Array.isArray(endEl) ? endEl[0].pitch : endEl.pitch;
+          const startNoteY = startPitch ? pitchToStaffY(startPitch, clef) : MIDDLE_LINE_Y;
+          const endNoteY = endPitch ? pitchToStaffY(endPitch, clef) : MIDDLE_LINE_Y;
+
+          // Determine direction based on stem directions of spanned notes
+          let stemsDown = 0;
+          let stemsUp = 0;
+          for (let si = slurPair.startIndex; si <= slurPair.stopIndex; si += 1) {
+            const el = voice.notes[si];
+            if (!el || getMarkerType(el)) continue;
+            const y = Array.isArray(el)
+              ? pitchToStaffY(el[0].pitch, clef)
+              : el.pitch
+              ? pitchToStaffY(el.pitch, clef)
+              : MIDDLE_LINE_Y;
+            if (y <= MIDDLE_LINE_Y) stemsDown += 1;
+            else stemsUp += 1;
+          }
+          // Slur curves away from stems (opposite side)
+          const direction = stemsDown >= stemsUp ? 'above' : 'below';
+
+          slursGroup.appendChild(
+            createSlurArc({
+              x1: startX,
+              y1: startNoteY,
+              x2: endX,
+              y2: endNoteY,
+              direction,
+              depth: slurPair.depth,
+            })
+          );
+        }
+        staffGroup.appendChild(slursGroup);
+      }
+
+      // Dynamics rendering pass
+      if (pendingDynamics.length > 0 || completedHairpins.length > 0) {
+        const dynamicsGroup = createGroup('dynamics-layer');
+
+        for (const pd of pendingDynamics) {
+          if (pd.x !== undefined) {
+            dynamicsGroup.appendChild(
+              renderDynamic({ dynamic: pd.dynamic, x: pd.x, y: DYNAMICS_Y })
+            );
+          }
+        }
+
+        for (const hp of completedHairpins) {
+          const startX = hp.startX !== undefined ? hp.startX : hp.endX;
+          const endX = hp.endX !== undefined ? hp.endX : hp.startX;
+          if (startX !== undefined && endX !== undefined) {
+            dynamicsGroup.appendChild(
+              renderHairpin({ type: hp.type, startX, endX, y: DYNAMICS_Y })
+            );
+          }
+        }
+
+        staffGroup.appendChild(dynamicsGroup);
+      }
+
+      // Ending (volta bracket) rendering pass
+      // Close any open endings (last ending in group has no stop marker)
+      for (const [number, data] of activeEndings) {
+        endingData.push({
+          number,
+          startX: data.startX,
+          endX: cursorX,
+          isClosed: false,
+        });
+      }
+      if (endingData.length > 0) {
+        const endingsGroup = createGroup('endings-layer');
+        for (const ed of endingData) {
+          endingsGroup.appendChild(
+            renderEnding({
+              number: ed.number,
+              startX: ed.startX,
+              endX: ed.endX,
+              open: !ed.isClosed,
+            })
+          );
+        }
+        staffGroup.appendChild(endingsGroup);
+      }
+
+      // Lyrics rendering pass
+      if (lyricData.length > 0) {
+        const lyricsGroup = createGroup('lyrics-layer');
+
+        for (let li = 0; li < lyricData.length; li += 1) {
+          const ld = lyricData[li];
+          lyricsGroup.appendChild(renderLyric({ text: ld.text, x: ld.x }));
+
+          // Detect melisma: if this lyric's note is followed by notes without lyrics
+          // before the next note with a lyric (or end of piece)
+          const nextLyricData = lyricData[li + 1];
+          const nextLyricNoteIndex = nextLyricData ? nextLyricData.noteIndex : voice.notes.length;
+
+          // Check if there are notes without lyrics between this note and the next lyric
+          let melismaEndX = null;
+          for (let mi = ld.noteIndex + 1; mi < nextLyricNoteIndex; mi += 1) {
+            const mel = voice.notes[mi];
+            if (mel && mel.pitch && mel.lyric === undefined) {
+              const mx = noteXPositions.get(mi);
+              if (mx !== undefined) melismaEndX = mx;
+            }
+          }
+
+          if (melismaEndX !== null) {
+            lyricsGroup.appendChild(renderMelisma({ startX: ld.x + 10, endX: melismaEndX }));
+          }
+        }
+
+        staffGroup.appendChild(lyricsGroup);
       }
 
       this._svg.appendChild(staffGroup);

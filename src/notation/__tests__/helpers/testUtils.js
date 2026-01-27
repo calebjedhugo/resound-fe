@@ -55,6 +55,53 @@ export function createNotationContext() {
       return container.querySelectorAll('.tie');
     },
 
+    // Phase 6 query helpers
+    getDynamics() {
+      return container.querySelectorAll('.dynamic');
+    },
+    getHairpins() {
+      return container.querySelectorAll('.hairpin');
+    },
+    getArticulations() {
+      return container.querySelectorAll('.articulation');
+    },
+    getArticulationsByType(type) {
+      return container.querySelectorAll(`.articulation-${type}`);
+    },
+    getSlurs() {
+      return container.querySelectorAll('.slur');
+    },
+    getTupletGroups() {
+      return container.querySelectorAll('.tuplet-group');
+    },
+    getGraceNotes() {
+      return container.querySelectorAll('.grace-note');
+    },
+    getRepeatBarlines() {
+      return container.querySelectorAll('[class*="barline-repeat"], .barline-final');
+    },
+    getEndings() {
+      return container.querySelectorAll('.ending');
+    },
+    getNavigationMarkers() {
+      return container.querySelectorAll('.navigation');
+    },
+    getTempoMarkings() {
+      return container.querySelectorAll('.tempo-marking');
+    },
+    getTempoChanges() {
+      return container.querySelectorAll('.tempo-change');
+    },
+    getExpressionTexts() {
+      return container.querySelectorAll('.expression');
+    },
+    getRehearsalMarks() {
+      return container.querySelectorAll('.rehearsal-mark');
+    },
+    getLyrics() {
+      return container.querySelectorAll('.lyric');
+    },
+
     // Cleanup
     destroy() {
       renderer.clear();

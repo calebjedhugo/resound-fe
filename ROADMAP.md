@@ -99,12 +99,12 @@ Suggested build sequence to enable incremental testing. See [`src/notation/SPEC.
 **Milestone: Complete core feature set**
 
 ### Phase 6: Extended Notation Features
-- ❌ Dynamics ([notation](src/notation/SPEC-dynamics.md) · [audio](src/audio/SPEC-dynamics.md)) - Dynamic markings and hairpins
-- ❌ Articulations ([notation](src/notation/SPEC-articulations.md) · [audio](src/audio/SPEC-articulations.md)) - Staccato, accent, fermata, etc.
-- ❌ Slurs ([notation](src/notation/SPEC-slurs.md) · [audio](src/audio/SPEC-slurs.md)) - Legato phrasing arcs
-- ❌ Tuplets ([notation](src/notation/SPEC-tuplets.md) · [audio](src/audio/SPEC-tuplets.md)) - Triplets and irregular groupings
-- ❌ Grace Notes ([notation](src/notation/SPEC-grace-notes.md) · [audio](src/audio/SPEC-grace-notes.md)) - Acciaccatura and appoggiatura
-- ❌ Repeats ([notation](src/notation/SPEC-repeats.md) · [audio](src/audio/SPEC-repeats.md)) - Repeat barlines, voltas, DC/DS
-- ❌ Text Annotations ([notation](src/notation/SPEC-text-annotations.md) · [audio](src/audio/SPEC-text-annotations.md)) - Tempo, expression, rehearsal marks, lyrics
+- ✅ Dynamics ([notation](src/notation/SPEC-dynamics.md) · [audio](src/audio/SPEC-dynamics.md)) - Dynamic markings and hairpins
+- ✅ Articulations ([notation](src/notation/SPEC-articulations.md) · [audio](src/audio/SPEC-articulations.md)) - Staccato, accent, fermata, etc.
+- ✅ Slurs ([notation](src/notation/SPEC-slurs.md) · [audio](src/audio/SPEC-slurs.md)) - Legato phrasing arcs
+- ✅ Tuplets ([notation](src/notation/SPEC-tuplets.md) · [audio](src/audio/SPEC-tuplets.md)) - Triplets and irregular groupings
+- ✅ Grace Notes ([notation](src/notation/SPEC-grace-notes.md) · [audio](src/audio/SPEC-grace-notes.md)) - Acciaccatura and appoggiatura
+- ✅ Repeats ([notation](src/notation/SPEC-repeats.md) · [audio](src/audio/SPEC-repeats.md)) - Repeat barlines, voltas, DC/DS
+- ✅ Text Annotations ([notation](src/notation/SPEC-text-annotations.md) · [audio](src/audio/SPEC-text-annotations.md)) - Tempo, expression, rehearsal marks, lyrics
 
 **Milestone: Full notation feature set**

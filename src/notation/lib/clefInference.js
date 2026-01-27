@@ -27,6 +27,9 @@ function collectPitchPositions(notes) {
           positions.push(getDiatonicPosition(note.pitch));
         }
       }
+    } else if (element.tuplet && element.notes) {
+      // Tuplet wrapper — recurse into inner notes
+      positions.push(...collectPitchPositions(element.notes));
     } else if (element.pitch) {
       positions.push(getDiatonicPosition(element.pitch));
     }
