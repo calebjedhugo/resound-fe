@@ -91,10 +91,10 @@ Suggested build sequence to enable incremental testing. See [`src/notation/SPEC.
 **Milestone: Fully metered notation with beaming and ties**
 
 ### Phase 5: Advanced Features
-- ❌ `components/Cursor.js` - Playback position
-- ❌ Multi-voice support in `NotationRenderer.js`
-- ❌ Chord rendering
-- ❌ Percussion clef and X noteheads
+- ✅ Playback position (`setPlaybackPosition()` in NotationRenderer, `data-beat` attributes, `.note-active` class, cursor line)
+- ✅ Multi-voice support in `NotationRenderer.js` (separate staves, independent clefs/key sigs/time sigs, voice-specific playback)
+- ✅ Chord rendering (shared stem, stacked accidentals, ledger lines, ties, beam-compatible)
+- ✅ Percussion clef and X noteheads (`position` 1-9 mapping, `.note-head-x` group)
 
 **Milestone: Complete core feature set**
 

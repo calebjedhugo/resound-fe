@@ -996,4 +996,649 @@ describe('NotationRenderer', () => {
       expect(tiesGroup).toBeNull();
     });
   });
+
+  describe('data-beat attributes', () => {
+    it('assigns data-beat to each note based on cumulative beats', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes[0].dataset.beat).toBe('0');
+      expect(notes[1].dataset.beat).toBe('1');
+      expect(notes[2].dataset.beat).toBe('2');
+    });
+
+    it('assigns data-beat to rests', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ]);
+
+      const rests = ctx.getRests();
+      expect(rests[0].dataset.beat).toBe('1');
+
+      const notes = ctx.getNotes();
+      expect(notes[1].dataset.beat).toBe('2');
+    });
+
+    it('accounts for different note durations in beat calculation', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/2' },
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/8' },
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes[0].dataset.beat).toBe('0');
+      expect(notes[1].dataset.beat).toBe('2');
+      expect(notes[2].dataset.beat).toBe('3');
+    });
+
+    it('accounts for dotted note durations in beat calculation', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4', dotted: true },
+        { pitch: 'E4', length: '1/8' },
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes[0].dataset.beat).toBe('0');
+      expect(notes[1].dataset.beat).toBe('1.5');
+    });
+  });
+
+  describe('playback position', () => {
+    it('highlights the note at the given beat', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ]);
+
+      ctx.renderer.setPlaybackPosition(1);
+      const active = ctx.getActiveNote();
+      expect(active).not.toBeNull();
+      expect(active.dataset.beat).toBe('1');
+    });
+
+    it('highlights the first note at beat 0', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ]);
+
+      ctx.renderer.setPlaybackPosition(0);
+      const active = ctx.getActiveNote();
+      expect(active).not.toBeNull();
+      expect(active.dataset.beat).toBe('0');
+    });
+
+    it('removes highlight when position is set to null', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ]);
+
+      ctx.renderer.setPlaybackPosition(0);
+      expect(ctx.getActiveNote()).not.toBeNull();
+
+      ctx.renderer.setPlaybackPosition(null);
+      expect(ctx.getActiveNote()).toBeNull();
+    });
+
+    it('moves highlight when position changes', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ]);
+
+      ctx.renderer.setPlaybackPosition(0);
+      expect(ctx.getActiveNote().dataset.beat).toBe('0');
+
+      ctx.renderer.setPlaybackPosition(2);
+      expect(ctx.getActiveNote().dataset.beat).toBe('2');
+
+      // Only one note should be active at a time
+      const allActive = ctx.container.querySelectorAll('.note-active');
+      expect(allActive).toHaveLength(1);
+    });
+
+    it('highlights a note when beat falls within its duration', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/2' },
+        { pitch: 'E4', length: '1/4' },
+      ]);
+
+      // Beat 0.5 falls within the half note (beats 0-2)
+      ctx.renderer.setPlaybackPosition(0.5);
+      const active = ctx.getActiveNote();
+      expect(active).not.toBeNull();
+      expect(active.dataset.beat).toBe('0');
+    });
+
+    it('renders a playback cursor line', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ]);
+
+      ctx.renderer.setPlaybackPosition(0);
+      const cursor = ctx.container.querySelector('.playback-cursor');
+      expect(cursor).not.toBeNull();
+    });
+
+    it('removes cursor line when position is null', () => {
+      ctx.render([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ]);
+
+      ctx.renderer.setPlaybackPosition(0);
+      expect(ctx.container.querySelector('.playback-cursor')).not.toBeNull();
+
+      ctx.renderer.setPlaybackPosition(null);
+      expect(ctx.container.querySelector('.playback-cursor')).toBeNull();
+    });
+
+    it('does nothing when called before render', () => {
+      expect(() => ctx.renderer.setPlaybackPosition(0)).not.toThrow();
+    });
+
+    it('highlights note in specific voice with voiceId option', () => {
+      ctx.render({
+        voices: [
+          {
+            id: 'melody',
+            clef: 'treble',
+            notes: [
+              { pitch: 'C5', length: '1/4' },
+              { pitch: 'E5', length: '1/4' },
+            ],
+          },
+          { id: 'bass', clef: 'bass', notes: [{ pitch: 'C3', length: '1/2' }] },
+        ],
+      });
+
+      ctx.renderer.setPlaybackPosition(1, { voiceId: 'melody' });
+      const active = ctx.container.querySelectorAll('.note-active');
+      expect(active).toHaveLength(1);
+      expect(active[0].dataset.beat).toBe('1');
+    });
+  });
+
+  describe('chord rendering', () => {
+    it('renders a chord as a single .note element with .chord class', () => {
+      ctx.render([
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes).toHaveLength(1);
+      expect(notes[0].classList.contains('chord')).toBe(true);
+    });
+
+    it('renders a note head for each pitch in the chord', () => {
+      ctx.render([
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      ]);
+
+      const heads = ctx.container.querySelectorAll('.note-head');
+      expect(heads).toHaveLength(3);
+    });
+
+    it('renders a single stem for the chord', () => {
+      ctx.render([
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      ]);
+
+      const stems = ctx.container.querySelectorAll('.note-stem');
+      expect(stems).toHaveLength(1);
+    });
+
+    it('assigns data-beat to chord', () => {
+      ctx.render([
+        { pitch: 'D4', length: '1/4' },
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+        ],
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes[1].dataset.beat).toBe('1');
+    });
+
+    it('uses the correct duration class from the chord notes', () => {
+      ctx.render([
+        [
+          { pitch: 'C4', length: '1/2' },
+          { pitch: 'E4', length: '1/2' },
+          { pitch: 'G4', length: '1/2' },
+        ],
+      ]);
+
+      const note = ctx.getNotes()[0];
+      expect(note.classList.contains('note-half')).toBe(true);
+    });
+
+    it('advances cursor correctly after a chord', () => {
+      ctx.render([
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+        ],
+        { pitch: 'G4', length: '1/4' },
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes).toHaveLength(2);
+      // Second note should be after the chord's spacing
+      expect(notes[1].dataset.beat).toBe('1');
+    });
+
+    it('renders accidentals for chord notes', () => {
+      ctx.render([
+        [
+          { pitch: 'C#4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+        ],
+      ]);
+
+      const accidentals = ctx.container.querySelectorAll('.accidental');
+      expect(accidentals).toHaveLength(1);
+    });
+
+    it('renders multiple accidentals for chord notes', () => {
+      ctx.render([
+        [
+          { pitch: 'F#4', length: '1/4' },
+          { pitch: 'Bb4', length: '1/4' },
+        ],
+      ]);
+
+      const accidentals = ctx.container.querySelectorAll('.accidental');
+      expect(accidentals).toHaveLength(2);
+    });
+
+    it('renders ledger lines for chord notes outside the staff', () => {
+      ctx.render([
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+        ],
+      ]);
+
+      // C4 in treble needs a ledger line
+      const ledgerLines = ctx.getLedgerLines();
+      expect(ledgerLines.length).toBeGreaterThan(0);
+    });
+
+    it('renders chords alongside regular notes', () => {
+      ctx.render([
+        { pitch: 'D4', length: '1/4' },
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+        ],
+        { pitch: 'G4', length: '1/4' },
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes).toHaveLength(3);
+      expect(notes[1].classList.contains('chord')).toBe(true);
+      expect(notes[0].classList.contains('chord')).toBe(false);
+    });
+
+    it('renders ties for chord notes', () => {
+      ctx.render([
+        [
+          { pitch: 'C4', length: '1/4', tie: 'start' },
+          { pitch: 'E4', length: '1/4', tie: 'start' },
+        ],
+        [
+          { pitch: 'C4', length: '1/4', tie: 'stop' },
+          { pitch: 'E4', length: '1/4', tie: 'stop' },
+        ],
+      ]);
+
+      expect(ctx.getTies()).toHaveLength(2);
+    });
+
+    it('tracks bar lines correctly with chords', () => {
+      ctx.render({
+        timeSignature: [4, 4],
+        notes: [
+          [
+            { pitch: 'C4', length: '1/4' },
+            { pitch: 'E4', length: '1/4' },
+          ],
+          { pitch: 'D4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+          { pitch: 'F4', length: '1/4' },
+          // bar line after 4 beats
+          { pitch: 'G4', length: '1/4' },
+        ],
+      });
+
+      expect(ctx.getBarLines()).toHaveLength(1);
+    });
+
+    it('highlights chord during playback', () => {
+      ctx.render([
+        { pitch: 'D4', length: '1/4' },
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+        ],
+      ]);
+
+      ctx.renderer.setPlaybackPosition(1);
+      const active = ctx.getActiveNote();
+      expect(active).not.toBeNull();
+      expect(active.classList.contains('chord')).toBe(true);
+    });
+  });
+
+  describe('percussion notes', () => {
+    it('infers percussion clef when all notes use position', () => {
+      ctx.render([
+        { position: 5, length: '1/4' },
+        { position: 1, length: '1/4' },
+      ]);
+
+      const staff = ctx.container.querySelector('.staff');
+      expect(staff.getAttribute('data-clef')).toBe('percussion');
+    });
+
+    it('renders percussion clef symbol', () => {
+      ctx.render([{ position: 5, length: '1/4' }]);
+
+      const clef = ctx.getClef();
+      expect(clef).not.toBeNull();
+      expect(clef.classList.contains('clef-percussion')).toBe(true);
+    });
+
+    it('renders percussion notes as .note elements', () => {
+      ctx.render([
+        { position: 5, length: '1/4' },
+        { position: 1, length: '1/4' },
+        { position: 9, length: '1/4' },
+      ]);
+
+      expect(ctx.getNotes()).toHaveLength(3);
+    });
+
+    it('renders X-shaped noteheads for percussion notes', () => {
+      ctx.render([{ position: 5, length: '1/4' }]);
+
+      const xHeads = ctx.container.querySelectorAll('.note-head-x');
+      expect(xHeads).toHaveLength(1);
+    });
+
+    it('does not render ellipse noteheads for percussion notes', () => {
+      ctx.render([{ position: 5, length: '1/4' }]);
+
+      const ellipseHeads = ctx.container.querySelectorAll('.note-head');
+      expect(ellipseHeads).toHaveLength(0);
+    });
+
+    it('positions percussion notes on correct staff positions', () => {
+      ctx.render([
+        { position: 1, length: '1/4' },
+        { position: 9, length: '1/4' },
+      ]);
+
+      const notes = ctx.getNotes();
+      // Position 1 = bottom line (y=90), position 9 = top line (y=10)
+      const y1 = parseFloat(notes[0].getAttribute('transform').match(/,\s*([^)]+)/)[1]);
+      const y9 = parseFloat(notes[1].getAttribute('transform').match(/,\s*([^)]+)/)[1]);
+      expect(y1).toBeGreaterThan(y9);
+    });
+
+    it('assigns data-beat to percussion notes', () => {
+      ctx.render([
+        { position: 5, length: '1/4' },
+        { position: 1, length: '1/4' },
+      ]);
+
+      const notes = ctx.getNotes();
+      expect(notes[0].dataset.beat).toBe('0');
+      expect(notes[1].dataset.beat).toBe('1');
+    });
+
+    it('renders percussion notes with stems', () => {
+      ctx.render([{ position: 5, length: '1/4' }]);
+
+      const stems = ctx.container.querySelectorAll('.note-stem');
+      expect(stems).toHaveLength(1);
+    });
+
+    it('renders rests between percussion notes', () => {
+      ctx.render([
+        { position: 5, length: '1/4' },
+        { length: '1/4' },
+        { position: 1, length: '1/4' },
+      ]);
+
+      expect(ctx.getNotes()).toHaveLength(2);
+      expect(ctx.getRests()).toHaveLength(1);
+    });
+
+    it('renders percussion notes with explicit percussion clef', () => {
+      ctx.render({
+        clef: 'percussion',
+        notes: [
+          { position: 5, length: '1/8' },
+          { position: 5, length: '1/8' },
+          { position: 1, length: '1/4' },
+        ],
+      });
+
+      const xHeads = ctx.container.querySelectorAll('.note-head-x');
+      expect(xHeads).toHaveLength(3);
+      expect(ctx.getNotes()).toHaveLength(3);
+    });
+
+    it('supports percussion in multi-voice input', () => {
+      ctx.render({
+        voices: [
+          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { clef: 'percussion', notes: [{ position: 5, length: '1/4' }] },
+        ],
+      });
+
+      const staves = ctx.container.querySelectorAll('.staff');
+      expect(staves).toHaveLength(2);
+      expect(staves[0].getAttribute('data-clef')).toBe('treble');
+      expect(staves[1].getAttribute('data-clef')).toBe('percussion');
+
+      // Treble voice has ellipse head, percussion has X head
+      const ellipseHeads = staves[0].querySelectorAll('.note-head');
+      const xHeads = staves[1].querySelectorAll('.note-head-x');
+      expect(ellipseHeads).toHaveLength(1);
+      expect(xHeads).toHaveLength(1);
+    });
+
+    it('highlights percussion note during playback', () => {
+      ctx.render([
+        { position: 5, length: '1/4' },
+        { position: 1, length: '1/4' },
+      ]);
+
+      ctx.renderer.setPlaybackPosition(1);
+      const active = ctx.getActiveNote();
+      expect(active).not.toBeNull();
+      expect(active.dataset.beat).toBe('1');
+    });
+  });
+
+  describe('multi-voice rendering', () => {
+    it('offsets voices vertically with correct spacing', () => {
+      ctx.render({
+        voices: [
+          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      });
+
+      const staves = ctx.container.querySelectorAll('.staff');
+      const transform0 = staves[0].getAttribute('transform');
+      const transform1 = staves[1].getAttribute('transform');
+
+      // First voice at y=0, second voice offset by VOICE_HEIGHT + VOICE_GAP (240)
+      expect(transform0).toContain('translate(0, 0)');
+      expect(transform1).toMatch(/translate\(0, 240\)/);
+    });
+
+    it('sizes SVG height for multiple voices', () => {
+      ctx.render({
+        voices: [
+          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      });
+
+      const svg = ctx.getSvg();
+      const height = parseInt(svg.getAttribute('height'), 10);
+      // 2 voices * 200 + 1 gap * 40 = 440
+      expect(height).toBe(440);
+    });
+
+    it('renders voices with different note counts independently', () => {
+      ctx.render({
+        voices: [
+          {
+            clef: 'treble',
+            notes: [
+              { pitch: 'C5', length: '1/4' },
+              { pitch: 'D5', length: '1/4' },
+              { pitch: 'E5', length: '1/4' },
+            ],
+          },
+          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/2' }] },
+        ],
+      });
+
+      // Total notes across both voices
+      expect(ctx.getNotes()).toHaveLength(4);
+
+      // Each voice has its own staff lines
+      const staffLines = ctx.container.querySelectorAll('.staff-lines');
+      expect(staffLines).toHaveLength(2);
+    });
+
+    it('renders bar lines independently per voice', () => {
+      ctx.render({
+        timeSignature: [4, 4],
+        voices: [
+          {
+            clef: 'treble',
+            notes: [
+              { pitch: 'C5', length: '1/4' },
+              { pitch: 'D5', length: '1/4' },
+              { pitch: 'E5', length: '1/4' },
+              { pitch: 'F5', length: '1/4' },
+              // bar line
+              { pitch: 'G5', length: '1/4' },
+            ],
+          },
+          {
+            clef: 'bass',
+            notes: [
+              { pitch: 'C3', length: '1/1' },
+              // bar line
+              { pitch: 'D3', length: '1/4' },
+            ],
+          },
+        ],
+      });
+
+      // Each voice generates its own bar line
+      const barLines = ctx.getBarLines();
+      expect(barLines).toHaveLength(2);
+    });
+
+    it('renders chords in a multi-voice context', () => {
+      ctx.render({
+        voices: [
+          {
+            clef: 'treble',
+            notes: [
+              [
+                { pitch: 'C5', length: '1/4' },
+                { pitch: 'E5', length: '1/4' },
+              ],
+            ],
+          },
+          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      });
+
+      const notes = ctx.getNotes();
+      expect(notes).toHaveLength(2);
+    });
+
+    it('highlights correct voice with voiceId option on multi-voice', () => {
+      ctx.render({
+        voices: [
+          {
+            id: 'melody',
+            clef: 'treble',
+            notes: [
+              { pitch: 'C5', length: '1/4' },
+              { pitch: 'D5', length: '1/4' },
+            ],
+          },
+          {
+            id: 'bass',
+            clef: 'bass',
+            notes: [
+              { pitch: 'C3', length: '1/4' },
+              { pitch: 'D3', length: '1/4' },
+            ],
+          },
+        ],
+      });
+
+      // Highlight beat 0 in bass voice only
+      ctx.renderer.setPlaybackPosition(0, { voiceId: 'bass' });
+      const active = ctx.container.querySelectorAll('.note-active');
+      expect(active).toHaveLength(1);
+
+      // The active note should be in the bass staff
+      const bassStaff = ctx.container.querySelectorAll('.staff')[1];
+      expect(bassStaff.contains(active[0])).toBe(true);
+    });
+
+    it('highlights all voices when no voiceId is specified', () => {
+      ctx.render({
+        voices: [
+          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      });
+
+      // Without voiceId, both voices get checked
+      ctx.renderer.setPlaybackPosition(0);
+      const active = ctx.container.querySelectorAll('.note-active');
+      // setPlaybackPosition finds the LAST matching note (iterates backwards)
+      expect(active).toHaveLength(1);
+    });
+  });
 });

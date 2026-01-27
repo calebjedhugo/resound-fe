@@ -3,7 +3,7 @@
  * Converts musical data to SVG staff notation.
  */
 
-import { createSvgElement, createGroup } from 'notation/lib/svgHelpers';
+import { createSvgElement, createGroup, createLine, createEllipse } from 'notation/lib/svgHelpers';
 import { parseNoteData } from 'notation/lib/dataParser';
 import { inferClef } from 'notation/lib/clefInference';
 import { getDurationInfo, fractionToBeats } from 'notation/lib/durationSymbols';
@@ -36,6 +36,9 @@ const KEY_SIG_ACCIDENTAL_WIDTH = 10;
 const TIME_SIG_WIDTH = 25;
 const BAR_LINE_PADDING = 5;
 const MIDDLE_LINE_Y = 50;
+const HEAD_RX = 6;
+const HEAD_RY = 5;
+const STEM_LENGTH = 35;
 
 const ACCIDENTAL_TYPE_MAP = {
   '#': 'sharp',
@@ -56,6 +59,7 @@ export class NotationRenderer {
     this._height = height || DEFAULT_HEIGHT;
     this._scale = scale || 1.0;
     this._svg = null;
+    this._noteData = [];
   }
 
   /**
@@ -152,13 +156,120 @@ export class NotationRenderer {
 
       // Track note X positions for tie rendering
       const noteXPositions = new Map();
+      let beatPosition = 0;
 
       // Notes
       for (let i = 0; i < voice.notes.length; i++) {
         const element = voice.notes[i];
 
         if (Array.isArray(element)) {
-          // Chord — skip for now
+          const chordNotes = element.filter((n) => n.pitch);
+          if (chordNotes.length === 0) {
+            beatPosition += 0;
+          } else {
+            const chordLength = chordNotes[0].length;
+            const info = getDurationInfo(chordLength);
+            const yPositions = chordNotes.map((n) => pitchToStaffY(n.pitch, clef));
+
+            // Stem direction: note furthest from middle line
+            const distances = yPositions.map((y) => Math.abs(y - MIDDLE_LINE_Y));
+            const maxDistIdx = distances.indexOf(Math.max(...distances));
+            const stemDown = yPositions[maxDistIdx] <= MIDDLE_LINE_Y;
+
+            const chordGroup = createGroup(`chord note ${info.cssClass}`, {
+              transform: `translate(${cursorX}, 0)`,
+            });
+
+            const currentBeatChord = beatPosition;
+            chordGroup.setAttribute('data-beat', String(currentBeatChord));
+
+            // Note heads
+            for (const noteY of yPositions) {
+              const fill = info.filledHead ? 'currentColor' : 'none';
+              chordGroup.appendChild(
+                createEllipse(0, noteY, HEAD_RX, HEAD_RY, {
+                  class: 'note-head',
+                  fill,
+                  stroke: 'currentColor',
+                })
+              );
+            }
+
+            // Single shared stem
+            if (info.hasStem) {
+              const minY = Math.min(...yPositions);
+              const maxY = Math.max(...yPositions);
+              const stemX = stemDown ? -HEAD_RX : HEAD_RX;
+              const stemY1 = stemDown ? minY : maxY;
+              const stemY2 = stemDown ? maxY + STEM_LENGTH : minY - STEM_LENGTH;
+
+              chordGroup.appendChild(
+                createLine(stemX, stemY1, stemX, stemY2, {
+                  class: 'note-stem',
+                  stroke: 'currentColor',
+                })
+              );
+            }
+
+            staffGroup.appendChild(chordGroup);
+
+            // Accidentals (on staffGroup with absolute coords)
+            for (let j = 0; j < chordNotes.length; j += 1) {
+              const { accidental } = parsePitch(chordNotes[j].pitch);
+              const accidentalType = ACCIDENTAL_TYPE_MAP[accidental];
+              if (accidentalType) {
+                const accGroup = createAccidental(accidentalType);
+                accGroup.setAttribute(
+                  'transform',
+                  `translate(${cursorX - ACCIDENTAL_OFFSET}, ${yPositions[j]})`
+                );
+                staffGroup.appendChild(accGroup);
+              }
+            }
+
+            // Ledger lines for each note (on staffGroup with absolute coords)
+            for (const noteY of yPositions) {
+              const ledgerGroup = createLedgerLines({ x: cursorX, y: noteY });
+              if (ledgerGroup) {
+                staffGroup.appendChild(ledgerGroup);
+              }
+            }
+
+            // Record positions for ties
+            noteXPositions.set(i, cursorX);
+
+            // Store note data for playback
+            const chordBeats = fractionToBeats(chordLength) * (chordNotes[0].dotted ? 1.5 : 1);
+            this._noteData.push({
+              element: chordGroup,
+              beat: currentBeatChord,
+              duration: chordBeats,
+              x: cursorX,
+              voiceId: voice.id,
+            });
+
+            cursorX += info.spacing;
+            const chordElementBeats = fractionToBeats(chordLength);
+            beatPosition += chordNotes[0].dotted ? chordElementBeats * 1.5 : chordElementBeats;
+
+            // Bar line insertion for chords
+            if (measureLength && chordElementBeats > 0) {
+              const adjustedBeats = chordNotes[0].dotted
+                ? chordElementBeats * 1.5
+                : chordElementBeats;
+              cumulativeBeats += adjustedBeats;
+              while (cumulativeBeats >= measureLength - 0.001) {
+                cursorX += BAR_LINE_PADDING;
+                staffGroup.appendChild(createBarLine(cursorX));
+                cursorX += BAR_LINE_PADDING;
+                cumulativeBeats -= measureLength;
+              }
+              if (Math.abs(cumulativeBeats) < 0.001) {
+                cumulativeBeats = 0;
+              }
+            }
+          }
+          // eslint-disable-next-line no-continue
           continue;
         }
 
@@ -178,12 +289,68 @@ export class NotationRenderer {
         // Record position for tie rendering
         noteXPositions.set(i, cursorX);
 
+        const currentBeat = beatPosition;
         let elementBeats = 0;
 
-        if (!element.pitch) {
+        if (element.position !== undefined) {
+          // Percussion note (position-based, X notehead)
+          const noteY = 100 - element.position * 10;
+          const info = getDurationInfo(element.length);
+
+          const noteGroup = createGroup(`note ${info.cssClass}`, {
+            transform: `translate(${cursorX}, ${noteY})`,
+          });
+          noteGroup.setAttribute('data-beat', String(currentBeat));
+
+          // X-shaped notehead
+          const xSize = 5;
+          const xHead = createGroup('note-head-x');
+          xHead.appendChild(
+            createLine(-xSize, -xSize, xSize, xSize, {
+              stroke: 'currentColor',
+              'stroke-width': 2,
+            })
+          );
+          xHead.appendChild(
+            createLine(-xSize, xSize, xSize, -xSize, {
+              stroke: 'currentColor',
+              'stroke-width': 2,
+            })
+          );
+          noteGroup.appendChild(xHead);
+
+          // Stem
+          if (info.hasStem) {
+            const stemDown = noteY <= MIDDLE_LINE_Y;
+            const stemX = stemDown ? -HEAD_RX : HEAD_RX;
+            const stemY2 = stemDown ? STEM_LENGTH : -STEM_LENGTH;
+
+            noteGroup.appendChild(
+              createLine(stemX, 0, stemX, stemY2, {
+                class: 'note-stem',
+                stroke: 'currentColor',
+              })
+            );
+          }
+
+          target.appendChild(noteGroup);
+
+          this._noteData.push({
+            element: noteGroup,
+            beat: currentBeat,
+            duration: fractionToBeats(element.length) * (element.dotted ? 1.5 : 1),
+            x: cursorX,
+            voiceId: voice.id,
+          });
+
+          cursorX += info.spacing;
+          elementBeats = fractionToBeats(element.length);
+          if (element.dotted) elementBeats *= 1.5;
+        } else if (!element.pitch) {
           // Rest (no pitch, has length)
           if (element.length) {
             const restGroup = createRest({ length: element.length, x: cursorX });
+            restGroup.setAttribute('data-beat', String(currentBeat));
             target.appendChild(restGroup);
             const info = getDurationInfo(element.length);
             cursorX += info.spacing;
@@ -213,7 +380,17 @@ export class NotationRenderer {
             beamed: isBeamed,
             stemDown: beamStemDown,
           });
+          noteGroup.setAttribute('data-beat', String(currentBeat));
           target.appendChild(noteGroup);
+
+          // Store note data for playback position
+          this._noteData.push({
+            element: noteGroup,
+            beat: currentBeat,
+            duration: fractionToBeats(element.length) * (element.dotted ? 1.5 : 1),
+            x: cursorX,
+            voiceId: voice.id,
+          });
 
           // Track position for beam rendering
           if (isBeamed) {
@@ -236,6 +413,8 @@ export class NotationRenderer {
           elementBeats = fractionToBeats(element.length);
           if (element.dotted) elementBeats *= 1.5;
         }
+
+        beatPosition += elementBeats;
 
         // Close beam group
         if (beamInfo && beamInfo.isLast && activeBeamGroupEl) {
@@ -305,6 +484,48 @@ export class NotationRenderer {
   }
 
   /**
+   * Set the playback position, highlighting the current note.
+   * @param {number|null} beat - Current beat position (null to clear)
+   * @param {Object} [options]
+   * @param {string} [options.voiceId] - Voice ID to highlight (all if omitted)
+   */
+  setPlaybackPosition(beat, options = {}) {
+    if (!this._svg) return;
+
+    // Remove existing highlights and cursor
+    this._svg.querySelectorAll('.note-active').forEach((el) => {
+      el.classList.remove('note-active');
+    });
+    const existingCursor = this._svg.querySelector('.playback-cursor');
+    if (existingCursor) existingCursor.remove();
+
+    if (beat === null || beat === undefined) return;
+
+    const candidates = options.voiceId
+      ? this._noteData.filter((d) => d.voiceId === options.voiceId)
+      : this._noteData;
+
+    // Find the note whose beat range contains the given beat
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      const d = candidates[i];
+      if (beat >= d.beat && beat < d.beat + d.duration) {
+        d.element.classList.add('note-active');
+
+        // Add cursor line
+        const staff = d.element.closest('.staff') || this._svg;
+        staff.appendChild(
+          createLine(d.x, 10, d.x, 90, {
+            class: 'playback-cursor',
+            stroke: 'currentColor',
+            'stroke-width': 1,
+          })
+        );
+        break;
+      }
+    }
+  }
+
+  /**
    * Remove the SVG and reset state.
    */
   clear() {
@@ -312,6 +533,7 @@ export class NotationRenderer {
       this._svg.parentNode.removeChild(this._svg);
     }
     this._svg = null;
+    this._noteData = [];
   }
 
   /**
