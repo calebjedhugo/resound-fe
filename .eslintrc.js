@@ -48,6 +48,7 @@ module.exports = {
     'import/prefer-default-export': 'off',
     'no-await-in-loop': 'off',
     'lines-between-class-members': 'off',
+    'no-underscore-dangle': 'off',
     'no-restricted-syntax': [
       'error',
       {
