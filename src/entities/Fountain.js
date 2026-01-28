@@ -5,6 +5,7 @@ import SongMatcher from 'core/SongMatcher';
 import ProgressManager from 'core/ProgressManager';
 import FountainInstrument from 'audio/instruments/Fountain';
 import { getDistance } from 'core/utils';
+import NotationDisplay from 'ui/NotationDisplay';
 import Entity from './Entity';
 
 class Fountain extends Entity {
@@ -35,6 +36,7 @@ class Fountain extends Entity {
     };
 
     this.createMesh();
+    this._createNotationDisplay();
 
     // Register with ListeningManager
     ListeningManager.registerListener(this);
@@ -52,6 +54,16 @@ class Fountain extends Entity {
     });
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.position.set(this.position.x, this.position.y + 1.25, this.position.z);
+  }
+
+  _createNotationDisplay() {
+    this.notationDisplay = new NotationDisplay({
+      song: this.requiredSong,
+      entityType: 'fountain',
+    });
+    for (const noteMesh of this.notationDisplay.meshes) {
+      this.mesh.add(noteMesh);
+    }
   }
 
   /**
@@ -108,6 +120,11 @@ class Fountain extends Entity {
     this.isComplete = true;
     console.log(`Fountain at ${this.position.x}, ${this.position.z} activated! Puzzle complete!`);
 
+    // Hide notation
+    if (this.notationDisplay) {
+      this.notationDisplay.hide();
+    }
+
     // Update visual appearance
     this.mesh.material.color.setHex(0x00ffff); // Cyan when activated
     this.mesh.material.emissive.setHex(0x004444);
@@ -150,6 +167,9 @@ class Fountain extends Entity {
   }
 
   dispose() {
+    if (this.notationDisplay) {
+      this.notationDisplay.dispose();
+    }
     // Unregister from listening manager
     ListeningManager.unregisterListener(this);
     super.dispose();

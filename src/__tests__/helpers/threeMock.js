@@ -121,6 +121,16 @@ class Mesh {
     this.material = new Material();
     this.geometry = new Geometry();
     this.up = new Vector3(0, 1, 0);
+    this.children = [];
+  }
+
+  add(child) {
+    this.children.push(child);
+  }
+
+  remove(child) {
+    const idx = this.children.indexOf(child);
+    if (idx > -1) this.children.splice(idx, 1);
   }
 
   getWorldDirection(target) {
@@ -167,6 +177,17 @@ class WebGLRenderer {
   dispose() {}
 }
 
+class CanvasTexture {
+  constructor(canvas) {
+    this.image = canvas;
+    this.needsUpdate = false;
+  }
+
+  dispose() {}
+}
+
+const DoubleSide = 2;
+
 module.exports = {
   Vector3,
   Quaternion,
@@ -181,6 +202,8 @@ module.exports = {
   CylinderGeometry: Geometry,
   MeshStandardMaterial: Material,
   MeshBasicMaterial: Material,
+  CanvasTexture,
+  DoubleSide,
   AmbientLight: Mesh,
   DirectionalLight: Mesh,
 };

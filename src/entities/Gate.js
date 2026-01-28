@@ -3,6 +3,7 @@ import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import SongMatcher from 'core/SongMatcher';
 import { getDistance } from 'core/utils';
+import NotationDisplay from 'ui/NotationDisplay';
 import Entity from './Entity';
 
 class Gate extends Entity {
@@ -24,6 +25,7 @@ class Gate extends Entity {
     this.listeningStartTime = Date.now();
 
     this.createMesh();
+    this._createNotationDisplay();
 
     // Register with ListeningManager
     ListeningManager.registerListener(this);
@@ -41,6 +43,16 @@ class Gate extends Entity {
     });
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.position.set(this.position.x, this.position.y + 1.5, this.position.z);
+  }
+
+  _createNotationDisplay() {
+    this.notationDisplay = new NotationDisplay({
+      song: this.requiredSong,
+      entityType: 'gate',
+    });
+    for (const noteMesh of this.notationDisplay.meshes) {
+      this.mesh.add(noteMesh);
+    }
   }
 
   /**
@@ -97,6 +109,11 @@ class Gate extends Entity {
     this.isOpen = true;
     console.log(`Gate at ${this.position.x}, ${this.position.z} activated!`);
 
+    // Hide notation
+    if (this.notationDisplay) {
+      this.notationDisplay.hide();
+    }
+
     // Update visual appearance
     this.mesh.material.color.setHex(0x00ff00); // Green when open
     this.mesh.material.emissive.setHex(0x003300);
@@ -107,6 +124,9 @@ class Gate extends Entity {
   }
 
   dispose() {
+    if (this.notationDisplay) {
+      this.notationDisplay.dispose();
+    }
     // Unregister from listening manager
     ListeningManager.unregisterListener(this);
     super.dispose();
