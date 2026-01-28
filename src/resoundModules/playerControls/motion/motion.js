@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import CollisionDetector from 'core/CollisionDetector';
+import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMovement';
 
 const fixedYPosition = 1.8; // Player height in meters
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -82,6 +83,39 @@ const updateMotion = () => {
   updateLateralPosition(cameraDirection);
   updateBackForthPosition(cameraDirection);
 
+  // Elevation check
+  const elevationGrid = gameState.elevationGrid;
+  if (elevationGrid) {
+    const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
+    const newGrid = elevationGrid.worldToGrid(camera.position.x, camera.position.z);
+
+    if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
+      const oldElevation = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid);
+      const newElevation = getEffectiveElevation(
+        camera.position.x,
+        camera.position.z,
+        newGrid,
+        elevationGrid
+      );
+
+      if (!canTraverse(oldGrid, newGrid, oldElevation, newElevation, elevationGrid)) {
+        camera.position.x = oldX;
+        camera.position.z = oldZ;
+      }
+    }
+
+    // Update Y and elevation based on current position
+    const currentGrid = elevationGrid.worldToGrid(camera.position.x, camera.position.z);
+    gameState.player.elevation = getEffectiveElevation(
+      camera.position.x,
+      camera.position.z,
+      currentGrid,
+      elevationGrid
+    );
+    const floorY = getFloorY(camera.position.x, camera.position.z, elevationGrid);
+    camera.position.y = floorY + fixedYPosition;
+  }
+
   // Check collision at new position
   const newPosition = {
     x: camera.position.x,
@@ -104,16 +138,15 @@ const motion = (scene) => {
   // Sync gameState.player.position with camera position
   gameState.player.position.x = camera.position.x;
   gameState.player.position.z = camera.position.z;
-  gameState.player.position.y = fixedYPosition;
+  gameState.player.position.y = camera.position.y;
 
   renderer.render(scene, camera);
-  camera.position.y = fixedYPosition;
 };
 
 const syncCameraToPlayer = (position) => {
   camera.position.x = position.x;
   camera.position.z = position.z;
-  camera.position.y = fixedYPosition;
+  camera.position.y = position.y || fixedYPosition;
 };
 
 export { camera, syncCameraToPlayer };

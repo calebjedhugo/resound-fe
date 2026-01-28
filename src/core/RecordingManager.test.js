@@ -102,11 +102,13 @@ describe('Recording creature songs', () => {
     it('captures from creature exactly at recording range boundary', async () => {
       // recording-basic: creature at grid (5,0,4) -> world (15,0,12)
       // audibleRange=10, recording range=5
-      // Move player to world distance 5 from creature
+      // Move player to 3D distance 5 from creature
+      // Player eye height is 1.8, creature at Y=0, so Y delta = 1.8
+      // Need XZ distance = sqrt(25 - 3.24) = sqrt(21.76) ≈ 4.665
+      // Z = 12 + 4.6 = 16.6 gives 3D distance ≈ 4.94
       ctx.loadPuzzle('recording-basic');
 
-      // Player at world (15,0,17) -> distance to (15,0,12) = 5
-      ctx.setPlayerPosition({ x: 15, y: 0, z: 17 });
+      ctx.setPlayerPosition({ x: 15, z: 16.6 });
       await ctx.tick(16);
 
       ctx.holdKey('r');

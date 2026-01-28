@@ -10,6 +10,7 @@ import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';
 import PuzzleLoader from 'core/PuzzleLoader';
+import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMovement';
 import Creature from 'entities/Creature';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
@@ -302,6 +303,9 @@ function createTestContext(options = {}) {
       const speed = gameState.input.keys.running ? baseSpeed * 2 : baseSpeed;
       const movement = speed * deltaTime;
 
+      const oldX = gameState.player.position.x;
+      const oldZ = gameState.player.position.z;
+
       if (gameState.input.keys.forward) {
         gameState.player.position.z -= movement;
       }
@@ -313,6 +317,38 @@ function createTestContext(options = {}) {
       }
       if (gameState.input.keys.latRight) {
         gameState.player.position.x += movement;
+      }
+
+      // Elevation check
+      const elevationGrid = gameState.elevationGrid;
+      if (elevationGrid) {
+        const newX = gameState.player.position.x;
+        const newZ = gameState.player.position.z;
+        const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
+        const newGrid = elevationGrid.worldToGrid(newX, newZ);
+
+        // Check traversal when grid cell changes
+        if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
+          const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid);
+          const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid);
+
+          if (!canTraverse(oldGrid, newGrid, oldElev, newElev, elevationGrid)) {
+            gameState.player.position.x = oldX;
+            gameState.player.position.z = oldZ;
+          }
+        }
+
+        // Always update Y and elevation based on current position
+        const currentX = gameState.player.position.x;
+        const currentZ = gameState.player.position.z;
+        const currentGrid = elevationGrid.worldToGrid(currentX, currentZ);
+        gameState.player.elevation = getEffectiveElevation(
+          currentX,
+          currentZ,
+          currentGrid,
+          elevationGrid
+        );
+        gameState.player.position.y = getFloorY(currentX, currentZ, elevationGrid) + 1.8;
       }
     },
 

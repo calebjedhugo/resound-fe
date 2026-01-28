@@ -91,10 +91,10 @@ class PuzzleLoader {
       entityManager.add(rightWall);
     }
 
-    // Set player start position (scaled)
+    // Set player start position (scaled, with eye height above floor)
     gameState.player.position = {
       x: puzzleData.playerStart.x * WORLD_SCALE,
-      y: puzzleData.playerStart.y * ELEVATION_HEIGHT,
+      y: puzzleData.playerStart.y * ELEVATION_HEIGHT + 1.8,
       z: puzzleData.playerStart.z * WORLD_SCALE,
     };
     gameState.player.elevation = puzzleData.playerStart.y;
