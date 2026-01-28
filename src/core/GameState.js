@@ -14,10 +14,13 @@ class GameState {
     this.player = {
       position: { x: 0, y: 1.8, z: 0 },
       rotation: { x: 0, y: 0 },
+      elevation: 0,
       inventory: [null, null, null, null, null], // 5 slots
       activeSlot: 0, // Currently selected slot (0-4)
       maxInventorySize: 5,
     };
+
+    this.elevationGrid = null;
 
     this.input = {
       keys: {
@@ -57,8 +60,10 @@ class GameState {
     this.musicalClock = null;
     this.player.position = { x: 0, y: 1.8, z: 0 };
     this.player.rotation = { x: 0, y: 0 };
+    this.player.elevation = 0;
     this.player.inventory = [null, null, null, null, null];
     this.player.activeSlot = 0;
+    this.elevationGrid = null;
     this.entities = [];
     this.recording = {
       isRecording: false,

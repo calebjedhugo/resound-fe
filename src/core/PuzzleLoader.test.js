@@ -4,7 +4,8 @@
  */
 
 import PuzzleLoader from 'core/PuzzleLoader';
-import { WORLD_SCALE } from 'core/constants';
+import gameState from 'core/GameState';
+import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 
 describe('PuzzleLoader', () => {
   describe('load()', () => {
@@ -249,6 +250,49 @@ describe('PuzzleLoader', () => {
 
       const result = await PuzzleLoader.load('test');
       expect(result).toEqual(validPuzzle);
+    });
+  });
+
+  describe('PuzzleLoader with elevation', () => {
+    it('builds an elevation grid when puzzle has floors', () => {
+      ctx.loadPuzzle('elevation-basic');
+
+      expect(gameState.elevationGrid).not.toBeNull();
+      // The elevated region is x1:4, z1:4, x2:10, z2:8, elevation:1
+      expect(ctx.getElevationAt(7, 6)).toBe(1);
+      // Outside the region should be 0
+      expect(ctx.getElevationAt(0, 0)).toBe(0);
+    });
+
+    it('builds an elevation grid with all-zero elevation when puzzle has no floors', () => {
+      ctx.loadPuzzle('recording-basic');
+
+      expect(gameState.elevationGrid).not.toBeNull();
+      expect(ctx.getElevationAt(5, 5)).toBe(0);
+      expect(ctx.getElevationAt(0, 0)).toBe(0);
+    });
+
+    it('sets player starting elevation from playerStart.y', () => {
+      ctx.loadPuzzle('elevation-basic');
+
+      // playerStart.y is 0 in elevation-basic
+      expect(ctx.getPlayerElevation()).toBe(0);
+    });
+
+    it('existing puzzles with y:0 load identically to before', () => {
+      ctx.loadPuzzle('recording-basic');
+
+      // Player position should be scaled correctly
+      // recording-basic: playerStart { x: 5, y: 0, z: 5 }
+      const pos = ctx.getPlayerPosition();
+      expect(pos.x).toBe(5 * WORLD_SCALE);
+      expect(pos.z).toBe(5 * WORLD_SCALE);
+
+      // Elevation should be 0
+      expect(ctx.getPlayerElevation()).toBe(0);
+
+      // Elevation grid should exist but be all-zero
+      expect(gameState.elevationGrid).not.toBeNull();
     });
   });
 });

@@ -1,0 +1,16 @@
+{
+  "id": "elevation-ramp",
+  "name": "Elevation Test - Ramp",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "playerStart": { "x": 7, "y": 0, "z": 13 },
+  "floors": [{ "elevation": 1, "x1": 4, "z1": 4, "x2": 10, "z2": 8 }],
+  "entities": [
+    {
+      "type": "ramp",
+      "position": { "x": 7, "y": 0, "z": 9 },
+      "direction": "north"
+    }
+  ]
+}

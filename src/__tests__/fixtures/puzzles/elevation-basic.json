@@ -1,0 +1,33 @@
+{
+  "id": "elevation-basic",
+  "name": "Elevation Test - Basic",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "playerStart": { "x": 7, "y": 0, "z": 13 },
+  "floors": [{ "elevation": 1, "x1": 4, "z1": 4, "x2": 10, "z2": 8 }],
+  "entities": [
+    {
+      "type": "ramp",
+      "position": { "x": 7, "y": 0, "z": 9 },
+      "direction": "north"
+    },
+    {
+      "type": "creature",
+      "position": { "x": 7, "y": 1, "z": 6 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/4" }],
+        "interval": 4,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 4, "y": 1, "z": 4 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 5, "y": 1, "z": 4 }
+    }
+  ]
+}

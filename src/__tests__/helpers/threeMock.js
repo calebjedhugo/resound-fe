@@ -112,6 +112,33 @@ class Geometry {
   dispose() {}
 }
 
+class BufferGeometry {
+  constructor() {
+    this.attributes = {};
+    this.index = null;
+  }
+
+  setAttribute(name, attribute) {
+    this.attributes[name] = attribute;
+    return this;
+  }
+
+  setIndex(index) {
+    this.index = index;
+    return this;
+  }
+
+  computeVertexNormals() {}
+  dispose() {}
+}
+
+class Float32BufferAttribute {
+  constructor(array, itemSize) {
+    this.array = array;
+    this.itemSize = itemSize;
+  }
+}
+
 class Mesh {
   constructor() {
     this.position = new Vector3();
@@ -139,6 +166,25 @@ class Mesh {
   }
 
   setRotationFromQuaternion() {}
+}
+
+class Group {
+  constructor() {
+    this.children = [];
+    this.position = new Vector3();
+    this.rotation = { x: 0, y: 0, z: 0 };
+    this.scale = { x: 1, y: 1, z: 1, set: () => {} };
+    this.visible = true;
+  }
+
+  add(obj) {
+    this.children.push(obj);
+  }
+
+  remove(obj) {
+    const idx = this.children.indexOf(obj);
+    if (idx > -1) this.children.splice(idx, 1);
+  }
 }
 
 class Scene {
@@ -192,6 +238,7 @@ module.exports = {
   Vector3,
   Quaternion,
   Color,
+  Group,
   Scene,
   Mesh,
   PerspectiveCamera,
@@ -200,6 +247,8 @@ module.exports = {
   BoxGeometry: Geometry,
   PlaneGeometry: Geometry,
   CylinderGeometry: Geometry,
+  BufferGeometry,
+  Float32BufferAttribute,
   MeshStandardMaterial: Material,
   MeshBasicMaterial: Material,
   CanvasTexture,

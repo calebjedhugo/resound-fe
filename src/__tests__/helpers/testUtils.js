@@ -45,6 +45,8 @@ import creatureTwoCreaturesHarmony from '../fixtures/puzzles/creature-two-creatu
 import parseWallBasic from '../fixtures/puzzles/parse-wall-basic.json';
 import parseRampBasic from '../fixtures/puzzles/parse-ramp-basic.json';
 import parseUnknownEntity from '../fixtures/puzzles/parse-unknown-entity.json';
+import elevationBasic from '../fixtures/puzzles/elevation-basic.json';
+import elevationRamp from '../fixtures/puzzles/elevation-ramp.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -77,6 +79,8 @@ const TEST_PUZZLES = {
   'parse-wall-basic': parseWallBasic,
   'parse-ramp-basic': parseRampBasic,
   'parse-unknown-entity': parseUnknownEntity,
+  'elevation-basic': elevationBasic,
+  'elevation-ramp': elevationRamp,
 };
 
 /**
@@ -550,6 +554,29 @@ function createTestContext(options = {}) {
      */
     clearEmittedNotes() {
       emittedNotes.length = 0;
+    },
+
+    // --- Elevation ---
+
+    /**
+     * Get player's current elevation level
+     */
+    getPlayerElevation() {
+      return gameState.player.elevation;
+    },
+
+    /**
+     * Query the elevation grid at a grid coordinate
+     */
+    getElevationAt(gridX, gridZ) {
+      return gameState.elevationGrid?.getElevation(gridX, gridZ) ?? 0;
+    },
+
+    /**
+     * Query the ramp grid at a grid coordinate
+     */
+    getRampAt(gridX, gridZ) {
+      return gameState.elevationGrid?.getRamp(gridX, gridZ) ?? null;
     },
 
     // --- Debug ---

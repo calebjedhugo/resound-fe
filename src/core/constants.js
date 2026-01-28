@@ -45,3 +45,7 @@ export const DEFAULT_CLAP_DISPLACEMENT = 0.0625;
 
 // Visual feedback duration for clap effect (seconds)
 export const CLAP_VISUAL_FADE_DURATION = 0.3;
+
+// Height of one elevation level in world units
+// Equal to WORLD_SCALE so one elevation step = one grid cell vertically
+export const ELEVATION_HEIGHT = 3.0;

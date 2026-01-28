@@ -4,7 +4,8 @@ import Fountain from 'entities/Fountain';
 import Wall from 'entities/Wall';
 import Ramp from 'entities/Ramp';
 import Floor from 'entities/Floor';
-import { WORLD_SCALE } from 'core/constants';
+import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import ElevationGrid from 'core/ElevationGrid';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 class PuzzleLoader {
@@ -45,8 +46,13 @@ class PuzzleLoader {
     const tempo = puzzleData.tempo || 120; // Default 120 BPM
     gameState.initMusicalClock(tempo);
 
-    // Create floor first (based on puzzle grid size)
-    const floor = new Floor(puzzleData.gridSize);
+    // Build elevation grid
+    const elevationGrid = new ElevationGrid(puzzleData.gridSize);
+    elevationGrid.applyFloors(puzzleData.floors || []);
+    gameState.elevationGrid = elevationGrid;
+
+    // Create floor with elevation data
+    const floor = new Floor(puzzleData.gridSize, puzzleData.floors || []);
     entityManager.add(floor);
 
     // Generate perimeter walls around the grid
@@ -88,9 +94,10 @@ class PuzzleLoader {
     // Set player start position (scaled)
     gameState.player.position = {
       x: puzzleData.playerStart.x * WORLD_SCALE,
-      y: puzzleData.playerStart.y * WORLD_SCALE,
+      y: puzzleData.playerStart.y * ELEVATION_HEIGHT,
       z: puzzleData.playerStart.z * WORLD_SCALE,
     };
+    gameState.player.elevation = puzzleData.playerStart.y;
 
     // Sync camera to player start position
     syncCameraToPlayer(gameState.player.position);
@@ -102,7 +109,7 @@ class PuzzleLoader {
       // Scale the position from grid coordinates to world coordinates
       const scaledPosition = {
         x: entityData.position.x * WORLD_SCALE,
-        y: entityData.position.y * WORLD_SCALE,
+        y: entityData.position.y * ELEVATION_HEIGHT,
         z: entityData.position.z * WORLD_SCALE,
       };
 
@@ -127,6 +134,7 @@ class PuzzleLoader {
           entity = new Ramp(scaledPosition, {
             direction: entityData.direction,
           });
+          elevationGrid.registerRamp(entityData.position.x, entityData.position.z, entity);
           break;
         default:
           console.warn(`Unknown entity type: ${entityData.type}`);

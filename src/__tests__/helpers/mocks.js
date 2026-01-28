@@ -363,12 +363,35 @@ class MockRenderer {
 }
 
 /**
+ * Mock Three.js Group
+ */
+class MockGroup {
+  constructor() {
+    this.children = [];
+    this.position = new MockVector3();
+    this.rotation = { x: 0, y: 0, z: 0 };
+    this.scale = { x: 1, y: 1, z: 1, set: jest.fn() };
+    this.visible = true;
+  }
+
+  add(obj) {
+    this.children.push(obj);
+  }
+
+  remove(obj) {
+    const idx = this.children.indexOf(obj);
+    if (idx > -1) this.children.splice(idx, 1);
+  }
+}
+
+/**
  * Mock THREE module
  */
 const mockThree = {
   Vector3: MockVector3,
   Quaternion: MockQuaternion,
   Color: MockColor,
+  Group: MockGroup,
   Scene: MockScene,
   Mesh: MockMesh,
   PerspectiveCamera: MockCamera,
@@ -441,6 +464,7 @@ export {
   MockGainNode,
   MockOscillatorNode,
   MockLocalStorage,
+  MockGroup,
   MockMesh,
   MockScene,
   MockVector3,

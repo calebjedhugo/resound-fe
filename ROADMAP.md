@@ -21,7 +21,7 @@ Update this checklist when completing features. Mark items ✅ when done, ⚠️
 - ✅ Gates that unlock when correct song played
 - ✅ Fountains (puzzle completion targets)
 - ✅ Walls (solid collision)
-- ✅ Ramps with directional elevation
+- ⚠️ Ramps with directional elevation (mesh only, no functional elevation - see `specs/elevation-and-ramps.md`)
 
 ## Puzzle System
 - ✅ JSON-based puzzle definitions

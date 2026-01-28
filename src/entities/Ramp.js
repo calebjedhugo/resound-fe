@@ -1,32 +1,126 @@
 import * as THREE from 'three';
+import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Entity from './Entity';
 
 class Ramp extends Entity {
   constructor(position, data = {}) {
     super('ramp', position, data);
-    this.direction = data.direction || 'north'; // north, south, east, west
+    this.direction = data.direction || 'north';
+    this.elevation = Math.round(position.y / ELEVATION_HEIGHT);
     this.createMesh();
   }
 
   createMesh() {
-    // Grid-cell-sized ramp (3 units to fill 1 grid cell at 3x scale)
-    const geometry = new THREE.BoxGeometry(3, 1, 3);
+    const geometry = this.createWedgeGeometry();
     const material = new THREE.MeshStandardMaterial({
       color: 0x88ff88,
       roughness: 0.8,
       metalness: 0.1,
     });
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + 0.5, this.position.z);
 
-    // Rotate based on direction
+    const baseY = this.elevation * ELEVATION_HEIGHT;
+    this.mesh.position.set(this.position.x, baseY, this.position.z);
+
     const rotations = {
       north: 0,
-      south: Math.PI,
       east: Math.PI / 2,
+      south: Math.PI,
       west: -Math.PI / 2,
     };
     this.mesh.rotation.y = rotations[this.direction] || 0;
+  }
+
+  createWedgeGeometry() {
+    const hw = WORLD_SCALE / 2;
+    const hd = WORLD_SCALE / 2;
+    const h = ELEVATION_HEIGHT;
+
+    // Wedge: low edge at +Z (local), high edge at -Z (local)
+    // Rotation handles direction mapping
+    //
+    // Vertices (before direction rotation):
+    //   Bottom face (Y=0): 4 corners
+    //   Top face: only 2 corners at -Z edge (Y=h)
+    const vertices = new Float32Array([
+      // Bottom face - 4 corners
+      -hw,
+      0,
+      -hd, // 0: back-left bottom
+      hw,
+      0,
+      -hd, // 1: back-right bottom
+      hw,
+      0,
+      hd, // 2: front-right bottom
+      -hw,
+      0,
+      hd, // 3: front-left bottom
+      // Top edge - 2 corners at -Z (high end)
+      -hw,
+      h,
+      -hd, // 4: back-left top
+      hw,
+      h,
+      -hd, // 5: back-right top
+    ]);
+
+    // Triangle indices (6 faces)
+    const indices = [
+      // Bottom face
+      0, 2, 1, 0, 3, 2,
+      // Slope face (from front-bottom to back-top)
+      3, 4, 5, 3, 5, 2,
+      // Back face (vertical, high end)
+      0, 1, 5, 0, 5, 4,
+      // Left face (triangle)
+      0, 4, 3,
+      // Right face (triangle)
+      1, 2, 5,
+    ];
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    return geometry;
+  }
+
+  /**
+   * Calculate the Y position for a world-space point on this ramp.
+   * Returns null if the point is not on this ramp.
+   */
+  getYAtPosition(worldX, worldZ) {
+    const hw = WORLD_SCALE / 2;
+    const localX = worldX - this.position.x;
+    const localZ = worldZ - this.position.z;
+
+    if (Math.abs(localX) > hw || Math.abs(localZ) > hw) {
+      return null;
+    }
+
+    let progress;
+    switch (this.direction) {
+      case 'north':
+        progress = (hw - localZ) / WORLD_SCALE;
+        break;
+      case 'south':
+        progress = (hw + localZ) / WORLD_SCALE;
+        break;
+      case 'east':
+        progress = (hw + localX) / WORLD_SCALE;
+        break;
+      case 'west':
+        progress = (hw - localX) / WORLD_SCALE;
+        break;
+      default:
+        progress = 0;
+    }
+
+    progress = Math.max(0, Math.min(1, progress));
+    const baseY = this.elevation * ELEVATION_HEIGHT;
+    return baseY + progress * ELEVATION_HEIGHT;
   }
 }
 
