@@ -11,6 +11,10 @@ import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
 import EntityToolbar from 'editor/ui/EntityToolbar';
 import PropertyPanel from 'editor/ui/PropertyPanel';
 import MetadataPanel from 'editor/ui/MetadataPanel';
+import ValidationPanel from 'editor/ui/ValidationPanel';
+import ImportPanel from 'editor/ui/ImportPanel';
+import ExportPanel from 'editor/ui/ExportPanel';
+import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
 
 export default class EditorApp {
   constructor() {
@@ -21,6 +25,8 @@ export default class EditorApp {
     this.camera = null;
     this.controls = null;
     this._animationId = null;
+    this._validationTimer = null;
+    this._autoSaveTimer = null;
   }
 
   init() {
@@ -56,6 +62,30 @@ export default class EditorApp {
       this.undoManager,
       this.editorScene
     );
+    this.validationPanel = new ValidationPanel(
+      document.getElementById('validation-panel'),
+      this.undoManager,
+      (entityId) => {
+        if (entityId) this.selectionManager.select(entityId);
+      }
+    );
+    this.importPanel = new ImportPanel(document.getElementById('import-panel'), (importedModel) => {
+      // Replace model state from imported model
+      this.undoManager._model._metadata = { ...importedModel.getMetadata() };
+      this.undoManager._model._playerSpawn = importedModel.getPlayerSpawn();
+      this.undoManager._model._floors = importedModel.getFloors();
+      this.undoManager._model._entities = importedModel.getEntities();
+      this.undoManager._model._nextEntityId =
+        Math.max(...importedModel.getEntities().map((e) => e.id), 0) + 1;
+      // Rebuild all visuals
+      this.entityPlacer.rebuildFromModel();
+      this.floorRegionPanel.refresh();
+      this.metadataPanel.refresh();
+      this.selectionManager.deselect();
+      this._scheduleValidation();
+      this._scheduleAutoSave();
+    });
+    this.exportPanel = new ExportPanel(document.getElementById('export-panel'), this.undoManager);
     this.entityDragger = new EntityDragger(
       this.scene,
       this.camera,
@@ -74,11 +104,71 @@ export default class EditorApp {
       }
     };
 
+    // "New Puzzle" button at the top of the sidebar
+    this._setupNewPuzzleButton();
+
+    // Restore saved session (auto-restore on load)
+    this._restoreSession();
+
     this._setupViewportClick();
     this._setupDrag();
     this._setupKeyboard();
     this._animate();
     window.addEventListener('resize', () => this._onResize());
+  }
+
+  _scheduleValidation() {
+    clearTimeout(this._validationTimer);
+    this._validationTimer = setTimeout(() => {
+      this.validationPanel.refresh();
+    }, 300);
+  }
+
+  _scheduleAutoSave() {
+    clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = setTimeout(() => {
+      saveSession(this.undoManager);
+    }, 500);
+  }
+
+  _restoreSession() {
+    const restored = loadSession();
+    if (restored) {
+      this._applyRestoredModel(restored);
+    }
+  }
+
+  _applyRestoredModel(importedModel) {
+    this.undoManager._model._metadata = { ...importedModel.getMetadata() };
+    this.undoManager._model._playerSpawn = importedModel.getPlayerSpawn();
+    this.undoManager._model._floors = importedModel.getFloors();
+    this.undoManager._model._entities = importedModel.getEntities();
+    this.undoManager._model._nextEntityId =
+      Math.max(...importedModel.getEntities().map((e) => e.id), 0) + 1;
+    this.entityPlacer.rebuildFromModel();
+    this.floorRegionPanel.refresh();
+    this.metadataPanel.refresh();
+    this.selectionManager.deselect();
+    this._scheduleValidation();
+  }
+
+  _setupNewPuzzleButton() {
+    const sidebar = document.getElementById('editor-sidebar');
+    const btn = document.createElement('button');
+    btn.className = 'editor-btn new-puzzle-btn';
+    btn.textContent = 'New Puzzle';
+    btn.addEventListener('click', () => {
+      clearSession();
+      const fresh = new EditorPuzzleModel();
+      this._applyRestoredModel(fresh);
+    });
+    // Insert after the h2 heading, before the first panel
+    const heading = sidebar.querySelector('h2');
+    if (heading && heading.nextSibling) {
+      sidebar.insertBefore(btn, heading.nextSibling);
+    } else {
+      sidebar.appendChild(btn);
+    }
   }
 
   _setupRenderer() {
@@ -126,12 +216,18 @@ export default class EditorApp {
       if (!grid) return;
 
       // Let floor region panel handle it first
-      if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) return;
+      if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) {
+        this._scheduleValidation();
+        this._scheduleAutoSave();
+        return;
+      }
 
       // If entity toolbar has active tool, place entity at hovered grid cell
       const activeTool = this.entityToolbar.activeTool;
       if (activeTool) {
         this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, this.editorScene.activeElevation);
+        this._scheduleValidation();
+        this._scheduleAutoSave();
         return;
       }
 
@@ -180,6 +276,8 @@ export default class EditorApp {
         if (this.selectionManager.selectedId !== null) {
           this.propertyPanel.show(this.selectionManager.selectedId);
         }
+        this._scheduleValidation();
+        this._scheduleAutoSave();
       }
       dragStarted = false;
     };
@@ -198,6 +296,8 @@ export default class EditorApp {
         this.metadataPanel.refresh();
         this.entityPlacer.rebuildFromModel();
         this.selectionManager.deselect();
+        this._scheduleValidation();
+        this._scheduleAutoSave();
       }
       // Cmd+Shift+Z / Ctrl+Shift+Z = redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
@@ -207,6 +307,8 @@ export default class EditorApp {
         this.metadataPanel.refresh();
         this.entityPlacer.rebuildFromModel();
         this.selectionManager.deselect();
+        this._scheduleValidation();
+        this._scheduleAutoSave();
       }
       // Escape cancels floor placement and deselects entity toolbar
       if (e.key === 'Escape') {
@@ -219,6 +321,8 @@ export default class EditorApp {
         if (this.selectionManager.selectedId !== null) {
           e.preventDefault();
           this.selectionManager.deleteSelected();
+          this._scheduleValidation();
+          this._scheduleAutoSave();
         }
       }
     });
@@ -243,6 +347,8 @@ export default class EditorApp {
 
   dispose() {
     if (this._animationId) cancelAnimationFrame(this._animationId);
+    clearTimeout(this._validationTimer);
+    clearTimeout(this._autoSaveTimer);
     this.controls.dispose();
     this.renderer.dispose();
   }

@@ -34,3 +34,18 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .song-editor-container { margin-top: 8px; }
 .playback-controls { display: flex; gap: 4px; margin-top: 8px; }
 .playback-controls .editor-btn { flex: 1; }
+.validation-header { display: flex; justify-content: space-between; align-items: center; }
+.collapse-btn { background: none; border: none; color: #8899aa; cursor: pointer; font-size: 14px; padding: 0 4px; }
+.validation-content { margin-top: 8px; font-size: 12px; }
+.validation-ok { color: #44ff88; }
+.validation-error { color: #ff4444; padding: 2px 0; }
+.validation-warning { color: #ffaa44; padding: 2px 0; }
+.import-status { font-size: 12px; margin-top: 4px; }
+.import-success { color: #44ff88; }
+.import-warning { color: #ffaa44; }
+.import-error { color: #ff4444; }
+.export-status { margin-top: 8px; font-size: 12px; }
+.export-errors { color: #ff4444; }
+.export-warnings { color: #ffaa44; }
+.export-actions { display: flex; gap: 4px; margin-top: 8px; }
+.manifest-entry pre { background: #0a1628; padding: 8px; border-radius: 4px; font-size: 11px; margin-top: 4px; overflow-x: auto; }
