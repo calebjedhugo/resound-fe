@@ -19,6 +19,11 @@
       "id": "test-004",
       "name": "Complex Harmony",
       "difficulty": 2
+    },
+    {
+      "id": "elevation-demo",
+      "name": "Elevated Harmony",
+      "difficulty": 2
     }
   ]
 }

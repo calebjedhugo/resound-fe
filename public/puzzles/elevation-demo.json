@@ -1,0 +1,51 @@
+{
+  "id": "elevation-demo",
+  "name": "Elevated Harmony",
+  "difficulty": 2,
+  "gridSize": 15,
+  "tempo": 120,
+  "playerStart": { "x": 7, "y": 0, "z": 13 },
+  "floors": [{ "elevation": 1, "x1": 3, "z1": 3, "x2": 11, "z2": 7 }],
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 7, "y": 1, "z": 5 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/1" }],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "ramp",
+      "position": { "x": 7, "y": 0, "z": 8 },
+      "direction": "north"
+    },
+    {
+      "type": "wall",
+      "position": { "x": 2, "y": 1, "z": 3 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 3, "y": 1, "z": 3 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 4, "y": 1, "z": 3 }
+    },
+    {
+      "type": "wall",
+      "position": { "x": 5, "y": 1, "z": 3 }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 6, "y": 1, "z": 3 },
+      "song": [{ "pitch": "C4", "length": "1/1" }]
+    },
+    {
+      "type": "fountain",
+      "position": { "x": 7, "y": 1, "z": 4 },
+      "song": [{ "pitch": "C4", "length": "1/1" }]
+    }
+  ]
+}

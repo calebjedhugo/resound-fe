@@ -21,11 +21,16 @@ Update this checklist when completing features. Mark items ✅ when done, ⚠️
 - ✅ Gates that unlock when correct song played
 - ✅ Fountains (puzzle completion targets)
 - ✅ Walls (solid collision)
-- ⚠️ Ramps with directional elevation (mesh only, no functional elevation - see `specs/elevation-and-ramps.md`)
+- ✅ Ramps with directional elevation (wedge geometry, functional slope traversal)
+- ✅ Elevation grid (discrete integer levels, floor regions, highest-wins overlap)
+- ✅ Player elevation movement (smooth ramp traversal, boundary blocking)
+- ✅ Elevation-aware collision (entities at different elevations don't block each other)
+- ✅ Creature elevation support (ramp traversal, elevation blocking, 3D audio distance)
+- ✅ Backward compatibility verified (all pre-elevation puzzles work identically)
 
 ## Puzzle System
 - ✅ JSON-based puzzle definitions
-- ✅ 4 playable puzzles (2 easy, 2 medium)
+- ✅ 5 playable puzzles (2 easy, 2 medium, 1 multi-elevation demo)
 - ✅ Progress tracking via localStorage
 - ✅ Puzzle manifest system
 
