@@ -3,8 +3,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
 import UndoManager from 'editor/model/UndoManager';
 import EditorScene from 'editor/viewport/EditorScene';
+import EntityPlacer from 'editor/viewport/EntityPlacer';
+import SelectionManager from 'editor/viewport/SelectionManager';
 import ElevationSelector from 'editor/ui/ElevationSelector';
 import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
+import EntityToolbar from 'editor/ui/EntityToolbar';
 
 export default class EditorApp {
   constructor() {
@@ -30,6 +33,15 @@ export default class EditorApp {
       document.getElementById('elevation-panel'),
       this.undoManager,
       this.editorScene
+    );
+    this.entityPlacer = new EntityPlacer(this.scene, this.undoManager);
+    this.selectionManager = new SelectionManager(this.camera, this.entityPlacer);
+    this.entityToolbar = new EntityToolbar(
+      document.getElementById('entity-toolbar'),
+      (toolType) => {
+        // When a tool is selected, deselect any selected entity
+        if (toolType) this.selectionManager.deselect();
+      }
     );
     this._setupViewportClick();
     this._setupKeyboard();
@@ -84,7 +96,18 @@ export default class EditorApp {
       // Let floor region panel handle it first
       if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) return;
 
-      // Other click handlers will go here in later phases
+      // If entity toolbar has active tool, place entity at hovered grid cell
+      const activeTool = this.entityToolbar.activeTool;
+      if (activeTool) {
+        this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, this.editorScene.activeElevation);
+        return;
+      }
+
+      // Otherwise, try selection via SelectionManager
+      const rect = container.getBoundingClientRect();
+      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      this.selectionManager.handleClick(mouseX, mouseY);
     });
   }
 
@@ -95,16 +118,27 @@ export default class EditorApp {
         e.preventDefault();
         this.undoManager.undo();
         this.floorRegionPanel.refresh();
+        this.entityPlacer.rebuildFromModel();
       }
       // Cmd+Shift+Z / Ctrl+Shift+Z = redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
         e.preventDefault();
         this.undoManager.redo();
         this.floorRegionPanel.refresh();
+        this.entityPlacer.rebuildFromModel();
       }
-      // Escape cancels floor placement
+      // Escape cancels floor placement and deselects entity toolbar
       if (e.key === 'Escape') {
         this.floorRegionPanel.cancelPlacing();
+        this.entityToolbar.deselect();
+        this.selectionManager.deselect();
+      }
+      // Delete or Backspace deletes selected entity
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (this.selectionManager.selectedId !== null) {
+          e.preventDefault();
+          this.selectionManager.deleteSelected();
+        }
       }
     });
   }

@@ -232,6 +232,33 @@ class CanvasTexture {
   dispose() {}
 }
 
+class Vector2 {
+  constructor(x = 0, y = 0) {
+    this.x = x;
+    this.y = y;
+  }
+
+  set(x, y) {
+    this.x = x;
+    this.y = y;
+    return this;
+  }
+}
+
+class Raycaster {
+  constructor() {
+    this.ray = { origin: new Vector3(), direction: new Vector3() };
+  }
+
+  setFromCamera() {}
+  intersectObjects() {
+    return [];
+  }
+  intersectObject() {
+    return [];
+  }
+}
+
 const DoubleSide = 2;
 
 module.exports = {
@@ -247,12 +274,15 @@ module.exports = {
   BoxGeometry: Geometry,
   PlaneGeometry: Geometry,
   CylinderGeometry: Geometry,
+  ConeGeometry: Geometry,
   BufferGeometry,
   Float32BufferAttribute,
   MeshStandardMaterial: Material,
   MeshBasicMaterial: Material,
   CanvasTexture,
   DoubleSide,
+  Vector2,
+  Raycaster,
   AmbientLight: Mesh,
   DirectionalLight: Mesh,
 };
