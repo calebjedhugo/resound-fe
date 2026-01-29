@@ -427,3 +427,189 @@ describe('Creature audible range', () => {
     expect(recorded).toBeNull();
   });
 });
+
+/**
+ * Creature elevation behavior tests
+ *
+ * Phase 5: Creatures track elevation, traverse ramps, are blocked by
+ * elevation boundaries, and 3D distance affects audio naturally.
+ */
+import { ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
+import { getDistance, getDistanceVolume } from 'core/utils';
+
+describe('Creature elevation behavior', () => {
+  describe('elevation tracking', () => {
+    it('creature spawned at elevation 1 has correct Y position', () => {
+      ctx.loadPuzzle('elevation-basic');
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      // Creature at grid (7,6), y=1 -> position.y = 1 * ELEVATION_HEIGHT = 3.0
+      expect(creature.position.y).toBe(ELEVATION_HEIGHT);
+      expect(creature.elevation).toBe(1);
+    });
+
+    it('creature mesh Y reflects elevation', () => {
+      ctx.loadPuzzle('elevation-basic');
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      // mesh.position.y = position.y + size = 3.0 + 0.9 = 3.9
+      expect(creature.mesh.position.y).toBeCloseTo(ELEVATION_HEIGHT + creature.size, 1);
+    });
+  });
+
+  describe('movement with elevation', () => {
+    // Real-timer helpers (same pattern as existing movement tests)
+    const realTimeUpdate = async (testCtx, durationMs, stepMs = 16) => {
+      const steps = Math.ceil(durationMs / stepMs);
+      const entityManager = testCtx.getEntityManager();
+
+      for (let i = 0; i < steps; i += 1) {
+        const dt = stepMs / 1000;
+        const clock = testCtx.getMusicalClock();
+        if (clock) clock.update(dt);
+        entityManager.update(dt);
+        // eslint-disable-next-line no-promise-executor-return
+        await new Promise((resolve) => setTimeout(resolve, stepMs));
+      }
+    };
+
+    const startPlayerPlayback = async (testCtx, pitch) => {
+      testCtx.startPlayerPlayback([{ pitch, length: '1/1' }], 480);
+      // eslint-disable-next-line no-promise-executor-return
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    beforeEach(() => {
+      jest.useRealTimers();
+      ctx.resetPlaybackState();
+    });
+
+    afterEach(() => {
+      ctx.stopPlayerPlayback();
+      jest.useFakeTimers();
+    });
+
+    it('creature pushed by consonant force traverses a ramp to a higher floor', async () => {
+      ctx.loadPuzzle('creature-elevation-ramp');
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      // Creature starts on the ramp cell (grid 7,9) at elevation 0
+      expect(creature.elevation).toBe(0);
+
+      // Play E4 - consonant with C4 (major 3rd) = attraction toward player (north)
+      // Player is at grid (7,5) on elevation 1, north of the ramp
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 6000);
+
+      // Creature should have moved north along the ramp, increasing elevation
+      // Force-based movement accumulates slowly; verify creature climbed the ramp
+      expect(creature.elevation).toBeGreaterThan(0);
+      expect(creature.position.y).toBeGreaterThan(0);
+      expect(creature.position.z).toBeLessThan(27); // Moved north from ramp center
+    }, 15000);
+
+    it('creature Y position updates as it moves along a ramp', async () => {
+      ctx.loadPuzzle('creature-elevation-ramp');
+      const creature = ctx.getCreatures()[0];
+      // Creature starts at y=0 from puzzle data, but is on the ramp cell (grid 7,9)
+      expect(creature.position.y).toBe(0);
+
+      // A single entity update should cause Y to update from getFloorY (ramp interpolation)
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 50);
+
+      // Y should now reflect the ramp position (between 0 and ELEVATION_HEIGHT)
+      expect(creature.position.y).toBeGreaterThan(0);
+    }, 10000);
+
+    it('creature is blocked by elevation change without a ramp', async () => {
+      ctx.loadPuzzle('creature-elevation-blocked');
+      const creatures = ctx.getCreatures();
+      const creature = creatures[0];
+      // Creature at grid (5,9) -> world (15, 0, 27), elevation 0
+      // Elevated floor starts at grid z=8 (elevation 1), no ramp at x=5
+
+      // Play E4 - consonant = attraction toward player (north)
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 800);
+
+      // Creature should NOT have crossed onto elevation 1
+      expect(creature.elevation).toBe(0);
+    }, 10000);
+
+    it('creature velocity resets to zero when blocked by elevation boundary', async () => {
+      ctx.loadPuzzle('creature-elevation-blocked');
+      const creature = ctx.getCreatures()[0];
+
+      // Push creature toward boundary
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 600);
+
+      // Stop playback so no new forces are applied
+      ctx.stopPlayerPlayback();
+
+      // Run a few more frames - with no forces and velocity zeroed on block, speed decays
+      await realTimeUpdate(ctx, 100);
+
+      const speed = Math.sqrt(creature.velocity.x ** 2 + creature.velocity.z ** 2);
+      expect(speed).toBeLessThan(0.5);
+      expect(creature.elevation).toBe(0);
+    }, 10000);
+  });
+
+  describe('cross-elevation audio', () => {
+    it('creature on elevation 1 is quieter to player on elevation 0 than same-floor creature', () => {
+      ctx.loadPuzzle('elevation-basic');
+      const creature = ctx.getCreatures()[0]; // elevation 1, position.y = 3.0
+
+      // Move player closer so creature is within audibleRange (15)
+      // Creature at world (21, 3.0, 18). Player at elevation 0.
+      ctx.setPlayerPosition({ x: 21, y: 1.8, z: 28 });
+      const playerPos = ctx.getPlayerPosition();
+
+      // 3D distance includes Y component from elevation difference
+      const dist3D = getDistance(creature.position, playerPos);
+
+      // XZ-only distance (what it would be without any Y component)
+      const distXZ = Math.sqrt(
+        (creature.position.x - playerPos.x) ** 2 + (creature.position.z - playerPos.z) ** 2
+      );
+
+      // 3D distance exceeds XZ distance because Y difference adds to it
+      expect(dist3D).toBeGreaterThan(distXZ);
+
+      // Volume from 3D distance is lower than from XZ-only distance
+      expect(getDistanceVolume(dist3D, creature.audibleRange)).toBeLessThan(
+        getDistanceVolume(distXZ, creature.audibleRange)
+      );
+    });
+
+    it('creature beyond audibleRange (including Y distance) is silent', async () => {
+      ctx.loadPuzzle('elevation-ramp'); // Has elevation grid
+
+      // Add creature at elevation 1 with small audibleRange
+      const creature = ctx.addCreature({
+        position: { x: 7 * WORLD_SCALE, y: ELEVATION_HEIGHT, z: 6 * WORLD_SCALE },
+        song: [{ pitch: 'C4', length: '1/4' }],
+        interval: 4,
+        audibleRange: 4,
+      });
+
+      // Position player so XZ distance < 4 but 3D distance > 4
+      // Creature at (21, 3.0, 18). Player Y = 1.8 at elevation 0.
+      // Y diff = 1.2. Need XZ dist where sqrt(xz^2 + 1.44) > 4, so xz^2 > 14.56, xz > 3.81
+      // Set player at (21, 1.8, 14.1) -> XZ dist = 3.9
+      // 3D dist = sqrt(3.9^2 + 1.2^2) = sqrt(15.21 + 1.44) = sqrt(16.65) ≈ 4.08 > 4
+      ctx.setPlayerPosition({ x: 21, y: 1.8, z: 14.1 });
+
+      await ctx.tick(16);
+
+      // Verify 3D distance exceeds audible range
+      const dist = getDistance(creature.position, ctx.getPlayerPosition());
+      expect(dist).toBeGreaterThan(creature.audibleRange);
+
+      // Creature should not be recordable (too far in 3D)
+      expect(creature.isRecordable).toBe(false);
+    });
+  });
+});

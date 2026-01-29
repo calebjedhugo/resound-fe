@@ -48,6 +48,8 @@ import parseRampBasic from '../fixtures/puzzles/parse-ramp-basic.json';
 import parseUnknownEntity from '../fixtures/puzzles/parse-unknown-entity.json';
 import elevationBasic from '../fixtures/puzzles/elevation-basic.json';
 import elevationRamp from '../fixtures/puzzles/elevation-ramp.json';
+import creatureElevationRamp from '../fixtures/puzzles/creature-elevation-ramp.json';
+import creatureElevationBlocked from '../fixtures/puzzles/creature-elevation-blocked.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -82,6 +84,8 @@ const TEST_PUZZLES = {
   'parse-unknown-entity': parseUnknownEntity,
   'elevation-basic': elevationBasic,
   'elevation-ramp': elevationRamp,
+  'creature-elevation-ramp': creatureElevationRamp,
+  'creature-elevation-blocked': creatureElevationBlocked,
 };
 
 /**

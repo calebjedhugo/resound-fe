@@ -1,9 +1,26 @@
 import gameState from './GameState';
+import { ELEVATION_HEIGHT } from './constants';
 
 /**
  * CollisionDetector - Handles collision detection between entities
  */
 class CollisionDetector {
+  /**
+   * Get the elevation level for a world position using the elevation grid and ramps.
+   * @param {Object} position - World position {x, y, z}
+   * @returns {number} Elevation level (integer on flat floors, fractional on ramps)
+   */
+  static getElevationForPosition(position) {
+    if (!gameState.elevationGrid) return 0;
+    const grid = gameState.elevationGrid.worldToGrid(position.x, position.z);
+    const ramp = gameState.elevationGrid.getRamp(grid.x, grid.z);
+    if (ramp) {
+      const rampY = ramp.getYAtPosition(position.x, position.z);
+      if (rampY !== null) return rampY / ELEVATION_HEIGHT;
+    }
+    return gameState.elevationGrid.getElevation(grid.x, grid.z);
+  }
+
   /**
    * Check if a circular entity (player/creature) collides with any blocking entities
    * @param {Object} position - Position to check {x, y, z}
@@ -12,10 +29,16 @@ class CollisionDetector {
    * @returns {boolean} True if collision detected
    */
   static checkCollision(position, radius, ignoreId = null) {
+    const positionElevation = this.getElevationForPosition(position);
+
     // Check against all entities
     for (const entity of gameState.entities) {
       // Skip self
       if (entity.id === ignoreId) continue;
+
+      // Skip entities at different elevations
+      const entityElevation = this.getElevationForPosition(entity.position);
+      if (Math.abs(positionElevation - entityElevation) > 0.5) continue;
 
       // Check collision based on entity type
       if (entity.type === 'wall') {

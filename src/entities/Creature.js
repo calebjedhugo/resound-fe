@@ -14,7 +14,9 @@ import {
   CREATURE_DECELERATION,
   ATTRACTION_FORCE_STRENGTH,
   REPULSION_FORCE_STRENGTH,
+  ELEVATION_HEIGHT,
 } from 'core/constants';
+import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMovement';
 import Entity from './Entity';
 
 class Creature extends Entity {
@@ -34,6 +36,9 @@ class Creature extends Entity {
 
     // Physical properties
     this.size = data.size || DEFAULT_CREATURE_SIZE; // Radius in world units
+
+    // Elevation tracking (derived from initial Y position)
+    this.elevation = Math.round(this.position.y / ELEVATION_HEIGHT);
 
     // Movement properties
     this.maxSpeed = data.maxSpeed || DEFAULT_CREATURE_MAX_SPEED;
@@ -352,6 +357,24 @@ class Creature extends Entity {
     const newX = this.position.x + this.velocity.x * deltaTime;
     const newZ = this.position.z + this.velocity.z * deltaTime;
 
+    // Check elevation traversal before entity collision
+    const elevationGrid = gameState.elevationGrid;
+    if (elevationGrid) {
+      const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
+      const newGrid = elevationGrid.worldToGrid(newX, newZ);
+
+      if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
+        const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid);
+        const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid);
+
+        if (!canTraverse(oldGrid, newGrid, oldElev, newElev, elevationGrid)) {
+          this.velocity.x = 0;
+          this.velocity.z = 0;
+          return;
+        }
+      }
+    }
+
     // Check collision at new position
     const newPosition = { x: newX, y: this.position.y, z: newZ };
     if (!CollisionDetector.checkCollision(newPosition, this.size, this.id)) {
@@ -362,6 +385,18 @@ class Creature extends Entity {
       // Collision detected - stop movement
       this.velocity.x = 0;
       this.velocity.z = 0;
+    }
+
+    // Update Y position and elevation from elevation grid
+    if (elevationGrid) {
+      this.position.y = getFloorY(this.position.x, this.position.z, elevationGrid);
+      const currentGrid = elevationGrid.worldToGrid(this.position.x, this.position.z);
+      this.elevation = getEffectiveElevation(
+        this.position.x,
+        this.position.z,
+        currentGrid,
+        elevationGrid
+      );
     }
 
     // Update mesh position

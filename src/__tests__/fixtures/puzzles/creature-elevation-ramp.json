@@ -1,0 +1,25 @@
+{
+  "id": "creature-elevation-ramp",
+  "name": "Creature Elevation Ramp Test",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 480,
+  "playerStart": { "x": 7, "y": 1, "z": 5 },
+  "floors": [{ "elevation": 1, "x1": 4, "z1": 4, "x2": 10, "z2": 8 }],
+  "entities": [
+    {
+      "type": "ramp",
+      "position": { "x": 7, "y": 0, "z": 9 },
+      "direction": "north"
+    },
+    {
+      "type": "creature",
+      "position": { "x": 7, "y": 0, "z": 9 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/1" }],
+        "interval": 1,
+        "audibleRange": 30
+      }
+    }
+  ]
+}
