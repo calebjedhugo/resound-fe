@@ -20,6 +20,7 @@ export default {
     '^ui/(.*)$': '<rootDir>/src/ui/$1',
     '^states/(.*)$': '<rootDir>/src/states/$1',
     '^notation/(.*)$': '<rootDir>/src/notation/$1',
+    '^editor/(.*)$': '<rootDir>/src/editor/$1',
     '^resoundModules/(.*)$': '<rootDir>/src/resoundModules/$1',
     '^createEventListeners$': '<rootDir>/src/createEventListeners.js',
   },
