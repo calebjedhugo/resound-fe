@@ -5,9 +5,12 @@ import UndoManager from 'editor/model/UndoManager';
 import EditorScene from 'editor/viewport/EditorScene';
 import EntityPlacer from 'editor/viewport/EntityPlacer';
 import SelectionManager from 'editor/viewport/SelectionManager';
+import EntityDragger from 'editor/viewport/EntityDragger';
 import ElevationSelector from 'editor/ui/ElevationSelector';
 import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
 import EntityToolbar from 'editor/ui/EntityToolbar';
+import PropertyPanel from 'editor/ui/PropertyPanel';
+import MetadataPanel from 'editor/ui/MetadataPanel';
 
 export default class EditorApp {
   constructor() {
@@ -43,7 +46,36 @@ export default class EditorApp {
         if (toolType) this.selectionManager.deselect();
       }
     );
+    this.propertyPanel = new PropertyPanel(
+      document.getElementById('property-panel'),
+      this.undoManager,
+      this.entityPlacer
+    );
+    this.metadataPanel = new MetadataPanel(
+      document.getElementById('metadata-panel'),
+      this.undoManager,
+      this.editorScene
+    );
+    this.entityDragger = new EntityDragger(
+      this.scene,
+      this.camera,
+      this.undoManager,
+      this.entityPlacer,
+      this.selectionManager
+    );
+    this.entityDragger.groundPlane = this.editorScene._groundPlane;
+
+    // Wire selection changes to property panel
+    this.selectionManager.onSelectionChange = (entityId) => {
+      if (entityId !== null) {
+        this.propertyPanel.show(entityId);
+      } else {
+        this.propertyPanel.hide();
+      }
+    };
+
     this._setupViewportClick();
+    this._setupDrag();
     this._setupKeyboard();
     this._animate();
     window.addEventListener('resize', () => this._onResize());
@@ -111,6 +143,51 @@ export default class EditorApp {
     });
   }
 
+  _setupDrag() {
+    const container = document.getElementById('editor-viewport');
+    let dragStarted = false;
+
+    container.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // Left click only
+      if (this.entityToolbar.activeTool) return; // Don't drag while placing
+      if (this.selectionManager.selectedId === null) return;
+      dragStarted = true;
+    });
+
+    container.addEventListener('mousemove', (e) => {
+      if (!dragStarted) return;
+
+      const rect = container.getBoundingClientRect();
+      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      if (!this.entityDragger.isDragging) {
+        // Start dragging on first move after mousedown
+        this.entityDragger.startDrag(this.selectionManager.selectedId);
+        this.controls.enabled = false; // Disable orbit while dragging
+      }
+
+      const gridSize = this.undoManager.getMetadata().gridSize;
+      this.entityDragger.updateDrag(mouseX, mouseY, gridSize, this.editorScene.activeElevation);
+    });
+
+    const endDrag = () => {
+      if (this.entityDragger.isDragging) {
+        const gridSize = this.undoManager.getMetadata().gridSize;
+        this.entityDragger.endDrag(gridSize, this.editorScene.activeElevation);
+        this.controls.enabled = true; // Re-enable orbit
+        // Refresh property panel with updated position
+        if (this.selectionManager.selectedId !== null) {
+          this.propertyPanel.show(this.selectionManager.selectedId);
+        }
+      }
+      dragStarted = false;
+    };
+
+    container.addEventListener('mouseup', endDrag);
+    container.addEventListener('mouseleave', endDrag);
+  }
+
   _setupKeyboard() {
     document.addEventListener('keydown', (e) => {
       // Cmd+Z / Ctrl+Z = undo
@@ -118,14 +195,18 @@ export default class EditorApp {
         e.preventDefault();
         this.undoManager.undo();
         this.floorRegionPanel.refresh();
+        this.metadataPanel.refresh();
         this.entityPlacer.rebuildFromModel();
+        this.selectionManager.deselect();
       }
       // Cmd+Shift+Z / Ctrl+Shift+Z = redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
         e.preventDefault();
         this.undoManager.redo();
         this.floorRegionPanel.refresh();
+        this.metadataPanel.refresh();
         this.entityPlacer.rebuildFromModel();
+        this.selectionManager.deselect();
       }
       // Escape cancels floor placement and deselects entity toolbar
       if (e.key === 'Escape') {
