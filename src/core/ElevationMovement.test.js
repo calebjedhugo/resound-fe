@@ -11,7 +11,7 @@ import Ramp from 'entities/Ramp';
 
 describe('Player elevation movement', () => {
   describe('walking on flat elevated floors', () => {
-    it('player on elevation 0 has Y position equal to eye height (1.8)', () => {
+    it('player on elevation 0 has Y position at floor level + eye height (0 + 1.8)', () => {
       ctx.loadPuzzle('elevation-ramp');
 
       // Player starts at grid (7, 13), elevation 0

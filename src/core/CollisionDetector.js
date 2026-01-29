@@ -1,5 +1,5 @@
 import gameState from './GameState';
-import { ELEVATION_HEIGHT } from './constants';
+import { ELEVATION_HEIGHT, ELEVATION_COLLISION_THRESHOLD } from './constants';
 
 /**
  * CollisionDetector - Handles collision detection between entities
@@ -38,7 +38,7 @@ class CollisionDetector {
 
       // Skip entities at different elevations
       const entityElevation = this.getElevationForPosition(entity.position);
-      if (Math.abs(positionElevation - entityElevation) > 0.5) continue;
+      if (Math.abs(positionElevation - entityElevation) > ELEVATION_COLLISION_THRESHOLD) continue;
 
       // Check collision based on entity type
       if (entity.type === 'wall') {

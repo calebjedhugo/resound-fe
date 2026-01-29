@@ -49,3 +49,7 @@ export const CLAP_VISUAL_FADE_DURATION = 0.3;
 // Height of one elevation level in world units
 // Equal to WORLD_SCALE so one elevation step = one grid cell vertically
 export const ELEVATION_HEIGHT = 3.0;
+
+// Maximum elevation difference (in levels) at which entities still collide
+// Entities more than this apart vertically are on different floors and pass through each other
+export const ELEVATION_COLLISION_THRESHOLD = 0.5;
