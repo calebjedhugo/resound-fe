@@ -1,0 +1,160 @@
+/**
+ * FloorRegionPanel
+ *
+ * UI for adding and managing floor regions. Uses a two-corner
+ * click-to-define workflow on the grid: click first corner, then
+ * click second corner to define a rectangular floor region at the
+ * active elevation level.
+ *
+ * Renders floor regions as semi-transparent 3D boxes in the scene,
+ * colored by elevation level (HSL hue rotation).
+ */
+import * as THREE from 'three';
+import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+
+export default class FloorRegionPanel {
+  constructor(container, undoManager, editorScene) {
+    this._container = container;
+    this._undoManager = undoManager;
+    this._editorScene = editorScene;
+    this._isPlacing = false;
+    this._firstCorner = null;
+    this._previewMesh = null;
+    this._floorMeshes = [];
+    this._render();
+  }
+
+  _render() {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'panel-section';
+
+    const label = document.createElement('label');
+    label.textContent = 'Floor Regions';
+    label.className = 'panel-label';
+    wrapper.appendChild(label);
+
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add Floor Region';
+    addBtn.className = 'editor-btn';
+    addBtn.onclick = () => this._startPlacing();
+    wrapper.appendChild(addBtn);
+    this._addBtn = addBtn;
+
+    this._listEl = document.createElement('div');
+    this._listEl.className = 'floor-list';
+    wrapper.appendChild(this._listEl);
+
+    this._container.appendChild(wrapper);
+    this._refreshList();
+  }
+
+  _startPlacing() {
+    this._isPlacing = true;
+    this._firstCorner = null;
+    this._addBtn.textContent = 'Click first corner...';
+    this._addBtn.disabled = true;
+  }
+
+  handleGridClick(gridX, gridZ) {
+    if (!this._isPlacing) return false;
+
+    if (!this._firstCorner) {
+      this._firstCorner = { x: gridX, z: gridZ };
+      this._addBtn.textContent = 'Click second corner...';
+      return true;
+    }
+
+    // Second corner -- define the floor region
+    const x1 = Math.min(this._firstCorner.x, gridX);
+    const z1 = Math.min(this._firstCorner.z, gridZ);
+    const x2 = Math.max(this._firstCorner.x, gridX);
+    const z2 = Math.max(this._firstCorner.z, gridZ);
+    const elevation = this._editorScene.activeElevation;
+
+    this._undoManager.addFloor(elevation, x1, z1, x2, z2);
+    this._isPlacing = false;
+    this._firstCorner = null;
+    this._addBtn.textContent = '+ Add Floor Region';
+    this._addBtn.disabled = false;
+    this._refreshList();
+    this._renderFloors();
+    return true;
+  }
+
+  cancelPlacing() {
+    this._isPlacing = false;
+    this._firstCorner = null;
+    this._addBtn.textContent = '+ Add Floor Region';
+    this._addBtn.disabled = false;
+  }
+
+  get isPlacing() {
+    return this._isPlacing;
+  }
+
+  _refreshList() {
+    this._listEl.innerHTML = '';
+    const floors = this._undoManager.getFloors();
+    floors.forEach((f, i) => {
+      const row = document.createElement('div');
+      row.className = 'floor-row';
+
+      const info = document.createElement('span');
+      info.textContent = `E${f.elevation}: (${f.x1},${f.z1}) to (${f.x2},${f.z2})`;
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'X';
+      delBtn.className = 'delete-btn';
+      delBtn.onclick = () => {
+        this._undoManager.removeFloor(i);
+        this._refreshList();
+        this._renderFloors();
+      };
+
+      row.appendChild(info);
+      row.appendChild(delBtn);
+      this._listEl.appendChild(row);
+    });
+  }
+
+  _renderFloors() {
+    // Clear old meshes
+    this._floorMeshes.forEach((m) => {
+      this._editorScene._scene.remove(m);
+      m.geometry.dispose();
+      m.material.dispose();
+    });
+    this._floorMeshes = [];
+
+    const floors = this._undoManager.getFloors();
+
+    floors.forEach((f) => {
+      const width = (f.x2 - f.x1 + 1) * WORLD_SCALE;
+      const depth = (f.z2 - f.z1 + 1) * WORLD_SCALE;
+      const geo = new THREE.BoxGeometry(width, 0.2, depth);
+
+      // Color by elevation level
+      const hue = (f.elevation * 0.15) % 1;
+      const color = new THREE.Color().setHSL(hue, 0.4, 0.35);
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        transparent: true,
+        opacity: 0.7,
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      const centerX = (f.x1 + (f.x2 - f.x1 + 1) / 2) * WORLD_SCALE;
+      const centerZ = (f.z1 + (f.z2 - f.z1 + 1) / 2) * WORLD_SCALE;
+      const y = f.elevation * ELEVATION_HEIGHT;
+      mesh.position.set(centerX, y, centerZ);
+      this._editorScene._scene.add(mesh);
+      this._floorMeshes.push(mesh);
+    });
+  }
+
+  // Call this to refresh the view after undo/redo
+  refresh() {
+    this._refreshList();
+    this._renderFloors();
+  }
+}

@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
 import UndoManager from 'editor/model/UndoManager';
 import EditorScene from 'editor/viewport/EditorScene';
+import ElevationSelector from 'editor/ui/ElevationSelector';
+import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
 
 export default class EditorApp {
   constructor() {
@@ -20,6 +22,16 @@ export default class EditorApp {
     this._setupCamera();
     this._setupControls();
     this.editorScene = new EditorScene(this.scene, this.undoManager);
+    this.elevationSelector = new ElevationSelector(
+      document.getElementById('elevation-panel'),
+      this.editorScene
+    );
+    this.floorRegionPanel = new FloorRegionPanel(
+      document.getElementById('elevation-panel'),
+      this.undoManager,
+      this.editorScene
+    );
+    this._setupViewportClick();
     this._setupKeyboard();
     this._animate();
     window.addEventListener('resize', () => this._onResize());
@@ -62,17 +74,37 @@ export default class EditorApp {
     this.controls.update();
   }
 
+  _setupViewportClick() {
+    const container = document.getElementById('editor-viewport');
+    container.addEventListener('click', (e) => {
+      // Get hovered grid cell from EditorScene
+      const grid = this.editorScene.getHoveredGrid();
+      if (!grid) return;
+
+      // Let floor region panel handle it first
+      if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) return;
+
+      // Other click handlers will go here in later phases
+    });
+  }
+
   _setupKeyboard() {
     document.addEventListener('keydown', (e) => {
       // Cmd+Z / Ctrl+Z = undo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         this.undoManager.undo();
+        this.floorRegionPanel.refresh();
       }
       // Cmd+Shift+Z / Ctrl+Shift+Z = redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
         e.preventDefault();
         this.undoManager.redo();
+        this.floorRegionPanel.refresh();
+      }
+      // Escape cancels floor placement
+      if (e.key === 'Escape') {
+        this.floorRegionPanel.cancelPlacing();
       }
     });
   }

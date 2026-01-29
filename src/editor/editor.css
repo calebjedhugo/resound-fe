@@ -5,3 +5,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 #editor-sidebar h2 { font-size: 16px; margin-bottom: 16px; color: #e94560; }
 #editor-viewport { flex: 1; position: relative; }
 #editor-viewport canvas { display: block; width: 100%; height: 100%; }
+.panel-section { margin-bottom: 16px; }
+.panel-label { display: block; font-size: 12px; color: #8899aa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+.elevation-controls { display: flex; align-items: center; gap: 12px; }
+.elevation-btn { width: 32px; height: 32px; background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a7a; border-radius: 4px; cursor: pointer; font-size: 16px; }
+.elevation-btn:hover { background: #1a4a7a; }
+.elevation-display { font-size: 24px; font-weight: bold; min-width: 30px; text-align: center; }
+.editor-btn { display: block; width: 100%; padding: 8px; background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a7a; border-radius: 4px; cursor: pointer; margin-bottom: 8px; }
+.editor-btn:hover { background: #1a4a7a; }
+.editor-btn:disabled { opacity: 0.5; cursor: default; }
+.floor-list { font-size: 13px; }
+.floor-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #0f3460; }
+.delete-btn { background: #6b2020; color: #e0e0e0; border: 1px solid #8b3030; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 11px; }
+.delete-btn:hover { background: #8b3030; }
