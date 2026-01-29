@@ -5,12 +5,15 @@
  * Shown when an entity is selected, hidden when deselected.
  * Fields vary by entity type (creature, gate, fountain, ramp, wall).
  */
+import NotationEditor from 'editor/ui/NotationEditor';
+
 export default class PropertyPanel {
   constructor(container, undoManager, entityPlacer) {
     this._container = container; // #property-panel
     this._undoManager = undoManager;
     this._entityPlacer = entityPlacer;
     this._selectedId = null;
+    this._notationEditor = null;
   }
 
   show(entityId) {
@@ -25,6 +28,10 @@ export default class PropertyPanel {
 
   hide() {
     this._selectedId = null;
+    if (this._notationEditor) {
+      this._notationEditor.dispose();
+      this._notationEditor = null;
+    }
     this._container.innerHTML = '';
   }
 
@@ -51,7 +58,7 @@ export default class PropertyPanel {
         break;
       case 'gate':
       case 'fountain':
-        this._renderSongStub(wrapper, entity);
+        this._renderSongEditor(wrapper, entity);
         break;
       case 'ramp':
         this._renderRampFields(wrapper, entity);
@@ -86,16 +93,20 @@ export default class PropertyPanel {
       this._undoManager.updateEntity(this._selectedId, { data: newData });
     });
 
-    // Song stub
-    this._renderSongStub(wrapper, entity);
+    // Song editor
+    this._renderSongEditor(wrapper, entity);
   }
 
-  _renderSongStub(wrapper) {
-    const songBtn = document.createElement('button');
-    songBtn.className = 'editor-btn';
-    songBtn.textContent = 'Edit Song (Phase 6B)';
-    songBtn.disabled = true;
-    wrapper.appendChild(songBtn);
+  _renderSongEditor(wrapper, entity) {
+    if (this._notationEditor) {
+      this._notationEditor.dispose();
+      this._notationEditor = null;
+    }
+    const songContainer = document.createElement('div');
+    songContainer.className = 'song-editor-container';
+    wrapper.appendChild(songContainer);
+
+    this._notationEditor = new NotationEditor(songContainer, this._undoManager, entity.id);
   }
 
   _renderRampFields(wrapper, entity) {
