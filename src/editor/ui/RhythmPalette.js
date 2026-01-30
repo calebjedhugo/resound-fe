@@ -2,21 +2,42 @@
  * RhythmPalette
  *
  * Row of clickable duration buttons above the staff.
+ * Each button displays an SVG note icon rendered by the notation system.
  * Allows selecting note duration via click or keyboard shortcut.
  */
 
+import { createNote } from 'notation/components/Note';
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
 const DURATIONS = [
-  { key: '2', label: '\uD834\uDD5D\uD834\uDD5D', length: '2/1', name: 'Double Whole' },
-  { key: '3', label: '\uD834\uDD5D', length: '1/1', name: 'Whole' },
-  { key: '4', label: '\uD834\uDD5E', length: '1/2', name: 'Half' },
-  { key: '5', label: '\u2669', length: '1/4', name: 'Quarter' },
-  { key: '6', label: '\u266A', length: '1/8', name: 'Eighth' },
-  { key: '7', label: '\uD834\uDD61', length: '1/16', name: '16th' },
-  { key: '8', label: '\uD834\uDD62', length: '1/32', name: '32nd' },
-  { key: '9', label: '\uD834\uDD63', length: '1/64', name: '64th' },
+  { key: '2', length: '1/1', name: 'Whole' },
+  { key: '3', length: '1/2', name: 'Half' },
+  { key: '4', length: '1/4', name: 'Quarter' },
+  { key: '5', length: '1/8', name: 'Eighth' },
+  { key: '6', length: '1/16', name: '16th' },
+  { key: '7', length: '1/32', name: '32nd' },
 ];
 
 export { DURATIONS };
+
+/**
+ * Create a small SVG element containing a single note icon.
+ * Uses the notation system's createNote to render a real note
+ * at a fixed pitch so it inherits button text color via currentColor.
+ * @param {string} length - Fraction string (e.g. "1/4")
+ * @returns {SVGSVGElement}
+ */
+function createNoteIcon(length) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 32 100');
+  svg.setAttribute('width', '24');
+  svg.setAttribute('height', '40');
+
+  const noteGroup = createNote({ pitch: 'B4', length, x: 16, clef: 'treble' });
+  svg.appendChild(noteGroup);
+  return svg;
+}
 
 export default class RhythmPalette {
   constructor(container, onDurationSelect) {
@@ -41,10 +62,10 @@ export default class RhythmPalette {
     row.className = 'rhythm-palette';
 
     this._buttons = {};
-    DURATIONS.forEach(({ key, label, length, name }) => {
+    DURATIONS.forEach(({ key, length, name }) => {
       const btn = document.createElement('button');
       btn.className = 'rhythm-btn';
-      btn.textContent = label;
+      btn.appendChild(createNoteIcon(length));
       btn.title = `${name} (${key})`;
       btn.dataset.length = length;
       if (length === this._activeLength) btn.classList.add('active');

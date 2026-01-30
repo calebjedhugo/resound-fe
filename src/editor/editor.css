@@ -28,7 +28,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .notation-staff { margin: 8px 0; cursor: crosshair; outline: none; border: 1px solid #0f3460; border-radius: 4px; }
 .notation-staff:focus { border-color: #44ff88; }
 .rhythm-palette { display: flex; gap: 2px; margin-bottom: 8px; flex-wrap: wrap; }
-.rhythm-btn { padding: 4px 8px; background: #0a1628; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 3px; cursor: pointer; font-size: 14px; }
+.rhythm-btn { display: flex; align-items: center; justify-content: center; padding: 4px 8px; background: #0a1628; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 3px; cursor: pointer; }
+.rhythm-btn svg { width: 24px; height: 40px; }
 .rhythm-btn:hover { background: #16213e; }
 .rhythm-btn.active { background: #0f3460; border-color: #44ff88; color: #44ff88; }
 .song-editor-container { margin-top: 8px; }
