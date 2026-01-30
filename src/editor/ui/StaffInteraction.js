@@ -3,48 +3,63 @@
  *
  * Pure-logic module for resolving staff coordinates to pitches and
  * calculating barline positions. No DOM or browser dependencies.
+ *
+ * Delegates pitch/Y mapping to the notation system's coordinate space
+ * (pitchToStaffY, CLEF_CONSTANTS from notation/lib/notePositions).
  */
 
-// Staff layout constants
-const STAFF_TOP_Y = 20; // Y pixel of top line (F5)
-const STAFF_LINE_SPACING = 10; // Pixels between staff lines
-const STAFF_LINES = 5;
+import { pitchToStaffY, CLEF_CONSTANTS } from 'notation/lib/notePositions';
 
-// Pitches from top of staff to bottom (treble clef, each line/space)
-// F5, E5, D5, C5, B4, A4, G4, F4, E4, D4 (and ledger lines beyond)
-const STAFF_PITCHES = ['F5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3'];
+const NOTE_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
 /**
- * Convert a Y pixel coordinate to the nearest staff pitch.
- * Each half-space (line or space) is STAFF_LINE_SPACING / 2 = 5 pixels.
- * @param {number} y - Y coordinate in SVG viewBox space
+ * Convert a Y coordinate in notation space to the nearest diatonic pitch.
+ * Reverses the formula: y = (clefConstant - diatonicPos) * 10
+ *
+ * @param {number} y - Y coordinate in notation coordinate space
+ * @param {string} clef - Clef name (default 'treble')
  * @returns {string} Pitch string, e.g. 'B4'
  */
-export function yToPitch(y) {
-  const halfSpaceFromTop = Math.round((y - STAFF_TOP_Y) / (STAFF_LINE_SPACING / 2));
-  const clampedIndex = Math.max(0, Math.min(halfSpaceFromTop, STAFF_PITCHES.length - 1));
-  return STAFF_PITCHES[clampedIndex];
+export function yToPitch(y, clef = 'treble') {
+  const constant = CLEF_CONSTANTS[clef];
+  // diatonicPos = constant - y / 10
+  const diatonicPos = Math.round(constant - y / 10);
+
+  // Clamp to reasonable range: 3 ledger lines above and below staff.
+  // Staff spans from constant-1 (top line) down to constant-8 (bottom line).
+  // 3 ledger lines = 6 additional diatonic positions in each direction.
+  const topLinePos = constant - 1;
+  const bottomLinePos = constant - 8;
+  const maxPos = topLinePos + 6; // 3 ledger lines above top line
+  const minPos = bottomLinePos - 6; // 3 ledger lines below bottom line
+  const clampedPos = Math.max(minPos, Math.min(maxPos, diatonicPos));
+
+  const octave = Math.floor(clampedPos / 7);
+  const noteIndex = clampedPos - octave * 7;
+  return `${NOTE_NAMES[noteIndex]}${octave}`;
 }
 
 /**
- * Convert a pitch string to a Y pixel coordinate.
+ * Convert a pitch string to a Y coordinate in notation space.
+ * Thin wrapper around pitchToStaffY.
+ *
  * @param {string} pitch - Pitch string, e.g. 'B4'
- * @returns {number} Y coordinate in SVG viewBox space
+ * @param {string} clef - Clef name (default 'treble')
+ * @returns {number} Y coordinate in notation coordinate space
  */
-export function pitchToY(pitch) {
-  const index = STAFF_PITCHES.indexOf(pitch);
-  if (index === -1) return STAFF_TOP_Y; // fallback
-  return STAFF_TOP_Y + index * (STAFF_LINE_SPACING / 2);
+export function pitchToY(pitch, clef = 'treble') {
+  return pitchToStaffY(pitch, clef);
 }
 
 /**
- * Snap a Y coordinate to the nearest staff line or space.
- * @param {number} y - Y coordinate in SVG viewBox space
+ * Snap a Y coordinate to the nearest diatonic position in notation space.
+ * Positions are on a 10px grid (each diatonic step = 10px).
+ *
+ * @param {number} y - Y coordinate in notation coordinate space
  * @returns {number} Snapped Y coordinate
  */
 export function snapToStaffPosition(y) {
-  const halfSpaceFromTop = Math.round((y - STAFF_TOP_Y) / (STAFF_LINE_SPACING / 2));
-  return STAFF_TOP_Y + halfSpaceFromTop * (STAFF_LINE_SPACING / 2);
+  return Math.round(y / 10) * 10;
 }
 
 /**
@@ -79,13 +94,12 @@ export function calculateBarlines(notes, timeSignature = [4, 4]) {
 
 /**
  * Create a note object from a staff click coordinate and active duration.
- * @param {number} y - Y coordinate of the click in SVG viewBox space
+ * @param {number} y - Y coordinate of the click in notation coordinate space
  * @param {string} activeLength - Duration string, e.g. '1/4'
+ * @param {string} clef - Clef name (default 'treble')
  * @returns {{ pitch: string, length: string }}
  */
-export function createNoteFromClick(y, activeLength) {
-  const pitch = yToPitch(y);
+export function createNoteFromClick(y, activeLength, clef = 'treble') {
+  const pitch = yToPitch(y, clef);
   return { pitch, length: activeLength };
 }
-
-export { STAFF_TOP_Y, STAFF_LINE_SPACING, STAFF_LINES, STAFF_PITCHES };

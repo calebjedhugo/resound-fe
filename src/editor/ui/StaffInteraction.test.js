@@ -2,57 +2,97 @@
  * StaffInteraction Tests
  *
  * Tests the pure-logic module for resolving staff coordinates to pitches
- * and calculating barline positions. No DOM or browser dependencies.
+ * and calculating barline positions. Uses the notation system's coordinate
+ * space where pitchToStaffY('B4', 'treble') = 50 and each diatonic step = 10px.
  */
 import {
   yToPitch,
+  pitchToY,
   snapToStaffPosition,
   calculateBarlines,
   createNoteFromClick,
 } from 'editor/ui/StaffInteraction';
+import { pitchToStaffY } from 'notation/lib/notePositions';
 import SongModel from 'editor/model/SongModel';
 
 describe('StaffInteraction', () => {
-  // ── yToPitch ──────────────────────────────────────────────────────────
+  // -- yToPitch ---------------------------------------------------------------
 
   describe('yToPitch', () => {
-    it('resolves middle of staff (B4 line) to B4', () => {
-      // B4 is the middle line of a treble clef staff.
-      // B4 is at index 4 in STAFF_PITCHES: F5(0), E5(1), D5(2), C5(3), B4(4)
-      // Y = STAFF_TOP_Y + 4 * (LINE_SPACING / 2) = 20 + 4 * 5 = 40
-      const y = 40;
-      expect(yToPitch(y)).toBe('B4');
+    it('resolves middle of staff (B4) to B4', () => {
+      // B4 in treble: pitchToStaffY('B4', 'treble') = (39 - 34) * 10 = 50
+      expect(yToPitch(50)).toBe('B4');
     });
 
-    it('resolves top of staff (F5 space) to F5', () => {
-      // F5 is at index 0 in STAFF_PITCHES, at STAFF_TOP_Y = 20
-      const y = 20;
-      expect(yToPitch(y)).toBe('F5');
+    it('resolves top staff line (F5) to F5', () => {
+      // F5 in treble: pitchToStaffY('F5', 'treble') = (39 - 38) * 10 = 10
+      expect(yToPitch(10)).toBe('F5');
     });
 
-    it('resolves bottom of staff (D4 space) to D4', () => {
-      // D4 is at index 9 in STAFF_PITCHES
-      // Y = 20 + 9 * 5 = 65
-      const y = 65;
-      expect(yToPitch(y)).toBe('D4');
+    it('resolves bottom staff line (E4) to E4', () => {
+      // E4 in treble: pitchToStaffY('E4', 'treble') = (39 - 30) * 10 = 90
+      expect(yToPitch(90)).toBe('E4');
+    });
+
+    it('snaps to nearest pitch when Y is between positions', () => {
+      // Y = 53 is closer to B4 (y=50) than to A4 (y=60)
+      expect(yToPitch(53)).toBe('B4');
+
+      // Y = 57 is closer to A4 (y=60) than to B4 (y=50)
+      expect(yToPitch(57)).toBe('A4');
+
+      // Y = 55 rounds to 60 (A4) due to Math.round on 39 - 5.5 = 33.5 -> 34 = B4
+      // Actually: diatonicPos = Math.round(39 - 55/10) = Math.round(39 - 5.5) = Math.round(33.5) = 34 -> B4
+      // Math.round(33.5) rounds to 34 in JS (rounds half to even... actually JS rounds 0.5 up)
+      expect(yToPitch(55)).toBe('B4');
+    });
+
+    it('clamps to valid range for extreme Y values', () => {
+      // Very negative Y (far above staff) should clamp to the highest allowed pitch
+      const highPitch = yToPitch(-100);
+      // maxPos = (39-1) + 6 = 44 -> octave 6, noteIndex 2 -> E6
+      expect(highPitch).toBe('E6');
+
+      // Very large Y (far below staff) should clamp to the lowest allowed pitch
+      const lowPitch = yToPitch(300);
+      // minPos = (39-8) - 6 = 25 -> octave 3, noteIndex 4 -> G3
+      expect(lowPitch).toBe('G3');
     });
   });
 
-  // ── snapToStaffPosition ───────────────────────────────────────────────
+  // -- pitchToY ---------------------------------------------------------------
+
+  describe('pitchToY', () => {
+    it('returns the same value as pitchToStaffY for known pitches', () => {
+      const pitches = ['F5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4'];
+      pitches.forEach((pitch) => {
+        expect(pitchToY(pitch)).toBe(pitchToStaffY(pitch, 'treble'));
+      });
+    });
+
+    it('matches the notation system coordinate space', () => {
+      expect(pitchToY('F5')).toBe(10); // Top line
+      expect(pitchToY('D5')).toBe(30); // Second line
+      expect(pitchToY('B4')).toBe(50); // Middle line
+      expect(pitchToY('G4')).toBe(70); // Fourth line
+      expect(pitchToY('E4')).toBe(90); // Bottom line
+    });
+  });
+
+  // -- snapToStaffPosition ----------------------------------------------------
 
   describe('snapToStaffPosition', () => {
-    it('snaps to nearest staff line or space (rounds to nearest half-step position)', () => {
-      // A Y between two positions should snap to the nearest one.
-      // Half-space size = 5px. Position at index 4 (B4) = y=40.
-      // A Y of 42 should snap to 40 (closer to B4 than to A4 at 45).
-      expect(snapToStaffPosition(42)).toBe(40);
-
-      // A Y of 43 should snap to 45 (closer to A4 at 45 than B4 at 40).
-      expect(snapToStaffPosition(43)).toBe(45);
+    it('snaps to nearest diatonic position in notation coordinates', () => {
+      // Positions are on a 10px grid
+      expect(snapToStaffPosition(53)).toBe(50); // Snaps to B4 position
+      expect(snapToStaffPosition(57)).toBe(60); // Snaps to A4 position
+      expect(snapToStaffPosition(45)).toBe(50); // Snaps to B4 position
+      expect(snapToStaffPosition(10)).toBe(10); // Already on grid (F5)
+      expect(snapToStaffPosition(0)).toBe(0); // On grid
     });
   });
 
-  // ── calculateBarlines ────────────────────────────────────────────────
+  // -- calculateBarlines ------------------------------------------------------
 
   describe('calculateBarlines', () => {
     it('places one barline after four quarter notes in 4/4', () => {
@@ -69,36 +109,33 @@ describe('StaffInteraction', () => {
       expect(barlines).toEqual([4]);
     });
 
-    it('places barlines after notes 4 and 5 for five quarter notes in 4/4', () => {
+    it('places barlines correctly for mixed durations', () => {
       const notes = [
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'D4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
-        { pitch: 'F4', length: '1/4' },
-        { pitch: 'G4', length: '1/4' },
+        { pitch: 'C4', length: '1/2' }, // half note = 0.5
+        { pitch: 'D4', length: '1/4' }, // quarter = 0.25, total 0.75
+        { pitch: 'E4', length: '1/4' }, // quarter = 0.25, total 1.0 -> barline
+        { pitch: 'F4', length: '1/4' }, // quarter = 0.25, total 0.25
       ];
 
       const barlines = calculateBarlines(notes);
 
-      // Barline after note 4 (end of first measure) — no barline after note 5
-      // since a single note doesn't complete a second measure
-      expect(barlines).toEqual([4]);
+      // Barline after the 3rd note (accumulated 1.0 whole note = one 4/4 measure)
+      expect(barlines).toEqual([3]);
     });
   });
 
-  // ── createNoteFromClick ────────────────────────────────────────────────
+  // -- createNoteFromClick ----------------------------------------------------
 
   describe('createNoteFromClick', () => {
-    it('creates a note with correct pitch and length from a staff click', () => {
-      // Click at Y = 40 (B4) with active length '1/4'
-      const note = createNoteFromClick(40, '1/4');
-
+    it('creates a note with correct pitch and length from staff click', () => {
+      // Click at Y = 50 (B4) with active length '1/4'
+      const note = createNoteFromClick(50, '1/4');
       expect(note).toEqual({ pitch: 'B4', length: '1/4' });
     });
 
-    it('places a note via staff click into SongModel correctly', () => {
+    it('integrates with SongModel correctly', () => {
       const model = new SongModel();
-      const clickY = 40; // B4
+      const clickY = 50; // B4 in notation coordinate space
       const activeLength = '1/4';
 
       const note = createNoteFromClick(clickY, activeLength);
