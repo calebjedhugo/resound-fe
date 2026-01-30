@@ -13,7 +13,7 @@
 ## Common Commands
 
 ```bash
-npm start          # Dev server (port 5173)
+npm start          # Dev server (port 5173) - game at /, editor at /editor.html
 npm test           # Jest tests (watch mode)
 npm run build      # Production build
 npm run lint       # ESLint
@@ -47,6 +47,12 @@ The `src/audio/` folder is **planned for extraction** into a standalone npm pack
 - ✅ Keep it independent of game-specific logic
 - ✅ No imports from `entities/`, `core/GameState`, etc.
 - ❌ Don't add game-specific logic to audio classes
+
+### Puzzle Editor (`src/editor/`)
+- Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
+- **EditorPuzzleModel** is the central mutable data model; **UndoManager** wraps it
+- Serialization handles type-specific JSON format differences (creature `data.song` vs gate root `song`)
+- 132 tests covering model, serialization, validation, song editing, viewport, and I/O
 
 ### Entity System
 - All entities extend `Entity.js` base class
@@ -94,4 +100,4 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 
 ---
 
-*Last Updated: 2026-01-24*
+*Last Updated: 2026-01-29*
