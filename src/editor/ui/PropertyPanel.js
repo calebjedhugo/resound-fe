@@ -5,16 +5,15 @@
  * Shown when an entity is selected, hidden when deselected.
  * Fields vary by entity type (creature, gate, fountain, ramp, wall).
  */
-import NotationEditor from 'editor/ui/NotationEditor';
 
 export default class PropertyPanel {
-  constructor(container, undoManager, entityPlacer, onDelete) {
+  constructor(container, undoManager, entityPlacer, onDelete, onEditSong) {
     this._container = container; // #property-panel
     this._undoManager = undoManager;
     this._entityPlacer = entityPlacer;
     this._onDelete = onDelete || null;
+    this._onEditSong = onEditSong || null;
     this._selectedId = null;
-    this._notationEditor = null;
   }
 
   show(entityId) {
@@ -29,10 +28,6 @@ export default class PropertyPanel {
 
   hide() {
     this._selectedId = null;
-    if (this._notationEditor) {
-      this._notationEditor.dispose();
-      this._notationEditor = null;
-    }
     this._container.innerHTML = '';
   }
 
@@ -108,20 +103,23 @@ export default class PropertyPanel {
       this._undoManager.updateEntity(this._selectedId, { data: newData });
     });
 
-    // Song editor
+    // Song editor button
     this._renderSongEditor(wrapper, entity);
   }
 
   _renderSongEditor(wrapper, entity) {
-    if (this._notationEditor) {
-      this._notationEditor.dispose();
-      this._notationEditor = null;
-    }
+    if (!this._onEditSong) return;
+
     const songContainer = document.createElement('div');
     songContainer.className = 'song-editor-container';
-    wrapper.appendChild(songContainer);
 
-    this._notationEditor = new NotationEditor(songContainer, this._undoManager, entity.id);
+    const editBtn = document.createElement('button');
+    editBtn.className = 'editor-btn edit-song-btn';
+    editBtn.textContent = 'Edit Song...';
+    editBtn.onclick = () => this._onEditSong(entity.id);
+
+    songContainer.appendChild(editBtn);
+    wrapper.appendChild(songContainer);
   }
 
   _renderRampFields(wrapper, entity) {

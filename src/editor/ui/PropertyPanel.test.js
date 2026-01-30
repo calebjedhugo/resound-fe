@@ -1,12 +1,17 @@
 /**
- * PropertyPanel Logic Tests
+ * @jest-environment jsdom
+ */
+
+/**
+ * PropertyPanel Tests
  *
  * Tests that property updates through the panel correctly
  * persist via UndoManager to the underlying model.
- * DOM rendering is not tested (manual verification).
+ * Also tests Edit Song button rendering and callback behavior.
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
 import UndoManager from 'editor/model/UndoManager';
+import PropertyPanel from 'editor/ui/PropertyPanel';
 
 describe('PropertyPanel logic', () => {
   let model, undoManager;
@@ -76,5 +81,106 @@ describe('PropertyPanel logic', () => {
     expect(restored).toBeDefined();
     expect(restored.type).toBe('creature');
     expect(restored.data.interval).toBe(8);
+  });
+});
+
+describe('PropertyPanel Edit Song button', () => {
+  let model, undoManager, container, panel;
+
+  beforeEach(() => {
+    model = new EditorPuzzleModel();
+    undoManager = new UndoManager(model);
+    container = document.createElement('div');
+    container.id = 'property-panel';
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    if (panel) {
+      panel.hide();
+    }
+    if (container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+  });
+
+  it('renders an Edit Song button for creature entities', () => {
+    const onEditSong = jest.fn();
+    panel = new PropertyPanel(container, undoManager, {}, null, onEditSong);
+    const id = undoManager.addEntity('creature', 5, 0, 3, {
+      song: [],
+      interval: 8,
+      audibleRange: 15,
+    });
+
+    panel.show(id);
+
+    const editBtn = container.querySelector('.edit-song-btn');
+    expect(editBtn).not.toBeNull();
+    expect(editBtn.textContent).toBe('Edit Song...');
+  });
+
+  it('renders an Edit Song button for gate entities', () => {
+    const onEditSong = jest.fn();
+    panel = new PropertyPanel(container, undoManager, {}, null, onEditSong);
+    const id = undoManager.addEntity('gate', 5, 0, 3, { song: [] });
+
+    panel.show(id);
+
+    const editBtn = container.querySelector('.edit-song-btn');
+    expect(editBtn).not.toBeNull();
+    expect(editBtn.textContent).toBe('Edit Song...');
+  });
+
+  it('renders an Edit Song button for fountain entities', () => {
+    const onEditSong = jest.fn();
+    panel = new PropertyPanel(container, undoManager, {}, null, onEditSong);
+    const id = undoManager.addEntity('fountain', 5, 0, 3, { song: [] });
+
+    panel.show(id);
+
+    const editBtn = container.querySelector('.edit-song-btn');
+    expect(editBtn).not.toBeNull();
+    expect(editBtn.textContent).toBe('Edit Song...');
+  });
+
+  it('does not render an Edit Song button for wall entities', () => {
+    const onEditSong = jest.fn();
+    panel = new PropertyPanel(container, undoManager, {}, null, onEditSong);
+    const id = undoManager.addEntity('wall', 5, 0, 3, {});
+
+    panel.show(id);
+
+    const editBtn = container.querySelector('.edit-song-btn');
+    expect(editBtn).toBeNull();
+  });
+
+  it('does not render an Edit Song button for ramp entities', () => {
+    const onEditSong = jest.fn();
+    panel = new PropertyPanel(container, undoManager, {}, null, onEditSong);
+    const id = undoManager.addEntity('ramp', 5, 0, 3, { direction: 'north' });
+
+    panel.show(id);
+
+    const editBtn = container.querySelector('.edit-song-btn');
+    expect(editBtn).toBeNull();
+  });
+
+  it('calls onEditSong callback with entity ID when Edit Song button is clicked', () => {
+    const onEditSong = jest.fn();
+    panel = new PropertyPanel(container, undoManager, {}, null, onEditSong);
+    const id = undoManager.addEntity('creature', 5, 0, 3, {
+      song: [],
+      interval: 8,
+      audibleRange: 15,
+    });
+
+    panel.show(id);
+
+    const editBtn = container.querySelector('.edit-song-btn');
+    editBtn.click();
+
+    expect(onEditSong).toHaveBeenCalledTimes(1);
+    expect(onEditSong).toHaveBeenCalledWith(id);
   });
 });

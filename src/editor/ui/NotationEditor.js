@@ -9,10 +9,11 @@ import RhythmPalette, { DURATIONS } from 'editor/ui/RhythmPalette';
 import { yToPitch, createNoteFromClick, calculateBarlines } from 'editor/ui/StaffInteraction';
 
 export default class NotationEditor {
-  constructor(container, undoManager, entityId) {
+  constructor(container, undoManager, entityId, options = {}) {
     this._container = container;
     this._undoManager = undoManager;
     this._entityId = entityId;
+    this._polyphonic = options.polyphonic !== undefined ? options.polyphonic : true;
     this._songModel = new SongModel();
     this._palette = null;
     this._staffEl = null;
@@ -24,14 +25,17 @@ export default class NotationEditor {
   _loadSong() {
     const entity = this._undoManager.getEntity(this._entityId);
     if (entity && entity.data && entity.data.song) {
-      this._songModel.fromSongArray(entity.data.song);
+      this._songModel.fromSongArray(JSON.parse(JSON.stringify(entity.data.song)));
     }
   }
 
   _saveSong() {
     const entity = this._undoManager.getEntity(this._entityId);
     if (!entity) return;
-    const newData = { ...entity.data, song: this._songModel.toSongArray() };
+    const newData = {
+      ...entity.data,
+      song: JSON.parse(JSON.stringify(this._songModel.toSongArray())),
+    };
     this._undoManager.updateEntity(this._entityId, { data: newData });
   }
 
@@ -173,7 +177,7 @@ export default class NotationEditor {
     const scaleY = viewBox.height / rect.height;
     const svgY = (e.clientY - rect.top) * scaleY;
 
-    if (e.shiftKey && this._songModel._selectedIndex !== null) {
+    if (e.shiftKey && this._songModel._selectedIndex !== null && this._polyphonic) {
       // Chord building
       const note = createNoteFromClick(svgY, this._palette.activeLength);
       this._songModel.makeChord(this._songModel._selectedIndex, note.pitch, note.length);
