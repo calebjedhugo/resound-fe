@@ -6,6 +6,7 @@ import EditorScene from 'editor/viewport/EditorScene';
 import EntityPlacer from 'editor/viewport/EntityPlacer';
 import SelectionManager from 'editor/viewport/SelectionManager';
 import EntityDragger from 'editor/viewport/EntityDragger';
+import GhostPreview from 'editor/viewport/GhostPreview';
 import ElevationSelector from 'editor/ui/ElevationSelector';
 import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
 import EntityToolbar from 'editor/ui/EntityToolbar';
@@ -44,18 +45,25 @@ export default class EditorApp {
       this.editorScene
     );
     this.entityPlacer = new EntityPlacer(this.scene, this.undoManager);
+    this.ghostPreview = new GhostPreview(this.scene);
     this.selectionManager = new SelectionManager(this.camera, this.entityPlacer);
     this.entityToolbar = new EntityToolbar(
       document.getElementById('entity-toolbar'),
       (toolType) => {
         // When a tool is selected, deselect any selected entity
         if (toolType) this.selectionManager.deselect();
+        this.ghostPreview.setEntityType(toolType);
       }
     );
     this.propertyPanel = new PropertyPanel(
       document.getElementById('property-panel'),
       this.undoManager,
-      this.entityPlacer
+      this.entityPlacer,
+      () => {
+        this.selectionManager.deleteSelected();
+        this._scheduleValidation();
+        this._scheduleAutoSave();
+      }
     );
     this.metadataPanel = new MetadataPanel(
       document.getElementById('metadata-panel'),
@@ -332,6 +340,7 @@ export default class EditorApp {
     this._animationId = requestAnimationFrame(() => this._animate());
     this.controls.update();
     this.editorScene.updateHover(this.camera);
+    this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this.editorScene.update();
     this.renderer.render(this.scene, this.camera);
   }
@@ -349,6 +358,7 @@ export default class EditorApp {
     if (this._animationId) cancelAnimationFrame(this._animationId);
     clearTimeout(this._validationTimer);
     clearTimeout(this._autoSaveTimer);
+    this.ghostPreview.dispose();
     this.controls.dispose();
     this.renderer.dispose();
   }

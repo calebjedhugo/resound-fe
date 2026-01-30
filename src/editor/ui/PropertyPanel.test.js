@@ -41,4 +41,40 @@ describe('PropertyPanel logic', () => {
     expect(meta.name).toBe('Test Puzzle');
     expect(meta.tempo).toBe(140);
   });
+
+  it('deleting an entity removes it from the model', () => {
+    const id = undoManager.addEntity('creature', 3, 0, 3, { song: [] });
+
+    undoManager.removeEntity(id);
+
+    expect(undoManager.getEntity(id)).toBeUndefined();
+  });
+
+  it('getEntity returns undefined after deletion', () => {
+    const id = undoManager.addEntity('gate', 2, 0, 2, { song: 'C4' });
+    expect(undoManager.getEntity(id)).toBeDefined();
+
+    undoManager.removeEntity(id);
+
+    expect(undoManager.getEntity(id)).toBeUndefined();
+    expect(undoManager.getEntities().find((e) => e.id === id)).toBeUndefined();
+  });
+
+  it('deletion is undoable (undo restores the entity)', () => {
+    const id = undoManager.addEntity('creature', 5, 0, 5, {
+      song: [],
+      interval: 8,
+      audibleRange: 15,
+    });
+
+    undoManager.removeEntity(id);
+    expect(undoManager.getEntity(id)).toBeUndefined();
+
+    undoManager.undo();
+
+    const restored = undoManager.getEntity(id);
+    expect(restored).toBeDefined();
+    expect(restored.type).toBe('creature');
+    expect(restored.data.interval).toBe(8);
+  });
 });

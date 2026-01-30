@@ -277,10 +277,11 @@ class MockColor {
  * Mock Three.js Material
  */
 class MockMaterial {
-  constructor() {
-    this.opacity = 1;
-    this.transparent = false;
-    this.color = new MockColor(0xffffff);
+  constructor(opts = {}) {
+    this.opacity = opts.opacity !== undefined ? opts.opacity : 1;
+    this.transparent = opts.transparent || false;
+    this.depthWrite = opts.depthWrite !== undefined ? opts.depthWrite : true;
+    this.color = opts.color !== undefined ? new MockColor(opts.color) : new MockColor(0xffffff);
     this.emissive = new MockColor(0x000000);
     this.emissiveIntensity = 0;
   }
@@ -299,14 +300,15 @@ class MockGeometry {
  * Mock Three.js mesh
  */
 class MockMesh {
-  constructor() {
+  constructor(geometry, material) {
     this.position = new MockVector3();
     this.rotation = { x: 0, y: 0, z: 0 };
     this.scale = { x: 1, y: 1, z: 1, set: jest.fn() };
     this.visible = true;
-    this.material = new MockMaterial();
-    this.geometry = new MockGeometry();
+    this.material = material || new MockMaterial();
+    this.geometry = geometry || new MockGeometry();
     this.up = new MockVector3(0, 1, 0);
+    this.userData = {};
   }
 
   getWorldDirection(target) {
@@ -400,6 +402,7 @@ const mockThree = {
   BoxGeometry: MockGeometry,
   PlaneGeometry: MockGeometry,
   CylinderGeometry: MockGeometry,
+  ConeGeometry: MockGeometry,
   MeshStandardMaterial: MockMaterial,
   MeshBasicMaterial: MockMaterial,
   AmbientLight: MockMesh,

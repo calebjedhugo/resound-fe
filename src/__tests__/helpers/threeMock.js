@@ -95,10 +95,11 @@ class Color {
 }
 
 class Material {
-  constructor() {
-    this.opacity = 1;
-    this.transparent = false;
-    this.color = new Color();
+  constructor(opts = {}) {
+    this.opacity = opts.opacity !== undefined ? opts.opacity : 1;
+    this.transparent = opts.transparent || false;
+    this.depthWrite = opts.depthWrite !== undefined ? opts.depthWrite : true;
+    this.color = opts.color !== undefined ? new Color(opts.color) : new Color();
     this.emissive = new Color(0x000000);
     this.emissiveIntensity = 0;
     this.roughness = 0.5;
@@ -140,15 +141,16 @@ class Float32BufferAttribute {
 }
 
 class Mesh {
-  constructor() {
+  constructor(geometry, material) {
     this.position = new Vector3();
     this.rotation = { x: 0, y: 0, z: 0 };
     this.scale = { x: 1, y: 1, z: 1, set: () => {} };
     this.visible = true;
-    this.material = new Material();
-    this.geometry = new Geometry();
+    this.material = material || new Material();
+    this.geometry = geometry || new Geometry();
     this.up = new Vector3(0, 1, 0);
     this.children = [];
+    this.userData = {};
   }
 
   add(child) {

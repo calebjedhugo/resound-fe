@@ -8,10 +8,11 @@
 import NotationEditor from 'editor/ui/NotationEditor';
 
 export default class PropertyPanel {
-  constructor(container, undoManager, entityPlacer) {
+  constructor(container, undoManager, entityPlacer, onDelete) {
     this._container = container; // #property-panel
     this._undoManager = undoManager;
     this._entityPlacer = entityPlacer;
+    this._onDelete = onDelete || null;
     this._selectedId = null;
     this._notationEditor = null;
   }
@@ -64,6 +65,20 @@ export default class PropertyPanel {
         this._renderRampFields(wrapper, entity);
         break;
       // wall and player: position only
+    }
+
+    // Delete button
+    if (this._onDelete) {
+      const deleteRow = document.createElement('div');
+      deleteRow.style.marginTop = '12px';
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.textContent = 'Delete Entity';
+      deleteBtn.style.width = '100%';
+      deleteBtn.style.padding = '6px';
+      deleteBtn.onclick = () => this._onDelete();
+      deleteRow.appendChild(deleteBtn);
+      wrapper.appendChild(deleteRow);
     }
 
     this._container.appendChild(wrapper);

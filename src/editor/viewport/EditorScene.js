@@ -29,7 +29,7 @@ export default class EditorScene {
     const size = this._gridSize * WORLD_SCALE;
 
     // Grid helper
-    const gridHelper = new THREE.GridHelper(size, this._gridSize, 0x0f3460, 0x0a2040);
+    const gridHelper = new THREE.GridHelper(size, this._gridSize, 0x4f8bc7, 0x285c88);
     gridHelper.position.set(size / 2, 0, size / 2);
     this._scene.add(gridHelper);
 
