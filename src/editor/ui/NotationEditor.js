@@ -33,7 +33,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // Layout constants
 const STAFF_START_X = 20;
 const STAFF_TOP_OFFSET = 10;
-const CLEF_WIDTH = 30;
+const CLEF_WIDTH = 45;
 const KEY_SIG_ACCIDENTAL_WIDTH = 10;
 const TIME_SIG_WIDTH = 25;
 const HEADER_PADDING = 5;
