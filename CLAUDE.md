@@ -40,13 +40,21 @@ Tests are integration-style: test behaviors through public APIs, mock only brows
 
 ## Architecture Notes
 
-### IMPORTANT: Audio System Independence
+### IMPORTANT: Package Extraction Path
 
-The `src/audio/` folder is **planned for extraction** into a standalone npm package. When working with audio code:
+Three systems are planned for extraction into standalone npm packages. **Respect these dependency boundaries:**
 
-- ✅ Keep it independent of game-specific logic
-- ✅ No imports from `entities/`, `core/GameState`, etc.
-- ❌ Don't add game-specific logic to audio classes
+```
+audio (standalone)        ← game
+notation (standalone)     ← game, notation-editor
+notation-editor           ← game-editor
+  (depends on notation)
+```
+
+- `src/audio/` — no imports from `entities/`, `core/`, `editor/`
+- `src/notation/` — no imports from `audio/`, `entities/`, `core/`, `editor/`
+- Notation editor (`NotationEditor`, `SongModel`, `RhythmPalette`, `StaffInteraction`, `AccidentalDisplay`) — imports only from `notation/`, never from game or puzzle editor code
+- `NotationEditor` talks to the puzzle editor through a minimal interface (currently `undoManager.getEntity`/`updateEntity`) — keep this boundary thin
 
 ### Puzzle Editor (`src/editor/`)
 - Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
