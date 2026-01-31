@@ -25,8 +25,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .prop-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; font-size: 13px; }
 .prop-input { width: 100px; padding: 4px; background: #0a1628; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 3px; }
 .prop-select { padding: 4px; background: #0a1628; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 3px; }
-.notation-staff { margin: 8px 0; cursor: crosshair; outline: none; border: 1px solid #0f3460; border-radius: 4px; }
+.notation-staff { margin: 8px 0; cursor: crosshair; outline: none; border: 1px solid #0f3460; border-radius: 4px; color: #e0e0e0; }
 .notation-staff:focus { border-color: #44ff88; }
+.notation-staff .staff-line { stroke: #445566; }
+.notation-staff .note-selected { color: #ffaa00; }
+.notation-staff .bar-line { stroke: #667788; }
 .rhythm-palette { display: flex; gap: 2px; margin-bottom: 8px; flex-wrap: wrap; }
 .rhythm-btn { display: flex; align-items: center; justify-content: center; padding: 4px 8px; background: #0a1628; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 3px; cursor: pointer; }
 .rhythm-btn svg { width: 24px; height: 40px; }
