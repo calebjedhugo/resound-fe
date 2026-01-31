@@ -511,6 +511,147 @@ describe('SongEditorModal', () => {
     });
   });
 
+  // -- clef selector -----------------------------------------------------------
+
+  describe('clef selector', () => {
+    it('renders a clef dropdown in the modal header', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.song-modal-header .clef-selector');
+      expect(select).not.toBeNull();
+      expect(select.tagName).toBe('SELECT');
+    });
+
+    it('dropdown shows Auto, Treble, Bass options', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      const options = Array.from(select.options).map((o) => o.textContent);
+      expect(options).toEqual(['Auto', 'Treble', 'Bass']);
+    });
+
+    it('defaults to Auto when entity has no data.clef', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      expect(select.value).toBe('auto');
+    });
+
+    it('defaults to the stored clef when entity has data.clef', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+        clef: 'bass',
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      expect(select.value).toBe('bass');
+    });
+
+    it('selecting Treble persists clef to entity data', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'treble';
+      select.dispatchEvent(new Event('change'));
+
+      const entity = env.undoManager.getEntity(id);
+      expect(entity.data.clef).toBe('treble');
+    });
+
+    it('selecting Bass persists clef to entity data', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'bass';
+      select.dispatchEvent(new Event('change'));
+
+      const entity = env.undoManager.getEntity(id);
+      expect(entity.data.clef).toBe('bass');
+    });
+
+    it('selecting Auto removes clef from entity data', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+        clef: 'bass',
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'auto';
+      select.dispatchEvent(new Event('change'));
+
+      const entity = env.undoManager.getEntity(id);
+      expect(entity.data.clef).toBeUndefined();
+    });
+
+    it('clef change is undoable', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'bass';
+      select.dispatchEvent(new Event('change'));
+
+      let entity = env.undoManager.getEntity(id);
+      expect(entity.data.clef).toBe('bass');
+
+      env.undoManager.undo();
+
+      entity = env.undoManager.getEntity(id);
+      expect(entity.data.clef).toBeUndefined();
+    });
+  });
+
   // -- horizontal overflow ----------------------------------------------------
 
   describe('horizontal overflow', () => {

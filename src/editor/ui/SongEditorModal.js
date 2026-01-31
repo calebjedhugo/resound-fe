@@ -58,10 +58,52 @@ export default class SongEditorModal {
     titleEl.textContent = `${typeName} Song \u2014 ${position}`;
     headerEl.appendChild(titleEl);
 
+    // Clef selector
+    const clefSelect = document.createElement('select');
+    clefSelect.className = 'prop-select clef-selector';
+    const currentClef = entity.data.clef || null;
+
+    const autoOption = document.createElement('option');
+    autoOption.value = 'auto';
+    autoOption.textContent = 'Auto';
+    if (!currentClef) autoOption.selected = true;
+    clefSelect.appendChild(autoOption);
+
+    const trebleOption = document.createElement('option');
+    trebleOption.value = 'treble';
+    trebleOption.textContent = 'Treble';
+    if (currentClef === 'treble') trebleOption.selected = true;
+    clefSelect.appendChild(trebleOption);
+
+    const bassOption = document.createElement('option');
+    bassOption.value = 'bass';
+    bassOption.textContent = 'Bass';
+    if (currentClef === 'bass') bassOption.selected = true;
+    clefSelect.appendChild(bassOption);
+
+    clefSelect.onchange = () => {
+      const val = clefSelect.value;
+      const ent = this._undoManager.getEntity(entityId);
+      if (!ent) return;
+      if (val === 'auto') {
+        const newData = { ...ent.data };
+        delete newData.clef;
+        this._undoManager.updateEntity(entityId, { data: newData });
+        this._notationEditor._clefOverride = null;
+      } else {
+        const newData = { ...ent.data, clef: val };
+        this._undoManager.updateEntity(entityId, { data: newData });
+        this._notationEditor._clefOverride = val;
+      }
+      this._notationEditor._renderStaff();
+    };
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'song-modal-close';
     closeBtn.innerHTML = '&times;';
     closeBtn.onclick = () => this.close();
+
+    headerEl.appendChild(clefSelect);
     headerEl.appendChild(closeBtn);
 
     modalEl.appendChild(headerEl);
@@ -97,9 +139,15 @@ export default class SongEditorModal {
     // Append to root
     this._rootContainer.appendChild(this._backdropEl);
 
+    // Read puzzle metadata for musical context
+    const metadata = this._undoManager.getMetadata();
+
     // Create NotationEditor inside the body
     this._notationEditor = new NotationEditor(bodyEl, this._undoManager, entityId, {
       polyphonic: isPolyphonic,
+      keySignature: metadata.keySignature || 'C',
+      timeSignature: metadata.timeSignature || [4, 4],
+      clef: entity.data.clef || null,
     });
 
     // Focus the staff element
