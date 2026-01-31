@@ -15,6 +15,8 @@ import MetadataPanel from 'editor/ui/MetadataPanel';
 import ValidationPanel from 'editor/ui/ValidationPanel';
 import ImportPanel from 'editor/ui/ImportPanel';
 import ExportPanel from 'editor/ui/ExportPanel';
+import ContextMenu from 'editor/ui/ContextMenu';
+import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
 
 export default class EditorApp {
@@ -55,6 +57,11 @@ export default class EditorApp {
         this.ghostPreview.setEntityType(toolType);
       }
     );
+    this.songEditorModal = new SongEditorModal(
+      document.getElementById('editor-root'),
+      this.undoManager
+    );
+    this.contextMenu = new ContextMenu(document.getElementById('editor-viewport'));
     this.propertyPanel = new PropertyPanel(
       document.getElementById('property-panel'),
       this.undoManager,
@@ -63,6 +70,9 @@ export default class EditorApp {
         this.selectionManager.deleteSelected();
         this._scheduleValidation();
         this._scheduleAutoSave();
+      },
+      (entityId) => {
+        this.songEditorModal.open(entityId);
       }
     );
     this.metadataPanel = new MetadataPanel(
@@ -245,6 +255,56 @@ export default class EditorApp {
       const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       this.selectionManager.handleClick(mouseX, mouseY);
     });
+
+    // Right-click context menu
+    const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
+    container.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+
+      const rect = container.getBoundingClientRect();
+      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // Raycast to find entity under cursor
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), this.camera);
+      const meshes = this.entityPlacer.getAllMeshes();
+      const hits = raycaster.intersectObjects(meshes);
+
+      if (hits.length > 0) {
+        const hitMesh = hits[0].object;
+        const entityId = this.entityPlacer.getEntityIdFromMesh(hitMesh);
+        if (entityId !== null) {
+          this.selectionManager.select(entityId);
+          const entity = this.undoManager.getEntity(entityId);
+          const items = [];
+
+          if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
+            items.push({
+              label: 'Edit Song',
+              action: () => this.songEditorModal.open(entityId),
+            });
+          }
+
+          if (items.length > 0) {
+            this.controls.enabled = false;
+            this.contextMenu.show(e.clientX - rect.left, e.clientY - rect.top, items);
+            // Re-enable controls after menu hides
+            const checkHidden = () => {
+              if (!container.querySelector('.context-menu')) {
+                this.controls.enabled = true;
+              } else {
+                requestAnimationFrame(checkHidden);
+              }
+            };
+            requestAnimationFrame(checkHidden);
+          }
+          return;
+        }
+      }
+
+      this.contextMenu.hide();
+    });
   }
 
   _setupDrag() {
@@ -296,6 +356,9 @@ export default class EditorApp {
 
   _setupKeyboard() {
     document.addEventListener('keydown', (e) => {
+      // Skip editor keyboard handling while song editor modal is open
+      if (this.songEditorModal && this.songEditorModal.isOpen) return;
+
       // Cmd+Z / Ctrl+Z = undo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -358,6 +421,8 @@ export default class EditorApp {
     if (this._animationId) cancelAnimationFrame(this._animationId);
     clearTimeout(this._validationTimer);
     clearTimeout(this._autoSaveTimer);
+    this.songEditorModal.dispose();
+    this.contextMenu.dispose();
     this.ghostPreview.dispose();
     this.controls.dispose();
     this.renderer.dispose();
