@@ -153,6 +153,32 @@ export default class SongModel {
   }
 
   /**
+   * Insert a rest (no pitch) at the cursor position.
+   * Cursor stays at the inserted position.
+   */
+  insertRest(length) {
+    const rest = { length };
+    this._notes.splice(this._cursorPosition, 0, rest);
+  }
+
+  /**
+   * Append a rest (no pitch) at the end. Cursor moves to one past the new rest.
+   */
+  appendRest(length) {
+    const rest = { length };
+    this._notes.push(rest);
+    this._cursorPosition = this._notes.length;
+  }
+
+  /**
+   * Returns true if the entry is a rest (no pitch property, not a chord array).
+   */
+  static isRest(entry) {
+    if (Array.isArray(entry)) return false;
+    return !entry.pitch;
+  }
+
+  /**
    * Remove note/chord at index.
    * If selected note removed, select next (or previous if at end, or null if empty).
    */
@@ -189,6 +215,8 @@ export default class SongModel {
     if (index < 0 || index >= this._notes.length) return;
 
     const existing = this._notes[index];
+    if (!Array.isArray(existing) && !existing.pitch) return; // rest guard
+
     const newNote = { pitch, length };
 
     if (Array.isArray(existing)) {
@@ -230,6 +258,7 @@ export default class SongModel {
   }
 
   _transposeSingleNote(note, direction) {
+    if (!note.pitch) return; // rest guard
     const { name, octave } = parsePitch(note.pitch);
     const chromIdx = CHROMATIC_SCALE.indexOf(name);
     let newIdx = chromIdx + direction;
@@ -244,6 +273,35 @@ export default class SongModel {
     }
 
     note.pitch = formatPitch(CHROMATIC_SCALE[newIdx], newOctave);
+  }
+
+  // ── Accidentals ────────────────────────────────────────────────────
+
+  /**
+   * Set accidental on a single note's pitch string.
+   * Strips any existing accidental before applying the new one.
+   */
+  _setNoteAccidental(note, accidental) {
+    const match = note.pitch.match(/^([A-G])[#b]?(\d+)$/);
+    if (!match) return;
+    note.pitch = `${match[1]}${accidental}${match[2]}`;
+  }
+
+  /**
+   * Set accidental ('#', 'b', or '' for natural) on the note/chord at index.
+   * For chords, applies to all notes. No-ops on out-of-range or rest entries.
+   */
+  setAccidental(index, accidental) {
+    if (index < 0 || index >= this._notes.length) return;
+    const entry = this._notes[index];
+    if (Array.isArray(entry)) {
+      for (const note of entry) {
+        this._setNoteAccidental(note, accidental);
+      }
+    } else {
+      if (!entry.pitch) return; // rest guard
+      this._setNoteAccidental(entry, accidental);
+    }
   }
 
   // ── Duration ───────────────────────────────────────────────────────

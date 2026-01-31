@@ -296,6 +296,170 @@ describe('SongModel', () => {
     });
   });
 
+  // ── Accidentals ───────────────────────────────────────────────────────
+
+  describe('setAccidental', () => {
+    it('adds sharp to a natural note', () => {
+      model.appendNote('F4', '1/4');
+      model.setAccidental(0, '#');
+      expect(model.toSongArray()[0].pitch).toBe('F#4');
+    });
+
+    it('adds flat to a natural note', () => {
+      model.appendNote('B4', '1/4');
+      model.setAccidental(0, 'b');
+      expect(model.toSongArray()[0].pitch).toBe('Bb4');
+    });
+
+    it('removes accidental from a sharp note', () => {
+      model.appendNote('F#4', '1/4');
+      model.setAccidental(0, '');
+      expect(model.toSongArray()[0].pitch).toBe('F4');
+    });
+
+    it('removes accidental from a flat note', () => {
+      model.appendNote('Bb4', '1/4');
+      model.setAccidental(0, '');
+      expect(model.toSongArray()[0].pitch).toBe('B4');
+    });
+
+    it('replaces sharp with flat', () => {
+      model.appendNote('F#4', '1/4');
+      model.setAccidental(0, 'b');
+      expect(model.toSongArray()[0].pitch).toBe('Fb4');
+    });
+
+    it('replaces flat with sharp', () => {
+      model.appendNote('Bb4', '1/4');
+      model.setAccidental(0, '#');
+      expect(model.toSongArray()[0].pitch).toBe('B#4');
+    });
+
+    it('no-ops on out-of-range index', () => {
+      model.appendNote('C4', '1/4');
+      model.setAccidental(5, '#');
+      expect(model.toSongArray()[0].pitch).toBe('C4');
+    });
+
+    it('applies accidental to all notes in a chord', () => {
+      model.appendNote('C4', '1/4');
+      model.makeChord(0, 'E4', '1/4');
+      model.setAccidental(0, '#');
+      const chord = model.toSongArray()[0];
+      expect(chord[0].pitch).toBe('C#4');
+      expect(chord[1].pitch).toBe('E#4');
+    });
+
+    it('preserves octave number when changing accidental', () => {
+      model.appendNote('G5', '1/4');
+      model.setAccidental(0, 'b');
+      expect(model.toSongArray()[0].pitch).toBe('Gb5');
+    });
+
+    it('does not normalize flats to sharps (preserves spelling)', () => {
+      model.appendNote('E4', '1/4');
+      model.setAccidental(0, 'b');
+      // Eb4 should stay Eb4, not be converted to D#4
+      expect(model.toSongArray()[0].pitch).toBe('Eb4');
+    });
+  });
+
+  // ── Rests ─────────────────────────────────────────────────────────────
+
+  describe('insertRest', () => {
+    it('inserts a rest object without a pitch property at cursor position', () => {
+      model.appendNote('C4', '1/4');
+      model._cursorPosition = 0;
+      model.insertRest('1/4');
+      const notes = model.toSongArray();
+      expect(notes[0]).toEqual({ length: '1/4' });
+      expect(notes[0].pitch).toBeUndefined();
+    });
+
+    it('rest has the specified length', () => {
+      model.insertRest('1/8');
+      expect(model.toSongArray()[0].length).toBe('1/8');
+    });
+
+    it('cursor stays at the inserted position', () => {
+      model.insertRest('1/4');
+      expect(model._cursorPosition).toBe(0);
+    });
+  });
+
+  describe('appendRest', () => {
+    it('appends a rest at the end of the notes array', () => {
+      model.appendNote('C4', '1/4');
+      model.appendRest('1/2');
+      const notes = model.toSongArray();
+      expect(notes[1]).toEqual({ length: '1/2' });
+    });
+
+    it('advances the cursor past the rest', () => {
+      model.appendRest('1/4');
+      expect(model._cursorPosition).toBe(1);
+    });
+  });
+
+  describe('rest guards on existing methods', () => {
+    it('transposeUp no-ops on a rest entry', () => {
+      model.appendRest('1/4');
+      model.transposeUp(0);
+      expect(model.toSongArray()[0]).toEqual({ length: '1/4' });
+    });
+
+    it('transposeDown no-ops on a rest entry', () => {
+      model.appendRest('1/4');
+      model.transposeDown(0);
+      expect(model.toSongArray()[0]).toEqual({ length: '1/4' });
+    });
+
+    it('setAccidental no-ops on a rest entry', () => {
+      model.appendRest('1/4');
+      model.setAccidental(0, '#');
+      expect(model.toSongArray()[0]).toEqual({ length: '1/4' });
+    });
+
+    it('makeChord no-ops when target index is a rest', () => {
+      model.appendRest('1/4');
+      model.makeChord(0, 'C4', '1/4');
+      // Should still be a rest, not converted to chord
+      expect(model.toSongArray()[0]).toEqual({ length: '1/4' });
+    });
+
+    it('setDuration works on a rest entry', () => {
+      model.appendRest('1/4');
+      model.setDuration(0, '1/8');
+      expect(model.toSongArray()[0]).toEqual({ length: '1/8' });
+    });
+
+    it('toggleDot works on a rest entry', () => {
+      model.appendRest('1/4');
+      model.toggleDot(0);
+      expect(model.toSongArray()[0]).toEqual({ length: '3/8' });
+    });
+
+    it('removeNote works on a rest entry', () => {
+      model.appendRest('1/4');
+      model.removeNote(0);
+      expect(model.toSongArray()).toEqual([]);
+    });
+  });
+
+  describe('isRest', () => {
+    it('returns true for a rest object', () => {
+      expect(SongModel.isRest({ length: '1/4' })).toBe(true);
+    });
+
+    it('returns false for a pitched note', () => {
+      expect(SongModel.isRest({ pitch: 'C4', length: '1/4' })).toBe(false);
+    });
+
+    it('returns false for a chord array', () => {
+      expect(SongModel.isRest([{ pitch: 'C4', length: '1/4' }])).toBe(false);
+    });
+  });
+
   // ── Serialization ────────────────────────────────────────────────────
 
   describe('fromSongArray / toSongArray', () => {
