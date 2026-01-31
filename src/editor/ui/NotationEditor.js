@@ -217,13 +217,12 @@ export default class NotationEditor {
     svg.setAttribute('viewBox', `0 0 ${svgWidth} 200`);
     svg.style.background = '#0a1628';
 
-    // Staff group with offset
-    const staffGroup = createGroup('staff-group', {
-      transform: `translate(0, ${STAFF_TOP_OFFSET})`,
-    });
+    // Staff group (no vertical offset — components use staff-group coords directly)
+    const staffGroup = createGroup('staff-group');
 
-    // Staff lines
+    // Staff lines (offset so lines sit at y = 10, 30, 50, 70, 90 in staff-group coords)
     const staffLines = createStaffLines(svgWidth - 20);
+    staffLines.setAttribute('transform', `translate(0, ${STAFF_TOP_OFFSET})`);
     staffGroup.appendChild(staffLines);
 
     // Clef
@@ -316,7 +315,7 @@ export default class NotationEditor {
     for (let j = 0; j < this._songModel._cursorPosition && j < notes.length; j += 1) {
       cursorX += safeDurationInfo(entryNoteObj(notes[j]).length).spacing;
     }
-    const cursor = createLine(cursorX, 0, cursorX, 80, {
+    const cursor = createLine(cursorX, STAFF_TOP_OFFSET, cursorX, STAFF_TOP_OFFSET + 80, {
       class: 'cursor-line',
       stroke: '#44ff88',
       'stroke-width': '2',
