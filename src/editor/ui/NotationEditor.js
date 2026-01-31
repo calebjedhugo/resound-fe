@@ -197,8 +197,10 @@ export default class NotationEditor {
 
     const noteStartX = headerX + HEADER_PADDING;
 
-    // Calculate barline positions
-    const barlinePositions = calculateBarlines(notes, this._timeSignature || [4, 4]);
+    // Calculate barline positions (no barlines in unmetered mode)
+    const barlinePositions = this._timeSignature
+      ? calculateBarlines(notes, this._timeSignature)
+      : [];
     const barlineSet = new Set(barlinePositions);
 
     // Calculate total width based on notes
@@ -289,6 +291,11 @@ export default class NotationEditor {
           keyInfo
         );
         staffGroup.appendChild(noteEl);
+      }
+
+      // In unmetered mode (null time signature), reset accidentals after each note
+      if (!this._timeSignature && !isRest) {
+        activeAccidentals.clear();
       }
 
       xPos += info.spacing;

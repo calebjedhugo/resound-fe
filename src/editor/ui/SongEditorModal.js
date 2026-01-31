@@ -146,7 +146,7 @@ export default class SongEditorModal {
     this._notationEditor = new NotationEditor(bodyEl, this._undoManager, entityId, {
       polyphonic: isPolyphonic,
       keySignature: metadata.keySignature || 'C',
-      timeSignature: metadata.timeSignature || [4, 4],
+      timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
       clef: entity.data.clef || null,
     });
 
