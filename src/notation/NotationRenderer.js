@@ -55,6 +55,7 @@ const HEAD_RX = 6;
 const HEAD_RY = 5;
 const STEM_LENGTH = 35;
 const DYNAMICS_Y = 110;
+const STAFF_CENTER_Y = STAFF_TOP_OFFSET + 40; // midpoint of 5-line staff
 
 /**
  * Check if an element is a non-note marker (dynamic, hairpin, barline, etc.).
@@ -119,7 +120,8 @@ export class NotationRenderer {
 
     parsed.voices.forEach((voice, index) => {
       const clef = voice.clef || inferClef(voice.notes);
-      const voiceY = index * (VOICE_HEIGHT + VOICE_GAP);
+      const voiceHeight = voiceCount > 1 ? VOICE_HEIGHT : totalHeight;
+      const voiceY = index * (VOICE_HEIGHT + VOICE_GAP) + (voiceHeight / 2 - STAFF_CENTER_Y);
 
       const staffGroup = createGroup(`staff staff-${index}`, {
         'data-voice-id': voice.id,

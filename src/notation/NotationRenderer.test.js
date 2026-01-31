@@ -1501,9 +1501,9 @@ describe('NotationRenderer', () => {
       const transform0 = staves[0].getAttribute('transform');
       const transform1 = staves[1].getAttribute('transform');
 
-      // First voice at y=0, second voice offset by VOICE_HEIGHT + VOICE_GAP (240)
-      expect(transform0).toContain('translate(0, 0)');
-      expect(transform1).toMatch(/translate\(0, 240\)/);
+      // Voices centered vertically, spaced by VOICE_HEIGHT + VOICE_GAP (240)
+      expect(transform0).toContain('translate(0, 50)');
+      expect(transform1).toMatch(/translate\(0, 290\)/);
     });
 
     it('sizes SVG height for multiple voices', () => {

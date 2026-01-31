@@ -38,7 +38,10 @@ const KEY_SIG_ACCIDENTAL_WIDTH = 10;
 const TIME_SIG_WIDTH = 25;
 const HEADER_PADDING = 5;
 const ACCIDENTAL_OFFSET = 14;
+const SVG_HEIGHT = 200;
 const MIN_SVG_WIDTH = 300;
+const STAFF_CENTER_Y = STAFF_TOP_OFFSET + 40; // midpoint of 5-line staff
+const STAFF_VERTICAL_OFFSET = SVG_HEIGHT / 2 - STAFF_CENTER_Y;
 
 // Note head dimensions (matching Note.js)
 const HEAD_RX = 6;
@@ -214,11 +217,13 @@ export default class NotationEditor {
     // Create SVG
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('width', svgWidth);
-    svg.setAttribute('viewBox', `0 0 ${svgWidth} 200`);
+    svg.setAttribute('viewBox', `0 0 ${svgWidth} ${SVG_HEIGHT}`);
     svg.style.background = '#0a1628';
 
-    // Staff group (no vertical offset — components use staff-group coords directly)
-    const staffGroup = createGroup('staff-group');
+    // Staff group — centered vertically in SVG
+    const staffGroup = createGroup('staff-group', {
+      transform: `translate(0, ${STAFF_VERTICAL_OFFSET})`,
+    });
 
     // Staff lines (offset so lines sit at y = 10, 30, 50, 70, 90 in staff-group coords)
     const staffLines = createStaffLines(svgWidth - 20);

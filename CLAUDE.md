@@ -52,6 +52,7 @@ The `src/audio/` folder is **planned for extraction** into a standalone npm pack
 - Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
 - **EditorPuzzleModel** is the central mutable data model; **UndoManager** wraps it
 - Serialization handles type-specific JSON format differences (creature `data.song` vs gate root `song`)
+- `NotationEditor.js` has its own layout constants mirroring `NotationRenderer.js` — keep both in sync
 - 132 tests covering model, serialization, validation, song editing, viewport, and I/O
 
 ### Entity System
