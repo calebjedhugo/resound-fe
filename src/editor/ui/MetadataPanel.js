@@ -2,8 +2,39 @@
  * MetadataPanel
  *
  * Always-visible panel for editing puzzle-level metadata:
- * ID, name, difficulty, tempo, grid size, clap displacement.
+ * ID, name, difficulty, tempo, grid size, clap displacement,
+ * key signature, time signature.
  */
+import { isValidKeySignature } from 'notation/lib/keySignatures';
+
+const KEY_SIGNATURE_OPTIONS = [
+  'C',
+  'G',
+  'D',
+  'A',
+  'E',
+  'B',
+  'F#',
+  'C#',
+  'F',
+  'Bb',
+  'Eb',
+  'Ab',
+  'Db',
+  'Gb',
+  'Cb',
+];
+
+const TIME_SIGNATURE_PRESETS = [
+  { label: '4/4', value: [4, 4] },
+  { label: '3/4', value: [3, 4] },
+  { label: '2/4', value: [2, 4] },
+  { label: '6/8', value: [6, 8] },
+  { label: '2/2', value: [2, 2] },
+  { label: '3/8', value: [3, 8] },
+  { label: 'None (unmetered)', value: null },
+];
+
 export default class MetadataPanel {
   constructor(container, undoManager, editorScene) {
     this._container = container; // #metadata-panel
@@ -71,6 +102,64 @@ export default class MetadataPanel {
     this._addField(wrapper, 'text', 'Clap Displacement', meta.clapDisplacement || '', (val) => {
       this._undoManager.setMetadata({ clapDisplacement: val || null });
     });
+
+    // Key Signature
+    const keyRow = document.createElement('div');
+    keyRow.className = 'prop-row';
+    const keyLabel = document.createElement('label');
+    keyLabel.textContent = 'Key Signature: ';
+    keyRow.appendChild(keyLabel);
+    const keySelect = document.createElement('select');
+    keySelect.className = 'prop-select';
+    KEY_SIGNATURE_OPTIONS.forEach((key) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = key;
+      if (meta.keySignature === key) opt.selected = true;
+      keySelect.appendChild(opt);
+    });
+    keySelect.onchange = () => {
+      const value = keySelect.value;
+      if (isValidKeySignature(value)) {
+        this._undoManager.setMetadata({ keySignature: value });
+      }
+    };
+    keyRow.appendChild(keySelect);
+    wrapper.appendChild(keyRow);
+
+    // Time Signature
+    const timeRow = document.createElement('div');
+    timeRow.className = 'prop-row';
+    const timeLabel = document.createElement('label');
+    timeLabel.textContent = 'Time Signature: ';
+    timeRow.appendChild(timeLabel);
+    const timeSelect = document.createElement('select');
+    timeSelect.className = 'prop-select';
+    TIME_SIGNATURE_PRESETS.forEach((preset) => {
+      const opt = document.createElement('option');
+      opt.value = preset.label;
+      opt.textContent = preset.label;
+      // Match current value
+      if (meta.timeSignature === null && preset.value === null) {
+        opt.selected = true;
+      } else if (
+        Array.isArray(meta.timeSignature) &&
+        Array.isArray(preset.value) &&
+        meta.timeSignature[0] === preset.value[0] &&
+        meta.timeSignature[1] === preset.value[1]
+      ) {
+        opt.selected = true;
+      }
+      timeSelect.appendChild(opt);
+    });
+    timeSelect.onchange = () => {
+      const selected = TIME_SIGNATURE_PRESETS.find((p) => p.label === timeSelect.value);
+      if (selected) {
+        this._undoManager.setMetadata({ timeSignature: selected.value });
+      }
+    };
+    timeRow.appendChild(timeSelect);
+    wrapper.appendChild(timeRow);
 
     this._container.appendChild(wrapper);
   }

@@ -180,7 +180,34 @@ describe('EditorPuzzleModel', () => {
         tempo: 120,
         gridSize: 15,
         clapDisplacement: null,
+        keySignature: 'C',
+        timeSignature: [4, 4],
       });
+    });
+
+    it('defaults keySignature to C', () => {
+      const meta = model.getMetadata();
+      expect(meta.keySignature).toBe('C');
+    });
+
+    it('defaults timeSignature to [4, 4]', () => {
+      const meta = model.getMetadata();
+      expect(meta.timeSignature).toEqual([4, 4]);
+    });
+
+    it('setMetadata updates keySignature', () => {
+      model.setMetadata({ keySignature: 'G' });
+      expect(model.getMetadata().keySignature).toBe('G');
+    });
+
+    it('setMetadata updates timeSignature', () => {
+      model.setMetadata({ timeSignature: [3, 4] });
+      expect(model.getMetadata().timeSignature).toEqual([3, 4]);
+    });
+
+    it('setMetadata allows null timeSignature for unmetered', () => {
+      model.setMetadata({ timeSignature: null });
+      expect(model.getMetadata().timeSignature).toBeNull();
     });
   });
 

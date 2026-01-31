@@ -295,6 +295,47 @@ describe('Puzzle Serialization', () => {
 
       expect(json.clapDisplacement).toBe('1/4');
     });
+
+    it('serializes keySignature and timeSignature', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({
+        id: 'key-time-test',
+        name: 'Key Time Test',
+        keySignature: 'Bb',
+        timeSignature: [3, 4],
+      });
+      model.setPlayerSpawn(0, 0, 0);
+
+      const json = serializePuzzle(model);
+
+      expect(json.keySignature).toBe('Bb');
+      expect(json.timeSignature).toEqual([3, 4]);
+    });
+
+    it('serializes default keySignature and timeSignature', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'defaults-test', name: 'Defaults' });
+      model.setPlayerSpawn(0, 0, 0);
+
+      const json = serializePuzzle(model);
+
+      expect(json.keySignature).toBe('C');
+      expect(json.timeSignature).toEqual([4, 4]);
+    });
+
+    it('serializes null timeSignature for unmetered', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({
+        id: 'unmetered-test',
+        name: 'Unmetered',
+        timeSignature: null,
+      });
+      model.setPlayerSpawn(0, 0, 0);
+
+      const json = serializePuzzle(model);
+
+      expect(json.timeSignature).toBeNull();
+    });
   });
 
   describe('deserialization', () => {
@@ -406,6 +447,100 @@ describe('Puzzle Serialization', () => {
       const meta = model.getMetadata();
       expect(meta.clapDisplacement).toBeNull();
       expect(model.getFloors()).toEqual([]);
+    });
+
+    it('deserializes keySignature and timeSignature', () => {
+      const json = {
+        id: 'key-time-import',
+        name: 'Key Time Import',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        keySignature: 'Eb',
+        timeSignature: [6, 8],
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [],
+      };
+
+      const model = deserializePuzzle(json);
+      const meta = model.getMetadata();
+
+      expect(meta.keySignature).toBe('Eb');
+      expect(meta.timeSignature).toEqual([6, 8]);
+    });
+
+    it('falls back to C and [4,4] when keySignature and timeSignature are absent on import', () => {
+      const json = {
+        id: 'no-key-time',
+        name: 'No Key Time',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [],
+      };
+
+      const model = deserializePuzzle(json);
+      const meta = model.getMetadata();
+
+      expect(meta.keySignature).toBe('C');
+      expect(meta.timeSignature).toEqual([4, 4]);
+    });
+
+    it('falls back to C for invalid keySignature on import', () => {
+      const json = {
+        id: 'bad-key',
+        name: 'Bad Key',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        keySignature: 'Z#',
+        timeSignature: [4, 4],
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [],
+      };
+
+      const model = deserializePuzzle(json);
+      const meta = model.getMetadata();
+
+      expect(meta.keySignature).toBe('C');
+    });
+
+    it('handles null timeSignature for unmetered mode', () => {
+      const json = {
+        id: 'unmetered',
+        name: 'Unmetered',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        keySignature: 'C',
+        timeSignature: null,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [],
+      };
+
+      const model = deserializePuzzle(json);
+      const meta = model.getMetadata();
+
+      expect(meta.timeSignature).toBeNull();
+    });
+
+    it('falls back to [4,4] for invalid timeSignature on import', () => {
+      const json = {
+        id: 'bad-time',
+        name: 'Bad Time',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        timeSignature: 'invalid',
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [],
+      };
+
+      const model = deserializePuzzle(json);
+      const meta = model.getMetadata();
+
+      expect(meta.timeSignature).toEqual([4, 4]);
     });
   });
 });

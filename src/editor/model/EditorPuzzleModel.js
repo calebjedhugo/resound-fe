@@ -12,6 +12,8 @@ const DEFAULT_METADATA = {
   tempo: 120,
   gridSize: 15,
   clapDisplacement: null,
+  keySignature: 'C',
+  timeSignature: [4, 4],
 };
 
 export default class EditorPuzzleModel {

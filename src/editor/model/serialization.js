@@ -12,6 +12,7 @@
  *    - Wall: position only
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
+import { isValidKeySignature } from 'notation/lib/keySignatures';
 
 /**
  * Serialize an EditorPuzzleModel into a puzzle JSON object.
@@ -36,6 +37,9 @@ export function serializePuzzle(model) {
   if (metadata.clapDisplacement != null) {
     json.clapDisplacement = metadata.clapDisplacement;
   }
+
+  json.keySignature = metadata.keySignature;
+  json.timeSignature = metadata.timeSignature;
 
   json.playerStart = playerSpawn
     ? { x: playerSpawn.x, y: playerSpawn.y, z: playerSpawn.z }
@@ -111,6 +115,25 @@ function serializeEntity(entity) {
 export function deserializePuzzle(json) {
   const model = new EditorPuzzleModel();
 
+  // Validate keySignature, fall back to 'C' if invalid or absent
+  const keySignature =
+    json.keySignature && isValidKeySignature(json.keySignature) ? json.keySignature : 'C';
+
+  // Validate timeSignature: must be null or a 2-element array of positive integers
+  let timeSignature = [4, 4];
+  if (json.timeSignature === null) {
+    timeSignature = null;
+  } else if (
+    Array.isArray(json.timeSignature) &&
+    json.timeSignature.length === 2 &&
+    Number.isInteger(json.timeSignature[0]) &&
+    Number.isInteger(json.timeSignature[1]) &&
+    json.timeSignature[0] > 0 &&
+    json.timeSignature[1] > 0
+  ) {
+    timeSignature = json.timeSignature;
+  }
+
   // Metadata
   model.setMetadata({
     id: json.id,
@@ -119,6 +142,8 @@ export function deserializePuzzle(json) {
     tempo: json.tempo,
     gridSize: json.gridSize,
     clapDisplacement: json.clapDisplacement ?? null,
+    keySignature,
+    timeSignature,
   });
 
   // Player spawn
