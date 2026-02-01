@@ -53,15 +53,13 @@ notation-editor           ← game-editor
 
 - `src/audio/` — no imports from `entities/`, `core/`, `editor/`
 - `src/notation/` — no imports from `audio/`, `entities/`, `core/`, `editor/`
-- Notation editor (`NotationEditor`, `SongModel`, `RhythmPalette`, `StaffInteraction`, `AccidentalDisplay`) — imports only from `notation/`, never from game or puzzle editor code
-- `NotationEditor` talks to the puzzle editor through a minimal interface (currently `undoManager.getEntity`/`updateEntity`) — keep this boundary thin
+- `src/editor/ui/` notation files — import only from `notation/`, never from game code
 
 ### Puzzle Editor (`src/editor/`)
 - Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
 - **EditorPuzzleModel** is the central mutable data model; **UndoManager** wraps it
 - Serialization handles type-specific JSON format differences (creature `data.song` vs gate root `song`)
-- `NotationEditor.js` has its own layout constants mirroring `NotationRenderer.js` — keep both in sync
-- 132 tests covering model, serialization, validation, song editing, viewport, and I/O
+- See `src/editor/CLAUDE.md` for notation editor details and SVG sizing patterns
 
 ### Entity System
 - All entities extend `Entity.js` base class
@@ -100,6 +98,7 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 - All notation components (clefs, notes, time sigs, bar lines) have this offset **baked into their coordinates**
 - `STAFF_TOP_OFFSET` must ONLY be applied to the staff-lines element, **never to a parent group** — otherwise components get a double offset
 - `NotationRenderer.js` is the reference implementation; the editor (`NotationEditor.js`) must match its approach
+- **When notation doesn't fit visually**: fix SVG dimensions in the renderer code, NOT the CSS container (see `src/editor/CLAUDE.md`)
 
 ### Recording
 - Can only record within creature's `audibleRange × 0.5`
