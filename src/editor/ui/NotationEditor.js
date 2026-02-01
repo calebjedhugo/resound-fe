@@ -423,11 +423,14 @@ export default class NotationEditor {
     }
 
     const svgWidth = Math.max(MIN_SVG_WIDTH, noteStartX + maxNotesWidth + 40);
-    const svgHeight = voiceYOffsets[1] + 100 + 20;
+    const contentBottom = voiceYOffsets[1] + STAFF_TOP_OFFSET + 80;
+    const GRAND_STAFF_PADDING = 30;
+    const svgHeight = contentBottom + GRAND_STAFF_PADDING * 2;
 
     // Create SVG
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('width', svgWidth);
+    svg.setAttribute('height', svgHeight);
     svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
     svg.style.background = '#0a1628';
 
@@ -442,7 +445,7 @@ export default class NotationEditor {
       this._currentClef = clef;
 
       const voiceGroup = createGroup('voice-group', {
-        transform: `translate(0, ${yOffset})`,
+        transform: `translate(0, ${yOffset + GRAND_STAFF_PADDING})`,
       });
 
       if (!isActive) {
