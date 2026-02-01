@@ -543,4 +543,101 @@ describe('Puzzle Serialization', () => {
       expect(meta.timeSignature).toEqual([4, 4]);
     });
   });
+
+  describe('staffGroups serialization', () => {
+    it('serializes gate staffGroups at entity root', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'gate-staff-groups' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('gate', 5, 0, 3, {
+        song: [],
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+
+      const json = serializePuzzle(model);
+      const gate = json.entities[0];
+
+      expect(gate.staffGroups).toEqual([{ type: 'brace', voiceIds: ['treble', 'bass'] }]);
+    });
+
+    it('gate without staffGroups has no staffGroups field', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'gate-no-groups' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('gate', 5, 0, 3, {
+        song: [{ pitch: 'C4', length: '1/4' }],
+      });
+
+      const json = serializePuzzle(model);
+      const gate = json.entities[0];
+
+      expect(gate.staffGroups).toBeUndefined();
+    });
+
+    it('gate with staffGroups round-trips correctly', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'gate-round-trip-sg' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('gate', 5, 0, 3, {
+        song: {
+          voices: [
+            { id: 'treble', clef: 'treble', notes: [] },
+            { id: 'bass', clef: 'bass', notes: [] },
+          ],
+          staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+        },
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+
+      const json = serializePuzzle(model);
+      const restored = deserializePuzzle(json);
+
+      const gate = restored.getEntities().find((e) => e.type === 'gate');
+      expect(gate.data.staffGroups).toEqual([{ type: 'brace', voiceIds: ['treble', 'bass'] }]);
+      expect(gate.data.song.voices).toHaveLength(2);
+    });
+
+    it('fountain with staffGroups round-trips correctly', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'fountain-round-trip-sg' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('fountain', 5, 0, 3, {
+        song: {
+          voices: [
+            { id: 'treble', clef: 'treble', notes: [{ pitch: 'E5', length: '1/4' }] },
+            { id: 'bass', clef: 'bass', notes: [{ pitch: 'E3', length: '1/4' }] },
+          ],
+          staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+        },
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+
+      const json = serializePuzzle(model);
+      const restored = deserializePuzzle(json);
+
+      const fountain = restored.getEntities().find((e) => e.type === 'fountain');
+      expect(fountain.data.staffGroups).toEqual([{ type: 'brace', voiceIds: ['treble', 'bass'] }]);
+    });
+
+    it('serializes voices+staffGroups song format for gates', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'gate-voices-song' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('gate', 5, 0, 3, {
+        song: {
+          voices: [
+            { id: 'treble', clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+            { id: 'bass', clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+          ],
+          staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+        },
+      });
+
+      const json = serializePuzzle(model);
+      const gate = json.entities[0];
+
+      expect(gate.song.voices).toHaveLength(2);
+      expect(gate.song.staffGroups).toEqual([{ type: 'brace', voiceIds: ['treble', 'bass'] }]);
+    });
+  });
 });

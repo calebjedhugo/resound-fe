@@ -12,8 +12,10 @@ class Fountain extends Entity {
   constructor(position, data = {}) {
     super('fountain', position, data);
 
-    // Validate required data
-    if (!data.song || !Array.isArray(data.song) || data.song.length === 0) {
+    // Validate required data — accept flat array or voices object
+    const validArray = Array.isArray(data.song) && data.song.length > 0;
+    const validVoices = data.song && !Array.isArray(data.song) && Array.isArray(data.song.voices);
+    if (!validArray && !validVoices) {
       throw new Error('Fountain requires a song array');
     }
 
@@ -140,9 +142,9 @@ class Fountain extends Entity {
       }
     });
 
-    // Play the solution song with Fountain instrument
+    // Play the solution song with Fountain instrument (flatten voices format for playback)
     await this.instrument.play({
-      data: this.requiredSong,
+      data: SongMatcher.flattenSong(this.requiredSong),
       tempo: gameState.musicalClock?.tempo || 120,
       basis: 4,
     });

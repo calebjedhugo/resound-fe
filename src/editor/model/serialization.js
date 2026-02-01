@@ -78,19 +78,29 @@ function serializeEntity(entity) {
       return { type: 'creature', position, data };
     }
 
-    case 'gate':
-      return {
+    case 'gate': {
+      const gateResult = {
         type: 'gate',
         position,
         song: entity.data.song || [],
       };
+      if (entity.data.staffGroups && entity.data.staffGroups.length > 0) {
+        gateResult.staffGroups = entity.data.staffGroups;
+      }
+      return gateResult;
+    }
 
-    case 'fountain':
-      return {
+    case 'fountain': {
+      const fountainResult = {
         type: 'fountain',
         position,
         song: entity.data.song || [],
       };
+      if (entity.data.staffGroups && entity.data.staffGroups.length > 0) {
+        fountainResult.staffGroups = entity.data.staffGroups;
+      }
+      return fountainResult;
+    }
 
     case 'ramp':
       return {
@@ -188,17 +198,23 @@ function deserializeEntity(model, entity) {
       });
       break;
 
-    case 'gate':
-      model.addEntity('gate', x, y, z, {
-        song: entity.song,
-      });
+    case 'gate': {
+      const gateData = { song: entity.song };
+      if (entity.staffGroups) {
+        gateData.staffGroups = entity.staffGroups;
+      }
+      model.addEntity('gate', x, y, z, gateData);
       break;
+    }
 
-    case 'fountain':
-      model.addEntity('fountain', x, y, z, {
-        song: entity.song,
-      });
+    case 'fountain': {
+      const fountainData = { song: entity.song };
+      if (entity.staffGroups) {
+        fountainData.staffGroups = entity.staffGroups;
+      }
+      model.addEntity('fountain', x, y, z, fountainData);
       break;
+    }
 
     case 'ramp':
       model.addEntity('ramp', x, y, z, {

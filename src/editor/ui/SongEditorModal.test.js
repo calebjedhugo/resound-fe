@@ -652,6 +652,127 @@ describe('SongEditorModal', () => {
     });
   });
 
+  // -- grand staff mode -------------------------------------------------------
+
+  describe('grand staff mode', () => {
+    it('dropdown includes Grand Staff option for polyphonic entities', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, { song: [] });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      const options = Array.from(select.options).map((o) => o.textContent);
+      expect(options).toContain('Grand Staff');
+    });
+
+    it('does not show Grand Staff for creature entities', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      const options = Array.from(select.options).map((o) => o.textContent);
+      expect(options).not.toContain('Grand Staff');
+    });
+
+    it('selecting Grand Staff stores staffGroups on entity data', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, { song: [] });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'grand-staff';
+      select.dispatchEvent(new Event('change'));
+
+      const entity = env.undoManager.getEntity(id);
+      expect(entity.data.staffGroups).toEqual([{ type: 'brace', voiceIds: ['treble', 'bass'] }]);
+    });
+
+    it('selecting Grand Staff removes clef from entity data', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, { song: [], clef: 'bass' });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'grand-staff';
+      select.dispatchEvent(new Event('change'));
+
+      const entity = env.undoManager.getEntity(id);
+      expect(entity.data.clef).toBeUndefined();
+    });
+
+    it('Grand Staff is pre-selected when entity has staffGroups with brace', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, {
+        song: [],
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      expect(select.value).toBe('grand-staff');
+    });
+
+    it('switching from Grand Staff to Auto removes staffGroups', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, {
+        song: [],
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'auto';
+      select.dispatchEvent(new Event('change'));
+
+      const entity = env.undoManager.getEntity(id);
+      expect(entity.data.staffGroups).toBeUndefined();
+    });
+
+    it('Grand Staff creates editor with two staff-lines groups', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, {
+        song: [],
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+
+      modal.open(id);
+
+      const svg = env.root.querySelector('.notation-staff svg');
+      const staffLines = svg.querySelectorAll('.staff-lines');
+      expect(staffLines.length).toBe(2);
+    });
+
+    it('Grand Staff change is undoable', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, { song: [] });
+
+      modal.open(id);
+
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'grand-staff';
+      select.dispatchEvent(new Event('change'));
+
+      let entity = env.undoManager.getEntity(id);
+      expect(entity.data.staffGroups).toBeDefined();
+
+      env.undoManager.undo();
+
+      entity = env.undoManager.getEntity(id);
+      expect(entity.data.staffGroups).toBeUndefined();
+    });
+  });
+
   // -- horizontal overflow ----------------------------------------------------
 
   describe('horizontal overflow', () => {

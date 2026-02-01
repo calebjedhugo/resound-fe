@@ -3,9 +3,58 @@
  */
 class SongMatcher {
   /**
+   * Flatten a multi-voice song into a sequential note/chord array.
+   * Notes from different voices at the same beat position become chords.
+   * Flat-array input passes through unchanged.
+   * @param {Array|Object} song - Flat array or { voices: [...] } object
+   * @returns {Array} Flat array of notes and chords
+   */
+  static flattenSong(song) {
+    if (!song) return [];
+    if (Array.isArray(song)) return song;
+    if (!song.voices || song.voices.length === 0) return [];
+
+    // Collect (beatPosition, note) pairs from all voices
+    const entries = [];
+    for (const voice of song.voices) {
+      let beat = 0;
+      for (const note of voice.notes || []) {
+        entries.push({ beat, note });
+        const [num, den] = note.length.split('/').map(Number);
+        beat += num / den;
+      }
+    }
+
+    if (entries.length === 0) return [];
+
+    // Sort by beat position
+    entries.sort((a, b) => a.beat - b.beat);
+
+    // Group notes at same beat into chords
+    const result = [];
+    let i = 0;
+    while (i < entries.length) {
+      const currentBeat = entries[i].beat;
+      const group = [entries[i].note];
+      i += 1;
+      while (i < entries.length && Math.abs(entries[i].beat - currentBeat) < 1e-10) {
+        group.push(entries[i].note);
+        i += 1;
+      }
+      if (group.length === 1) {
+        result.push(group[0]);
+      } else {
+        result.push(group);
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Compare two songs for exact match (quantized)
    * @param {Array} capturedSong - Captured/recorded song data
-   * @param {Array} requiredSong - Required song data (standard format)
+   * @param {Array|Object} requiredSong - Required song data (flat array or voices format)
    * @returns {boolean} True if songs match exactly
    */
   static songsMatch(capturedSong, requiredSong) {
@@ -13,15 +62,17 @@ class SongMatcher {
       return false;
     }
 
+    const flatRequired = this.flattenSong(requiredSong);
+
     // Must have same number of notes/chords
-    if (capturedSong.length !== requiredSong.length) {
+    if (capturedSong.length !== flatRequired.length) {
       return false;
     }
 
     // Compare each note/chord
     for (let i = 0; i < capturedSong.length; i += 1) {
       const captured = capturedSong[i];
-      const required = requiredSong[i];
+      const required = flatRequired[i];
 
       // Both are chords (arrays)
       if (Array.isArray(captured) && Array.isArray(required)) {

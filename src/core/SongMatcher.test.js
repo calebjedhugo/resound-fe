@@ -243,6 +243,121 @@ describe('SongMatcher', () => {
     });
   });
 
+  describe('flattenSong', () => {
+    it('passes through a flat array unchanged', () => {
+      const song = [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ];
+      expect(SongMatcher.flattenSong(song)).toEqual(song);
+    });
+
+    it('returns empty array for null input', () => {
+      expect(SongMatcher.flattenSong(null)).toEqual([]);
+    });
+
+    it('returns empty array for undefined input', () => {
+      expect(SongMatcher.flattenSong(undefined)).toEqual([]);
+    });
+
+    it('returns empty array when all voices have empty notes', () => {
+      const song = {
+        voices: [
+          { id: 'treble', notes: [] },
+          { id: 'bass', notes: [] },
+        ],
+      };
+      expect(SongMatcher.flattenSong(song)).toEqual([]);
+    });
+
+    it('creates a chord from notes at the same beat position', () => {
+      const song = {
+        voices: [
+          { id: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { id: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      };
+      const result = SongMatcher.flattenSong(song);
+      expect(result).toHaveLength(1);
+      expect(Array.isArray(result[0])).toBe(true);
+      expect(result[0]).toHaveLength(2);
+    });
+
+    it('keeps notes at different beat positions as separate entries', () => {
+      const song = {
+        voices: [
+          {
+            id: 'treble',
+            notes: [
+              { pitch: 'C5', length: '1/4' },
+              { pitch: 'E5', length: '1/4' },
+            ],
+          },
+          { id: 'bass', notes: [{ pitch: 'C3', length: '1/2' }] },
+        ],
+      };
+      const result = SongMatcher.flattenSong(song);
+      // Beat 0: C5 + C3 → chord
+      // Beat 0.25: E5 → single note
+      expect(result).toHaveLength(2);
+      expect(Array.isArray(result[0])).toBe(true); // chord at beat 0
+      expect(Array.isArray(result[1])).toBe(false); // single note at beat 0.25
+    });
+
+    it('preserves note length in flattened output', () => {
+      const song = {
+        voices: [{ id: 'treble', notes: [{ pitch: 'C5', length: '1/2' }] }],
+      };
+      const result = SongMatcher.flattenSong(song);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ pitch: 'C5', length: '1/2' });
+    });
+
+    it('merges three simultaneous notes into a three-note chord', () => {
+      const song = {
+        voices: [
+          { id: 'soprano', notes: [{ pitch: 'E5', length: '1/4' }] },
+          { id: 'alto', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { id: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      };
+      const result = SongMatcher.flattenSong(song);
+      expect(result).toHaveLength(1);
+      expect(Array.isArray(result[0])).toBe(true);
+      expect(result[0]).toHaveLength(3);
+    });
+  });
+
+  describe('songsMatch with voices format', () => {
+    it('matches when requiredSong uses voices format', () => {
+      const required = {
+        voices: [
+          { id: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { id: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      };
+      // Flattened: beat 0 has C5 + C3 → chord
+      const captured = [
+        [
+          { pitch: 'C3', length: '1/4' },
+          { pitch: 'C5', length: '1/4' },
+        ],
+      ];
+      expect(SongMatcher.songsMatch(captured, required)).toBe(true);
+    });
+
+    it('does not match when captured differs from flattened voices', () => {
+      const required = {
+        voices: [
+          { id: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { id: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      };
+      const captured = [{ pitch: 'C5', length: '1/4' }];
+      expect(SongMatcher.songsMatch(captured, required)).toBe(false);
+    });
+  });
+
   describe('notesMatch', () => {
     it('returns true when pitch and length match exactly', () => {
       const note1 = { pitch: 'C4', length: '1/4' };

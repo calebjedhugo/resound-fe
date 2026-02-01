@@ -70,11 +70,20 @@ class NotationDisplay {
     }
 
     try {
+      // Detect grand staff (voices format with staffGroups) for taller rendering
+      const isGrandStaff =
+        this.song &&
+        !Array.isArray(this.song) &&
+        Array.isArray(this.song.staffGroups) &&
+        this.song.staffGroups.length > 0;
+      const rendererHeight = isGrandStaff ? 300 : 150;
+      const canvasHeight = isGrandStaff ? 384 : 192;
+
       const container = document.createElement('div');
       const renderer = new NotationRenderer({
         container,
         width: 400,
-        height: 150,
+        height: rendererHeight,
       });
 
       const svg = renderer.render(this.song);
@@ -89,7 +98,7 @@ class NotationDisplay {
       img.onload = () => {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
-        canvas.height = 192;
+        canvas.height = canvasHeight;
         const ctx = canvas.getContext('2d');
 
         // Transparent background (entity color shows through)

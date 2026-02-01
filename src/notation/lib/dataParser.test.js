@@ -33,6 +33,14 @@ describe('dataParser', () => {
 
         expect(result.voices[0].clef).toBeUndefined();
       });
+
+      it('defaults staffGroups to empty array', () => {
+        const input = [{ pitch: 'C4', length: '1/4' }];
+
+        const result = parseNoteData(input);
+
+        expect(result.staffGroups).toEqual([]);
+      });
     });
 
     describe('Level 2: Single voice with metadata', () => {
@@ -68,6 +76,16 @@ describe('dataParser', () => {
         expect(voice.keySignature).toBe('C');
         expect(voice.timeSignature).toBeNull();
         expect(voice.clef).toBeUndefined();
+      });
+
+      it('defaults staffGroups to empty array', () => {
+        const input = {
+          notes: [{ pitch: 'C4', length: '1/4' }],
+        };
+
+        const result = parseNoteData(input);
+
+        expect(result.staffGroups).toEqual([]);
       });
     });
 
@@ -161,6 +179,30 @@ describe('dataParser', () => {
         const result = parseNoteData(input);
 
         expect(result.markers).toEqual(input.markers);
+      });
+
+      it('propagates staffGroups from input to output', () => {
+        const input = {
+          voices: [
+            { id: 'treble', clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+            { id: 'bass', clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+          ],
+          staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+        };
+
+        const result = parseNoteData(input);
+
+        expect(result.staffGroups).toEqual([{ type: 'brace', voiceIds: ['treble', 'bass'] }]);
+      });
+
+      it('defaults staffGroups to empty array when absent from Level 3 input', () => {
+        const input = {
+          voices: [{ id: 'melody', clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] }],
+        };
+
+        const result = parseNoteData(input);
+
+        expect(result.staffGroups).toEqual([]);
       });
     });
 

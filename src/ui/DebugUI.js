@@ -99,7 +99,19 @@ class DebugUI {
    * Format a song for display
    */
   formatSong(songData) {
-    if (!songData || songData.length === 0) return 'empty';
+    if (!songData) return 'empty';
+
+    // Handle voices format (object with voices array)
+    if (!Array.isArray(songData)) {
+      if (songData.voices && Array.isArray(songData.voices)) {
+        return songData.voices
+          .map((v) => `${v.id || '?'}:[${(v.notes || []).map((n) => n.pitch).join(' ')}]`)
+          .join(' | ');
+      }
+      return 'empty';
+    }
+
+    if (songData.length === 0) return 'empty';
 
     return songData
       .map((item) => {

@@ -1641,4 +1641,138 @@ describe('NotationRenderer', () => {
       expect(active).toHaveLength(1);
     });
   });
+
+  describe('grand staff rendering (staffGroups with brace)', () => {
+    const grandStaffInput = {
+      voices: [
+        {
+          id: 'treble',
+          clef: 'treble',
+          notes: [
+            { pitch: 'C5', length: '1/4' },
+            { pitch: 'E5', length: '1/4' },
+          ],
+        },
+        {
+          id: 'bass',
+          clef: 'bass',
+          notes: [
+            { pitch: 'C3', length: '1/4' },
+            { pitch: 'E3', length: '1/4' },
+          ],
+        },
+      ],
+      staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+    };
+
+    it('renders a brace element when staffGroups contains a brace', () => {
+      ctx.render(grandStaffInput);
+      const brace = ctx.container.querySelector('.brace');
+      expect(brace).not.toBeNull();
+    });
+
+    it('does not render a brace when staffGroups is empty', () => {
+      ctx.render({
+        voices: [
+          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      });
+      const brace = ctx.container.querySelector('.brace');
+      expect(brace).toBeNull();
+    });
+
+    it('renders two staff groups for a grand staff', () => {
+      ctx.render(grandStaffInput);
+      const staves = ctx.container.querySelectorAll('.staff');
+      expect(staves).toHaveLength(2);
+    });
+
+    it('uses tighter spacing between grouped staves than independent staves', () => {
+      // Grand staff (with brace grouping)
+      ctx.render(grandStaffInput);
+      const grandStaves = ctx.container.querySelectorAll('.staff');
+      const grandY0 = parseFloat(
+        grandStaves[0].getAttribute('transform').match(/translate\(0, ([^)]+)\)/)[1]
+      );
+      const grandY1 = parseFloat(
+        grandStaves[1].getAttribute('transform').match(/translate\(0, ([^)]+)\)/)[1]
+      );
+      const grandGap = grandY1 - grandY0;
+
+      ctx.renderer.clear();
+
+      // Independent staves (no grouping)
+      ctx.render({
+        voices: [
+          { clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+          { clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+        ],
+      });
+      const indStaves = ctx.container.querySelectorAll('.staff');
+      const indY0 = parseFloat(
+        indStaves[0].getAttribute('transform').match(/translate\(0, ([^)]+)\)/)[1]
+      );
+      const indY1 = parseFloat(
+        indStaves[1].getAttribute('transform').match(/translate\(0, ([^)]+)\)/)[1]
+      );
+      const indGap = indY1 - indY0;
+
+      expect(grandGap).toBeLessThan(indGap);
+    });
+
+    it('renders shared bar lines spanning both staves in a brace group', () => {
+      ctx.render({
+        voices: [
+          {
+            id: 'treble',
+            clef: 'treble',
+            timeSignature: [4, 4],
+            notes: [
+              { pitch: 'C5', length: '1/4' },
+              { pitch: 'D5', length: '1/4' },
+              { pitch: 'E5', length: '1/4' },
+              { pitch: 'F5', length: '1/4' },
+              { pitch: 'G5', length: '1/4' },
+            ],
+          },
+          {
+            id: 'bass',
+            clef: 'bass',
+            timeSignature: [4, 4],
+            notes: [
+              { pitch: 'C3', length: '1/1' },
+              { pitch: 'D3', length: '1/4' },
+            ],
+          },
+        ],
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+
+      const sharedBarLines = ctx.container.querySelectorAll('.shared-bar-line');
+      expect(sharedBarLines.length).toBeGreaterThan(0);
+    });
+
+    it('renders notes correctly in both voices of a grand staff', () => {
+      ctx.render(grandStaffInput);
+      expect(ctx.getNotes()).toHaveLength(4);
+    });
+
+    it('renders a clef for each staff in the grand staff', () => {
+      ctx.render(grandStaffInput);
+      const clefs = ctx.container.querySelectorAll('.clef');
+      expect(clefs).toHaveLength(2);
+      expect(clefs[0].classList.contains('clef-treble')).toBe(true);
+      expect(clefs[1].classList.contains('clef-bass')).toBe(true);
+    });
+
+    it('sets SVG height to accommodate the grand staff layout', () => {
+      ctx.render(grandStaffInput);
+      const svg = ctx.getSvg();
+      const height = parseInt(svg.getAttribute('height'), 10);
+      // Grand staff should be taller than single staff (200) but possibly
+      // different from normal multi-voice height (440)
+      expect(height).toBeGreaterThan(200);
+    });
+  });
 });

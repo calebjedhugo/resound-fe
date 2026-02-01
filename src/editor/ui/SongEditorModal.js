@@ -58,15 +58,23 @@ export default class SongEditorModal {
     titleEl.textContent = `${typeName} Song \u2014 ${position}`;
     headerEl.appendChild(titleEl);
 
+    // Body element (declared early so clef-change handler can reference it)
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'song-modal-body';
+
+    // Read puzzle metadata for musical context
+    const metadata = this._undoManager.getMetadata();
+
     // Clef selector
     const clefSelect = document.createElement('select');
     clefSelect.className = 'prop-select clef-selector';
     const currentClef = entity.data.clef || null;
+    const hasGrandStaff = (entity.data.staffGroups || []).some((g) => g.type === 'brace');
 
     const autoOption = document.createElement('option');
     autoOption.value = 'auto';
     autoOption.textContent = 'Auto';
-    if (!currentClef) autoOption.selected = true;
+    if (!currentClef && !hasGrandStaff) autoOption.selected = true;
     clefSelect.appendChild(autoOption);
 
     const trebleOption = document.createElement('option');
@@ -81,21 +89,53 @@ export default class SongEditorModal {
     if (currentClef === 'bass') bassOption.selected = true;
     clefSelect.appendChild(bassOption);
 
+    if (isPolyphonic) {
+      const grandStaffOption = document.createElement('option');
+      grandStaffOption.value = 'grand-staff';
+      grandStaffOption.textContent = 'Grand Staff';
+      if (hasGrandStaff) grandStaffOption.selected = true;
+      clefSelect.appendChild(grandStaffOption);
+    }
+
     clefSelect.onchange = () => {
       const val = clefSelect.value;
       const ent = this._undoManager.getEntity(entityId);
       if (!ent) return;
-      if (val === 'auto') {
-        const newData = { ...ent.data };
+
+      const wasGrandStaff = (ent.data.staffGroups || []).some((g) => g.type === 'brace');
+      const isNowGrandStaff = val === 'grand-staff';
+
+      // Update entity data
+      const newData = { ...ent.data };
+      if (isNowGrandStaff) {
         delete newData.clef;
-        this._undoManager.updateEntity(entityId, { data: newData });
-        this._notationEditor._clefOverride = null;
+        newData.staffGroups = [{ type: 'brace', voiceIds: ['treble', 'bass'] }];
+      } else if (val === 'auto') {
+        delete newData.clef;
+        delete newData.staffGroups;
       } else {
-        const newData = { ...ent.data, clef: val };
-        this._undoManager.updateEntity(entityId, { data: newData });
-        this._notationEditor._clefOverride = val;
+        newData.clef = val;
+        delete newData.staffGroups;
       }
-      this._notationEditor._renderStaff();
+      this._undoManager.updateEntity(entityId, { data: newData });
+
+      // Recreate editor if mode changed (grand staff <-> single staff)
+      if (wasGrandStaff !== isNowGrandStaff) {
+        this._notationEditor.dispose();
+        const updatedEntity = this._undoManager.getEntity(entityId);
+        this._notationEditor = new NotationEditor(bodyEl, this._undoManager, entityId, {
+          polyphonic: isPolyphonic,
+          keySignature: metadata.keySignature || 'C',
+          timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
+          clef: updatedEntity.data.clef || null,
+          staffGroups: updatedEntity.data.staffGroups || [],
+        });
+        const staffEl = bodyEl.querySelector('.notation-staff');
+        if (staffEl) staffEl.focus();
+      } else if (!isNowGrandStaff) {
+        this._notationEditor._clefOverride = val === 'auto' ? null : val;
+        this._notationEditor._renderStaff();
+      }
     };
 
     const closeBtn = document.createElement('button');
@@ -109,8 +149,6 @@ export default class SongEditorModal {
     modalEl.appendChild(headerEl);
 
     // Body
-    const bodyEl = document.createElement('div');
-    bodyEl.className = 'song-modal-body';
     modalEl.appendChild(bodyEl);
 
     // Footer
@@ -139,15 +177,13 @@ export default class SongEditorModal {
     // Append to root
     this._rootContainer.appendChild(this._backdropEl);
 
-    // Read puzzle metadata for musical context
-    const metadata = this._undoManager.getMetadata();
-
     // Create NotationEditor inside the body
     this._notationEditor = new NotationEditor(bodyEl, this._undoManager, entityId, {
       polyphonic: isPolyphonic,
       keySignature: metadata.keySignature || 'C',
       timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
       clef: entity.data.clef || null,
+      staffGroups: entity.data.staffGroups || [],
     });
 
     // Focus the staff element

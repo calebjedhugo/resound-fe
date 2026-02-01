@@ -3,7 +3,8 @@
  *
  * Canonical output:
  * {
- *   markers: [...],  // optional
+ *   markers: [...],      // optional
+ *   staffGroups: [...],   // staff grouping info (e.g., brace for grand staff)
  *   voices: [{
  *     id: string,
  *     clef: string | undefined,
@@ -17,6 +18,7 @@ export function parseNoteData(input) {
   // Level 1: plain array of notes
   if (Array.isArray(input)) {
     return {
+      staffGroups: [],
       voices: [
         {
           id: '0',
@@ -34,6 +36,7 @@ export function parseNoteData(input) {
     const topTimeSignature = input.timeSignature !== undefined ? input.timeSignature : null;
 
     const result = {
+      staffGroups: input.staffGroups || [],
       voices: input.voices.map((voice, index) => ({
         id: voice.id !== undefined ? voice.id : String(index),
         clef: voice.clef,
@@ -62,5 +65,5 @@ export function parseNoteData(input) {
     voice.clef = input.clef;
   }
 
-  return { voices: [voice] };
+  return { staffGroups: [], voices: [voice] };
 }

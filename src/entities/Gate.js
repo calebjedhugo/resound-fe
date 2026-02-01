@@ -10,8 +10,10 @@ class Gate extends Entity {
   constructor(position, data = {}) {
     super('gate', position, data);
 
-    // Validate required data
-    if (!data.song || !Array.isArray(data.song) || data.song.length === 0) {
+    // Validate required data — accept flat array or voices object
+    const validArray = Array.isArray(data.song) && data.song.length > 0;
+    const validVoices = data.song && !Array.isArray(data.song) && Array.isArray(data.song.voices);
+    if (!validArray && !validVoices) {
       throw new Error('Gate requires a song array');
     }
 

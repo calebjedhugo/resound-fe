@@ -152,6 +152,42 @@ describe('NotationDisplay on Gates and Fountains', () => {
     });
   });
 
+  describe('voices format (grand staff)', () => {
+    const voicesSong = {
+      voices: [
+        { id: 'treble', clef: 'treble', notes: [{ pitch: 'C5', length: '1/4' }] },
+        { id: 'bass', clef: 'bass', notes: [{ pitch: 'C3', length: '1/4' }] },
+      ],
+      staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+    };
+
+    it('gate accepts voices-format song without throwing', () => {
+      expect(() => new Gate({ x: 0, y: 0, z: 0 }, { song: voicesSong })).not.toThrow();
+    });
+
+    it('fountain accepts voices-format song without throwing', () => {
+      expect(() => new Fountain({ x: 0, y: 0, z: 0 }, { song: voicesSong })).not.toThrow();
+    });
+
+    it('gate with voices-format song creates notation display', () => {
+      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: voicesSong });
+      expect(gate.notationDisplay).toBeDefined();
+      expect(gate.notationDisplay.song).toBe(gate.requiredSong);
+    });
+
+    it('fountain with voices-format song creates notation display', () => {
+      const fountain = new Fountain({ x: 0, y: 0, z: 0 }, { song: voicesSong });
+      expect(fountain.notationDisplay).toBeDefined();
+      expect(fountain.notationDisplay.song).toBe(fountain.requiredSong);
+    });
+
+    it('gate with voices-format song has 4 notation meshes', () => {
+      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: voicesSong });
+      const notationChildren = gate.mesh.children.filter((c) => c._isNotationMesh);
+      expect(notationChildren).toHaveLength(4);
+    });
+  });
+
   describe('multi-note songs', () => {
     it('gate with multi-note song creates notation display successfully', () => {
       const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: multiNoteSong });

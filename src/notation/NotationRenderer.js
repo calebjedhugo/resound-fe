@@ -37,6 +37,8 @@ import { renderTempoMarking, renderTempoChange } from 'notation/components/Tempo
 import { renderExpressionText } from 'notation/components/ExpressionText';
 import { renderRehearsalMark } from 'notation/components/RehearsalMark';
 import { renderLyric, renderMelisma } from 'notation/components/Lyric';
+import { createBrace } from 'notation/components/Brace';
+import { createSharedBarLine } from 'notation/components/SharedBarLine';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DEFAULT_WIDTH = 800;
@@ -46,6 +48,8 @@ const STAFF_TOP_OFFSET = 10;
 const CLEF_WIDTH = 45;
 const VOICE_HEIGHT = 200;
 const VOICE_GAP = 40;
+const GRAND_STAFF_GAP = 60;
+const STAFF_HEIGHT = 80; // 5 lines, 20px apart
 const ACCIDENTAL_OFFSET = 14;
 const KEY_SIG_ACCIDENTAL_WIDTH = 10;
 const TIME_SIG_WIDTH = 25;
@@ -108,8 +112,52 @@ export class NotationRenderer {
 
     const parsed = parseNoteData(songData);
     const voiceCount = parsed.voices.length;
-    const totalHeight =
-      voiceCount > 1 ? voiceCount * VOICE_HEIGHT + (voiceCount - 1) * VOICE_GAP : this._height;
+    const staffGroups = parsed.staffGroups || [];
+
+    // Build brace group lookup: voiceId -> group info
+    const braceGroups = staffGroups.filter((g) => g.type === 'brace');
+    const voiceBraceGroup = new Map();
+    for (const group of braceGroups) {
+      for (const vid of group.voiceIds) {
+        voiceBraceGroup.set(vid, group);
+      }
+    }
+
+    // Compute Y positions for each voice
+    const voiceYPositions = [];
+    let currentY = 0;
+    for (let vi = 0; vi < voiceCount; vi += 1) {
+      const voice = parsed.voices[vi];
+      const voiceHeight = voiceCount > 1 ? VOICE_HEIGHT : this._height;
+      const yOffset = voiceHeight / 2 - STAFF_CENTER_Y;
+
+      if (vi === 0) {
+        voiceYPositions.push(yOffset);
+        currentY = yOffset;
+      } else {
+        const prevVoice = parsed.voices[vi - 1];
+        const prevInBrace = voiceBraceGroup.get(prevVoice.id);
+        const currInBrace = voiceBraceGroup.get(voice.id);
+        const sameGroup = prevInBrace && currInBrace && prevInBrace === currInBrace;
+        const gap = sameGroup ? GRAND_STAFF_GAP + STAFF_HEIGHT : VOICE_HEIGHT + VOICE_GAP;
+        currentY += gap;
+        voiceYPositions.push(currentY);
+      }
+    }
+
+    const hasBraceGroups = braceGroups.length > 0;
+    let totalHeight;
+    if (voiceCount <= 1) {
+      totalHeight = this._height;
+    } else if (hasBraceGroups) {
+      // Dynamic height for grouped staves
+      const lastVoiceBottom =
+        voiceYPositions[voiceCount - 1] + STAFF_TOP_OFFSET + STAFF_HEIGHT + 40;
+      totalHeight = lastVoiceBottom;
+    } else {
+      // Legacy formula for independent staves
+      totalHeight = voiceCount * VOICE_HEIGHT + (voiceCount - 1) * VOICE_GAP;
+    }
 
     this._svg = createSvgElement('svg', {
       class: 'notation',
@@ -118,10 +166,12 @@ export class NotationRenderer {
       viewBox: `0 0 ${this._width} ${totalHeight}`,
     });
 
+    // Track per-voice barline X positions for shared barlines
+    const voiceBarlineXPositions = new Map();
+
     parsed.voices.forEach((voice, index) => {
       const clef = voice.clef || inferClef(voice.notes);
-      const voiceHeight = voiceCount > 1 ? VOICE_HEIGHT : totalHeight;
-      const voiceY = index * (VOICE_HEIGHT + VOICE_GAP) + (voiceHeight / 2 - STAFF_CENTER_Y);
+      const voiceY = voiceYPositions[index];
 
       const staffGroup = createGroup(`staff staff-${index}`, {
         'data-voice-id': voice.id,
@@ -163,6 +213,10 @@ export class NotationRenderer {
       // Beat tracking for bar lines
       const measureLength = timeSignature ? timeSignature[0] * (4 / timeSignature[1]) : null;
       let cumulativeBeats = 0;
+
+      // Track barline X positions for shared barlines in brace groups
+      const barlineXs = [];
+      voiceBarlineXPositions.set(voice.id, barlineXs);
 
       // Pre-compute beam groups
       const beamGroups = timeSignature ? computeBeamGroups(voice.notes, timeSignature) : [];
@@ -443,6 +497,7 @@ export class NotationRenderer {
             while (cumulativeBeats >= measureLength - 0.001) {
               cursorX += BAR_LINE_PADDING;
               staffGroup.appendChild(createBarLine(cursorX));
+              barlineXs.push(cursorX);
               cursorX += BAR_LINE_PADDING;
               cumulativeBeats -= measureLength;
             }
@@ -646,6 +701,7 @@ export class NotationRenderer {
               while (cumulativeBeats >= measureLength - 0.001) {
                 cursorX += BAR_LINE_PADDING;
                 staffGroup.appendChild(createBarLine(cursorX));
+                barlineXs.push(cursorX);
                 cursorX += BAR_LINE_PADDING;
                 cumulativeBeats -= measureLength;
               }
@@ -861,6 +917,7 @@ export class NotationRenderer {
           while (cumulativeBeats >= measureLength - 0.001) {
             cursorX += BAR_LINE_PADDING;
             staffGroup.appendChild(createBarLine(cursorX));
+            barlineXs.push(cursorX);
             cursorX += BAR_LINE_PADDING;
             cumulativeBeats -= measureLength;
           }
@@ -1030,6 +1087,36 @@ export class NotationRenderer {
 
       this._svg.appendChild(staffGroup);
     });
+
+    // Render brace and shared barlines for staff groups
+    for (const group of braceGroups) {
+      const voiceIndices = group.voiceIds
+        .map((vid) => parsed.voices.findIndex((v) => v.id === vid))
+        .filter((i) => i >= 0);
+      if (voiceIndices.length < 2) continue;
+
+      const firstIdx = Math.min(...voiceIndices);
+      const lastIdx = Math.max(...voiceIndices);
+      const topY = voiceYPositions[firstIdx] + STAFF_TOP_OFFSET;
+      const bottomY = voiceYPositions[lastIdx] + STAFF_TOP_OFFSET + STAFF_HEIGHT;
+
+      // Brace at the left edge
+      const braceHeight = bottomY - topY;
+      const braceEl = createBrace({ height: braceHeight });
+      braceEl.setAttribute('transform', `translate(${STAFF_START_X - 12}, ${topY})`);
+      this._svg.appendChild(braceEl);
+
+      // Shared barlines: collect X positions common across grouped voices
+      const allBarlineXSets = voiceIndices.map((vi) => {
+        const vid = parsed.voices[vi].id;
+        return voiceBarlineXPositions.get(vid) || [];
+      });
+      // Use the first voice's barline positions (voices in a group share time sig)
+      const sharedXPositions = allBarlineXSets[0] || [];
+      for (const x of sharedXPositions) {
+        this._svg.appendChild(createSharedBarLine({ x, topY, bottomY }));
+      }
+    }
 
     if (this._container) {
       this._container.appendChild(this._svg);

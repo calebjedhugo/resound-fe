@@ -83,7 +83,13 @@ export default class NotationEditor {
     container,
     undoManager,
     entityId,
-    { polyphonic = true, keySignature = 'C', timeSignature = [4, 4], clef = null } = {}
+    {
+      polyphonic = true,
+      keySignature = 'C',
+      timeSignature = [4, 4],
+      clef = null,
+      staffGroups = [],
+    } = {}
   ) {
     this._container = container;
     this._undoManager = undoManager;
@@ -93,7 +99,15 @@ export default class NotationEditor {
     this._timeSignature = timeSignature;
     this._clefOverride = clef;
     this._currentClef = 'treble';
-    this._songModel = new SongModel(timeSignature || [4, 4]);
+    this._staffGroups = staffGroups;
+    this._isGrandStaff = staffGroups.length > 0 && staffGroups.some((g) => g.type === 'brace');
+
+    const ts = timeSignature || [4, 4];
+    this._voiceModels = this._isGrandStaff
+      ? [new SongModel(ts), new SongModel(ts)]
+      : [new SongModel(ts)];
+    this._activeVoiceIndex = 0;
+
     this._palette = null;
     this._staffEl = null;
 
@@ -101,20 +115,53 @@ export default class NotationEditor {
     this._render();
   }
 
+  get _songModel() {
+    return this._voiceModels[this._activeVoiceIndex];
+  }
+
   _loadSong() {
     const entity = this._undoManager.getEntity(this._entityId);
-    if (entity && entity.data && entity.data.song) {
-      this._songModel.fromSongArray(JSON.parse(JSON.stringify(entity.data.song)));
+    if (!entity || !entity.data || !entity.data.song) return;
+
+    const song = entity.data.song;
+
+    if (this._isGrandStaff && song.voices) {
+      song.voices.forEach((voice, i) => {
+        if (this._voiceModels[i]) {
+          this._voiceModels[i].fromSongArray(JSON.parse(JSON.stringify(voice.notes)));
+        }
+      });
+    } else if (Array.isArray(song)) {
+      this._voiceModels[0].fromSongArray(JSON.parse(JSON.stringify(song)));
     }
   }
 
   _saveSong() {
     const entity = this._undoManager.getEntity(this._entityId);
     if (!entity) return;
-    const newData = {
-      ...entity.data,
-      song: JSON.parse(JSON.stringify(this._songModel.toSongArray())),
-    };
+
+    let songData;
+    if (this._isGrandStaff) {
+      songData = {
+        voices: [
+          {
+            id: 'treble',
+            clef: 'treble',
+            notes: JSON.parse(JSON.stringify(this._voiceModels[0].toSongArray())),
+          },
+          {
+            id: 'bass',
+            clef: 'bass',
+            notes: JSON.parse(JSON.stringify(this._voiceModels[1].toSongArray())),
+          },
+        ],
+        staffGroups: JSON.parse(JSON.stringify(this._staffGroups)),
+      };
+    } else {
+      songData = JSON.parse(JSON.stringify(this._songModel.toSongArray()));
+    }
+
+    const newData = { ...entity.data, song: songData };
     this._undoManager.updateEntity(this._entityId, { data: newData });
   }
 
@@ -173,9 +220,14 @@ export default class NotationEditor {
   }
 
   _renderStaff() {
-    const notes = this._songModel.toSongArray();
-
     this._staffEl.innerHTML = '';
+
+    if (this._isGrandStaff) {
+      this._renderGrandStaff();
+      return;
+    }
+
+    const notes = this._songModel.toSongArray();
 
     // Resolve clef
     this._currentClef = this._resolveClef(notes);
@@ -329,6 +381,170 @@ export default class NotationEditor {
     staffGroup.appendChild(cursor);
 
     svg.appendChild(staffGroup);
+    this._staffEl.appendChild(svg);
+  }
+
+  /**
+   * Render grand staff: two voice staves with independent clefs.
+   */
+  _renderGrandStaff() {
+    const GRAND_STAFF_GAP = 60;
+    const clefs = ['treble', 'bass'];
+    const voiceYOffsets = [0, 90 + GRAND_STAFF_GAP];
+
+    // Key signature info (shared by both staves)
+    const keyInfo = getKeySignature(this._keySignature);
+
+    // Header layout (shared by both staves)
+    let headerX = STAFF_START_X;
+    const clefX = headerX;
+    headerX += CLEF_WIDTH;
+
+    const keySigX = headerX;
+    if (keyInfo.count > 0) {
+      headerX += keyInfo.count * KEY_SIG_ACCIDENTAL_WIDTH + HEADER_PADDING;
+    }
+
+    const timeSigX = headerX;
+    if (this._timeSignature) {
+      headerX += TIME_SIG_WIDTH + HEADER_PADDING;
+    }
+
+    const noteStartX = headerX + HEADER_PADDING;
+
+    // Calculate max width across both voices
+    let maxNotesWidth = 0;
+    for (const model of this._voiceModels) {
+      let voiceWidth = 0;
+      for (const entry of model.toSongArray()) {
+        voiceWidth += safeDurationInfo(entryNoteObj(entry).length).spacing;
+      }
+      maxNotesWidth = Math.max(maxNotesWidth, voiceWidth);
+    }
+
+    const svgWidth = Math.max(MIN_SVG_WIDTH, noteStartX + maxNotesWidth + 40);
+    const svgHeight = voiceYOffsets[1] + 100 + 20;
+
+    // Create SVG
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('width', svgWidth);
+    svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+    svg.style.background = '#0a1628';
+
+    // Render each voice
+    for (let v = 0; v < this._voiceModels.length; v += 1) {
+      const model = this._voiceModels[v];
+      const clef = clefs[v];
+      const yOffset = voiceYOffsets[v];
+      const isActive = v === this._activeVoiceIndex;
+
+      // Set current clef for note rendering helpers
+      this._currentClef = clef;
+
+      const voiceGroup = createGroup('voice-group', {
+        transform: `translate(0, ${yOffset})`,
+      });
+
+      if (!isActive) {
+        voiceGroup.setAttribute('opacity', '0.5');
+      }
+
+      // Staff lines
+      const staffLines = createStaffLines(svgWidth - 20);
+      staffLines.setAttribute('transform', `translate(0, ${STAFF_TOP_OFFSET})`);
+      voiceGroup.appendChild(staffLines);
+
+      // Clef
+      const clefEl = createClef(clef);
+      clefEl.setAttribute('transform', `translate(${clefX}, 0)`);
+      voiceGroup.appendChild(clefEl);
+
+      // Key signature
+      if (keyInfo.count > 0) {
+        const keySigEl = createKeySignature(this._keySignature, clef);
+        if (keySigEl) {
+          keySigEl.setAttribute('transform', `translate(${keySigX}, 0)`);
+          voiceGroup.appendChild(keySigEl);
+        }
+      }
+
+      // Time signature
+      if (this._timeSignature) {
+        const timeSigEl = createTimeSignature(this._timeSignature);
+        timeSigEl.setAttribute('transform', `translate(${timeSigX}, 0)`);
+        voiceGroup.appendChild(timeSigEl);
+      }
+
+      // Render notes
+      const notes = model.toSongArray();
+      const barlinePositions = this._timeSignature
+        ? calculateBarlines(notes, this._timeSignature)
+        : [];
+      const barlineSet = new Set(barlinePositions);
+      const activeAccidentals = new Map();
+      let xPos = noteStartX;
+
+      for (let i = 0; i < notes.length; i += 1) {
+        const entry = notes[i];
+
+        if (barlineSet.has(i)) {
+          activeAccidentals.clear();
+        }
+
+        const isRest = !Array.isArray(entry) && !entry.pitch;
+        const isChord = Array.isArray(entry);
+        const info = safeDurationInfo(entryNoteObj(entry).length);
+        const isSelected = isActive && i === model._selectedIndex;
+
+        if (isRest) {
+          voiceGroup.appendChild(this._renderRestEntry(entry, xPos, i, isSelected));
+        } else if (isChord) {
+          voiceGroup.appendChild(
+            this._renderChordEntry(entry, xPos, i, isSelected, activeAccidentals, keyInfo)
+          );
+        } else {
+          voiceGroup.appendChild(
+            this._renderSingleNote(entry, xPos, i, isSelected, activeAccidentals, keyInfo)
+          );
+        }
+
+        if (!this._timeSignature && !isRest) {
+          activeAccidentals.clear();
+        }
+
+        xPos += info.spacing;
+      }
+
+      // Barlines
+      for (const pos of barlinePositions) {
+        let barX = noteStartX;
+        for (let j = 0; j < pos && j < notes.length; j += 1) {
+          barX += safeDurationInfo(entryNoteObj(notes[j]).length).spacing;
+        }
+        voiceGroup.appendChild(createBarLine(barX));
+      }
+
+      // Cursor (only on active voice)
+      if (isActive) {
+        let cursorX = noteStartX;
+        for (let j = 0; j < model._cursorPosition && j < notes.length; j += 1) {
+          cursorX += safeDurationInfo(entryNoteObj(notes[j]).length).spacing;
+        }
+        const cursor = createLine(cursorX, STAFF_TOP_OFFSET, cursorX, STAFF_TOP_OFFSET + 80, {
+          class: 'cursor-line',
+          stroke: '#44ff88',
+          'stroke-width': '2',
+          opacity: '0.6',
+        });
+        voiceGroup.appendChild(cursor);
+      }
+
+      svg.appendChild(voiceGroup);
+    }
+
+    // Set _currentClef to active voice's clef for click handling
+    this._currentClef = clefs[this._activeVoiceIndex];
+
     this._staffEl.appendChild(svg);
   }
 
@@ -610,6 +826,19 @@ export default class NotationEditor {
         this._saveSong();
         break;
       }
+      case 'Enter':
+        if (this._isGrandStaff) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            this._activeVoiceIndex = Math.max(0, this._activeVoiceIndex - 1);
+          } else {
+            this._activeVoiceIndex = Math.min(
+              this._voiceModels.length - 1,
+              this._activeVoiceIndex + 1
+            );
+          }
+        }
+        break;
       default: {
         // Number keys 2-9 for note insertion
         const dur = DURATIONS.find((d) => d.key === e.key);

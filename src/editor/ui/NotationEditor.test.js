@@ -824,4 +824,138 @@ describe('NotationEditor', () => {
       expect(noteOrGroup).not.toBeNull();
     });
   });
+
+  // -- Grand staff mode ---------------------------------------------------
+
+  describe('grand staff mode', () => {
+    function createGrandStaffEditor(trebleNotes = [], bassNotes = [], options = {}) {
+      const songData =
+        trebleNotes.length || bassNotes.length
+          ? {
+              voices: [
+                { id: 'treble', clef: 'treble', notes: trebleNotes },
+                { id: 'bass', clef: 'bass', notes: bassNotes },
+              ],
+              staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+            }
+          : [];
+
+      const model = new EditorPuzzleModel();
+      const undoManager = new UndoManager(model);
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+
+      const entityId = undoManager.addEntity('gate', 5, 0, 3, {
+        song: songData,
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+        ...options.entityData,
+      });
+
+      const editor = new NotationEditor(container, undoManager, entityId, {
+        polyphonic: true,
+        keySignature: options.keySignature || 'C',
+        timeSignature: options.timeSignature !== undefined ? options.timeSignature : [4, 4],
+        clef: null,
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      });
+      return { model, undoManager, container, editor, entityId };
+    }
+
+    it('renders two staff-lines groups in grand staff mode', () => {
+      env = createGrandStaffEditor();
+      const svg = getSvg(env.container);
+      const staffLines = svg.querySelectorAll('.staff-lines');
+      expect(staffLines.length).toBe(2);
+    });
+
+    it('renders treble and bass clefs', () => {
+      env = createGrandStaffEditor();
+      const svg = getSvg(env.container);
+      const trebleClef = svg.querySelector('.clef-treble');
+      const bassClef = svg.querySelector('.clef-bass');
+      expect(trebleClef).not.toBeNull();
+      expect(bassClef).not.toBeNull();
+    });
+
+    it('starts with treble voice (index 0) active', () => {
+      env = createGrandStaffEditor();
+      expect(env.editor._activeVoiceIndex).toBe(0);
+    });
+
+    it('Enter key switches to bass voice (index 1)', () => {
+      env = createGrandStaffEditor();
+      dispatchKey(env.container, 'Enter');
+      expect(env.editor._activeVoiceIndex).toBe(1);
+    });
+
+    it('Shift+Enter switches back to treble voice (index 0)', () => {
+      env = createGrandStaffEditor();
+      dispatchKey(env.container, 'Enter');
+      expect(env.editor._activeVoiceIndex).toBe(1);
+      dispatchKey(env.container, 'Enter', { shiftKey: true });
+      expect(env.editor._activeVoiceIndex).toBe(0);
+    });
+
+    it('Enter does not go beyond last voice', () => {
+      env = createGrandStaffEditor();
+      dispatchKey(env.container, 'Enter');
+      dispatchKey(env.container, 'Enter');
+      expect(env.editor._activeVoiceIndex).toBe(1);
+    });
+
+    it('Shift+Enter does not go below first voice', () => {
+      env = createGrandStaffEditor();
+      dispatchKey(env.container, 'Enter', { shiftKey: true });
+      expect(env.editor._activeVoiceIndex).toBe(0);
+    });
+
+    it('places notes on the active voice', () => {
+      env = createGrandStaffEditor();
+      // Place a note on treble (default active)
+      clickStaff(env.container, { clientX: 100, clientY: 30 });
+      const entity = env.undoManager.getEntity(env.entityId);
+      const song = entity.data.song;
+      expect(song.voices[0].notes.length).toBe(1);
+      expect(song.voices[1].notes.length).toBe(0);
+    });
+
+    it('places notes on bass voice after switching', () => {
+      env = createGrandStaffEditor();
+      dispatchKey(env.container, 'Enter');
+      clickStaff(env.container, { clientX: 100, clientY: 150 });
+      const entity = env.undoManager.getEntity(env.entityId);
+      const song = entity.data.song;
+      expect(song.voices[0].notes.length).toBe(0);
+      expect(song.voices[1].notes.length).toBe(1);
+    });
+
+    it('saves song in voices+staffGroups format', () => {
+      env = createGrandStaffEditor();
+      clickStaff(env.container, { clientX: 100, clientY: 30 });
+      const entity = env.undoManager.getEntity(env.entityId);
+      const song = entity.data.song;
+      expect(song.voices).toBeDefined();
+      expect(song.staffGroups).toBeDefined();
+      expect(Array.isArray(song.voices)).toBe(true);
+      expect(song.voices.length).toBe(2);
+    });
+
+    it('loads existing voices+staffGroups song data', () => {
+      env = createGrandStaffEditor(
+        [{ pitch: 'C5', length: '1/4' }],
+        [{ pitch: 'C3', length: '1/4' }]
+      );
+      const svg = getSvg(env.container);
+      const notes = svg.querySelectorAll('.note');
+      expect(notes.length).toBe(2);
+    });
+
+    it('maintains separate cursor position per voice', () => {
+      env = createGrandStaffEditor();
+      // Place a note on treble
+      clickStaff(env.container, { clientX: 100, clientY: 30 });
+      expect(env.editor._voiceModels[0]._cursorPosition).toBe(1);
+      expect(env.editor._voiceModels[1]._cursorPosition).toBe(0);
+    });
+  });
 });
