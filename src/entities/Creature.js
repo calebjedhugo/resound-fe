@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import Random from 'audio/instruments/Random';
+import { Random } from 'resound-sound';
 import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import HarmonyAnalyzer from 'core/HarmonyAnalyzer';

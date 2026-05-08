@@ -15,7 +15,6 @@ export default {
 
     // Absolute imports from src/ (mirrors jsconfig.json baseUrl)
     '^core/(.*)$': '<rootDir>/src/core/$1',
-    '^audio/(.*)$': '<rootDir>/src/audio/$1',
     '^entities/(.*)$': '<rootDir>/src/entities/$1',
     '^ui/(.*)$': '<rootDir>/src/ui/$1',
     '^states/(.*)$': '<rootDir>/src/states/$1',

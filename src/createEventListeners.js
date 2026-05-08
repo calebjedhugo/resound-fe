@@ -1,6 +1,6 @@
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
-import Random from 'audio/instruments/Random';
+import { Random } from 'resound-sound';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';

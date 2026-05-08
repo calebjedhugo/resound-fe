@@ -1,4 +1,4 @@
-import MusicalClock from 'audio/lib/MusicalClock';
+import { MusicalClock } from 'resound-sound';
 
 class GameState {
   constructor() {

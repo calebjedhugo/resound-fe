@@ -1,4 +1,4 @@
-import Clap from 'audio/instruments/Clap';
+import { Clap } from 'resound-sound';
 import { CLAP_RANGE, DEFAULT_CLAP_DISPLACEMENT } from './constants';
 import { getDistance } from './utils';
 import gameState from './GameState';

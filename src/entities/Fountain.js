@@ -3,7 +3,7 @@ import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import SongMatcher from 'core/SongMatcher';
 import ProgressManager from 'core/ProgressManager';
-import FountainInstrument from 'audio/instruments/Fountain';
+import { Fountain as FountainInstrument } from 'resound-sound';
 import { getDistance } from 'core/utils';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from './Entity';

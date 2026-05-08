@@ -1,4 +1,4 @@
-import Piano from 'audio/instruments/Piano';
+import { Piano } from 'resound-sound';
 import { PLAYBACK_BEAT_TOLERANCE } from './constants';
 import ListeningManager from './ListeningManager';
 import gameState from './GameState';
