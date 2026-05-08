@@ -33,4 +33,8 @@ export default {
 
   // Ignore patterns
   testPathIgnorePatterns: ['/node_modules/'],
+
+  // resound-sound ships an ESM bundle; babel-jest needs to transform it even
+  // though it lives under node_modules.
+  transformIgnorePatterns: ['/node_modules/(?!(resound-sound)/)'],
 };
