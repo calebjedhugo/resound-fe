@@ -42,18 +42,15 @@ Tests are integration-style: test behaviors through public APIs, mock only brows
 
 ### IMPORTANT: Package Extraction Path
 
-Three systems are planned for extraction into standalone npm packages. **Respect these dependency boundaries:**
+`audio` and `notation` are extracted and published to npm as `resound-sound` and `resound-notation`. **One extraction remains — `notation-editor`** — and its dependency boundary still applies:
 
 ```
-audio (standalone)        ← game
-notation (standalone)     ← game, notation-editor
 notation-editor           ← game-editor
-  (depends on notation)
+  (depends on resound-notation)
 ```
 
-- `src/audio/` — no imports from `entities/`, `core/`, `editor/`
-- `src/notation/` — no imports from `audio/`, `entities/`, `core/`, `editor/`
-- `src/editor/ui/` notation files — import only from `notation/`, never from game code
+- `src/editor/ui/` notation-editor files — import only from `resound-notation`, never from game code
+- Game UI now imports from `resound-sound` and `resound-notation` (not `audio/` / `notation/`, which no longer exist)
 
 ### Puzzle Editor (`src/editor/`)
 - Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
@@ -94,11 +91,9 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 - Perfect intervals (unison, octave) don't affect movement
 
 ### Notation Coordinate System
-- **Staff-group coords**: staff lines at y = 10, 30, 50, 70, 90 (spacing = 20, `STAFF_TOP_OFFSET = 10`)
-- All notation components (clefs, notes, time sigs, bar lines) have this offset **baked into their coordinates**
-- `STAFF_TOP_OFFSET` must ONLY be applied to the staff-lines element, **never to a parent group** — otherwise components get a double offset
-- `NotationRenderer.js` is the reference implementation; the editor (`NotationEditor.js`) must match its approach
-- **When notation doesn't fit visually**: fix SVG dimensions in the renderer code, NOT the CSS container (see `src/editor/CLAUDE.md`)
+- The renderer lives in the `resound-notation` package — see that repo's docs for the full coordinate model
+- `src/editor/ui/NotationEditor.js` must match the package's renderer approach (offsets, staff-group structure)
+- **When notation doesn't fit visually in the editor**: fix SVG dimensions in the renderer (in `resound-notation`), NOT the CSS container (see `src/editor/CLAUDE.md`)
 
 ### Recording
 - Can only record within creature's `audibleRange × 0.5`
@@ -114,4 +109,4 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 
 ---
 
-*Last Updated: 2026-01-31*
+*Last Updated: 2026-05-08*
