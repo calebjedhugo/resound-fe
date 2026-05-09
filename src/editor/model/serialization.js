@@ -12,7 +12,7 @@
  *    - Wall: position only
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
-import { isValidKeySignature } from 'notation/lib/keySignatures';
+import { isValidKeySignature } from 'resound-notation/lib/keySignatures';
 
 /**
  * Serialize an EditorPuzzleModel into a puzzle JSON object.

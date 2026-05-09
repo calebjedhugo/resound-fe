@@ -5,7 +5,7 @@
  * ID, name, difficulty, tempo, grid size, clap displacement,
  * key signature, time signature.
  */
-import { isValidKeySignature } from 'notation/lib/keySignatures';
+import { isValidKeySignature } from 'resound-notation/lib/keySignatures';
 
 const KEY_SIGNATURE_OPTIONS = [
   'C',

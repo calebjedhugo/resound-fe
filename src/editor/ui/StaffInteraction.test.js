@@ -12,7 +12,7 @@ import {
   calculateBarlines,
   createNoteFromClick,
 } from 'editor/ui/StaffInteraction';
-import { pitchToStaffY } from 'notation/lib/notePositions';
+import { pitchToStaffY } from 'resound-notation/lib/notePositions';
 import SongModel from 'editor/model/SongModel';
 
 describe('StaffInteraction', () => {

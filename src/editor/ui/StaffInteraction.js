@@ -8,7 +8,7 @@
  * (pitchToStaffY, CLEF_CONSTANTS from notation/lib/notePositions).
  */
 
-import { pitchToStaffY, CLEF_CONSTANTS } from 'notation/lib/notePositions';
+import { pitchToStaffY, CLEF_CONSTANTS } from 'resound-notation/lib/notePositions';
 
 const NOTE_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 

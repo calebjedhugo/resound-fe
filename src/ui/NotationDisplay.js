@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NotationRenderer } from 'notation/NotationRenderer';
+import { NotationRenderer } from 'resound-notation/NotationRenderer';
 
 /**
  * Renders musical notation as in-world textures on entity surfaces.

@@ -10,7 +10,7 @@
  * and in-measure memory.
  */
 import { resolveAccidentalDisplay } from 'editor/ui/AccidentalDisplay';
-import { getKeySignature } from 'notation/lib/keySignatures';
+import { getKeySignature } from 'resound-notation/lib/keySignatures';
 
 describe('resolveAccidentalDisplay', () => {
   // -- Key signature baseline -------------------------------------------

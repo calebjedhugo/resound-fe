@@ -6,7 +6,7 @@
  * Allows selecting note duration via click or keyboard shortcut.
  */
 
-import { createNote } from 'notation/components/Note';
+import { createNote } from 'resound-notation/components/Note';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

@@ -11,7 +11,7 @@
  * 4. Memory resets at barlines (caller clears the map)
  */
 
-import { parsePitch } from 'notation/lib/notePositions';
+import { parsePitch } from 'resound-notation/lib/notePositions';
 
 /**
  * Determine whether to display an accidental for a note.

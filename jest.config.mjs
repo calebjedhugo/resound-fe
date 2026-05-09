@@ -18,7 +18,6 @@ export default {
     '^entities/(.*)$': '<rootDir>/src/entities/$1',
     '^ui/(.*)$': '<rootDir>/src/ui/$1',
     '^states/(.*)$': '<rootDir>/src/states/$1',
-    '^notation/(.*)$': '<rootDir>/src/notation/$1',
     '^editor/(.*)$': '<rootDir>/src/editor/$1',
     '^resoundModules/(.*)$': '<rootDir>/src/resoundModules/$1',
     '^createEventListeners$': '<rootDir>/src/createEventListeners.js',
@@ -36,5 +35,5 @@ export default {
 
   // resound-sound ships an ESM bundle; babel-jest needs to transform it even
   // though it lives under node_modules.
-  transformIgnorePatterns: ['/node_modules/(?!(resound-sound)/)'],
+  transformIgnorePatterns: ['/node_modules/(?!(resound-sound|resound-notation)/)'],
 };
