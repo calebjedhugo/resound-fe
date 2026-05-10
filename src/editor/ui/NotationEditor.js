@@ -298,7 +298,7 @@ export default class NotationEditor {
 
     // Time signature
     if (this._timeSignature) {
-      const timeSigEl = createTimeSignature(this._timeSignature);
+      const { element: timeSigEl } = createTimeSignature(this._timeSignature);
       timeSigEl.setAttribute('transform', `translate(${timeSigX}, 0)`);
       staffGroup.appendChild(timeSigEl);
     }
@@ -473,7 +473,7 @@ export default class NotationEditor {
 
       // Time signature
       if (this._timeSignature) {
-        const timeSigEl = createTimeSignature(this._timeSignature);
+        const { element: timeSigEl } = createTimeSignature(this._timeSignature);
         timeSigEl.setAttribute('transform', `translate(${timeSigX}, 0)`);
         voiceGroup.appendChild(timeSigEl);
       }

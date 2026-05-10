@@ -132,11 +132,13 @@ describe('Song Editor Integration', () => {
       const svg = env.root.querySelector('.notation-staff svg');
       const timeSigGroup = svg.querySelector('.time-signature');
       expect(timeSigGroup).not.toBeNull();
-      // Should show "3" and "4" as text elements
-      const texts = timeSigGroup.querySelectorAll('text');
-      expect(texts.length).toBe(2);
-      expect(texts[0].textContent).toBe('3');
-      expect(texts[1].textContent).toBe('4');
+      // SMuFL time signature exposes the numeric pair via data attributes.
+      expect(timeSigGroup.getAttribute('data-beats')).toBe('3');
+      expect(timeSigGroup.getAttribute('data-beat-value')).toBe('4');
+      // Each digit position renders a SMuFL glyph group containing a path.
+      expect(timeSigGroup.querySelector('.time-numerator')).not.toBeNull();
+      expect(timeSigGroup.querySelector('.time-denominator')).not.toBeNull();
+      expect(timeSigGroup.querySelectorAll('path').length).toBeGreaterThanOrEqual(2);
     });
 
     it('changing key signature in metadata then opening modal shows updated key', () => {

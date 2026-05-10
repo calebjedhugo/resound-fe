@@ -157,17 +157,21 @@ describe('NotationEditor', () => {
     it('renders filled head for quarter notes', () => {
       env = createEditor([{ pitch: 'C4', length: '1/4' }]);
       const svg = getSvg(env.container);
-      const noteHead = svg.querySelector('.note .note-head');
+      const note = svg.querySelector('.note');
+      expect(note).not.toBeNull();
+      expect(note.classList.contains('note-quarter')).toBe(true);
+      const noteHead = note.querySelector('.note-head');
       expect(noteHead).not.toBeNull();
-      expect(noteHead.getAttribute('fill')).toBe('currentColor');
     });
 
     it('renders open (unfilled) head for half notes', () => {
       env = createEditor([{ pitch: 'C4', length: '1/2' }]);
       const svg = getSvg(env.container);
-      const noteHead = svg.querySelector('.note .note-head');
+      const note = svg.querySelector('.note');
+      expect(note).not.toBeNull();
+      expect(note.classList.contains('note-half')).toBe(true);
+      const noteHead = note.querySelector('.note-head');
       expect(noteHead).not.toBeNull();
-      expect(noteHead.getAttribute('fill')).toBe('none');
     });
 
     it('renders stems on stemmed notes', () => {

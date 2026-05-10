@@ -151,11 +151,11 @@ describe('SongEditorModal', () => {
 
       modal.open(id);
 
-      // The staff should render note elements (ellipses) for each note
+      // The staff should render a note group for each pitch
       const staff = env.root.querySelector('.notation-staff');
       const svg = staff.querySelector('svg');
-      const noteEllipses = svg.querySelectorAll('ellipse');
-      expect(noteEllipses.length).toBe(2);
+      const notes = svg.querySelectorAll('.note');
+      expect(notes.length).toBe(2);
     });
 
     it('isOpen returns true while the modal is shown', () => {
@@ -419,12 +419,12 @@ describe('SongEditorModal', () => {
 
       modal.open(id1);
       let svg = env.root.querySelector('.notation-staff svg');
-      expect(svg.querySelectorAll('ellipse').length).toBe(1);
+      expect(svg.querySelectorAll('.note').length).toBe(1);
 
       modal.close();
       modal.open(id2);
       svg = env.root.querySelector('.notation-staff svg');
-      expect(svg.querySelectorAll('ellipse').length).toBe(3);
+      expect(svg.querySelectorAll('.note').length).toBe(3);
     });
 
     it('each note edit is a separate undo checkpoint', () => {

@@ -66,22 +66,30 @@ describe('RhythmPalette', () => {
 
     it('whole note button shows an open (unfilled) note head', () => {
       const wholeBtn = container.querySelector('[data-length="1/1"]');
-      const noteHead = wholeBtn.querySelector('.note-head');
-      expect(noteHead.getAttribute('fill')).toBe('none');
+      const note = wholeBtn.querySelector('.note');
+      expect(note).not.toBeNull();
+      expect(note.classList.contains('note-whole')).toBe(true);
+      expect(note.querySelector('.note-head')).not.toBeNull();
+      // Whole notes have no stem
+      expect(wholeBtn.querySelector('.note-stem')).toBeNull();
     });
 
     it('quarter note button shows a filled note head with stem', () => {
       const quarterBtn = container.querySelector('[data-length="1/4"]');
-      const noteHead = quarterBtn.querySelector('.note-head');
-      expect(noteHead.getAttribute('fill')).toBe('currentColor');
+      const note = quarterBtn.querySelector('.note');
+      expect(note).not.toBeNull();
+      expect(note.classList.contains('note-quarter')).toBe(true);
+      expect(note.querySelector('.note-head')).not.toBeNull();
       const stem = quarterBtn.querySelector('.note-stem');
       expect(stem).not.toBeNull();
     });
 
     it('eighth note button shows a filled note head with stem and flag', () => {
       const eighthBtn = container.querySelector('[data-length="1/8"]');
-      const noteHead = eighthBtn.querySelector('.note-head');
-      expect(noteHead.getAttribute('fill')).toBe('currentColor');
+      const note = eighthBtn.querySelector('.note');
+      expect(note).not.toBeNull();
+      expect(note.classList.contains('note-eighth')).toBe(true);
+      expect(note.querySelector('.note-head')).not.toBeNull();
       const stem = eighthBtn.querySelector('.note-stem');
       expect(stem).not.toBeNull();
       const flag = eighthBtn.querySelector('.note-flag');
