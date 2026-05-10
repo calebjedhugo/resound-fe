@@ -26,7 +26,7 @@
   },
   "homepage": "https://github.com/calebjedhugo/resound-fe#readme",
   "dependencies": {
-    "resound-notation": "^0.1.0",
+    "resound-notation": "^0.2.0",
     "resound-sound": "^0.1.0",
     "three": "^0.153.0"
   },
