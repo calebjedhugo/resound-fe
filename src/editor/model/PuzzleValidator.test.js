@@ -243,6 +243,39 @@ describe('PuzzleValidator', () => {
 
       expect(warnings.some((w) => /ramp/i.test(w) && /lower/i.test(w))).toBe(true);
     });
+
+    it('warns when a gate target uses a pitch no creature sings', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity('creature', 7, 0, 7, {
+        song: [{ pitch: 'C4', length: '1/4' }],
+        interval: 8,
+        audibleRange: 30,
+      });
+      model.addEntity('gate', 8, 0, 8, { song: [{ pitch: 'G5', length: '1/4' }] });
+      model.addEntity('wall', 8, 0, 7, {});
+
+      const { warnings } = validatePuzzle(model);
+
+      expect(warnings.some((w) => /unsolvable/i.test(w) && /G5/.test(w))).toBe(true);
+    });
+
+    it('does not warn about solvability when creatures cover the target pitches', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity('creature', 7, 0, 7, {
+        song: [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+        ],
+        interval: 8,
+        audibleRange: 30,
+      });
+      // Different rhythm than the creature, but the pitch (E4) is covered.
+      model.addEntity('fountain', 9, 0, 9, { song: [{ pitch: 'E4', length: '1/2' }] });
+
+      const { warnings } = validatePuzzle(model);
+
+      expect(warnings.some((w) => /unsolvable/i.test(w))).toBe(false);
+    });
   });
 
   // -- General tests --
