@@ -111,6 +111,8 @@ jest.mock('editor/io/sessionPersistence', () => ({
 }));
 
 import EditorApp from 'editor/EditorApp';
+import { loadSession } from 'editor/io/sessionPersistence';
+import { deserializePuzzle } from 'editor/model/serialization';
 
 function setupEditorDOM() {
   document.body.innerHTML = `
@@ -245,6 +247,72 @@ describe('EditorApp wiring', () => {
 
       editBtn.click();
       expect(app.songEditorModal.isOpen).toBe(true);
+    });
+  });
+
+  describe('session restore is disk-authoritative', () => {
+    afterEach(() => {
+      delete global.fetch;
+    });
+
+    function mockRepo(manifestPuzzles, diskJson) {
+      global.fetch = jest.fn((url) => {
+        if (url.includes('manifest.json')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ puzzles: manifestPuzzles }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(diskJson) });
+      });
+    }
+
+    it('restores the on-disk copy when the saved level exists in the repo', async () => {
+      // Stale localStorage snapshot says tempo 144...
+      loadSession.mockReturnValueOnce(
+        deserializePuzzle({
+          id: 'test-x',
+          name: 'X',
+          difficulty: 1,
+          gridSize: 15,
+          tempo: 144,
+          playerStart: { x: 0, y: 0, z: 0 },
+          entities: [],
+        })
+      );
+      // ...but the repo file (authoritative) says 120.
+      mockRepo([{ id: 'test-x', name: 'X', difficulty: 1 }], {
+        id: 'test-x',
+        name: 'X',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [],
+      });
+
+      await app._restoreSession();
+
+      expect(app.undoManager.getMetadata().tempo).toBe(120);
+    });
+
+    it('falls back to the saved snapshot when the level is not in the repo', async () => {
+      loadSession.mockReturnValueOnce(
+        deserializePuzzle({
+          id: 'unsaved',
+          name: 'U',
+          difficulty: 1,
+          gridSize: 15,
+          tempo: 144,
+          playerStart: { x: 0, y: 0, z: 0 },
+          entities: [],
+        })
+      );
+      mockRepo([], null);
+
+      await app._restoreSession();
+
+      expect(app.undoManager.getMetadata().tempo).toBe(144);
     });
   });
 

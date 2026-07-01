@@ -63,6 +63,12 @@ edits show up in the game on a manual reload.
   2-space JSON (compact inline note objects expand). Expected; commit it once.
 - The game picks up changes on a plain tab reload (`PuzzleLoader` fetches at
   runtime); there is no auto-reload of the game tab.
+- **Startup is disk-authoritative** (`EditorApp._restoreSession`). Because
+  autosave keeps disk current, on load the editor re-fetches the last-open
+  level from the repo (by id) instead of trusting the localStorage snapshot,
+  which can be stale (e.g. the file was reverted via git). Falls back to the
+  localStorage snapshot only for a not-yet-saved puzzle (no id / not in the
+  manifest).
 
 ## Future: its own package
 

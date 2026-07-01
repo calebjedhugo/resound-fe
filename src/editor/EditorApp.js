@@ -18,7 +18,8 @@ import ExportPanel from 'editor/ui/ExportPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
-import { savePuzzleToRepo } from 'editor/io/repoPersistence';
+import { savePuzzleToRepo, listRepoPuzzles, loadRepoPuzzle } from 'editor/io/repoPersistence';
+import { importPuzzle } from 'editor/io/importPuzzle';
 
 export default class EditorApp {
   constructor() {
@@ -161,11 +162,29 @@ export default class EditorApp {
     }
   }
 
-  _restoreSession() {
+  async _restoreSession() {
     const restored = loadSession();
-    if (restored) {
-      this._applyRestoredModel(restored);
+    if (!restored) return;
+
+    // Disk is authoritative: autosave keeps public/puzzles/<id>.json current,
+    // so if the last-open level exists in the repo, restore its on-disk copy
+    // rather than the (possibly stale) localStorage snapshot. Fall back to the
+    // snapshot for a not-yet-saved puzzle (no id, or id not in the manifest).
+    const { id } = restored.getMetadata();
+    if (id) {
+      try {
+        const puzzles = await listRepoPuzzles();
+        if (puzzles.some((p) => p.id === id)) {
+          const json = await loadRepoPuzzle(id);
+          this._applyRestoredModel(importPuzzle(json).model);
+          this.levelPicker.setSelected(id);
+          return;
+        }
+      } catch (err) {
+        console.warn('Falling back to saved session:', err);
+      }
     }
+    this._applyRestoredModel(restored);
   }
 
   _applyRestoredModel(importedModel) {
