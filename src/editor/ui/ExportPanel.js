@@ -1,16 +1,14 @@
 /**
  * ExportPanel
  *
- * Sidebar panel for exporting a puzzle to JSON.
- * Validates the model first, displaying errors or providing
- * download/clipboard actions on success.
+ * Sidebar panel for grabbing a standalone copy of the puzzle JSON.
+ *
+ * NOTE: during dev the editor autosaves the real repo file and upserts the
+ * manifest (see io/repoPersistence + src/editor/CLAUDE.md), so this panel is
+ * only for exporting a copy to share/download — it no longer prints a manifest
+ * entry to paste by hand.
  */
-import {
-  exportPuzzle,
-  downloadJson,
-  copyToClipboard,
-  getManifestEntry,
-} from 'editor/io/exportPuzzle';
+import { exportPuzzle, downloadJson, copyToClipboard } from 'editor/io/exportPuzzle';
 
 export default class ExportPanel {
   constructor(container, undoManager) {
@@ -93,16 +91,5 @@ export default class ExportPanel {
     actions.appendChild(copyBtn);
 
     this._statusEl.appendChild(actions);
-
-    // Manifest entry
-    const manifest = getManifestEntry(result.json);
-    const manifestDiv = document.createElement('div');
-    manifestDiv.className = 'manifest-entry';
-    manifestDiv.innerHTML = `<strong>Manifest entry:</strong><pre>${JSON.stringify(
-      manifest,
-      null,
-      2
-    )}</pre>`;
-    this._statusEl.appendChild(manifestDiv);
   }
 }

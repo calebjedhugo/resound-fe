@@ -11,20 +11,34 @@
  */
 import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import { maxFloorElevation } from 'editor/util/elevations';
 
 export default class FloorRegionPanel {
-  constructor(container, undoManager, editorScene) {
+  constructor(container, undoManager, editorScene, onFloorsChanged) {
     this._container = container;
     this._undoManager = undoManager;
     this._editorScene = editorScene;
+    this._onFloorsChanged = onFloorsChanged || (() => {});
     this._isPlacing = false;
     this._firstCorner = null;
     this._previewMesh = null;
     this._floorMeshes = [];
+    // Elevation the *next* region is placed on. Defaults to the current storey;
+    // can go one above the highest floor to start a new upper storey.
+    this._targetElevation = editorScene.activeElevation || 0;
     this._render();
   }
 
+  /** Highest elevation a new region may target: one above the current top. */
+  _maxTarget() {
+    return maxFloorElevation(this._undoManager.getFloors()) + 1;
+  }
+
   _render() {
+    this._container.innerHTML = '';
+    // Keep the target within [0, top + 1] as floors come and go.
+    this._targetElevation = Math.max(0, Math.min(this._targetElevation, this._maxTarget()));
+
     const wrapper = document.createElement('div');
     wrapper.className = 'panel-section';
 
@@ -32,6 +46,36 @@ export default class FloorRegionPanel {
     label.textContent = 'Floor Regions';
     label.className = 'panel-label';
     wrapper.appendChild(label);
+
+    // New-region elevation stepper (this is how a new upper storey is created).
+    const elevRow = document.createElement('div');
+    elevRow.className = 'floor-elev-row';
+    const elevLabel = document.createElement('span');
+    elevLabel.className = 'floor-elev-label';
+    elevLabel.textContent = 'Add next region on floor';
+    elevLabel.title = 'The elevation the next floor region you draw will be placed on';
+    elevRow.appendChild(elevLabel);
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'elevation-btn floor-elev-btn';
+    downBtn.textContent = '-';
+    downBtn.disabled = this._targetElevation <= 0;
+    downBtn.onclick = () => this._changeTarget(-1);
+    elevRow.appendChild(downBtn);
+
+    const elevValue = document.createElement('span');
+    elevValue.className = 'floor-elev-value';
+    elevValue.textContent = this._targetElevation;
+    elevRow.appendChild(elevValue);
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'elevation-btn floor-elev-btn';
+    upBtn.textContent = '+';
+    upBtn.disabled = this._targetElevation >= this._maxTarget();
+    upBtn.onclick = () => this._changeTarget(1);
+    elevRow.appendChild(upBtn);
+
+    wrapper.appendChild(elevRow);
 
     const addBtn = document.createElement('button');
     addBtn.textContent = '+ Add Floor Region';
@@ -46,6 +90,13 @@ export default class FloorRegionPanel {
 
     this._container.appendChild(wrapper);
     this._refreshList();
+  }
+
+  _changeTarget(delta) {
+    const next = this._targetElevation + delta;
+    if (next < 0 || next > this._maxTarget()) return;
+    this._targetElevation = next;
+    this._render();
   }
 
   _startPlacing() {
@@ -69,15 +120,16 @@ export default class FloorRegionPanel {
     const z1 = Math.min(this._firstCorner.z, gridZ);
     const x2 = Math.max(this._firstCorner.x, gridX);
     const z2 = Math.max(this._firstCorner.z, gridZ);
-    const elevation = this._editorScene.activeElevation;
+    const elevation = this._targetElevation;
 
     this._undoManager.addFloor(elevation, x1, z1, x2, z2);
     this._isPlacing = false;
     this._firstCorner = null;
     this._addBtn.textContent = '+ Add Floor Region';
     this._addBtn.disabled = false;
-    this._refreshList();
+    this._render();
     this._renderFloors();
+    this._onFloorsChanged();
     return true;
   }
 
@@ -107,8 +159,9 @@ export default class FloorRegionPanel {
       delBtn.className = 'delete-btn';
       delBtn.onclick = () => {
         this._undoManager.removeFloor(i);
-        this._refreshList();
+        this._render();
         this._renderFloors();
+        this._onFloorsChanged();
       };
 
       row.appendChild(info);
@@ -152,9 +205,9 @@ export default class FloorRegionPanel {
     });
   }
 
-  // Call this to refresh the view after undo/redo
+  // Call this to refresh the view after floors change (add/remove/undo/load)
   refresh() {
-    this._refreshList();
+    this._render();
     this._renderFloors();
   }
 }

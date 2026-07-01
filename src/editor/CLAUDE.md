@@ -45,9 +45,21 @@ altered note.)
 The editor reads and writes the repo's **real** puzzle files during dev, so
 edits show up in the game on a manual reload.
 
-- **Open Level** (`ui/LevelPicker.js`) — manifest-driven dropdown (replaced the
-  old file-picker `ImportPanel`). Loads `/puzzles/manifest.json` for the list
-  and `/puzzles/<id>.json` for the chosen level, then reuses `io/importPuzzle`.
+- **Puzzle picker** (`ui/PuzzlePicker.js`) — one top-of-sidebar dropdown that
+  both opens and creates puzzles (replaced the old bottom `LevelPicker`/"Open
+  Level" plus the separate top "New Puzzle" button). Manifest-driven: loads
+  `/puzzles/manifest.json` for the list and `/puzzles/<id>.json` for the chosen
+  level (reusing `io/importPuzzle`); a `+ New puzzle` item makes a fresh model.
+  A not-yet-saved puzzle shows a transient `(unsaved)` entry.
+- **Toolbar** (`ui/EditorToolbar.js`) — undo/redo buttons (mirror
+  `UndoManager.canUndo/canRedo`; undo/redo is centralized in `EditorApp._undo/_redo`),
+  a live save-status line driven by the autosave flow, a "Test in game" deep
+  link (`/?puzzle=<id>`, handled in `src/main.js`), and a keyboard-shortcut popover.
+- **Puzzle id is derived, not typed** — `MetadataPanel` has no ID field. The id
+  is `slugify(name)` while the puzzle is new (`EditorApp._puzzleCommitted === false`)
+  and locks after the first repo write, so renaming an existing puzzle never
+  forks its file. A fresh puzzle persists on the first edit that gives it a name
+  (→ id); before that, autosave skips and the status reads "Add a name to save".
 - **Autosave to repo** (`io/repoPersistence.js`) — debounced write of the
   current model to `public/puzzles/<id>.json` (and upserts `manifest.json`).
   Fires on **every** model mutation via a single central hook:
