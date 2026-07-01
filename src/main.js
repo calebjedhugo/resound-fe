@@ -156,6 +156,12 @@ async function initializeGame() {
   // Start in menu state
   stateMachine.setState('MENU');
 
+  // Deep link from the editor's "Test in game": ?puzzle=<id> jumps straight in.
+  const requestedPuzzle = new URLSearchParams(window.location.search).get('puzzle');
+  if (requestedPuzzle && puzzles.some((p) => p.id === requestedPuzzle)) {
+    startPuzzle(requestedPuzzle);
+  }
+
   // Setup event listeners
   createEventListeners();
   window.addEventListener('keydown', handleKeyDown);

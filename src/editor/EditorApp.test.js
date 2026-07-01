@@ -119,12 +119,14 @@ function setupEditorDOM() {
     <div id="editor-root">
       <div id="editor-sidebar"><h2>Editor</h2></div>
       <div id="editor-viewport" style="width:800px;height:600px;"></div>
+      <div id="toolbar-panel"></div>
+      <div id="puzzle-panel"></div>
       <div id="elevation-panel"></div>
+      <div id="floor-panel"></div>
       <div id="entity-toolbar"></div>
       <div id="property-panel"></div>
       <div id="metadata-panel"></div>
       <div id="validation-panel"></div>
-      <div id="import-panel"></div>
       <div id="export-panel"></div>
     </div>
   `;

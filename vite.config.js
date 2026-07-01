@@ -56,20 +56,55 @@ async function upsertManifest(puzzle) {
 }
 
 /**
+ * Remove a puzzle's entry from manifest.json by id, preserving order.
+ */
+async function removeFromManifest(id) {
+  let manifest = { puzzles: [] };
+  try {
+    manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+  } catch {
+    return;
+  }
+  manifest.puzzles = manifest.puzzles.filter((p) => p.id !== id);
+  await writeJsonFile(MANIFEST_PATH, manifest);
+}
+
+/**
  * Dev-only endpoint that writes edited puzzle JSON straight into
  * public/puzzles/<id>.json (and keeps manifest.json in sync) so the
  * editor round-trips into the repo's real files during development.
+ * DELETE removes the file and its manifest entry.
  */
 function puzzleWriterPlugin() {
   return {
     name: 'resound-puzzle-writer',
     configureServer(server) {
       server.middlewares.use('/api/puzzles', async (req, res, next) => {
+        const id = req.url.replace(/^\//, '').split('?')[0];
+
+        if (req.method === 'DELETE') {
+          if (!ID_PATTERN.test(id)) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Invalid puzzle id' }));
+            return;
+          }
+          try {
+            const filePath = path.join(PUZZLES_DIR, `${id}.json`);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            await removeFromManifest(id);
+            res.statusCode = 200;
+            res.end(JSON.stringify({ ok: true, id }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
         if (req.method !== 'POST') {
           next();
           return;
         }
-        const id = req.url.replace(/^\//, '').split('?')[0];
         if (!ID_PATTERN.test(id)) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: 'Invalid puzzle id' }));

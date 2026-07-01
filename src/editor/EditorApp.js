@@ -13,7 +13,8 @@ import EntityToolbar from 'editor/ui/EntityToolbar';
 import PropertyPanel from 'editor/ui/PropertyPanel';
 import MetadataPanel from 'editor/ui/MetadataPanel';
 import ValidationPanel from 'editor/ui/ValidationPanel';
-import LevelPicker from 'editor/ui/LevelPicker';
+import PuzzlePicker from 'editor/ui/PuzzlePicker';
+import EditorToolbar from 'editor/ui/EditorToolbar';
 import ExportPanel from 'editor/ui/ExportPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
@@ -32,6 +33,10 @@ export default class EditorApp {
     this._animationId = null;
     this._validationTimer = null;
     this._autoSaveTimer = null;
+    // True once the current puzzle exists on disk. While false (a brand-new
+    // puzzle), the id is derived live from the name; once true it is locked so
+    // renaming never forks the file.
+    this._puzzleCommitted = false;
   }
 
   init() {
@@ -41,12 +46,14 @@ export default class EditorApp {
     this.editorScene = new EditorScene(this.scene, this.undoManager);
     this.elevationSelector = new ElevationSelector(
       document.getElementById('elevation-panel'),
-      this.editorScene
+      this.editorScene,
+      this.undoManager
     );
     this.floorRegionPanel = new FloorRegionPanel(
-      document.getElementById('elevation-panel'),
+      document.getElementById('floor-panel'),
       this.undoManager,
-      this.editorScene
+      this.editorScene,
+      () => this.elevationSelector.refresh()
     );
     this.entityPlacer = new EntityPlacer(this.scene, this.undoManager);
     this.ghostPreview = new GhostPreview(this.scene);
@@ -78,7 +85,8 @@ export default class EditorApp {
     this.metadataPanel = new MetadataPanel(
       document.getElementById('metadata-panel'),
       this.undoManager,
-      this.editorScene
+      this.editorScene,
+      () => this._puzzleCommitted
     );
     this.validationPanel = new ValidationPanel(
       document.getElementById('validation-panel'),
@@ -87,12 +95,26 @@ export default class EditorApp {
         if (entityId) this.selectionManager.select(entityId);
       }
     );
-    this.levelPicker = new LevelPicker(document.getElementById('import-panel'), (importedModel) => {
-      // Load an existing repo level: replace model state without writing
-      // it straight back to disk (it already matches the file we read).
-      this._applyRestoredModel(importedModel);
-      this.levelPicker.setSelected(importedModel.getMetadata().id);
+    this.toolbar = new EditorToolbar(document.getElementById('toolbar-panel'), {
+      onUndo: () => this._undo(),
+      onRedo: () => this._redo(),
+      canUndo: () => this.undoManager.canUndo(),
+      canRedo: () => this.undoManager.canRedo(),
+      onTest: () => this._testInGame(),
     });
+    this.puzzlePicker = new PuzzlePicker(
+      document.getElementById('puzzle-panel'),
+      (importedModel) => {
+        // Load an existing repo level: replace model state without writing
+        // it straight back to disk (it already matches the file we read).
+        this._puzzleCommitted = true;
+        this._applyRestoredModel(importedModel);
+        this.puzzlePicker.setSelected(importedModel.getMetadata().id);
+        this.toolbar.setStatus('saved');
+      },
+      () => this._newPuzzle(),
+      () => this._newPuzzle() // after delete: drop to a fresh, unsaved puzzle
+    );
     this.exportPanel = new ExportPanel(document.getElementById('export-panel'), this.undoManager);
     this.entityDragger = new EntityDragger(
       this.scene,
@@ -110,28 +132,73 @@ export default class EditorApp {
     this.undoManager.setOnChange(() => {
       this._scheduleValidation();
       this._scheduleAutoSave();
+      this.toolbar.refresh();
+      const { id } = this.undoManager.getMetadata();
+      this.toolbar.setStatus(id ? 'dirty' : 'unnamed');
     });
 
     // Wire selection changes to property panel
     this.selectionManager.onSelectionChange = (entityId) => {
       if (entityId !== null) {
         this.propertyPanel.show(entityId);
+        // The selection inspector lives mid-sidebar; pull it into view so a
+        // selection made in the viewport isn't hidden below the fold.
+        const panel = document.getElementById('property-panel');
+        if (panel && panel.scrollIntoView) {
+          panel.scrollIntoView({ block: 'nearest' });
+        }
       } else {
         this.propertyPanel.hide();
       }
     };
 
-    // "New Puzzle" button at the top of the sidebar
-    this._setupNewPuzzleButton();
-
     // Restore saved session (auto-restore on load)
     this._restoreSession();
 
+    this._setupViewportHud();
     this._setupViewportClick();
     this._setupDrag();
     this._setupKeyboard();
     this._animate();
     window.addEventListener('resize', () => this._onResize());
+  }
+
+  /** True if a cell already holds an entity or the player spawn (one per tile). */
+  _isCellOccupied(x, y, z) {
+    if (this.undoManager.getEntitiesAt(x, y, z).length > 0) return true;
+    const spawn = this.undoManager.getPlayerSpawn();
+    return Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
+  }
+
+  /** Create the viewport overlay: a live hover-cell readout + a transient toast. */
+  _setupViewportHud() {
+    const container = document.getElementById('editor-viewport');
+    this._hudEl = document.createElement('div');
+    this._hudEl.className = 'viewport-hud';
+    container.appendChild(this._hudEl);
+
+    this._toastEl = document.createElement('div');
+    this._toastEl.className = 'viewport-toast';
+    container.appendChild(this._toastEl);
+  }
+
+  _updateHud() {
+    if (!this._hudEl) return;
+    const grid = this.editorScene.getHoveredGrid();
+    this._hudEl.textContent = grid
+      ? `Cell (${grid.x}, ${grid.z}) · E${this.editorScene.activeElevation}`
+      : '';
+  }
+
+  /** Briefly show a message in the viewport (e.g. why a placement was refused). */
+  _showToast(message) {
+    if (!this._toastEl) return;
+    this._toastEl.textContent = message;
+    this._toastEl.classList.add('visible');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      this._toastEl.classList.remove('visible');
+    }, 1400);
   }
 
   _scheduleValidation() {
@@ -150,15 +217,30 @@ export default class EditorApp {
   }
 
   async _saveToRepo() {
+    const { id, name } = this.undoManager.getMetadata();
+    if (!id) {
+      // No name yet -> nothing to write. Keep the prompt visible.
+      this.toolbar.setStatus('unnamed');
+      this.puzzlePicker.setSelected('', name);
+      return;
+    }
+    this.toolbar.setStatus('saving');
     try {
       const written = await savePuzzleToRepo(this.undoManager);
       if (written) {
+        this._puzzleCommitted = true;
         // A newly-created id won't be in the dropdown yet; refresh to add it.
-        const { id } = this.undoManager.getMetadata();
-        if (!this.levelPicker.hasLevel(id)) this.levelPicker.refresh(id);
+        if (!this.puzzlePicker.hasLevel(id)) {
+          await this.puzzlePicker.refresh(id);
+        }
+        this.puzzlePicker.setSelected(id);
+        this.toolbar.setStatus('saved');
+      } else {
+        this.toolbar.setStatus('unnamed');
       }
     } catch (err) {
       console.warn('Repo save failed:', err);
+      this.toolbar.setStatus('error', err.message);
     }
   }
 
@@ -176,14 +258,18 @@ export default class EditorApp {
         const puzzles = await listRepoPuzzles();
         if (puzzles.some((p) => p.id === id)) {
           const json = await loadRepoPuzzle(id);
+          this._puzzleCommitted = true;
           this._applyRestoredModel(importPuzzle(json).model);
-          this.levelPicker.setSelected(id);
+          await this.puzzlePicker.refresh(id);
+          this.toolbar.setStatus('saved');
           return;
         }
       } catch (err) {
         console.warn('Falling back to saved session:', err);
       }
     }
+    // Not on disk: a snapshot of a not-yet-saved puzzle.
+    this._puzzleCommitted = false;
     this._applyRestoredModel(restored);
   }
 
@@ -196,28 +282,67 @@ export default class EditorApp {
       Math.max(...importedModel.getEntities().map((e) => e.id), 0) + 1;
     this.entityPlacer.rebuildFromModel();
     this.floorRegionPanel.refresh();
+    this.elevationSelector.refresh();
     this.metadataPanel.refresh();
     this.selectionManager.deselect();
+    if (this.toolbar) this.toolbar.refresh();
+    const { id, name } = importedModel.getMetadata();
+    if (this.puzzlePicker && !this._puzzleCommitted) {
+      this.puzzlePicker.setSelected(id || '', name);
+    }
     this._scheduleValidation();
   }
 
-  _setupNewPuzzleButton() {
-    const sidebar = document.getElementById('editor-sidebar');
-    const btn = document.createElement('button');
-    btn.className = 'editor-btn new-puzzle-btn';
-    btn.textContent = 'New Puzzle';
-    btn.addEventListener('click', () => {
-      clearSession();
-      const fresh = new EditorPuzzleModel();
-      this._applyRestoredModel(fresh);
-    });
-    // Insert after the h2 heading, before the first panel
-    const heading = sidebar.querySelector('h2');
-    if (heading && heading.nextSibling) {
-      sidebar.insertBefore(btn, heading.nextSibling);
-    } else {
-      sidebar.appendChild(btn);
+  /** Create a brand-new, not-yet-saved puzzle after confirming any loss. */
+  _newPuzzle() {
+    const { id } = this.undoManager.getMetadata();
+    // Only a not-yet-saved puzzle can lose work; saved ones are on disk already.
+    if (!this._puzzleCommitted && !id && this.undoManager.canUndo()) {
+      // eslint-disable-next-line no-alert
+      const ok = window.confirm(
+        'Start a new puzzle? The current puzzle has not been named/saved and will be discarded.'
+      );
+      if (!ok) return;
     }
+    clearSession();
+    this._puzzleCommitted = false;
+    this._applyRestoredModel(new EditorPuzzleModel());
+    this.metadataPanel.expand();
+    this.toolbar.setStatus('unnamed');
+    // Focus the name field so the first thing you do is name it.
+    const nameInput = document.querySelector('#metadata-panel .prop-input');
+    if (nameInput) nameInput.focus();
+  }
+
+  /** Undo + refresh all UI that mirrors the model. */
+  _undo() {
+    this.undoManager.undo();
+    this._afterUndoRedo();
+  }
+
+  /** Redo + refresh all UI that mirrors the model. */
+  _redo() {
+    this.undoManager.redo();
+    this._afterUndoRedo();
+  }
+
+  _afterUndoRedo() {
+    this.floorRegionPanel.refresh();
+    this.elevationSelector.refresh();
+    this.metadataPanel.refresh();
+    this.entityPlacer.rebuildFromModel();
+    this.selectionManager.deselect();
+    this.toolbar.refresh();
+  }
+
+  /** Open the current puzzle in the game (new tab) via the ?puzzle= deep link. */
+  _testInGame() {
+    const { id } = this.undoManager.getMetadata();
+    if (!id || !this._puzzleCommitted) {
+      this.toolbar.setStatus('unnamed');
+      return;
+    }
+    window.open(`/?puzzle=${encodeURIComponent(id)}`, '_blank', 'noopener');
   }
 
   _setupRenderer() {
@@ -272,7 +397,13 @@ export default class EditorApp {
       // If entity toolbar has active tool, place entity at hovered grid cell
       const activeTool = this.entityToolbar.activeTool;
       if (activeTool) {
-        this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, this.editorScene.activeElevation);
+        const elevation = this.editorScene.activeElevation;
+        // One thing per tile: don't stack entities (or drop one on the player).
+        if (this._isCellOccupied(grid.x, elevation, grid.z)) {
+          this._showToast('That cell is already occupied');
+          return;
+        }
+        this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, elevation);
         return;
       }
 
@@ -387,20 +518,12 @@ export default class EditorApp {
       // Cmd+Z / Ctrl+Z = undo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        this.undoManager.undo();
-        this.floorRegionPanel.refresh();
-        this.metadataPanel.refresh();
-        this.entityPlacer.rebuildFromModel();
-        this.selectionManager.deselect();
+        this._undo();
       }
       // Cmd+Shift+Z / Ctrl+Shift+Z = redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
         e.preventDefault();
-        this.undoManager.redo();
-        this.floorRegionPanel.refresh();
-        this.metadataPanel.refresh();
-        this.entityPlacer.rebuildFromModel();
-        this.selectionManager.deselect();
+        this._redo();
       }
       // Escape cancels floor placement and deselects entity toolbar
       if (e.key === 'Escape') {
@@ -424,6 +547,7 @@ export default class EditorApp {
     this.editorScene.updateHover(this.camera);
     this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this.editorScene.update();
+    this._updateHud();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -440,6 +564,7 @@ export default class EditorApp {
     if (this._animationId) cancelAnimationFrame(this._animationId);
     clearTimeout(this._validationTimer);
     clearTimeout(this._autoSaveTimer);
+    clearTimeout(this._toastTimer);
     this.songEditorModal.dispose();
     this.contextMenu.dispose();
     this.ghostPreview.dispose();

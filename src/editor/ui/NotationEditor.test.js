@@ -86,6 +86,37 @@ describe('NotationEditor', () => {
     expect(song[0].pitch).toBe('E4');
   });
 
+  it('backspaces the last note when nothing is selected', () => {
+    const { editor, changes } = makeEditor({
+      song: [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ],
+    });
+    // Move the cursor to the end (deselecting), then backspace drops the last.
+    keydown(editor, 'ArrowRight');
+    keydown(editor, 'ArrowRight');
+    keydown(editor, 'Backspace');
+    const song = changes[changes.length - 1];
+    expect(song).toHaveLength(1);
+    expect(song[0].pitch).toBe('C4');
+  });
+
+  it('clears every note via the Clear button', () => {
+    const { editor, container, changes } = makeEditor({
+      song: [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ],
+    });
+    const clearBtn = [...container.querySelectorAll('.song-edit-controls button')].find(
+      (b) => b.textContent === 'Clear'
+    );
+    expect(clearBtn).toBeTruthy();
+    clearBtn.click();
+    expect(changes[changes.length - 1]).toEqual([]);
+  });
+
   it('builds two voices and a brace for grand-staff mode', () => {
     const { editor, container } = makeEditor({
       staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],

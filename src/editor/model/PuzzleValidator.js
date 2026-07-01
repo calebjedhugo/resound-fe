@@ -5,6 +5,7 @@
  * Errors block export; warnings flag issues for review.
  */
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import SongMatcher from 'core/SongMatcher';
 
 const VALID_PITCH = /^[A-G][#b]?\d$/;
 const VALID_LENGTH = /^1\/\d+$/;
@@ -13,6 +14,22 @@ const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
 
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * The distinct pitches a song contains (flattening voices and chords). Used to
+ * check solvability: a played song is a recording of creatures, so every pitch
+ * a gate/fountain requires must be sung by some creature.
+ */
+function songPitches(song) {
+  const pitches = new Set();
+  for (const entry of SongMatcher.flattenSong(song)) {
+    const notes = Array.isArray(entry) ? entry : [entry];
+    for (const note of notes) {
+      if (note && note.pitch) pitches.add(note.pitch);
+    }
+  }
+  return pitches;
 }
 
 /**
@@ -144,6 +161,25 @@ export function validatePuzzle(model) {
     if (!reachesTarget) {
       warnings.push(
         `Creature (id=${creature.id}) audible range (${range}) does not reach any gate or fountain`
+      );
+    }
+  }
+
+  // 6. Gate/fountain target requires a pitch no creature sings. A played song
+  // is a recording of creatures, so an uncovered pitch can never be produced —
+  // a strong (harmony-safe) signal the target is unsolvable.
+  const creaturePitches = new Set();
+  for (const creature of creatures) {
+    songPitches(creature.data?.song).forEach((p) => creaturePitches.add(p));
+  }
+  for (const target of gatesAndFountains) {
+    const needed = songPitches(target.data?.song);
+    const missing = [...needed].filter((p) => !creaturePitches.has(p));
+    if (needed.size > 0 && missing.length > 0) {
+      warnings.push(
+        `${capitalize(target.type)} (id=${
+          target.id
+        }) target uses pitch(es) no creature sings (${missing.join(', ')}) — may be unsolvable`
       );
     }
   }

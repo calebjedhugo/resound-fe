@@ -30,10 +30,10 @@ export default class ValidationPanel {
 
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'collapse-btn';
-    toggleBtn.textContent = this._collapsed ? '+' : '-';
+    toggleBtn.textContent = this._collapsed ? '▸' : '▾';
     toggleBtn.onclick = () => {
       this._collapsed = !this._collapsed;
-      toggleBtn.textContent = this._collapsed ? '+' : '-';
+      toggleBtn.textContent = this._collapsed ? '▸' : '▾';
       this._contentEl.style.display = this._collapsed ? 'none' : 'block';
     };
     header.appendChild(toggleBtn);
