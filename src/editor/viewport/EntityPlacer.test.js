@@ -126,6 +126,44 @@ describe('EntityPlacer', () => {
     expect(undoManager.getPlayerSpawn()).toEqual({ x: 4, y: 1, z: 7 });
   });
 
+  it('applies default data for a freshly placed creature', () => {
+    const id = placer.placeEntity('creature', 1, 1, 0);
+    const { data } = undoManager.getEntity(id);
+    expect(data.audibleRange).toBe(15);
+    expect(data.interval).toBe(8);
+    expect(data.song).toEqual([]);
+  });
+
+  it('refuses to stack a second entity on an occupied cell', () => {
+    const first = placer.placeEntity('creature', 3, 5, 2);
+    const second = placer.placeEntity('gate', 3, 5, 2);
+
+    expect(first).not.toBeNull();
+    expect(second).toBeNull();
+    expect(undoManager.getEntities()).toHaveLength(1);
+  });
+
+  it('refuses to place an entity on the player spawn cell', () => {
+    placer.placeEntity('player', 4, 4, 0);
+    const blocked = placer.placeEntity('creature', 4, 4, 0);
+
+    expect(blocked).toBeNull();
+    expect(undoManager.getEntities()).toHaveLength(0);
+  });
+
+  it('moves an entity and its mesh via setEntityPosition', () => {
+    const id = placer.placeEntity('creature', 2, 2, 0);
+    placer.setEntityPosition(id, 6, 7, 0);
+
+    const entity = undoManager.getEntity(id);
+    expect(entity.x).toBe(6);
+    expect(entity.z).toBe(7);
+    // gridToWorld(6, 7) => { x: 6*3+1.5=19.5, z: 7*3+1.5=22.5 }
+    const mesh = placer.getMeshById(id);
+    expect(mesh.position.x).toBe(19.5);
+    expect(mesh.position.z).toBe(22.5);
+  });
+
   it('removes the entity from the model when removeEntityById is called', () => {
     const id = placer.placeEntity('creature', 5, 5, 0);
     expect(undoManager.getEntity(id)).toBeDefined();
