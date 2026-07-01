@@ -12,7 +12,7 @@
  * Manifest-driven: reads /puzzles/manifest.json for the list and
  * /puzzles/<id>.json for the chosen level, reusing io/importPuzzle.
  */
-import { listRepoPuzzles, loadRepoPuzzle } from 'editor/io/repoPersistence';
+import { listRepoPuzzles, loadRepoPuzzle, deletePuzzleFromRepo } from 'editor/io/repoPersistence';
 import { importPuzzle } from 'editor/io/importPuzzle';
 
 const NEW_VALUE = '__new__';
@@ -23,11 +23,13 @@ export default class PuzzlePicker {
    * @param {HTMLElement} container - #puzzle-panel
    * @param {(model) => void} onLoad - called with the imported model of a chosen level
    * @param {() => void} onNew - called when "+ New puzzle" is chosen
+   * @param {() => void} [onDelete] - called after the open puzzle is deleted
    */
-  constructor(container, onLoad, onNew) {
+  constructor(container, onLoad, onNew, onDelete) {
     this._container = container;
     this._onLoad = onLoad;
     this._onNew = onNew;
+    this._onDelete = onDelete || (() => {});
     this._currentId = '';
     this._render();
     this.refresh();
@@ -42,10 +44,22 @@ export default class PuzzlePicker {
     label.textContent = 'Puzzle';
     wrapper.appendChild(label);
 
+    const row = document.createElement('div');
+    row.className = 'puzzle-picker-row';
+
     this._select = document.createElement('select');
     this._select.className = 'prop-select puzzle-select';
     this._select.onchange = () => this._onSelectChange();
-    wrapper.appendChild(this._select);
+    row.appendChild(this._select);
+
+    this._deleteBtn = document.createElement('button');
+    this._deleteBtn.className = 'delete-btn puzzle-delete-btn';
+    this._deleteBtn.textContent = 'Delete';
+    this._deleteBtn.title = 'Delete this puzzle from the repo';
+    this._deleteBtn.onclick = () => this._deleteSelected();
+    row.appendChild(this._deleteBtn);
+
+    wrapper.appendChild(row);
 
     this._statusEl = document.createElement('div');
     this._statusEl.className = 'import-status';
@@ -90,6 +104,7 @@ export default class PuzzlePicker {
     if (previous && this.hasLevel(previous)) {
       this._select.value = previous;
     }
+    this._updateDeleteState();
   }
 
   _onSelectChange() {
@@ -105,6 +120,36 @@ export default class PuzzlePicker {
     }
     if (value === UNSAVED_VALUE) return;
     this._loadSelected(value);
+  }
+
+  async _deleteSelected() {
+    const id = this._currentId;
+    if (!id || !this.hasLevel(id)) return;
+    const entry = (this._puzzles || []).find((p) => p.id === id);
+    const name = entry ? entry.name : id;
+    // eslint-disable-next-line no-alert
+    const ok = window.confirm(
+      `Delete "${name}" (${id}.json)? This removes the file from the repo and cannot be undone.`
+    );
+    if (!ok) return;
+    try {
+      await deletePuzzleFromRepo(id);
+      this._currentId = '';
+      await this.refresh();
+      this._statusEl.className = 'import-status import-success';
+      this._statusEl.textContent = `Deleted ${id}`;
+      this._onDelete();
+    } catch (err) {
+      this._statusEl.className = 'import-status import-error';
+      this._statusEl.textContent = `Error: ${err.message}`;
+    }
+  }
+
+  /** Enable Delete only when a saved, in-manifest puzzle is open. */
+  _updateDeleteState() {
+    if (this._deleteBtn) {
+      this._deleteBtn.disabled = !(this._currentId && this.hasLevel(this._currentId));
+    }
   }
 
   async _loadSelected(id) {
@@ -133,6 +178,7 @@ export default class PuzzlePicker {
     this._removeUnsavedOption();
     if (id && this.hasLevel(id)) {
       this._select.value = id;
+      this._updateDeleteState();
       return;
     }
     // Unsaved / not-in-manifest: show a placeholder current entry.
@@ -142,6 +188,7 @@ export default class PuzzlePicker {
     opt.dataset.unsaved = 'true';
     this._select.appendChild(opt);
     this._select.value = UNSAVED_VALUE;
+    this._updateDeleteState();
   }
 
   _removeUnsavedOption() {

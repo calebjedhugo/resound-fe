@@ -56,3 +56,23 @@ export async function savePuzzleToRepo(model) {
   }
   return true;
 }
+
+/**
+ * Delete a puzzle's repo file and manifest entry via the dev endpoint.
+ * @param {string} id
+ * @returns {Promise<boolean>} true if deleted
+ */
+export async function deletePuzzleFromRepo(id) {
+  if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return false;
+  const response = await fetch(`/api/puzzles/${id}`, { method: 'DELETE' });
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      detail = (await response.json()).error || detail;
+    } catch {
+      // keep statusText
+    }
+    throw new Error(`Failed to delete puzzle ${id}: ${detail}`);
+  }
+  return true;
+}

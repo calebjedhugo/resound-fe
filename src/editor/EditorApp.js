@@ -112,7 +112,8 @@ export default class EditorApp {
         this.puzzlePicker.setSelected(importedModel.getMetadata().id);
         this.toolbar.setStatus('saved');
       },
-      () => this._newPuzzle()
+      () => this._newPuzzle(),
+      () => this._newPuzzle() // after delete: drop to a fresh, unsaved puzzle
     );
     this.exportPanel = new ExportPanel(document.getElementById('export-panel'), this.undoManager);
     this.entityDragger = new EntityDragger(
