@@ -1,44 +1,48 @@
 # Editor — CLAUDE.md
 
-## Key UI Files (`ui/`)
+## The notation editor is local game code, built on the published renderer
 
-- **NotationEditor.js** — Main interactive SVG staff renderer. Handles single staff and grand staff modes.
-- **SongEditorModal.js** — Modal wrapper. Reads entity data/metadata, passes options to NotationEditor.
-- **StaffInteraction.js** — Pure-logic pitch/Y mapping and barline calculation. Delegates to `notation/lib/notePositions.js`.
-- **AccidentalDisplay.js** — Pure function for key-signature-aware accidental rendering.
-- **RhythmPalette.js** — Duration selector toolbar with SVG note icons.
+The interactive staff editor lives **here**, in the game, as a **consumer** of
+the published `resound-notation` package. It draws by calling the renderer's
+public `render()` and reads its SVG output; it does **not** hand-draw notation,
+and it needs no changes to `resound-notation` to work (the library ships only
+the renderer + `components/*` + `lib/*`).
 
-## SVG Sizing (IMPORTANT)
+Files (`ui/` + `model/`):
+- **NotationEditor.js** — the editor: builds song JSON, calls `NotationRenderer.render()`,
+  and overlays interaction (selection, edit cursor, click-to-place, keyboard, Play/Stop).
+  Container + song JSON in, edited song out via `onChange`.
+- **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
+- **RhythmPalette.js** — duration selector (renders note icons via `resound-notation/components/Note`).
+- **staffCoords.js** — reverse pitch mapping (click Y → pitch) via `resound-notation/lib/notePositions`.
+- **SongEditorModal.js** — modal wrapper: builds chrome + clef selector, constructs the editor
+  (`import NotationEditor from 'editor/ui/NotationEditor'`), persists `onChange` through
+  `undoManager.updateEntity(...)`, and injects a `resound-sound` `Synth` as the audio `player`
+  (guarded for no-`AudioContext` test envs). See `_createEditor()`.
 
-Visual sizing of the staff is controlled by **SVG attributes in `ui/NotationEditor.js`**, not CSS.
+It imports the renderer from the **registry** package: `resound-notation`,
+`resound-notation/components/Note`, `resound-notation/lib/*`. No local copy of
+the library — ever.
 
-When notation doesn't fit: fix SVG `height`, `viewBox`, and vertical offsets — never the modal CSS.
+## Why it draws via the renderer
 
-### Single Staff
+The old editor hand-drew notation from primitives, duplicating the renderer's
+engraving, and that copy drifted (short stems, plain-oval chords, missing
+flags). Rendering through the one `NotationRenderer` means engraving lives in
+exactly one place. Same for the in-game display (`src/ui/NotationDisplay.js`).
 
-```
-SVG_HEIGHT = 200
-STAFF_VERTICAL_OFFSET = SVG_HEIGHT / 2 - STAFF_CENTER_Y = 50
-```
+## If notation looks wrong
 
-Content is wrapped in a staff-group with `translate(0, STAFF_VERTICAL_OFFSET)` to center vertically.
+Fix it in the `resound-notation` package, publish a new version, then bump this
+repo's dependency and `npm install`. **Do not** hand-copy `dist/` into
+`node_modules`, and do not reintroduce hand-drawing here. (Note: an in-measure
+accidental-memory fix is committed on the library's `main` but not yet
+published — until it ships, the editor shows a courtesy accidental on every
+altered note.)
 
-### Grand Staff
+## Future: its own package
 
-```
-voiceYOffsets = [0, 90 + GRAND_STAFF_GAP]    // GRAND_STAFF_GAP = 60
-contentBottom = voiceYOffsets[1] + STAFF_TOP_OFFSET + 80
-svgHeight = contentBottom + GRAND_STAFF_PADDING * 2
-```
-
-Each voice group gets `translate(0, yOffset + GRAND_STAFF_PADDING)`. SVG sets explicit `height` attribute.
-
-### Pattern
-
-Both modes follow the same approach: calculate content bounds, add padding, set `height` + `viewBox` on the SVG, offset content with a translate. Reference `NotationDisplay.js` for how the game-side renderer adjusts height per mode.
-
-## Notation Dependency Boundary
-
-UI files import from `src/notation/` (components + lib) but **never** from game code (`entities/`, `core/`). Communication with the puzzle editor is through `undoManager.getEntity`/`updateEntity` only.
-
-Layout constants here mirror `NotationRenderer.js` — keep both in sync.
+The editor is a self-contained consumer of the renderer's public API, so if a
+second consumer ever appears it can graduate into its own package
+(`resound-notation-editor`) that depends on `resound-notation` — a move, not a
+rewrite. For now the game is the only consumer, so it lives here.

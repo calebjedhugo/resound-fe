@@ -1,9 +1,9 @@
 /**
  * RhythmPalette
  *
- * Row of clickable duration buttons above the staff.
- * Each button displays an SVG note icon rendered by the notation system.
- * Allows selecting note duration via click or keyboard shortcut.
+ * Row of clickable duration buttons above the staff. Each button shows a note
+ * icon rendered by the notation system, so the palette stays visually in sync
+ * with the engraving. Selection is available by click or keyboard shortcut.
  */
 
 import { createNote } from 'resound-notation/components/Note';
@@ -22,9 +22,8 @@ const DURATIONS = [
 export { DURATIONS };
 
 /**
- * Create a small SVG element containing a single note icon.
- * Uses the notation system's createNote to render a real note
- * at a fixed pitch so it inherits button text color via currentColor.
+ * Create a small SVG element containing a single note icon at a fixed pitch,
+ * so it inherits button text color via currentColor.
  * @param {string} length - Fraction string (e.g. "1/4")
  * @returns {SVGSVGElement}
  */

@@ -40,23 +40,21 @@ Tests are integration-style: test behaviors through public APIs, mock only brows
 
 ## Architecture Notes
 
-### IMPORTANT: Package Extraction Path
+### IMPORTANT: Package boundaries
 
-`audio` and `notation` are extracted and published to npm as `resound-sound` and `resound-notation`. **One extraction remains — `notation-editor`** — and its dependency boundary still applies:
+`audio` and `notation` are extracted to the published packages `resound-sound`
+and `resound-notation`; the game consumes them from the **registry** (no local
+copies — never hand-copy `dist/` into `node_modules`). `resound-notation` is a
+pure renderer; the game does not hand-draw notation.
 
-```
-notation-editor           ← game-editor
-  (depends on resound-notation)
-```
-
-- `src/editor/ui/` notation-editor files — import only from `resound-notation`, never from game code
-- Game UI now imports from `resound-sound` and `resound-notation` (not `audio/` / `notation/`, which no longer exist)
+- Game UI imports from `resound-sound` and `resound-notation` (not `audio/` / `notation/`, which no longer exist)
+- The **staff editor is local game code** (`src/editor/ui/NotationEditor.js` + `model/SongModel.js` + `ui/RhythmPalette.js` + `ui/staffCoords.js`) built on the published renderer's public API (`render()` + `components/*` + `lib/*`). `SongEditorModal.js` wires it to the entity model (`onChange` → `undoManager`) and injects a `resound-sound` `Synth` for playback. See `src/editor/CLAUDE.md`.
 
 ### Puzzle Editor (`src/editor/`)
 - Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
 - **EditorPuzzleModel** is the central mutable data model; **UndoManager** wraps it
 - Serialization handles type-specific JSON format differences (creature `data.song` vs gate root `song`)
-- See `src/editor/CLAUDE.md` for notation editor details and SVG sizing patterns
+- The notation editor is local code on top of published `resound-notation` — see `src/editor/CLAUDE.md`
 
 ### Entity System
 - All entities extend `Entity.js` base class
@@ -91,9 +89,8 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 - Perfect intervals (unison, octave) don't affect movement
 
 ### Notation Coordinate System
-- The renderer lives in the `resound-notation` package — see that repo's docs for the full coordinate model
-- `src/editor/ui/NotationEditor.js` must match the package's renderer approach (offsets, staff-group structure)
-- **When notation doesn't fit visually in the editor**: fix SVG dimensions in the renderer (in `resound-notation`), NOT the CSS container (see `src/editor/CLAUDE.md`)
+- All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model
+- **When engraving looks wrong**: fix it in `resound-notation`, publish a new version, then bump this repo's dependency and `npm install`. Do **not** hand-copy `dist/` into `node_modules` (see `src/editor/CLAUDE.md`)
 
 ### Recording
 - Can only record within creature's `audibleRange × 0.5`

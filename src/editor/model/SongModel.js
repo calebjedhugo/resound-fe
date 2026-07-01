@@ -1,11 +1,9 @@
 /**
  * SongModel — Pure-logic layer for measure-aware song editing.
  *
- * The puzzle JSON stores songs as flat note arrays. SongModel adds
- * measure awareness, transposition, duration editing, and cursor
- * navigation as editing aids.
- *
- * No UI or browser dependencies.
+ * Songs are stored as flat note arrays (the renderer's Level-1 input).
+ * SongModel adds measure awareness, transposition, duration editing, and
+ * cursor navigation as editing aids. No UI or browser dependencies.
  */
 
 const CHROMATIC_SCALE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -418,7 +416,6 @@ export default class SongModel {
     const capacity = this._measureCapacity();
     // Sum durations of notes before the cursor
     let accumulated = 0;
-    let measureStart = 0;
 
     for (let i = 0; i < this._cursorPosition && i < this._notes.length; i++) {
       const dur = this._entryDuration(this._notes[i]);
@@ -427,10 +424,8 @@ export default class SongModel {
       // If we completed a measure, reset
       if (Math.abs(accumulated - capacity) < 1e-9) {
         accumulated = 0;
-        measureStart = i + 1;
       } else if (accumulated > capacity + 1e-9) {
         accumulated = dur;
-        measureStart = i;
       }
     }
 
@@ -453,14 +448,14 @@ export default class SongModel {
   // ── Serialization ──────────────────────────────────────────────────
 
   /**
-   * Return the notes array as-is (puzzle JSON format).
+   * Return the notes array as-is (renderer Level-1 format).
    */
   toSongArray() {
     return this._notes;
   }
 
   /**
-   * Set notes from a puzzle JSON note array. Reset cursor to 0.
+   * Set notes from a note array. Reset cursor to 0.
    */
   fromSongArray(notes) {
     this._notes = notes;

@@ -6,6 +6,7 @@
  * Handles backdrop, keyboard isolation, and focus management.
  */
 import NotationEditor from 'editor/ui/NotationEditor';
+import { Synth } from 'resound-sound';
 
 export default class SongEditorModal {
   constructor(rootContainer, undoManager) {
@@ -15,6 +16,7 @@ export default class SongEditorModal {
     this._notationEditor = null;
     this._isOpen = false;
     this._entityId = null;
+    this._player = null; // lazily-created audio player for editor playback
 
     // Bound handlers for cleanup
     this._handleKeyDown = this._onKeyDown.bind(this);
@@ -123,18 +125,11 @@ export default class SongEditorModal {
       if (wasGrandStaff !== isNowGrandStaff) {
         this._notationEditor.dispose();
         const updatedEntity = this._undoManager.getEntity(entityId);
-        this._notationEditor = new NotationEditor(bodyEl, this._undoManager, entityId, {
-          polyphonic: isPolyphonic,
-          keySignature: metadata.keySignature || 'C',
-          timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
-          clef: updatedEntity.data.clef || null,
-          staffGroups: updatedEntity.data.staffGroups || [],
-        });
+        this._notationEditor = this._createEditor(bodyEl, updatedEntity, metadata, isPolyphonic);
         const staffEl = bodyEl.querySelector('.notation-staff');
         if (staffEl) staffEl.focus();
       } else if (!isNowGrandStaff) {
-        this._notationEditor._clefOverride = val === 'auto' ? null : val;
-        this._notationEditor._renderStaff();
+        this._notationEditor.setClef(val === 'auto' ? null : val);
       }
     };
 
@@ -178,19 +173,58 @@ export default class SongEditorModal {
     this._rootContainer.appendChild(this._backdropEl);
 
     // Create NotationEditor inside the body
-    this._notationEditor = new NotationEditor(bodyEl, this._undoManager, entityId, {
-      polyphonic: isPolyphonic,
-      keySignature: metadata.keySignature || 'C',
-      timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
-      clef: entity.data.clef || null,
-      staffGroups: entity.data.staffGroups || [],
-    });
+    this._notationEditor = this._createEditor(bodyEl, entity, metadata, isPolyphonic);
 
     // Focus the staff element
     const staffEl = bodyEl.querySelector('.notation-staff');
     if (staffEl) {
       staffEl.focus();
     }
+  }
+
+  /**
+   * Construct the notation-package editor bound to this entity. All engraving
+   * and interaction live in the package; the editor hands back edited songs
+   * through onChange, which we persist via the undo manager. Both the initial
+   * open and clef-driven recreation route through here.
+   */
+  _createEditor(bodyEl, entity, metadata, isPolyphonic) {
+    const entityId = this._entityId;
+    return new NotationEditor({
+      container: bodyEl,
+      song: entity.data.song || [],
+      polyphonic: isPolyphonic,
+      keySignature: metadata.keySignature || 'C',
+      timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
+      clef: entity.data.clef || null,
+      staffGroups: entity.data.staffGroups || [],
+      tempo: metadata.tempo || 120,
+      player: this._ensurePlayer(),
+      onChange: (song) => {
+        const ent = this._undoManager.getEntity(entityId);
+        if (!ent) return;
+        this._undoManager.updateEntity(entityId, { data: { ...ent.data, song } });
+      },
+    });
+  }
+
+  /**
+   * Lazily create a resound-sound Synth to sound editor playback. Returns null
+   * where Web Audio is unavailable (e.g. jsdom tests), in which case the editor
+   * still animates its playback cursor silently.
+   */
+  _ensurePlayer() {
+    if (this._player) return this._player;
+    const hasAudio =
+      typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+    if (hasAudio) {
+      try {
+        this._player = new Synth();
+      } catch {
+        this._player = null;
+      }
+    }
+    return this._player;
   }
 
   close() {

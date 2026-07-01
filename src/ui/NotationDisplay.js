@@ -70,24 +70,23 @@ class NotationDisplay {
     }
 
     try {
-      // Detect grand staff (voices format with staffGroups) for taller rendering
-      const isGrandStaff =
-        this.song &&
-        !Array.isArray(this.song) &&
-        Array.isArray(this.song.staffGroups) &&
-        this.song.staffGroups.length > 0;
-      const rendererHeight = isGrandStaff ? 300 : 150;
-      const canvasHeight = isGrandStaff ? 384 : 192;
-
+      // Hand the song straight to the renderer — it sizes the SVG to its own
+      // content (single staff vs grand staff, however many ledger lines), so
+      // the game never has to inspect notation structure. We then mirror that
+      // intrinsic aspect ratio onto the texture canvas so nothing is squashed.
       const container = document.createElement('div');
       const renderer = new NotationRenderer({
         container,
         width: 400,
-        height: rendererHeight,
       });
 
       const svg = renderer.render(this.song);
       if (!svg) return;
+
+      const [, , vbWidth, vbHeight] = (svg.getAttribute('viewBox') || '0 0 400 150')
+        .split(/\s+/)
+        .map(Number);
+      const canvasHeight = Math.max(64, Math.round(512 * (vbHeight / vbWidth)));
 
       // Serialize SVG to a data URL and draw on canvas
       const svgString = new XMLSerializer().serializeToString(svg);
