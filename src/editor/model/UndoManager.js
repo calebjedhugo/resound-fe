@@ -34,6 +34,7 @@ export default class UndoManager {
     this._model = model;
     this._undoStack = [];
     this._redoStack = [];
+    this._onChange = null;
 
     for (const method of READ_METHODS) {
       this[method] = (...args) => this._model[method](...args);
@@ -43,9 +44,26 @@ export default class UndoManager {
       this[method] = (...args) => {
         this._undoStack.push(this._saveState());
         this._redoStack.length = 0;
-        return this._model[method](...args);
+        const result = this._model[method](...args);
+        this._emitChange();
+        return result;
       };
     }
+  }
+
+  /**
+   * Register a callback fired after every model mutation (including
+   * undo/redo). Used to trigger autosave/validation centrally rather
+   * than wiring each panel. Direct model replacement (loading a level)
+   * bypasses the mutation wrappers and does not fire this.
+   * @param {() => void} fn
+   */
+  setOnChange(fn) {
+    this._onChange = fn;
+  }
+
+  _emitChange() {
+    if (this._onChange) this._onChange();
   }
 
   canUndo() {
@@ -61,6 +79,7 @@ export default class UndoManager {
     this._redoStack.push(this._saveState());
     const snapshot = this._undoStack.pop();
     this._restoreState(snapshot);
+    this._emitChange();
   }
 
   redo() {
@@ -68,6 +87,7 @@ export default class UndoManager {
     this._undoStack.push(this._saveState());
     const snapshot = this._redoStack.pop();
     this._restoreState(snapshot);
+    this._emitChange();
   }
 
   _saveState() {

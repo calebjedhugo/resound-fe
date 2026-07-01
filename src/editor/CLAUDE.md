@@ -40,6 +40,30 @@ accidental-memory fix is committed on the library's `main` but not yet
 published — until it ships, the editor shows a courtesy accidental on every
 altered note.)
 
+## Level navigation & live repo autosave (dev)
+
+The editor reads and writes the repo's **real** puzzle files during dev, so
+edits show up in the game on a manual reload.
+
+- **Open Level** (`ui/LevelPicker.js`) — manifest-driven dropdown (replaced the
+  old file-picker `ImportPanel`). Loads `/puzzles/manifest.json` for the list
+  and `/puzzles/<id>.json` for the chosen level, then reuses `io/importPuzzle`.
+- **Autosave to repo** (`io/repoPersistence.js`) — debounced write of the
+  current model to `public/puzzles/<id>.json` (and upserts `manifest.json`).
+  Fires on **every** model mutation via a single central hook:
+  `UndoManager.setOnChange(...)` (wired in `EditorApp.init`). No per-panel
+  wiring. Skipped when the puzzle has no valid `id` yet (new puzzles need an ID
+  first). Loading a level replaces the model *directly* (bypassing the mutation
+  wrappers), so opening a level never writes it back.
+- **Dev endpoint** — `POST /api/puzzles/:id` is a Vite `configureServer`
+  middleware in `vite.config.js` (dev-only; validates the id, matches body id,
+  writes pretty-printed JSON). Browsers can't write repo files, so this bridge
+  is required. **Changing `vite.config.js` requires a dev-server restart.**
+- First edit through the editor **reformats** a hand-authored puzzle file to
+  2-space JSON (compact inline note objects expand). Expected; commit it once.
+- The game picks up changes on a plain tab reload (`PuzzleLoader` fetches at
+  runtime); there is no auto-reload of the game tab.
+
 ## Future: its own package
 
 The editor is a self-contained consumer of the renderer's public API, so if a

@@ -13,11 +13,12 @@ import EntityToolbar from 'editor/ui/EntityToolbar';
 import PropertyPanel from 'editor/ui/PropertyPanel';
 import MetadataPanel from 'editor/ui/MetadataPanel';
 import ValidationPanel from 'editor/ui/ValidationPanel';
-import ImportPanel from 'editor/ui/ImportPanel';
+import LevelPicker from 'editor/ui/LevelPicker';
 import ExportPanel from 'editor/ui/ExportPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
+import { savePuzzleToRepo } from 'editor/io/repoPersistence';
 
 export default class EditorApp {
   constructor() {
@@ -87,21 +88,11 @@ export default class EditorApp {
         if (entityId) this.selectionManager.select(entityId);
       }
     );
-    this.importPanel = new ImportPanel(document.getElementById('import-panel'), (importedModel) => {
-      // Replace model state from imported model
-      this.undoManager._model._metadata = { ...importedModel.getMetadata() };
-      this.undoManager._model._playerSpawn = importedModel.getPlayerSpawn();
-      this.undoManager._model._floors = importedModel.getFloors();
-      this.undoManager._model._entities = importedModel.getEntities();
-      this.undoManager._model._nextEntityId =
-        Math.max(...importedModel.getEntities().map((e) => e.id), 0) + 1;
-      // Rebuild all visuals
-      this.entityPlacer.rebuildFromModel();
-      this.floorRegionPanel.refresh();
-      this.metadataPanel.refresh();
-      this.selectionManager.deselect();
-      this._scheduleValidation();
-      this._scheduleAutoSave();
+    this.levelPicker = new LevelPicker(document.getElementById('import-panel'), (importedModel) => {
+      // Load an existing repo level: replace model state without writing
+      // it straight back to disk (it already matches the file we read).
+      this._applyRestoredModel(importedModel);
+      this.levelPicker.setSelected(importedModel.getMetadata().id);
     });
     this.exportPanel = new ExportPanel(document.getElementById('export-panel'), this.undoManager);
     this.entityDragger = new EntityDragger(
@@ -112,6 +103,15 @@ export default class EditorApp {
       this.selectionManager
     );
     this.entityDragger.groundPlane = this.editorScene._groundPlane;
+
+    // Central hook: every model mutation (metadata, properties, songs,
+    // placement, undo/redo) validates and autosaves to the repo. Loading
+    // a level replaces the model directly and bypasses this, so it does
+    // not immediately write back.
+    this.undoManager.setOnChange(() => {
+      this._scheduleValidation();
+      this._scheduleAutoSave();
+    });
 
     // Wire selection changes to property panel
     this.selectionManager.onSelectionChange = (entityId) => {
@@ -146,7 +146,21 @@ export default class EditorApp {
     clearTimeout(this._autoSaveTimer);
     this._autoSaveTimer = setTimeout(() => {
       saveSession(this.undoManager);
+      this._saveToRepo();
     }, 500);
+  }
+
+  async _saveToRepo() {
+    try {
+      const written = await savePuzzleToRepo(this.undoManager);
+      if (written) {
+        // A newly-created id won't be in the dropdown yet; refresh to add it.
+        const { id } = this.undoManager.getMetadata();
+        if (!this.levelPicker.hasLevel(id)) this.levelPicker.refresh(id);
+      }
+    } catch (err) {
+      console.warn('Repo save failed:', err);
+    }
   }
 
   _restoreSession() {

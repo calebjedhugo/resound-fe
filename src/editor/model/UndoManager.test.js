@@ -239,4 +239,47 @@ describe('UndoManager', () => {
       expect(undoManager.canRedo()).toBe(true);
     });
   });
+
+  describe('setOnChange', () => {
+    it('fires the callback after every mutation', () => {
+      const onChange = jest.fn();
+      undoManager.setOnChange(onChange);
+
+      undoManager.addEntity('creature', 0, 0, 0, {});
+      undoManager.setMetadata({ name: 'X' });
+      undoManager.setPlayerSpawn(1, 0, 1);
+
+      expect(onChange).toHaveBeenCalledTimes(3);
+    });
+
+    it('fires the callback on undo and redo', () => {
+      undoManager.addEntity('creature', 0, 0, 0, {});
+
+      const onChange = jest.fn();
+      undoManager.setOnChange(onChange);
+
+      undoManager.undo();
+      undoManager.redo();
+
+      expect(onChange).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not fire on no-op undo/redo', () => {
+      const onChange = jest.fn();
+      undoManager.setOnChange(onChange);
+
+      undoManager.undo(); // nothing to undo
+      undoManager.redo(); // nothing to redo
+
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('still returns the mutation result when a callback is registered', () => {
+      undoManager.setOnChange(jest.fn());
+
+      const id = undoManager.addEntity('creature', 0, 0, 0, {});
+
+      expect(typeof id).toBe('number');
+    });
+  });
 });
