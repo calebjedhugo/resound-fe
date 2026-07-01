@@ -66,7 +66,7 @@ export default class MetadataPanel {
   _syncCollapsed() {
     if (!this._contentEl) return;
     this._contentEl.style.display = this._collapsed ? 'none' : 'block';
-    if (this._toggleBtn) this._toggleBtn.textContent = this._collapsed ? '+' : '-';
+    if (this._toggleBtn) this._toggleBtn.textContent = this._collapsed ? '▸' : '▾';
   }
 
   _render() {

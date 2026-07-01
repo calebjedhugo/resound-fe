@@ -11,12 +11,14 @@
  */
 
 const SHORTCUTS = [
-  ['Cmd/Ctrl + Z', 'Undo'],
-  ['Cmd/Ctrl + Shift + Z', 'Redo'],
+  ['Click tool, then grid', 'Place entity'],
+  ['Esc, then click entity', 'Select it (needs no active tool)'],
+  ['Drag selection, or edit X/Z', 'Move an entity'],
+  ['Right-click entity', 'Edit its song'],
   ['Delete / Backspace', 'Delete selected entity'],
   ['Escape', 'Deselect / cancel placement'],
-  ['Click tool, then grid', 'Place entity'],
-  ['Right-click entity', 'Edit song'],
+  ['Cmd/Ctrl + Z', 'Undo'],
+  ['Cmd/Ctrl + Shift + Z', 'Redo'],
 ];
 
 export default class EditorToolbar {
