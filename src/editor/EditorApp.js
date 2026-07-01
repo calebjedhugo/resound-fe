@@ -154,11 +154,50 @@ export default class EditorApp {
     // Restore saved session (auto-restore on load)
     this._restoreSession();
 
+    this._setupViewportHud();
     this._setupViewportClick();
     this._setupDrag();
     this._setupKeyboard();
     this._animate();
     window.addEventListener('resize', () => this._onResize());
+  }
+
+  /** True if a cell already holds an entity or the player spawn (one per tile). */
+  _isCellOccupied(x, y, z) {
+    if (this.undoManager.getEntitiesAt(x, y, z).length > 0) return true;
+    const spawn = this.undoManager.getPlayerSpawn();
+    return Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
+  }
+
+  /** Create the viewport overlay: a live hover-cell readout + a transient toast. */
+  _setupViewportHud() {
+    const container = document.getElementById('editor-viewport');
+    this._hudEl = document.createElement('div');
+    this._hudEl.className = 'viewport-hud';
+    container.appendChild(this._hudEl);
+
+    this._toastEl = document.createElement('div');
+    this._toastEl.className = 'viewport-toast';
+    container.appendChild(this._toastEl);
+  }
+
+  _updateHud() {
+    if (!this._hudEl) return;
+    const grid = this.editorScene.getHoveredGrid();
+    this._hudEl.textContent = grid
+      ? `Cell (${grid.x}, ${grid.z}) · E${this.editorScene.activeElevation}`
+      : '';
+  }
+
+  /** Briefly show a message in the viewport (e.g. why a placement was refused). */
+  _showToast(message) {
+    if (!this._toastEl) return;
+    this._toastEl.textContent = message;
+    this._toastEl.classList.add('visible');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      this._toastEl.classList.remove('visible');
+    }, 1400);
   }
 
   _scheduleValidation() {
@@ -357,7 +396,13 @@ export default class EditorApp {
       // If entity toolbar has active tool, place entity at hovered grid cell
       const activeTool = this.entityToolbar.activeTool;
       if (activeTool) {
-        this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, this.editorScene.activeElevation);
+        const elevation = this.editorScene.activeElevation;
+        // One thing per tile: don't stack entities (or drop one on the player).
+        if (this._isCellOccupied(grid.x, elevation, grid.z)) {
+          this._showToast('That cell is already occupied');
+          return;
+        }
+        this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, elevation);
         return;
       }
 
@@ -501,6 +546,7 @@ export default class EditorApp {
     this.editorScene.updateHover(this.camera);
     this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this.editorScene.update();
+    this._updateHud();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -517,6 +563,7 @@ export default class EditorApp {
     if (this._animationId) cancelAnimationFrame(this._animationId);
     clearTimeout(this._validationTimer);
     clearTimeout(this._autoSaveTimer);
+    clearTimeout(this._toastTimer);
     this.songEditorModal.dispose();
     this.contextMenu.dispose();
     this.ghostPreview.dispose();

@@ -41,11 +41,21 @@ export default class PropertyPanel {
     title.textContent = `${entity.type.charAt(0).toUpperCase() + entity.type.slice(1)} Properties`;
     wrapper.appendChild(title);
 
-    // Position (read-only for all)
-    const posInfo = document.createElement('div');
-    posInfo.className = 'prop-row';
-    posInfo.textContent = `Position: (${entity.x}, ${entity.y}, ${entity.z})`;
-    wrapper.appendChild(posInfo);
+    // Position: X/Z are editable so you can nudge without delete+replace;
+    // elevation (y) is set via the Active Elevation control, shown read-only.
+    const elevInfo = document.createElement('div');
+    elevInfo.className = 'prop-row';
+    elevInfo.textContent = `Elevation: ${entity.y}`;
+    wrapper.appendChild(elevInfo);
+
+    this._addNumberField(wrapper, 'X', entity.x, (val) => {
+      const e = this._undoManager.getEntity(this._selectedId);
+      this._entityPlacer.setEntityPosition(this._selectedId, val, e.z, e.y);
+    });
+    this._addNumberField(wrapper, 'Z', entity.z, (val) => {
+      const e = this._undoManager.getEntity(this._selectedId);
+      this._entityPlacer.setEntityPosition(this._selectedId, e.x, val, e.y);
+    });
 
     // Type-specific fields
     switch (entity.type) {
