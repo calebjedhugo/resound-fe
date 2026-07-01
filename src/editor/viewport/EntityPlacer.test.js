@@ -111,6 +111,21 @@ describe('EntityPlacer', () => {
     });
   });
 
+  it('rebuildFromModel is view-only: it does not mutate the model or fire onChange', () => {
+    // A player spawn is the tricky case: rebuilding its mesh must not
+    // re-run setPlayerSpawn (which would trigger autosave on every reload).
+    placer.placeEntity('player', 4, 7, 1);
+    placer.placeEntity('creature', 2, 3, 0);
+
+    const onChange = jest.fn();
+    undoManager.setOnChange(onChange);
+
+    placer.rebuildFromModel();
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(undoManager.getPlayerSpawn()).toEqual({ x: 4, y: 1, z: 7 });
+  });
+
   it('removes the entity from the model when removeEntityById is called', () => {
     const id = placer.placeEntity('creature', 5, 5, 0);
     expect(undoManager.getEntity(id)).toBeDefined();

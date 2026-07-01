@@ -32,7 +32,13 @@ export default class EntityPlacer {
 
   _placePlayerSpawn(gridX, gridZ, elevation) {
     this._undoManager.setPlayerSpawn(gridX, elevation, gridZ);
+    this._createPlayerSpawnMesh(gridX, gridZ, elevation);
+    return null; // No entity id for player spawn
+  }
 
+  // Builds just the spawn marker mesh (no model mutation), so view-only
+  // rebuilds don't touch the model / undo stack / autosave.
+  _createPlayerSpawnMesh(gridX, gridZ, elevation) {
     // Remove old spawn mesh
     if (this._playerSpawnMesh) {
       this._scene.remove(this._playerSpawnMesh);
@@ -52,7 +58,6 @@ export default class EntityPlacer {
     this._scene.add(mesh);
     this._playerSpawnMesh = mesh;
     mesh.userData = { type: 'player' };
-    return null; // No entity id for player spawn
   }
 
   _createMesh(id, type, gridX, gridZ, elevation, data) {
@@ -176,7 +181,7 @@ export default class EntityPlacer {
 
     const spawn = this._undoManager.getPlayerSpawn();
     if (spawn) {
-      this._placePlayerSpawn(spawn.x, spawn.z, spawn.y);
+      this._createPlayerSpawnMesh(spawn.x, spawn.z, spawn.y);
     }
   }
 }

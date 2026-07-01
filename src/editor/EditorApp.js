@@ -69,8 +69,6 @@ export default class EditorApp {
       this.entityPlacer,
       () => {
         this.selectionManager.deleteSelected();
-        this._scheduleValidation();
-        this._scheduleAutoSave();
       },
       (entityId) => {
         this.songEditorModal.open(entityId);
@@ -249,8 +247,6 @@ export default class EditorApp {
 
       // Let floor region panel handle it first
       if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) {
-        this._scheduleValidation();
-        this._scheduleAutoSave();
         return;
       }
 
@@ -258,8 +254,6 @@ export default class EditorApp {
       const activeTool = this.entityToolbar.activeTool;
       if (activeTool) {
         this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, this.editorScene.activeElevation);
-        this._scheduleValidation();
-        this._scheduleAutoSave();
         return;
       }
 
@@ -358,8 +352,6 @@ export default class EditorApp {
         if (this.selectionManager.selectedId !== null) {
           this.propertyPanel.show(this.selectionManager.selectedId);
         }
-        this._scheduleValidation();
-        this._scheduleAutoSave();
       }
       dragStarted = false;
     };
@@ -381,8 +373,6 @@ export default class EditorApp {
         this.metadataPanel.refresh();
         this.entityPlacer.rebuildFromModel();
         this.selectionManager.deselect();
-        this._scheduleValidation();
-        this._scheduleAutoSave();
       }
       // Cmd+Shift+Z / Ctrl+Shift+Z = redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
@@ -392,8 +382,6 @@ export default class EditorApp {
         this.metadataPanel.refresh();
         this.entityPlacer.rebuildFromModel();
         this.selectionManager.deselect();
-        this._scheduleValidation();
-        this._scheduleAutoSave();
       }
       // Escape cancels floor placement and deselects entity toolbar
       if (e.key === 'Escape') {
@@ -406,8 +394,6 @@ export default class EditorApp {
         if (this.selectionManager.selectedId !== null) {
           e.preventDefault();
           this.selectionManager.deleteSelected();
-          this._scheduleValidation();
-          this._scheduleAutoSave();
         }
       }
     });
