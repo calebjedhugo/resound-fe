@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import jsconfigPaths from 'vite-jsconfig-paths';
 import fs from 'fs';
 import path from 'path';
+import prettier from 'prettier';
 
 const PUZZLES_DIR = path.resolve(__dirname, 'public/puzzles');
 const MANIFEST_PATH = path.join(PUZZLES_DIR, 'manifest.json');
@@ -19,10 +20,25 @@ function readBody(req) {
 }
 
 /**
+ * Write an object to a JSON file formatted exactly as the repo's Prettier
+ * config would, so editor-written files match `prettier --write` and pass
+ * the lint-staged check on commit (no formatting churn).
+ */
+async function writeJsonFile(filePath, obj) {
+  const config = await prettier.resolveConfig(filePath);
+  const formatted = await prettier.format(JSON.stringify(obj), {
+    ...config,
+    filepath: filePath,
+    parser: 'json',
+  });
+  fs.writeFileSync(filePath, formatted);
+}
+
+/**
  * Upsert a puzzle's summary into manifest.json, preserving order.
  * Updates an existing entry by id, or appends a new one.
  */
-function upsertManifest(puzzle) {
+async function upsertManifest(puzzle) {
   let manifest = { puzzles: [] };
   try {
     manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
@@ -36,7 +52,7 @@ function upsertManifest(puzzle) {
   } else {
     manifest.puzzles.push(entry);
   }
-  fs.writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeJsonFile(MANIFEST_PATH, manifest);
 }
 
 /**
@@ -66,11 +82,8 @@ function puzzleWriterPlugin() {
             res.end(JSON.stringify({ error: 'Body id does not match URL id' }));
             return;
           }
-          fs.writeFileSync(
-            path.join(PUZZLES_DIR, `${id}.json`),
-            `${JSON.stringify(puzzle, null, 2)}\n`
-          );
-          upsertManifest(puzzle);
+          await writeJsonFile(path.join(PUZZLES_DIR, `${id}.json`), puzzle);
+          await upsertManifest(puzzle);
           res.statusCode = 200;
           res.end(JSON.stringify({ ok: true, id }));
         } catch (err) {
