@@ -254,6 +254,31 @@ export default class NotationEditor {
     controls.appendChild(playBtn);
     controls.appendChild(stopBtn);
     this._container.appendChild(controls);
+
+    // Edit controls (kept out of .playback-controls) + a shortcut legend, so
+    // the note-editing commands aren't invisible.
+    const editControls = document.createElement('div');
+    editControls.className = 'song-edit-controls';
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'editor-btn';
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear';
+    clearBtn.onclick = () => this.clear();
+    editControls.appendChild(clearBtn);
+    this._container.appendChild(editControls);
+
+    const hint = document.createElement('div');
+    hint.className = 'song-edit-hint';
+    hint.textContent =
+      'Click staff to add · click a note to select · Del removes · +/− transpose · . dot · # ♭ n accidental · r rest · ←/→ move';
+    this._container.appendChild(hint);
+  }
+
+  /** Remove every note from the active voice. */
+  clear() {
+    this._activeModel().fromSongArray([]);
+    this._emitChange();
+    this._renderStaff();
   }
 
   _renderStaff() {
@@ -438,8 +463,9 @@ export default class NotationEditor {
         }
         break;
       case 'Delete':
-      case 'Backspace':
+      case 'Backspace': {
         e.preventDefault();
+        let removed = false;
         if (model._selectedIndex !== null) {
           model.removeNote(model._selectedIndex);
           if (model._notes.length === 0) {
@@ -447,9 +473,17 @@ export default class NotationEditor {
           } else if (model._selectedIndex >= model._notes.length) {
             model._selectedIndex = model._notes.length - 1;
           }
-          this._emitChange();
+          removed = true;
+        } else if (model._cursorPosition > 0) {
+          // Nothing selected: behave like a text-editor backspace and drop the
+          // note just before the cursor.
+          model.removeNote(model._cursorPosition - 1);
+          model.moveCursor('left');
+          removed = true;
         }
+        if (removed) this._emitChange();
         break;
+      }
       case '#':
         if (model._selectedIndex !== null) {
           model.setAccidental(model._selectedIndex, '#');
