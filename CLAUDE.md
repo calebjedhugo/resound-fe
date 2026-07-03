@@ -73,6 +73,16 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 
 ---
 
+## Design Intent
+
+**Read [`DESIGN.md`](DESIGN.md) before changing gameplay, matching, or editor validation.**
+Several behaviors that look like bugs are designed — e.g. recording is raw
+R-press→R-release (NEVER auto-trim), creatures may legally self-solve puzzles,
+and there is no aiming. When playtesting surfaces one, document it there
+instead of "fixing" it.
+
+---
+
 ## Key Gotchas
 
 ### Web Audio
@@ -94,7 +104,7 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 
 ### Recording
 - Can only record within creature's `audibleRange × 0.5`
-- 5-slot limit (keys 0-4)
+- 5-slot limit (keys 1–5 or ←/→ to select)
 
 ---
 
@@ -106,4 +116,4 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 
 ---
 
-*Last Updated: 2026-05-08*
+*Last Updated: 2026-07-02 — Added Design Intent section (playtest-iteration findings)*
