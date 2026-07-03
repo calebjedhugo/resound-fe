@@ -1,0 +1,23 @@
+{
+  "id": "playtest-r4-selfsolve",
+  "name": "playtest-r4-selfsolve",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": { "x": 7, "y": 0, "z": 7 },
+  "floors": [],
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 5, "y": 0, "z": 7 },
+      "data": { "song": [{ "pitch": "B4", "length": "1/4" }], "interval": 8, "audibleRange": 15 }
+    },
+    {
+      "type": "fountain",
+      "position": { "x": 9, "y": 0, "z": 7 },
+      "song": [{ "pitch": "B4", "length": "1/4" }]
+    }
+  ]
+}

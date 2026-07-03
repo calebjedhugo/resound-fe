@@ -1,29 +1,14 @@
 {
   "puzzles": [
-    {
-      "id": "test-001",
-      "name": "First Steps",
-      "difficulty": 1
-    },
-    {
-      "id": "test-002",
-      "name": "Opening Gates",
-      "difficulty": 1
-    },
-    {
-      "id": "test-003",
-      "name": "Harmonic Motion",
-      "difficulty": 2
-    },
-    {
-      "id": "test-004",
-      "name": "Complex Harmony",
-      "difficulty": 2
-    },
-    {
-      "id": "elevation-demo",
-      "name": "Elevated Harmony",
-      "difficulty": 2
-    }
+    { "id": "test-001", "name": "First Steps", "difficulty": 1 },
+    { "id": "test-002", "name": "Opening Gates", "difficulty": 1 },
+    { "id": "test-003", "name": "Harmonic Motion", "difficulty": 2 },
+    { "id": "test-004", "name": "Complex Harmony", "difficulty": 2 },
+    { "id": "elevation-demo", "name": "Elevated Harmony", "difficulty": 2 },
+    { "id": "playtest-r1", "name": "playtest-r1", "difficulty": 1 },
+    { "id": "playtest-r2", "name": "playtest-r2", "difficulty": 1 },
+    { "id": "playtest-r3", "name": "playtest-r3", "difficulty": 1 },
+    { "id": "playtest-r4-selfsolve", "name": "playtest-r4-selfsolve", "difficulty": 1 },
+    { "id": "playtest-r4-legit", "name": "playtest-r4-legit", "difficulty": 1 }
   ]
 }

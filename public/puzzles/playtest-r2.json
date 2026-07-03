@@ -1,0 +1,35 @@
+{
+  "id": "playtest-r2",
+  "name": "playtest-r2",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": { "x": 3, "y": 0, "z": 0 },
+  "floors": [{ "elevation": 0, "x1": 3, "z1": 0, "x2": 7, "z2": 7 }],
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 3, "y": 0, "z": 3 },
+      "data": {
+        "song": [
+          { "pitch": "B4", "length": "1/4" },
+          { "pitch": "C#5", "length": "1/4" },
+          { "pitch": "A#4", "length": "1/4" }
+        ],
+        "interval": 8,
+        "audibleRange": 12
+      }
+    },
+    {
+      "type": "fountain",
+      "position": { "x": 7, "y": 0, "z": 6 },
+      "song": [
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "C#5", "length": "1/4" },
+        { "pitch": "A#4", "length": "1/4" }
+      ]
+    }
+  ]
+}
