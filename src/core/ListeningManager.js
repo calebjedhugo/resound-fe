@@ -39,6 +39,28 @@ class ListeningManager {
   }
 
   /**
+   * Quantize captured notes to the 16th-note grid and group simultaneous
+   * notes, keeping beat positions (needed for phrase segmentation).
+   * @param {Array} capturedNotes - Array of note events
+   * @param {number} startTime - When listening started
+   * @param {number} tempo - Tempo in BPM
+   * @returns {Array<{beat: number, notes: Array}>} sorted by beat
+   */
+  static groupNotesByBeat(capturedNotes, startTime, tempo) {
+    if (capturedNotes.length === 0) return [];
+
+    const quantized = capturedNotes.map((note) => ({
+      ...note,
+      beat: quantizeToBeat(note.timestamp, startTime, tempo, 16),
+    }));
+    const grouped = groupBy(quantized, 'beat');
+    return Object.keys(grouped)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((beat) => ({ beat, notes: grouped[beat] }));
+  }
+
+  /**
    * Process captured notes into song format (quantize and group)
    * @param {Array} capturedNotes - Array of note events
    * @param {number} startTime - When listening started
@@ -46,47 +68,12 @@ class ListeningManager {
    * @returns {Array} Processed song data
    */
   static processCapturedNotes(capturedNotes, startTime, tempo) {
-    if (capturedNotes.length === 0) {
-      return [];
-    }
-
-    // 1. Quantize each note to nearest 16th note beat
-    const quantized = capturedNotes.map((note) => ({
-      ...note,
-      beat: quantizeToBeat(note.timestamp, startTime, tempo, 16),
-    }));
-
-    // 2. Group notes by beat (notes on same beat = chord)
-    const grouped = groupBy(quantized, 'beat');
-
-    // 3. Sort by beat
-    const sortedBeats = Object.keys(grouped)
-      .map(Number)
-      .sort((a, b) => a - b);
-
-    // 4. Convert to song format
-    const songData = [];
-    sortedBeats.forEach((beat) => {
-      const notesAtBeat = grouped[beat];
-
-      if (notesAtBeat.length === 1) {
-        // Single note
-        songData.push({
-          pitch: notesAtBeat[0].pitch,
-          length: notesAtBeat[0].length,
-        });
-      } else {
-        // Chord (multiple notes)
-        songData.push(
-          notesAtBeat.map((note) => ({
-            pitch: note.pitch,
-            length: note.length,
-          }))
-        );
+    return this.groupNotesByBeat(capturedNotes, startTime, tempo).map(({ notes }) => {
+      if (notes.length === 1) {
+        return { pitch: notes[0].pitch, length: notes[0].length };
       }
+      return notes.map((note) => ({ pitch: note.pitch, length: note.length }));
     });
-
-    return songData;
   }
 
   /**

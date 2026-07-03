@@ -57,6 +57,9 @@ class Creature extends Entity {
       // Track current note for harmony analysis
       this.currentNote = noteEvent;
 
+      // Sound carries as far as its source's audible range
+      noteEvent.sourceRange = this.audibleRange;
+
       // Emit to listening manager
       ListeningManager.emitNote(noteEvent);
     };
@@ -121,11 +124,35 @@ class Creature extends Entity {
     // Update creatures in range for recording UI
     this.updateRecordingState();
 
+    // Visual "now singing" cue (audio has no visual equivalent otherwise)
+    this.updateSingingVisual(deltaTime);
+
     // Calculate forces from nearby playing sources (continuous while harmonies exist)
     this.calculateForces();
 
     // Apply force-based movement
     this.updateMovement(deltaTime);
+  }
+
+  /**
+   * Pulse glow + scale while the creature is singing so the melody
+   * is noticeable without sound.
+   */
+  updateSingingVisual(deltaTime) {
+    if (!this.mesh || !this.mesh.material) return;
+
+    const singing = this.instrument.playbackState.isPlaying;
+    if (singing) {
+      this.singingPhase = (this.singingPhase || 0) + deltaTime * 6;
+      const pulse = 0.5 + 0.5 * Math.sin(this.singingPhase);
+      this.mesh.material.emissiveIntensity = 0.2 + pulse * 1.0;
+      const scale = 1 + 0.08 * pulse;
+      this.mesh.scale.set(scale, scale, scale);
+    } else if (this.singingPhase) {
+      this.singingPhase = 0;
+      this.mesh.material.emissiveIntensity = 0.2;
+      this.mesh.scale.set(1, 1, 1);
+    }
   }
 
   /**
@@ -358,7 +385,7 @@ class Creature extends Entity {
     const newZ = this.position.z + this.velocity.z * deltaTime;
 
     // Check elevation traversal before entity collision
-    const elevationGrid = gameState.elevationGrid;
+    const { elevationGrid } = gameState;
     if (elevationGrid) {
       const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
       const newGrid = elevationGrid.worldToGrid(newX, newZ);

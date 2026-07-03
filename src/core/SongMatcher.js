@@ -96,6 +96,48 @@ class SongMatcher {
   }
 
   /**
+   * Note length string → quarter-note beats ("1/4" → 1, "1/8" → 0.5).
+   * Malformed lengths count as one beat.
+   */
+  static lengthToBeats(length) {
+    const [num, den] = String(length).split('/').map(Number);
+    if (!num || !den) return 1;
+    return (num * 4) / den;
+  }
+
+  /**
+   * Split a beat-grouped note stream into PHRASES: contiguous utterances
+   * separated by silence. A listener hears everything over time (creature
+   * passes, stray notes, the player's playback); each phrase is evaluated
+   * against the target on its own, so old sounds neither help nor hurt a
+   * later playback — but the playback itself must BE the target, exactly.
+   * @param {Array<{beat: number, notes: Array}>} groups - from ListeningManager.groupNotesByBeat
+   * @param {number} [gapBeats] - silence (beyond the previous note's duration)
+   *   that starts a new phrase
+   * @returns {Array<Array>} phrases in song format (notes/chords)
+   */
+  static phrasesFromBeatGroups(groups, gapBeats = 1) {
+    const phrases = [];
+    let current = null;
+    let expectedNext = null;
+
+    for (const { beat, notes } of groups) {
+      if (current === null || beat > expectedNext + gapBeats) {
+        current = { startBeat: beat, elements: [] };
+        phrases.push(current);
+      }
+      if (notes.length === 1) {
+        current.elements.push({ pitch: notes[0].pitch, length: notes[0].length });
+      } else {
+        current.elements.push(notes.map((n) => ({ pitch: n.pitch, length: n.length })));
+      }
+      const durationBeats = Math.min(...notes.map((n) => this.lengthToBeats(n.length)));
+      expectedNext = beat + durationBeats;
+    }
+    return phrases;
+  }
+
+  /**
    * Compare two single notes
    * @param {Object} note1 - { pitch, length }
    * @param {Object} note2 - { pitch, length }

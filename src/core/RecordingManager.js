@@ -1,5 +1,9 @@
+import showToast from 'ui/Toast';
 import gameState from './GameState';
 import { quantizeToBeat, groupBy } from './utils';
+
+// Throttle the out-of-range warning (key repeat fires startRecording rapidly)
+let lastRangeWarning = 0;
 
 /**
  * RecordingManager - Handles real-time recording of creature songs
@@ -12,7 +16,14 @@ class RecordingManager {
     const { creaturesInRange } = gameState.recording;
 
     if (creaturesInRange.length === 0) {
-      console.warn('No creatures in recording range');
+      const now = Date.now();
+      if (now - lastRangeWarning > 2500) {
+        lastRangeWarning = now;
+        showToast('No creature close enough to record — move closer and press R', {
+          type: 'error',
+          duration: 3000,
+        });
+      }
       return;
     }
 
@@ -20,10 +31,24 @@ class RecordingManager {
     gameState.recording.isRecording = true;
     gameState.recording.startTime = Date.now();
     gameState.recording.capturedNotes = [];
+    // A recording carries as far as the loudest creature it was taken from
+    gameState.recording.sourceRange = Math.max(
+      ...creaturesInRange.map((creature) => creature.audibleRange || 0)
+    );
 
-    // Attach recording callbacks to all creatures in range
-    // Save their original callbacks so we can restore them
-    creaturesInRange.forEach((creature) => {
+    // Attach recording callbacks to all creatures in range, remembering
+    // exactly which creatures we wrapped: stopRecording must restore THIS
+    // list, not whoever is in range by then — a creature that wandered out
+    // mid-recording would otherwise keep its wrapper forever, silently
+    // feeding stale notes into every later recording.
+    // NOTE: recording captures exactly what sounds between R-press and
+    // R-release — starting and stopping at the right musical moment is part
+    // of the puzzle (deliberately no auto-trim/auto-stop).
+    this._wrappedCreatures = [...creaturesInRange];
+    this._wrappedCreatures.forEach((creature) => {
+      // Already wrapped (defensive: never stack wrappers)
+      if (creature.instrument.savedNoteCallback) return;
+
       // Store original callback
       creature.instrument.savedNoteCallback = creature.instrument.noteCallback;
 
@@ -46,24 +71,39 @@ class RecordingManager {
   static stopRecording() {
     if (!gameState.recording.isRecording) return;
 
-    // Restore original callbacks
-    const { creaturesInRange } = gameState.recording;
-    creaturesInRange.forEach((creature) => {
+    // Restore original callbacks on the creatures we actually wrapped
+    // (NOT the live in-range list — see startRecording)
+    (this._wrappedCreatures || []).forEach((creature) => {
+      if (!creature.instrument.savedNoteCallback) return;
       creature.instrument.noteCallback = creature.instrument.savedNoteCallback;
       delete creature.instrument.savedNoteCallback;
     });
+    this._wrappedCreatures = [];
 
     // Process captured notes
     const processedData = this.processCapturedNotes();
-
-    // Store in active inventory slot (overwrite if occupied)
     const { activeSlot } = gameState.player;
-    gameState.player.inventory[activeSlot] = {
-      id: `recording_${Date.now()}`,
-      data: processedData,
-      recordedAt: Date.now(),
-      tempo: gameState.musicalClock.tempo,
-    };
+
+    if (processedData.length === 0) {
+      // Keep whatever was in the slot rather than overwriting it with silence
+      showToast('Nothing captured — record while the creature is singing', {
+        type: 'error',
+        duration: 4000,
+      });
+    } else {
+      // Store in active inventory slot (overwrite if occupied)
+      gameState.player.inventory[activeSlot] = {
+        id: `recording_${Date.now()}`,
+        data: processedData,
+        recordedAt: Date.now(),
+        tempo: gameState.musicalClock.tempo,
+        sourceRange: gameState.recording.sourceRange,
+      };
+      showToast(`Recorded ${processedData.length} notes into slot ${activeSlot + 1}`, {
+        type: 'success',
+        duration: 3500,
+      });
+    }
 
     // Reset recording state
     gameState.recording.isRecording = false;

@@ -33,7 +33,7 @@ describe('Gates and Fountains recognizing songs', () => {
 
       // Advance time for playback to complete and gate to process
       // At 120 BPM, 1/4 note = 500ms, add time for gate update
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Assert: gate should now be open
       expect(ctx.isGateOpen(gates[0])).toBe(true);
@@ -57,7 +57,7 @@ describe('Gates and Fountains recognizing songs', () => {
       // Play the song
       ctx.pressKey('space');
       // 3 notes x 1/4 = 3 beats, plus extra for playback and one more tick to process
-      await ctx.advanceBeats(4);
+      await ctx.advanceBeats(8);
       await ctx.tick(16);
 
       // Assert: gate should be open
@@ -78,7 +78,7 @@ describe('Gates and Fountains recognizing songs', () => {
 
       // Play the wrong song
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Assert: gate should still be closed
       expect(ctx.isGateOpen(gates[0])).toBe(false);
@@ -99,7 +99,7 @@ describe('Gates and Fountains recognizing songs', () => {
 
       // Play the song from out of range
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Assert: gate should still be closed (player too far)
       expect(ctx.isGateOpen(gates[0])).toBe(false);
@@ -121,7 +121,7 @@ describe('Gates and Fountains recognizing songs', () => {
 
       // Play the song from close range
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Assert: gate should now be open
       expect(ctx.isGateOpen(gates[0])).toBe(true);
@@ -138,7 +138,7 @@ describe('Gates and Fountains recognizing songs', () => {
 
       // Activate gate
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(true);
 
@@ -164,7 +164,7 @@ describe('Gates and Fountains recognizing songs', () => {
 
       // Play the song
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Assert: fountain should be activated
       expect(ctx.isFountainActive(fountains[0])).toBe(true);
@@ -186,7 +186,7 @@ describe('Gates and Fountains recognizing songs', () => {
 
       ctx.pressKey('space');
       // 3 notes x 1/4 = 3 beats, plus extra for playback and one more tick to process
-      await ctx.advanceBeats(4);
+      await ctx.advanceBeats(8);
       await ctx.tick(16);
 
       expect(ctx.isFountainActive(fountains[0])).toBe(true);
@@ -203,7 +203,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const fountains = ctx.getFountains();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Fountain should NOT be activated
       expect(ctx.isFountainActive(fountains[0])).toBe(false);
@@ -220,7 +220,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const fountains = ctx.getFountains();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Fountain should NOT be activated (length mismatch)
       expect(ctx.isFountainActive(fountains[0])).toBe(false);
@@ -236,7 +236,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const fountains = ctx.getFountains();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       expect(ctx.isFountainActive(fountains[0])).toBe(true);
 
@@ -264,7 +264,7 @@ describe('Gates and Fountains recognizing songs', () => {
       // So notes should NOT reach gate
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
@@ -283,7 +283,7 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Should be within range (boundary inclusive)
       expect(ctx.isGateOpen(gates[0])).toBe(true);
@@ -301,7 +301,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.clearEmittedNotes();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Check that notes were emitted
       const notes = ctx.getEmittedNotes();
@@ -323,7 +323,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.clearEmittedNotes();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(4);
+      await ctx.advanceBeats(8);
 
       // All 3 notes should have been emitted
       const notes = ctx.getEmittedNotes();
@@ -346,7 +346,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const gates = ctx.getGates();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
@@ -362,7 +362,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const gates = ctx.getGates();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
@@ -381,7 +381,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const gates = ctx.getGates();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(3);
+      await ctx.advanceBeats(5);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
@@ -401,7 +401,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const gates = ctx.getGates();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(4);
+      await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
@@ -420,7 +420,7 @@ describe('Gates and Fountains recognizing songs', () => {
       const gates = ctx.getGates();
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(2);
+      await ctx.advanceBeats(8);
 
       // Gate should open because active slot (2) has correct song
       expect(ctx.isGateOpen(gates[0])).toBe(true);

@@ -358,6 +358,89 @@ describe('SongMatcher', () => {
     });
   });
 
+  describe('lengthToBeats', () => {
+    it('converts note lengths to quarter-note beats', () => {
+      expect(SongMatcher.lengthToBeats('1/4')).toBe(1);
+      expect(SongMatcher.lengthToBeats('1/8')).toBe(0.5);
+      expect(SongMatcher.lengthToBeats('1/2')).toBe(2);
+      expect(SongMatcher.lengthToBeats('1/16')).toBe(0.25);
+    });
+
+    it('treats malformed lengths as one beat', () => {
+      expect(SongMatcher.lengthToBeats('bogus')).toBe(1);
+      expect(SongMatcher.lengthToBeats(undefined)).toBe(1);
+    });
+  });
+
+  describe('phrasesFromBeatGroups', () => {
+    const group = (beat, ...pitches) => ({
+      beat,
+      notes: pitches.map((pitch) => ({ pitch, length: '1/4' })),
+    });
+
+    it('keeps a contiguous run of notes in one phrase', () => {
+      const phrases = SongMatcher.phrasesFromBeatGroups([
+        group(0, 'B4'),
+        group(1, 'C#5'),
+        group(2, 'G#4'),
+      ]);
+      expect(phrases).toHaveLength(1);
+      expect(phrases[0].startBeat).toBe(0);
+      expect(phrases[0].elements.map((e) => e.pitch)).toEqual(['B4', 'C#5', 'G#4']);
+    });
+
+    it('splits phrases at silences longer than the gap', () => {
+      // Notes at beats 0-2, then silence until beat 8 (creature interval)
+      const phrases = SongMatcher.phrasesFromBeatGroups([
+        group(0, 'B4'),
+        group(1, 'C#5'),
+        group(2, 'G#4'),
+        group(8, 'B4'),
+        group(9, 'C#5'),
+        group(10, 'G#4'),
+      ]);
+      expect(phrases).toHaveLength(2);
+      expect(phrases[1].startBeat).toBe(8);
+      expect(phrases[1].elements).toHaveLength(3);
+    });
+
+    it('does not split within the gap tolerance', () => {
+      // Note at beat 0 lasts 1 beat; next at beat 2 = 1 beat of silence = tolerated
+      const phrases = SongMatcher.phrasesFromBeatGroups([group(0, 'B4'), group(2, 'C#5')]);
+      expect(phrases).toHaveLength(1);
+    });
+
+    it('groups simultaneous notes as chords within a phrase', () => {
+      const phrases = SongMatcher.phrasesFromBeatGroups([group(0, 'C4', 'E4'), group(1, 'G4')]);
+      expect(phrases).toHaveLength(1);
+      expect(Array.isArray(phrases[0].elements[0])).toBe(true);
+      expect(phrases[0].elements[0].map((n) => n.pitch)).toEqual(['C4', 'E4']);
+    });
+
+    it('exact-phrase consequence: an over-long take is one long phrase, not a match', () => {
+      const target = [
+        { pitch: 'B4', length: '1/4' },
+        { pitch: 'C#5', length: '1/4' },
+        { pitch: 'G#4', length: '1/4' },
+      ];
+      // Two passes played back-to-back with no silence between
+      const phrases = SongMatcher.phrasesFromBeatGroups([
+        group(0, 'B4'),
+        group(1, 'C#5'),
+        group(2, 'G#4'),
+        group(3, 'B4'),
+        group(4, 'C#5'),
+        group(5, 'G#4'),
+      ]);
+      expect(phrases).toHaveLength(1);
+      expect(SongMatcher.songsMatch(phrases[0].elements, target)).toBe(false);
+    });
+
+    it('returns an empty list for no input', () => {
+      expect(SongMatcher.phrasesFromBeatGroups([])).toEqual([]);
+    });
+  });
+
   describe('notesMatch', () => {
     it('returns true when pitch and length match exactly', () => {
       const note1 = { pitch: 'C4', length: '1/4' };

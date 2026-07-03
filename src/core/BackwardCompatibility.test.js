@@ -129,7 +129,7 @@ describe('Backward compatibility', () => {
     ctx.pressKey('space');
 
     // Advance time for playback and gate processing
-    await ctx.advanceBeats(2);
+    await ctx.advanceBeats(8);
 
     // Gate should now be open
     expect(ctx.isGateOpen(gates[0])).toBe(true);

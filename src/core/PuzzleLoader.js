@@ -55,40 +55,19 @@ class PuzzleLoader {
     const floor = new Floor(puzzleData.gridSize, puzzleData.floors || []);
     entityManager.add(floor);
 
-    // Generate perimeter walls around the grid
+    // Generate perimeter walls just OUTSIDE the grid (rows/cols -1 and
+    // gridSize), so every grid cell is playable — walls on edge cells used to
+    // trap entities placed there.
     const { gridSize } = puzzleData;
+    for (let i = -1; i <= gridSize; i += 1) {
+      // Top edge (z = -1) and bottom edge (z = gridSize), including corners
+      entityManager.add(new Wall({ x: i * WORLD_SCALE, y: 0, z: -1 * WORLD_SCALE }));
+      entityManager.add(new Wall({ x: i * WORLD_SCALE, y: 0, z: gridSize * WORLD_SCALE }));
+    }
     for (let i = 0; i < gridSize; i += 1) {
-      // Top edge (z = 0)
-      const topWall = new Wall({
-        x: i * WORLD_SCALE,
-        y: 0,
-        z: 0,
-      });
-      entityManager.add(topWall);
-
-      // Bottom edge (z = gridSize - 1)
-      const bottomWall = new Wall({
-        x: i * WORLD_SCALE,
-        y: 0,
-        z: (gridSize - 1) * WORLD_SCALE,
-      });
-      entityManager.add(bottomWall);
-
-      // Left edge (x = 0)
-      const leftWall = new Wall({
-        x: 0,
-        y: 0,
-        z: i * WORLD_SCALE,
-      });
-      entityManager.add(leftWall);
-
-      // Right edge (x = gridSize - 1)
-      const rightWall = new Wall({
-        x: (gridSize - 1) * WORLD_SCALE,
-        y: 0,
-        z: i * WORLD_SCALE,
-      });
-      entityManager.add(rightWall);
+      // Left edge (x = -1) and right edge (x = gridSize)
+      entityManager.add(new Wall({ x: -1 * WORLD_SCALE, y: 0, z: i * WORLD_SCALE }));
+      entityManager.add(new Wall({ x: gridSize * WORLD_SCALE, y: 0, z: i * WORLD_SCALE }));
     }
 
     // Set player start position (scaled, with eye height above floor)
@@ -113,31 +92,36 @@ class PuzzleLoader {
         z: entityData.position.z * WORLD_SCALE,
       };
 
-      switch (entityData.type) {
-        case 'creature':
-          entity = new Creature(scaledPosition, entityData.data || {});
-          break;
-        case 'gate':
-          entity = new Gate(scaledPosition, {
-            song: entityData.song,
-          });
-          break;
-        case 'fountain':
-          entity = new Fountain(scaledPosition, {
-            song: entityData.song,
-          });
-          break;
-        case 'wall':
-          entity = new Wall(scaledPosition);
-          break;
-        case 'ramp':
-          entity = new Ramp(scaledPosition, {
-            direction: entityData.direction,
-          });
-          elevationGrid.registerRamp(entityData.position.x, entityData.position.z, entity);
-          break;
-        default:
-          console.warn(`Unknown entity type: ${entityData.type}`);
+      try {
+        switch (entityData.type) {
+          case 'creature':
+            entity = new Creature(scaledPosition, entityData.data || {});
+            break;
+          case 'gate':
+            entity = new Gate(scaledPosition, {
+              song: entityData.song,
+            });
+            break;
+          case 'fountain':
+            entity = new Fountain(scaledPosition, {
+              song: entityData.song,
+            });
+            break;
+          case 'wall':
+            entity = new Wall(scaledPosition);
+            break;
+          case 'ramp':
+            entity = new Ramp(scaledPosition, {
+              direction: entityData.direction,
+            });
+            elevationGrid.registerRamp(entityData.position.x, entityData.position.z, entity);
+            break;
+          default:
+            console.warn(`Unknown entity type: ${entityData.type}`);
+        }
+      } catch (error) {
+        const { x, z } = entityData.position;
+        throw new Error(`${entityData.type} at (${x}, ${z}): ${error.message}`);
       }
 
       if (entity) {

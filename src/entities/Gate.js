@@ -1,12 +1,15 @@
 import * as THREE from 'three';
-import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
-import SongMatcher from 'core/SongMatcher';
+import evaluatePhrases from 'core/phraseMatching';
 import { getDistance } from 'core/utils';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from './Entity';
 
 class Gate extends Entity {
+  // How long heard notes stay eligible for matching (must comfortably exceed
+  // the longest target phrase at the slowest supported tempo)
+  static CAPTURE_RETENTION_MS = 30000;
+
   constructor(position, data = {}) {
     super('gate', position, data);
 
@@ -64,9 +67,10 @@ class Gate extends Entity {
   onNoteCaptured(noteEvent) {
     if (this.isActivated) return; // Already activated, ignore
 
-    // Check if note source is within audible range
+    // A sound carries as far as its source's audible range (fall back to our
+    // own range for sources that don't declare one)
     const distance = getDistance(this.position, noteEvent.sourcePosition);
-    if (distance > this.audibleRange) return; // Too far, ignore
+    if (distance > (noteEvent.sourceRange ?? this.audibleRange)) return; // Too far, ignore
 
     // Capture the note
     this.capturedNotes.push(noteEvent);
@@ -76,28 +80,51 @@ class Gate extends Entity {
    * Update gate state - check for song match
    */
   update(deltaTime) {
+    this._updateMismatchFlash();
     if (this.isActivated) return; // Already activated
+
+    // Sliding window: forget notes older than the retention period. (A hard
+    // periodic wipe used to split playbacks that straddled the boundary,
+    // making slow-tempo solutions impossible.)
+    const cutoff = Date.now() - Gate.CAPTURE_RETENTION_MS;
+    if (this.capturedNotes.length > 0 && this.capturedNotes[0].timestamp < cutoff) {
+      this.capturedNotes = this.capturedNotes.filter((n) => n.timestamp >= cutoff);
+    }
 
     // Check if we have captured notes to process
     if (this.capturedNotes.length === 0) return;
 
-    // Process captured notes and check for match
-    const processedSong = ListeningManager.processCapturedNotes(
-      this.capturedNotes,
-      this.listeningStartTime,
-      gameState.musicalClock?.tempo || 120
-    );
-
-    if (SongMatcher.songsMatch(processedSong, this.requiredSong)) {
+    // Segment everything heard into silence-delimited phrases; a COMPLETED
+    // phrase must equal the target exactly (rotated/over-long takes fail;
+    // stale earlier sounds are their own phrases and don't interfere).
+    const result = evaluatePhrases(this);
+    if (result === true) {
       this.activate();
+    } else if (result === 'mismatch') {
+      this._flashMismatch();
     }
+  }
 
-    // Clear old captured notes periodically to prevent memory buildup
-    const now = Date.now();
-    if (now - this.listeningStartTime > 10000) {
-      // Clear every 10 seconds
-      this.capturedNotes = [];
-      this.listeningStartTime = now;
+  /** Brief red pulse when a completed phrase failed to match (wordless feedback). */
+  _flashMismatch() {
+    if (!this.mesh || !this.mesh.material) return;
+    if (!this._mismatchFlashUntil) {
+      this._savedEmissive = this.mesh.material.emissive.getHex();
+      this._savedEmissiveIntensity = this.mesh.material.emissiveIntensity;
+    }
+    this._mismatchFlashUntil = Date.now() + 600;
+    this.mesh.material.emissive.setHex(0xaa1111);
+    this.mesh.material.emissiveIntensity = 1.0;
+  }
+
+  _updateMismatchFlash() {
+    if (!this._mismatchFlashUntil) return;
+    if (Date.now() > this._mismatchFlashUntil) {
+      this._mismatchFlashUntil = null;
+      if (this.mesh && this.mesh.material && !this.isActivated) {
+        this.mesh.material.emissive.setHex(this._savedEmissive);
+        this.mesh.material.emissiveIntensity = this._savedEmissiveIntensity;
+      }
     }
   }
 

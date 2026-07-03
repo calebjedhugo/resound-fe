@@ -1,7 +1,13 @@
 import { Piano } from 'resound-sound';
+import showToast from 'ui/Toast';
 import { PLAYBACK_BEAT_TOLERANCE } from './constants';
 import ListeningManager from './ListeningManager';
+import SongMatcher from './SongMatcher';
+import { getDistance } from './utils';
 import gameState from './GameState';
+
+// How far playback carries when a recording doesn't declare a source range
+const DEFAULT_PLAYBACK_RANGE = 15;
 
 /**
  * PlaybackManager - Handles playback of recorded songs from inventory
@@ -9,12 +15,16 @@ import gameState from './GameState';
 class PlaybackManager {
   static playerInstrument = new Piano('player');
   static isPlaying = false;
+  static playbackSourceRange = DEFAULT_PLAYBACK_RANGE;
 
   // Set up note callback to emit to ListeningManager and track current note
   static {
     this.playerInstrument.noteCallback = (noteEvent) => {
       // Track current note for harmony analysis
       this.playerInstrument.currentNote = noteEvent;
+
+      // Playback carries as far as the creature it was recorded from
+      noteEvent.sourceRange = this.playbackSourceRange;
 
       // Emit to listening manager
       ListeningManager.emitNote(noteEvent);
@@ -29,7 +39,7 @@ class PlaybackManager {
     const recording = inventory[activeSlot];
 
     if (!recording || !recording.data) {
-      console.warn('No recording in active slot');
+      showToast('Nothing to play — record a creature first (R)', { duration: 3000 });
       return;
     }
 
@@ -40,6 +50,7 @@ class PlaybackManager {
 
     // Set player position for listening
     this.playerInstrument.sourcePosition = position;
+    this.playbackSourceRange = recording.sourceRange || DEFAULT_PLAYBACK_RANGE;
 
     // Calculate quantized start timing
     const { musicalClock } = gameState;
@@ -106,6 +117,12 @@ class PlaybackManager {
 
     this.isPlaying = true;
 
+    // Snapshot which targets are still locked, so we can tell the player
+    // whether this playback unlocked anything.
+    const lockedTargets = gameState.entities.filter(
+      (e) => (e.type === 'fountain' || e.type === 'gate') && !e.isActivated
+    );
+
     // Wait for startDelay, then begin playback
     setTimeout(() => {
       // Play the song (offsets already injected into songData)
@@ -120,7 +137,47 @@ class PlaybackManager {
     const totalDuration = this.calculateSongDuration(songData, tempo);
     setTimeout(() => {
       this.isPlaying = false;
+
+      // Give the match a moment to process, then report a miss (success is
+      // loudly announced by the target itself).
+      setTimeout(() => {
+        const unlockedAny = lockedTargets.some((e) => e.isActivated);
+        if (lockedTargets.length > 0 && !unlockedAny && gameState.mode === 'PLAYING') {
+          showToast(this.describeMiss(lockedTargets), { duration: 5000 });
+        }
+      }, 700);
     }, startDelay + totalDuration);
+  }
+
+  /**
+   * Explain why a playback unlocked nothing, using the nearest locked target.
+   * @param {Array} lockedTargets - gates/fountains that were locked at playback start
+   * @returns {string}
+   */
+  static describeMiss(lockedTargets) {
+    const pos = this.playerInstrument.sourcePosition || gameState.player.position;
+    let nearest = null;
+    let nearestDist = Infinity;
+    lockedTargets.forEach((target) => {
+      const d = getDistance(target.position, pos);
+      if (d < nearestDist) {
+        nearest = target;
+        nearestDist = d;
+      }
+    });
+    if (!nearest) return 'Nothing unlocked';
+
+    if (nearestDist > this.playbackSourceRange) {
+      return `Nothing unlocked — the nearest ${nearest.type} couldn't hear you (${Math.round(
+        nearestDist
+      )} away; your playback carries ${Math.round(this.playbackSourceRange)})`;
+    }
+
+    const requiredCount = SongMatcher.flattenSong(nearest.requiredSong).length;
+    return (
+      `The ${nearest.type} heard you, but not its song (${requiredCount} notes, shown above it) — ` +
+      'record one clean pass and play it while everything else is quiet'
+    );
   }
 
   /**

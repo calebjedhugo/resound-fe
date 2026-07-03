@@ -179,8 +179,13 @@ function createTestContext(options = {}) {
         // Update all entities
         entityManager.update(dt);
 
-        // Advance Jest fake timers to trigger instrument callbacks
-        jest.advanceTimersByTime(tickSize);
+        // Advance Jest fake timers to trigger instrument callbacks. Must be
+        // the async variant: instruments schedule successive notes through
+        // await/microtask chains, and the sync variant defers all of that to
+        // the end of the advance — stamping later notes with bunched, wildly
+        // late timestamps that break phrase (gap-aware) matching.
+        // eslint-disable-next-line no-await-in-loop
+        await jest.advanceTimersByTimeAsync(tickSize);
       }
 
       // Flush all pending timers and microtasks to complete async instrument playback
