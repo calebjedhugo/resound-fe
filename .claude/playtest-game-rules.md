@@ -25,9 +25,8 @@ unlocks/activates it. Activating fountains completes the puzzle.
   editor warns about this layout ("the puzzle will solve itself").
 - **Play back while the creature is quiet.** Targets capture ALL notes they
   hear into one stream; notes interleaved DURING your playback corrupt the
-  sequence. (Stale notes heard BEFORE your playback no longer spoil it —
-  matching looks for the target as a contiguous run within everything heard
-  in the last ~30 seconds.)
+  performance. (Stale notes heard BEFORE your playback don't spoil it — see
+  the exact-matching rule below.)
 - **Recording range is half the audible range** (`audibleRange × 0.5`). You
   must be close.
 - **Recording timing is a core puzzle skill — BY DESIGN.** Recording captures
@@ -110,11 +109,34 @@ unlocks/activates it. Activating fountains completes the puzzle.
 
 - Agents are code-blind: chrome-devtools MCP browser tools only; no Read/
   Grep/Bash/WebFetch on the project, no page source, no console.
-- `evaluate_script` is allowed ONLY for the two ears snippets (install +
-  poll). The install snippet hooks `OscillatorNode.start/stop` and
-  `AudioParam.setValueAtTime` to log `{t, kind, note, freq}` events —
-  re-install after every page load. Poll with
-  `JSON.stringify((window.__ears||[]).splice(0))`.
+- `evaluate_script` is allowed ONLY for the two ears snippets below (install
+  + poll). Re-install after every page load/navigation.
+
+SNIPPET 1 (install):
+
+```js
+(() => {
+  if (window.__ears) return 'ears already installed';
+  const names=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const toNote=f=>{ if(!f||f<=0) return null; const n=Math.round(12*Math.log2(f/440))+69; return names[((n%12)+12)%12]+(Math.floor(n/12)-1); };
+  window.__ears=[];
+  const t0=performance.now();
+  const logEv=(kind,f)=>{ window.__ears.push({t:+((performance.now()-t0)/1000).toFixed(2), kind, note:toNote(f), freq:Math.round(f*10)/10}); if(window.__ears.length>800) window.__ears.splice(0, window.__ears.length-800); };
+  const os=OscillatorNode.prototype.start;
+  OscillatorNode.prototype.start=function(...a){ this.__f=this.frequency.value; logEv('noteOn',this.frequency.value); return os.apply(this,a); };
+  const ost=OscillatorNode.prototype.stop;
+  OscillatorNode.prototype.stop=function(...a){ logEv('noteOff',this.__f??this.frequency.value); return ost.apply(this,a); };
+  const svat=AudioParam.prototype.setValueAtTime;
+  AudioParam.prototype.setValueAtTime=function(v,t){ if(v>=20) logEv('pitchChange',v); return svat.call(this,v,t); };
+  return 'ears installed';
+})()
+```
+
+SNIPPET 2 (listen — returns and clears events since the last poll):
+
+```js
+JSON.stringify((window.__ears||[]).splice(0))
+```
 - Ears usage: verify editor preview matches composed notation; identify
   creature melodies; confirm playback pitches; correlate unlock fanfares.
 - **Tab hygiene (standing rule):** work in ONE tab, navigating it between
@@ -165,12 +187,16 @@ unlocks/activates it. Activating fountains completes the puzzle.
   matching = exact-per-phrase; toasts are a crutch — communicate visually
   (see DESIGN.md "Design philosophy"). Added: mismatch red flash + debug
   phrase line, slot pop animation, per-slot note counts.
+- R6 (2026-07-02/03): agent session was environmentally degraded (dead ears,
+  inflated counts — disproven by live coordinator verification), but its one
+  real blocker was gold: replaying a wrong take completed the puzzle. Root
+  cause: the retention window's trimming manufactured phantom leading
+  silence around cycle-aligned remnants. Fixed with a trim horizon (trimmed
+  history is unknowable, not silent). Also fixed: rapid look-taps swallowed
+  by impulse clearing; debug cosmetics. Designer rulings: rests in targets
+  must be matchable with exactness kept → anchored rhythm-timeline matching
+  (SongMatcher.targetTimeline + core/phraseMatching.js, polyphony-safe);
+  mouse-position camera is intended (see DESIGN.md).
 - Testing tip: the dev build exposes `window.__resoundDebug` ({gameState,
   scene, entityManager, PlaybackManager, ListeningManager}) — for
   coordinator/diagnostic use, NOT for code-blind agents.
-- STATUS (paused 2026-07-02): R4 verification round was in flight when the
-  session paused — if no R4 report exists, relaunch it (verify: keyboard-only
-  cold start, legit solve of playtest-r3, self-solve visibility/freeze, pause
-  titles, convergence verdict). All work is uncommitted in the working tree;
-  all 558 tests pass. Puzzles playtest-r1 (intentionally broken), r2, r3 are
-  test artifacts in public/puzzles/.
