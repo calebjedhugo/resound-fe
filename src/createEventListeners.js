@@ -4,10 +4,21 @@ import { Random } from 'resound-sound';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';
+import showToast from 'ui/Toast';
 
 const randomInstrument = new Random();
 
-const dispatchKeyboardActions = ({ code, type }) => {
+// When the current recording started — distinguishes a quick R tap (toggle
+// mode: recording continues until the next R press) from a long hold
+// (walkie-talkie mode: releasing R stops).
+let recordStartedAt = 0;
+const RECORD_HOLD_THRESHOLD_MS = 400;
+
+// Per-key press timestamps for tap detection (movement/look impulses)
+const keyPressedAt = {};
+const TAP_THRESHOLD_MS = 250;
+
+const dispatchKeyboardActions = ({ code, type, repeat }) => {
   let value;
   if (type === 'keydown') value = true;
   else if (type === 'keyup') value = false;
@@ -16,22 +27,55 @@ const dispatchKeyboardActions = ({ code, type }) => {
     return;
   }
 
+  // Quick taps queue an impulse ON RELEASE, so every tap yields exactly one
+  // guaranteed step regardless of frame timing. Holds move continuously via
+  // the key flag and queue nothing.
+  const press = (name) => {
+    gameState.input.keys[name] = value;
+    if (value) {
+      if (!repeat) keyPressedAt[name] = Date.now();
+    } else if (Date.now() - (keyPressedAt[name] || 0) < TAP_THRESHOLD_MS) {
+      gameState.input.impulses[name] += 1;
+    }
+  };
+
   switch (code) {
     case 'KeyA':
-      gameState.input.keys.latLeft = value;
+      press('latLeft');
       break;
     case 'KeyD':
-      gameState.input.keys.latRight = value;
+      press('latRight');
       break;
     case 'KeyW':
-      gameState.input.keys.forward = value;
+      press('forward');
       break;
     case 'KeyS':
-      gameState.input.keys.backward = value;
+      press('backward');
       break;
     case 'ShiftLeft':
     case 'ShiftRight':
       gameState.input.keys.running = value;
+      break;
+    case 'KeyJ':
+      press('lookLeft');
+      break;
+    case 'KeyL':
+      press('lookRight');
+      break;
+    case 'KeyI':
+      press('lookUp');
+      break;
+    case 'KeyK':
+      press('lookDown');
+      break;
+    case 'KeyM':
+      // Toggle mouse-look (keyboard look via IJKL always works)
+      if (value) {
+        const enabled = CameraController.toggleMouseLook(gameState);
+        showToast(enabled ? 'Mouse look on' : 'Mouse look off — look with I/J/K/L', {
+          duration: 3000,
+        });
+      }
       break;
     case 'Space':
       // Playback from active inventory slot
@@ -40,12 +84,20 @@ const dispatchKeyboardActions = ({ code, type }) => {
       }
       break;
     case 'KeyR':
-      // Recording toggle
-      if (value && !RecordingManager.isRecording()) {
-        // Keydown - start recording
-        RecordingManager.startRecording();
-      } else if (!value && RecordingManager.isRecording()) {
-        // Keyup - stop recording
+      // Hybrid recording control: a tap toggles recording on/off; a long
+      // hold records while held and stops on release.
+      if (value) {
+        if (repeat) break;
+        if (!RecordingManager.isRecording()) {
+          RecordingManager.startRecording();
+          recordStartedAt = Date.now();
+        } else {
+          RecordingManager.stopRecording();
+        }
+      } else if (
+        RecordingManager.isRecording() &&
+        Date.now() - recordStartedAt > RECORD_HOLD_THRESHOLD_MS
+      ) {
         RecordingManager.stopRecording();
       }
       break;
@@ -68,6 +120,16 @@ const dispatchKeyboardActions = ({ code, type }) => {
       // Clap (quantized to 16th notes)
       if (value) {
         ClapManager.requestClap();
+      }
+      break;
+    case 'Digit1':
+    case 'Digit2':
+    case 'Digit3':
+    case 'Digit4':
+    case 'Digit5':
+      // Jump straight to an inventory slot (1-based, matching the UI labels)
+      if (value) {
+        gameState.player.activeSlot = Number(code.slice(-1)) - 1;
       }
       break;
     default:

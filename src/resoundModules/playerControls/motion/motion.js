@@ -21,8 +21,27 @@ const getSpeed = () => {
   return running ? baseSpeed * runMultiplier : baseSpeed;
 };
 
+// Guaranteed distance for a discrete key tap (a tap shorter than one frame
+// would otherwise move ~0). Held keys move continuously and clear impulses.
+const IMPULSE_STEP = 0.35;
+
+// Consume ALL queued impulses for a direction, returning how many steps to
+// apply this frame. Draining fully (not one per frame) keeps burst taps and
+// background-throttled tabs responsive.
+const consumeImpulse = (name) => {
+  const { keys, impulses } = gameState.input;
+  if (!impulses) return 0;
+  const count = impulses[name];
+  impulses[name] = 0;
+  return keys[name] ? 0 : count;
+};
+
 const updateBackForthPosition = (cameraDirection) => {
   const { backward, forward } = gameState.input.keys;
+
+  camera.position.addScaledVector(cameraDirection, IMPULSE_STEP * consumeImpulse('forward'));
+  camera.position.addScaledVector(cameraDirection, -IMPULSE_STEP * consumeImpulse('backward'));
+
   if (backward && forward) return; // do nothing if moving in both directions.
 
   const speed = getSpeed();
@@ -38,11 +57,15 @@ const updateBackForthPosition = (cameraDirection) => {
 const updateLateralPosition = (cameraDirection) => {
   const { latLeft, latRight } = gameState.input.keys;
 
+  const cameraSide = new THREE.Vector3();
+  cameraSide.crossVectors(camera.up, cameraDirection).normalize();
+
+  camera.position.addScaledVector(cameraSide, IMPULSE_STEP * consumeImpulse('latLeft'));
+  camera.position.addScaledVector(cameraSide, -IMPULSE_STEP * consumeImpulse('latRight'));
+
   if (latLeft && latRight) return; // do nothing if moving in both directions.
 
   const speed = getSpeed();
-  const cameraSide = new THREE.Vector3();
-  cameraSide.crossVectors(camera.up, cameraDirection).normalize();
 
   if (latLeft) {
     camera.position.addScaledVector(cameraSide, speed);
@@ -54,6 +77,8 @@ const updateLateralPosition = (cameraDirection) => {
 
 const updateCameraDirection = () => {
   const { centered: mouseCentered } = gameState.input.mouse;
+
+  CameraController.applyKeyboardLook(gameState);
 
   // Condition here is for performance.
   if (!mouseCentered) {
@@ -76,6 +101,17 @@ const updateMotion = () => {
   const cameraDirection = new THREE.Vector3();
   camera.getWorldDirection(cameraDirection);
 
+  // Walking is ground-based: flatten the view direction so looking up/down
+  // never slows (or zeroes) movement.
+  cameraDirection.y = 0;
+  if (cameraDirection.lengthSq() < 1e-6) {
+    // Looking straight up/down — derive forward from yaw instead
+    const [viewX] = CameraController.getView(gameState);
+    cameraDirection.set(-Math.sin(viewX), 0, -Math.cos(viewX));
+  } else {
+    cameraDirection.normalize();
+  }
+
   // Store old position for collision checking
   const oldX = camera.position.x;
   const oldZ = camera.position.z;
@@ -84,7 +120,7 @@ const updateMotion = () => {
   updateBackForthPosition(cameraDirection);
 
   // Elevation check
-  const elevationGrid = gameState.elevationGrid;
+  const { elevationGrid } = gameState;
   if (elevationGrid) {
     const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
     const newGrid = elevationGrid.worldToGrid(camera.position.x, camera.position.z);

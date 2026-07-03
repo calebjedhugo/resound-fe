@@ -442,9 +442,18 @@ function installMocks() {
         appendChild: jest.fn(),
         removeChild: jest.fn(),
       },
+      head: {
+        appendChild: jest.fn(),
+      },
+      getElementById: jest.fn(() => null),
       createElement: jest.fn(() => ({
         style: {},
+        dataset: {},
         getContext: jest.fn(),
+        appendChild: jest.fn(),
+        remove: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
       })),
     };
   }
