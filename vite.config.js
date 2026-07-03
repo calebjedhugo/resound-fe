@@ -132,6 +132,15 @@ function puzzleWriterPlugin() {
 
 export default defineConfig({
   plugins: [jsconfigPaths(), puzzleWriterPlugin()],
+  server: {
+    watch: {
+      // Editor autosave writes puzzle JSON into public/ constantly; Vite's
+      // default watcher full-reloads EVERY open tab on any public/ change,
+      // which closed editor modals mid-edit and ejected game sessions to the
+      // menu. Puzzles are fetch()ed at runtime, so no reload is ever needed.
+      ignored: ['**/public/puzzles/**'],
+    },
+  },
   build: {
     rollupOptions: {
       input: {
