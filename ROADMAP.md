@@ -52,6 +52,24 @@ Update this checklist when completing features. Mark items ✅ when done, ⚠️
 - ❌ Production deployment pipeline
 - ❌ Raspberry Pi hosting setup (planned)
 
+## Playtest Follow-ups (approved 2026-07-03, next session)
+Designer-approved from playtest round R7 (context: `.claude/playtest-game-rules.md`
+iteration log; design constraints: `DESIGN.md`). Run `/playtest` to verify after.
+- ❌ Keyboard-navigable puzzle menu (focusable entries, arrows + Enter to launch)
+- ❌ Red flash on the active slot when a performance fails to match — wordless
+  failure feedback that works while facing away from the target (mirrors the
+  green record pop; per DESIGN.md philosophy, favored over longer toasts)
+- ❌ Playback-failure toast should fire at JUDGMENT time (after the trailing
+  silence margin), not on a fixed delay after playback ends — verify, then fix
+- ❌ F3 debug: only ellipsize slot listings when notes are actually omitted
+- ❌ Progress-reset affordance (persistent ✓ has no reset; per-puzzle replay
+  indicator or settings reset)
+- ❌ Verification round for the above + items R7 skipped: exactly-3-note
+  rotated take fails, red-flash visibility with target on screen, menu ✓
+  transition on a fresh profile, fresh-eyes sweep
+- 💡 Camera idea the designer is mulling (ASK before building): gradual
+  turn slow-down after the mouse stops moving
+
 ## Future/Planned
 - ❌ Extract `src/audio/` folder to standalone npm package
 - ❌ Backend with authentication
