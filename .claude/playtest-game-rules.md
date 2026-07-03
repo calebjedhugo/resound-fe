@@ -197,6 +197,12 @@ JSON.stringify((window.__ears||[]).splice(0))
   must be matchable with exactness kept → anchored rhythm-timeline matching
   (SongMatcher.targetTimeline + core/phraseMatching.js, polyphony-safe);
   mouse-position camera is intended (see DESIGN.md).
+- R7 (2026-07-03, first /playtest skill run): final convergence verification
+  in flight when the session's connection window closed — mission: clean
+  take succeeds / rotated + over-long fail / no false completion on
+  repeated playback (trim-horizon regression). If no R7 report exists in
+  the session transcript, re-run `/playtest` with that focus; any steps its
+  report marks SKIPPED still need verification.
 - Testing tip: the dev build exposes `window.__resoundDebug` ({gameState,
   scene, entityManager, PlaybackManager, ListeningManager}) — for
   coordinator/diagnostic use, NOT for code-blind agents.
