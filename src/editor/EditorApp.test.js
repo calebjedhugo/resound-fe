@@ -68,6 +68,7 @@ jest.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
 jest.mock('editor/viewport/EditorScene', () =>
   jest.fn(() => ({
     getHoveredGrid: jest.fn(),
+    gridFromEvent: jest.fn(),
     updateHover: jest.fn(),
     update: jest.fn(),
     activeElevation: 0,

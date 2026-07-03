@@ -148,6 +148,39 @@ export function validatePuzzle(model) {
     }
   }
 
+  // 3b. Creature in range of a target it satisfies by itself: the puzzle will
+  // solve without the player. Legal by design (creatures CAN activate
+  // targets), but almost always a layout mistake — warn loudly.
+  for (const creature of creatures) {
+    const creatureSong = creature.data?.song;
+    const creatureSings = creatureSong && creatureSong.length > 0;
+    for (const target of creatureSings ? gatesAndFountains : []) {
+      const targetSong = target.data?.song;
+      const targetEmpty =
+        !targetSong || (Array.isArray(targetSong) ? targetSong.length === 0 : !targetSong.voices);
+      if (!targetEmpty) {
+        const dx = (creature.x - target.x) * WORLD_SCALE;
+        const dy = (creature.y - target.y) * ELEVATION_HEIGHT;
+        const dz = (creature.z - target.z) * WORLD_SCALE;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const range = creature.data?.audibleRange ?? 0;
+        let selfSolves = false;
+        try {
+          selfSolves = distance <= range && SongMatcher.songsMatch(creatureSong, targetSong);
+        } catch {
+          // A malformed song can't self-solve; other checks will flag it.
+        }
+        if (selfSolves) {
+          warnings.push(
+            `${capitalize(target.type)} (id=${target.id}) hears creature (id=${
+              creature.id
+            }) singing its exact target — the puzzle will solve itself without the player`
+          );
+        }
+      }
+    }
+  }
+
   // 3. Creature audibleRange doesn't reach any gate/fountain
   for (const creature of creatures) {
     const range = creature.data?.audibleRange ?? 0;

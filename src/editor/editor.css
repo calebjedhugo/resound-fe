@@ -3,11 +3,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 #editor-root { display: flex; width: 100%; height: 100%; }
 #editor-sidebar { width: 280px; min-width: 280px; background: #16213e; padding: 16px; overflow-y: auto; border-right: 1px solid #0f3460; }
 #editor-sidebar h2 { font-size: 16px; margin-bottom: 16px; color: #e94560; }
-#editor-viewport { flex: 1; position: relative; }
+#editor-viewport { flex: 1; position: relative; min-width: 0; }
 #editor-viewport canvas { display: block; width: 100%; height: 100%; }
 .viewport-hud { position: absolute; left: 12px; bottom: 12px; padding: 4px 10px; background: rgba(10, 22, 40, 0.75); border: 1px solid #0f3460; border-radius: 4px; font-size: 12px; font-family: ui-monospace, monospace; color: #aab7c4; pointer-events: none; min-height: 22px; }
 .viewport-toast { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); padding: 6px 14px; background: rgba(107, 32, 32, 0.92); border: 1px solid #8b3030; border-radius: 4px; font-size: 13px; color: #ffe0e0; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
 .viewport-toast.visible { opacity: 1; }
+.viewport-toast.success { background: rgba(26, 74, 42, 0.92); border-color: #2f7a4a; color: #d8ffe4; }
 .panel-section { margin-bottom: 16px; }
 .panel-label { display: block; font-size: 12px; color: #8899aa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
 .elevation-controls { display: flex; align-items: center; gap: 12px; }
@@ -28,7 +29,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .toolbar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .tool-btn { padding: 8px; background: #16213e; color: #e0e0e0; border: 2px solid; border-radius: 4px; cursor: pointer; font-size: 12px; text-align: center; }
 .tool-btn:hover { background: #1a3050; }
-.tool-btn.active { background: #0f3460; box-shadow: 0 0 8px rgba(255,255,255,0.2); }
+.tool-btn.active { background: #0f3460; outline: 2px solid #fff; outline-offset: 1px; font-weight: 700; box-shadow: 0 0 8px rgba(255,255,255,0.35); }
 .prop-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; font-size: 13px; }
 .prop-input { width: 100px; padding: 4px; background: #0a1628; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 3px; }
 .prop-select { padding: 4px; background: #0a1628; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 3px; }
@@ -54,6 +55,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .validation-ok { color: #44ff88; }
 .validation-error { color: #ff4444; padding: 2px 0; }
 .validation-warning { color: #ffaa44; padding: 2px 0; }
+.validation-clickable { cursor: pointer; text-decoration: underline dotted; }
+.validation-clickable:hover { filter: brightness(1.3); }
 .import-status { font-size: 12px; margin-top: 4px; }
 .import-success { color: #44ff88; }
 .import-warning { color: #ffaa44; }

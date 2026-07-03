@@ -100,4 +100,19 @@ export default class EditorScene {
     if (!this._hoverMesh.visible) return null;
     return snapToGrid(this._hoverMesh.position.x, this._hoverMesh.position.z, this._gridSize);
   }
+
+  /**
+   * Resolve the grid cell under a specific mouse event, refreshing the hover
+   * state first. Clicks must use this rather than trusting the last mousemove:
+   * synthetic/automated clicks (and click-after-scroll) can land on a cell the
+   * pointer never "moved" over, which used to place entities at a stale cell.
+   */
+  gridFromEvent(event, camera) {
+    const container = document.getElementById('editor-viewport');
+    const rect = container.getBoundingClientRect();
+    this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this.updateHover(camera);
+    return this.getHoveredGrid();
+  }
 }

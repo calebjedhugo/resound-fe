@@ -14,11 +14,12 @@ import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { maxFloorElevation } from 'editor/util/elevations';
 
 export default class FloorRegionPanel {
-  constructor(container, undoManager, editorScene, onFloorsChanged) {
+  constructor(container, undoManager, editorScene, onFloorsChanged, notify) {
     this._container = container;
     this._undoManager = undoManager;
     this._editorScene = editorScene;
     this._onFloorsChanged = onFloorsChanged || (() => {});
+    this._notify = notify || (() => {});
     this._isPlacing = false;
     this._firstCorner = null;
     this._previewMesh = null;
@@ -122,7 +123,28 @@ export default class FloorRegionPanel {
     const z2 = Math.max(this._firstCorner.z, gridZ);
     const elevation = this._targetElevation;
 
+    // Floors can't stack: the ground storey already covers the whole grid,
+    // and higher regions may not overlap an existing region at their level.
+    if (elevation === 0) {
+      this._notify('Ground floor already covers the whole grid — use E1+ for raised floors');
+      this.cancelPlacing();
+      return true;
+    }
+    const overlap = this._undoManager
+      .getFloors()
+      .find(
+        (f) => f.elevation === elevation && x1 <= f.x2 && x2 >= f.x1 && z1 <= f.z2 && z2 >= f.z1
+      );
+    if (overlap) {
+      this._notify(
+        `Overlaps the E${elevation} floor (${overlap.x1},${overlap.z1})–(${overlap.x2},${overlap.z2}) — floors can't stack`
+      );
+      this.cancelPlacing();
+      return true;
+    }
+
     this._undoManager.addFloor(elevation, x1, z1, x2, z2);
+    this._notify(`Floor added at E${elevation}: (${x1},${z1})–(${x2},${z2})`, 'success');
     this._isPlacing = false;
     this._firstCorner = null;
     this._addBtn.textContent = '+ Add Floor Region';

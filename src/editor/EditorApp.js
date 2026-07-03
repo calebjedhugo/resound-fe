@@ -53,7 +53,8 @@ export default class EditorApp {
       document.getElementById('floor-panel'),
       this.undoManager,
       this.editorScene,
-      () => this.elevationSelector.refresh()
+      () => this.elevationSelector.refresh(),
+      (message, kind) => this._showToast(message, kind)
     );
     this.entityPlacer = new EntityPlacer(this.scene, this.undoManager);
     this.ghostPreview = new GhostPreview(this.scene);
@@ -93,7 +94,8 @@ export default class EditorApp {
       this.undoManager,
       (entityId) => {
         if (entityId) this.selectionManager.select(entityId);
-      }
+      },
+      (entityId) => this.songEditorModal.open(entityId)
     );
     this.toolbar = new EditorToolbar(document.getElementById('toolbar-panel'), {
       onUndo: () => this._undo(),
@@ -185,20 +187,27 @@ export default class EditorApp {
   _updateHud() {
     if (!this._hudEl) return;
     const grid = this.editorScene.getHoveredGrid();
-    this._hudEl.textContent = grid
+    const cellText = grid
       ? `Cell (${grid.x}, ${grid.z}) · E${this.editorScene.activeElevation}`
       : '';
+    const tool = this.entityToolbar ? this.entityToolbar.activeTool : null;
+    const toolText = tool ? `Placing ${tool} — click a tile (Esc cancels)` : '';
+    this._hudEl.textContent = [toolText, cellText].filter(Boolean).join(' · ');
   }
 
   /** Briefly show a message in the viewport (e.g. why a placement was refused). */
-  _showToast(message) {
+  _showToast(message, kind = 'error') {
     if (!this._toastEl) return;
     this._toastEl.textContent = message;
+    this._toastEl.classList.toggle('success', kind === 'success');
     this._toastEl.classList.add('visible');
     clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => {
-      this._toastEl.classList.remove('visible');
-    }, 1400);
+    this._toastTimer = setTimeout(
+      () => {
+        this._toastEl.classList.remove('visible');
+      },
+      kind === 'error' ? 4200 : 2600
+    );
   }
 
   _scheduleValidation() {
@@ -382,12 +391,33 @@ export default class EditorApp {
     this.controls.update();
   }
 
+  /** Raycast the viewport event position against entity meshes. */
+  _entityIdAtEvent(e) {
+    const container = document.getElementById('editor-viewport');
+    const rect = container.getBoundingClientRect();
+    const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), this.camera);
+    const hits = raycaster.intersectObjects(this.entityPlacer.getAllMeshes());
+    if (hits.length === 0) return null;
+    return this.entityPlacer.getEntityIdFromMesh(hits[0].object);
+  }
+
   _setupViewportClick() {
     const container = document.getElementById('editor-viewport');
+    const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
+
     container.addEventListener('click', (e) => {
-      // Get hovered grid cell from EditorScene
-      const grid = this.editorScene.getHoveredGrid();
-      if (!grid) return;
+      // Resolve the cell from the click itself (not the last mousemove)
+      const grid = this.editorScene.gridFromEvent(e, this.camera);
+      if (!grid) {
+        // A click that would have done something deserves a reason when it can't
+        if (this.entityToolbar.activeTool || this.floorRegionPanel.isPlacing) {
+          this._showToast('Aim at a tile inside the grid');
+        }
+        return;
+      }
 
       // Let floor region panel handle it first
       if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) {
@@ -404,6 +434,7 @@ export default class EditorApp {
           return;
         }
         this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, elevation);
+        this._showToast(`${activeTool} placed at (${grid.x}, ${grid.z})`, 'success');
         return;
       }
 
@@ -414,8 +445,19 @@ export default class EditorApp {
       this.selectionManager.handleClick(mouseX, mouseY);
     });
 
+    // Double-click a creature/gate/fountain to open its song directly
+    // (mouse-friendly alternative to the right-click menu).
+    container.addEventListener('dblclick', (e) => {
+      const entityId = this._entityIdAtEvent(e);
+      if (entityId === null) return;
+      const entity = this.undoManager.getEntity(entityId);
+      if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
+        this.selectionManager.select(entityId);
+        this.songEditorModal.open(entityId);
+      }
+    });
+
     // Right-click context menu
-    const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
     container.addEventListener('contextmenu', (e) => {
       e.preventDefault();
 

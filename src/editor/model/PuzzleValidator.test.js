@@ -288,12 +288,20 @@ describe('PuzzleValidator', () => {
         interval: 8,
         audibleRange: 30,
       });
+      // Targets use covered pitches but are NOT the creature's exact song
+      // (an exact in-range match would correctly warn about self-solving).
       model.addEntity('gate', 8, 0, 8, {
-        song: [{ pitch: 'C4', length: '1/4' }],
+        song: [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'C4', length: '1/4' },
+        ],
       });
       model.addEntity('wall', 8, 0, 7, {}); // wall adjacent to gate
       model.addEntity('fountain', 9, 0, 9, {
-        song: [{ pitch: 'C4', length: '1/4' }],
+        song: [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'C4', length: '1/4' },
+        ],
       });
 
       const { errors, warnings } = validatePuzzle(model);
