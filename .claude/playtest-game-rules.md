@@ -38,13 +38,15 @@ unlocks/activates it. Activating fountains completes the puzzle.
   songs and timing the recording window IS the solution. The live hint shows
   a running captured-note count ("Recording — N notes captured… press R to
   stop") so the player can learn the timing skill.
-- **Matching is exact, per phrase**: everything a target hears is segmented
-  into silence-delimited phrases (gap = 1 beat beyond the previous note);
-  a COMPLETED phrase must equal the target note-for-note (pitch + duration,
-  quantized to 16ths). Rotated takes fail; over-long takes fail; a phrase is
-  judged only once silence follows it. Stale earlier sounds are separate
-  phrases and don't interfere. Targets display their required notes as
-  floating notation above them.
+- **Matching is exact — the performance must BE the target**: the target is
+  a rhythm timeline (pitch + duration + relative beat position, quantized to
+  16ths), with rests as expected gaps. A performance matches when every
+  target note sounds at the right relative beat and nothing else sounds in
+  the window or within 1 beat of silence on either side. Rotated takes
+  fail; over-long takes fail; notes during a target's rests fail; judgment
+  waits until the trailing silence has actually elapsed. Stale earlier
+  sounds don't interfere. Polyphonic targets (chords/voices) keep their
+  rhythm. Targets display their required notes as floating notation.
 - **Mismatch feedback is visual**: a completed wrong phrase flashes the
   gate/fountain RED for ~600ms. Animations are hard to catch in single
   screenshots — use the F3 debug panel, which mirrors the last judged phrase

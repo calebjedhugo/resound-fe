@@ -39,14 +39,17 @@ automated playtesters can observe them.)
 - **Playback etiquette:** targets hear everything at once — notes interleaved
   during a playback corrupt the match. "Play while other sounds are quiet"
   is intended gameplay, not a bug.
-- **Matching is exact, per phrase** (ruled 2026-07-02): everything a target
-  hears is segmented into silence-delimited phrases (`core/phraseMatching.js`,
-  gap = 1 beat beyond the previous note); a COMPLETED phrase must equal the
-  target note-for-note. Rotated takes fail, over-long takes fail, prefixes
-  can't match early (a phrase is judged only after silence follows it), and
-  stale earlier sounds are separate phrases that neither help nor hurt.
-  A wrong completed phrase flashes the target red (wordless feedback) and is
-  logged in the F3 debug panel.
+- **Matching is exact — the performance must BE the target** (ruled
+  2026-07-02): the target is a rhythm timeline of pitched onsets at real
+  beat offsets (`SongMatcher.targetTimeline`), with **rests as expected
+  gaps**; a performance matches when every target onset has a matching
+  heard note at the right relative beat and NOTHING ELSE sounds inside the
+  aligned window or within one beat of silence on either side
+  (`core/phraseMatching.js`). Rotated takes fail, over-long takes fail,
+  notes during rests fail, prefixes can't match before the trailing silence
+  elapses, and stale earlier sounds neither help nor hurt. Polyphonic
+  targets (chords, multi-voice) keep their true rhythm. A failed utterance
+  flashes the target red (wordless feedback) and is logged in the F3 panel.
 
 ## World / editor (settled)
 
