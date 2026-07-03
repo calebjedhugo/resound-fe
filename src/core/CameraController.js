@@ -76,14 +76,15 @@ class CameraController {
     const { lookLeft, lookRight, lookUp, lookDown } = keys;
 
     // A discrete tap guarantees a minimum rotation; held keys turn
-    // continuously (and clear any queued impulse for that direction). All
-    // queued taps drain in one frame so bursts and throttled tabs stay
-    // responsive.
+    // continuously. All queued taps drain in one frame so bursts and
+    // throttled tabs stay responsive; while the key is held the queue is
+    // left intact (clearing it destroyed taps whose successor's key-down
+    // straddled a frame — rapid taps landed at half rate).
     const consume = (name) => {
-      if (!impulses) return 0;
+      if (!impulses || keys[name]) return 0;
       const count = impulses[name];
       impulses[name] = 0;
-      return keys[name] ? 0 : count;
+      return count;
     };
 
     let dx = 0;

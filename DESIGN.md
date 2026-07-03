@@ -51,6 +51,14 @@ automated playtesters can observe them.)
   targets (chords, multi-voice) keep their true rhythm. A failed utterance
   flashes the target red (wordless feedback) and is logged in the F3 panel.
 
+- **Mouse-position camera is intended** (ruled 2026-07-03): the cursor's
+  offset from screen center steers the view, and a cursor resting outside
+  the center zone keeps turning the camera. This is the designed feel — do
+  not replace it with pointer-lock or add dead-man's gating. (Designer is
+  mulling a possible refinement: gradual turn slow-down after the mouse
+  stops moving. Idea only; ask before building.) Keyboard look (M + IJKL)
+  remains the alternative.
+
 ## World / editor (settled)
 
 - **Ground floor (elevation 0) is implicit everywhere.** Floor regions exist

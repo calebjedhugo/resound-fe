@@ -27,13 +27,15 @@ const IMPULSE_STEP = 0.35;
 
 // Consume ALL queued impulses for a direction, returning how many steps to
 // apply this frame. Draining fully (not one per frame) keeps burst taps and
-// background-throttled tabs responsive.
+// background-throttled tabs responsive. While the key is held, leave the
+// queue intact — clearing it destroyed taps whose successor's key-down
+// straddled a frame (rapid taps landed at half rate).
 const consumeImpulse = (name) => {
   const { keys, impulses } = gameState.input;
-  if (!impulses) return 0;
+  if (!impulses || keys[name]) return 0;
   const count = impulses[name];
   impulses[name] = 0;
-  return keys[name] ? 0 : count;
+  return count;
 };
 
 const updateBackForthPosition = (cameraDirection) => {

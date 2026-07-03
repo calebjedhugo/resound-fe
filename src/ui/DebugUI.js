@@ -72,10 +72,13 @@ class DebugUI {
       html += '<br/>';
     }
 
-    // Show harmony detections
-    if (gameState.harmonyLog && gameState.harmonyLog.length > 0) {
+    // Show harmony detections (recent only — stale lines read as "still sounding")
+    const recentHarmonies = (gameState.harmonyLog || []).filter(
+      (h) => Date.now() - h.timestamp < 4000
+    );
+    if (recentHarmonies.length > 0) {
       html += '<strong>Player-Creature Harmonies:</strong><br/>';
-      gameState.harmonyLog.forEach((h) => {
+      recentHarmonies.forEach((h) => {
         let harmonyColor = '#ffff00'; // perfect (yellow)
         if (h.harmony === 'consonant') harmonyColor = '#00ff00'; // green
         if (h.harmony === 'dissonant') harmonyColor = '#ff0000'; // red

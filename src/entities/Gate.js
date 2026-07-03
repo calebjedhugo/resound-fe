@@ -89,6 +89,10 @@ class Gate extends Entity {
     const cutoff = Date.now() - Gate.CAPTURE_RETENTION_MS;
     if (this.capturedNotes.length > 0 && this.capturedNotes[0].timestamp < cutoff) {
       this.capturedNotes = this.capturedNotes.filter((n) => n.timestamp >= cutoff);
+      // Everything before the cutoff is now unknowable — matching must not
+      // mistake forgotten notes for silence (a trimmed take once left a
+      // cycle-aligned remnant that "matched" with phantom leading silence)
+      this._trimHorizonMs = cutoff;
     }
 
     // Check if we have captured notes to process

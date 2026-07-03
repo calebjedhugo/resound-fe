@@ -59,24 +59,37 @@ export default function evaluatePhrases(listener) {
   const nowBeat = (Date.now() - listener.listeningStartTime) / msPerBeat;
   const firstOffset = timeline.onsets[0].beat;
 
+  // Beats at/before this horizon were trimmed from the buffer and are
+  // UNKNOWABLE — an anchor whose leading silence margin reaches into them
+  // cannot be judged (forgotten notes must not read as silence)
+  const trimHorizonBeat =
+    listener._trimHorizonMs !== undefined
+      ? (listener._trimHorizonMs - listener.listeningStartTime) / msPerBeat
+      : -Infinity;
+
   let inProgress = false;
   for (const anchorGroup of groups) {
     const anchorBeat = anchorGroup.beat - firstOffset;
+    // An anchor is only judgeable if its whole leading silence margin lies
+    // in remembered (untrimmed) history
+    const judgeable = anchorBeat - PHRASE_GAP_BEATS > trimHorizonBeat + TOL_BEATS;
     const endBeat = anchorBeat + timeline.totalBeats;
     const windowClosed = nowBeat > endBeat + PHRASE_GAP_BEATS;
 
     // Every target onset due so far must have a matching heard group
-    let aligned = true;
+    let aligned = judgeable;
     const used = new Set();
-    for (const onset of timeline.onsets) {
-      const want = anchorBeat + onset.beat;
-      if (!windowClosed && want > nowBeat + TOL_BEATS) break; // rest is future
-      const group = groups.find((g) => !used.has(g) && Math.abs(g.beat - want) <= TOL_BEATS);
-      if (!group || !groupMatchesOnset(group, onset)) {
-        aligned = false;
-        break;
+    if (aligned) {
+      for (const onset of timeline.onsets) {
+        const want = anchorBeat + onset.beat;
+        if (!windowClosed && want > nowBeat + TOL_BEATS) break; // rest is future
+        const group = groups.find((g) => !used.has(g) && Math.abs(g.beat - want) <= TOL_BEATS);
+        if (!group || !groupMatchesOnset(group, onset)) {
+          aligned = false;
+          break;
+        }
+        used.add(group);
       }
-      used.add(group);
     }
     if (aligned) {
       // Nothing else may sound inside the window or its silence margins
@@ -109,7 +122,9 @@ export default function evaluatePhrases(listener) {
   listener.lastPhraseResult = {
     noteCount: phrases[phrases.length - 1].elements.length,
     matched: false,
-    at: Date.now(),
+    // Stamp when the utterance ENDED, not when it was judged (judgment
+    // waits out the silence margin, which read as inflated "Xs ago")
+    at: listener.listeningStartTime + (lastGroup.beat + lastDur) * msPerBeat,
   };
   return 'mismatch';
 }

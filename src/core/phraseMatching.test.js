@@ -211,6 +211,40 @@ describe('evaluatePhrases — exact anchored matching', () => {
   });
 });
 
+describe('evaluatePhrases — trim horizon (forgotten notes are not silence)', () => {
+  it('does not match a remnant whose leading silence was manufactured by trimming', () => {
+    // Regression (R6 blocker): an over-long take trimmed by the retention
+    // window once left a cycle-aligned 3-note remnant; the trimmed history
+    // read as clean leading silence and the fountain "matched" a phrase the
+    // player never performed.
+    const listener = makeListener({
+      notes: [
+        [0, 'B4'],
+        [1, 'C#5'],
+        [2, 'G#4'],
+      ],
+      nowBeats: 6,
+    });
+    // Notes up to beat -0.5 were trimmed away — the anchor's leading margin
+    // reaches into unknowable history
+    listener._trimHorizonMs = listener.listeningStartTime + -0.5 * MS_PER_BEAT;
+    expect(evaluatePhrases(listener)).not.toBe(true);
+  });
+
+  it('still matches when the trim horizon is comfortably in the past', () => {
+    const listener = makeListener({
+      notes: [
+        [10, 'B4'],
+        [11, 'C#5'],
+        [12, 'G#4'],
+      ],
+      nowBeats: 16,
+    });
+    listener._trimHorizonMs = listener.listeningStartTime + 2 * MS_PER_BEAT;
+    expect(evaluatePhrases(listener)).toBe(true);
+  });
+});
+
 describe('evaluatePhrases — rests in the target', () => {
   const RESTED_TARGET = [
     { pitch: 'B4', length: '1/4' },
