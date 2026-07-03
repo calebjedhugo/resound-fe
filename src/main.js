@@ -10,11 +10,16 @@ import PuzzleLoader from 'core/PuzzleLoader';
 import ProgressManager from 'core/ProgressManager';
 
 import MainMenu from 'ui/MainMenu';
+import showToast from 'ui/Toast';
+import ControlsOverlay from 'ui/ControlsOverlay';
+import CameraModeBadge from 'ui/CameraModeBadge';
 import PauseMenu from 'ui/PauseMenu';
 import RecordingUI from 'ui/RecordingUI';
 import DebugUI from 'ui/DebugUI';
 import ClapVisual from 'ui/ClapVisual';
 import ClapManager from 'core/ClapManager';
+import PlaybackManager from 'core/PlaybackManager';
+import ListeningManager from 'core/ListeningManager';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
@@ -40,6 +45,8 @@ let pauseMenu = null;
 const recordingUI = new RecordingUI();
 const debugUI = new DebugUI();
 const clapVisual = new ClapVisual(scene);
+const controlsOverlay = new ControlsOverlay();
+const cameraModeBadge = new CameraModeBadge();
 
 // Set up clap visual callback
 ClapManager.setVisualCallback((position, range) => {
@@ -57,8 +64,16 @@ async function startPuzzle(puzzleId) {
     PuzzleLoader.parse(puzzleData, entityManager, gameState);
     gameState.currentPuzzle = puzzleData;
     stateMachine.setState('PLAYING');
+    controlsOverlay.show(puzzleData.name);
   } catch (error) {
     console.error('Failed to load puzzle:', error);
+    // A partial parse may have added entities/state — clean up before returning to menu
+    gameState.reset();
+    entityManager.clear();
+    showToast(`Couldn't load puzzle "${puzzleId}": ${error.message}`, {
+      type: 'error',
+      duration: 9000,
+    });
   }
 }
 
@@ -79,6 +94,9 @@ function exitToMenu() {
   entityManager.clear();
   clapVisual.clear();
   ClapManager.reset();
+  controlsOverlay.hide();
+  recordingUI.setActionHint(null);
+  cameraModeBadge.update(gameState);
   stateMachine.setState('MENU');
 }
 
@@ -105,7 +123,10 @@ async function nextPuzzle() {
 // Game loop callbacks
 function update(deltaTime) {
   stateMachine.update(deltaTime);
-  if (gameState.mode === 'PLAYING') {
+  // The world holds still while the start/help overlay is up: creatures don't
+  // sing (a self-solving layout would otherwise complete silently before the
+  // player ever sees the world) and the musical clock doesn't advance.
+  if (gameState.mode === 'PLAYING' && !controlsOverlay.visible) {
     // Update musical clock (includes metronome)
     if (gameState.musicalClock) {
       gameState.musicalClock.update(deltaTime);
@@ -115,6 +136,7 @@ function update(deltaTime) {
     recordingUI.update();
     debugUI.update();
   }
+  cameraModeBadge.update(gameState);
 }
 
 function render() {
@@ -132,10 +154,23 @@ function handleKeyDown(event) {
     }
   }
 
-  // Toggle metronome with 'M' key
-  if (event.code === 'KeyM' && gameState.mode === 'PLAYING' && gameState.musicalClock) {
+  // Toggle the controls/help overlay with 'H' while playing
+  if (event.code === 'KeyH' && gameState.mode === 'PLAYING') {
+    controlsOverlay.toggle(gameState.currentPuzzle && gameState.currentPuzzle.name);
+  }
+
+  // Toggle debug info with F3
+  if (event.code === 'F3' && gameState.mode === 'PLAYING') {
+    const enabled = debugUI.toggle();
+    showToast(`Debug info ${enabled ? 'on' : 'off'}`, { duration: 2000 });
+  }
+
+  // Toggle metronome with 'N' key (M is the mouse-look toggle)
+  if (event.code === 'KeyN' && gameState.mode === 'PLAYING' && gameState.musicalClock) {
     gameState.musicalClock.toggleMetronome();
-    console.log(`Metronome ${gameState.musicalClock.metronomeEnabled ? 'enabled' : 'disabled'}`);
+    showToast(`Metronome ${gameState.musicalClock.metronomeEnabled ? 'on' : 'off'}`, {
+      duration: 2500,
+    });
   }
 }
 
@@ -169,6 +204,11 @@ async function initializeGame() {
   // Start game loop
   const gameLoop = new GameLoop(update, render);
   gameLoop.start();
+}
+
+// Dev-only introspection handle (used by tests/tooling; not part of the game)
+if (import.meta.env.DEV) {
+  window.__resoundDebug = { gameState, scene, entityManager, PlaybackManager, ListeningManager };
 }
 
 // Start the game

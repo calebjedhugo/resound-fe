@@ -1,6 +1,5 @@
-import Menu from './Menu';
 import gameState from 'core/GameState';
-import ProgressManager from 'core/ProgressManager';
+import Menu from './Menu';
 
 class PauseMenu extends Menu {
   constructor(onContinue, onExit, onNextPuzzle) {
@@ -13,9 +12,11 @@ class PauseMenu extends Menu {
   render() {
     this.clear();
 
-    // Check if current puzzle is complete
-    const isPuzzleComplete =
-      gameState.currentPuzzle && ProgressManager.isComplete(gameState.currentPuzzle.id);
+    // Complete = every fountain in THIS session is activated. (Persistent
+    // progress would title a fresh replay of an already-beaten puzzle
+    // "Puzzle Complete!" the moment you pause.)
+    const fountains = gameState.entities.filter((e) => e.type === 'fountain');
+    const isPuzzleComplete = fountains.length > 0 && fountains.every((f) => f.isActivated);
 
     // Title
     const title = document.createElement('h1');

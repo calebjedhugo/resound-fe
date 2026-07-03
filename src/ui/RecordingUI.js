@@ -32,7 +32,40 @@ class RecordingUI {
     // Create recording UI (mic overlay)
     this.createRecordingUI();
 
+    // Contextual action hint (bottom-center of screen)
+    this.createActionHint();
+
     document.body.appendChild(this.container);
+  }
+
+  createActionHint() {
+    this.actionHint = document.createElement('div');
+    this.actionHint.id = 'action-hint';
+    this.actionHint.style.cssText = `
+      position: fixed;
+      bottom: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.72);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font: 15px/1.4 sans-serif;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      opacity: 0;
+      z-index: 1000;
+    `;
+    document.body.appendChild(this.actionHint);
+  }
+
+  setActionHint(text) {
+    if (text) {
+      if (this.actionHint.textContent !== text) this.actionHint.textContent = text;
+      this.actionHint.style.opacity = '1';
+    } else {
+      this.actionHint.style.opacity = '0';
+    }
   }
 
   createInventoryUI() {
@@ -56,9 +89,26 @@ class RecordingUI {
         position: relative;
       `;
       slot.dataset.index = i;
+
+      // Persistent note count for occupied slots (legible without toasts)
+      const countEl = document.createElement('div');
+      countEl.style.cssText = `
+        position: absolute;
+        bottom: 2px;
+        right: 4px;
+        font-size: 13px;
+        font-weight: bold;
+        color: rgba(255, 255, 255, 0.95);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        pointer-events: none;
+      `;
+      slot.appendChild(countEl);
+      slot.countEl = countEl;
+
       this.inventorySlots.push(slot);
       this.inventoryContainer.appendChild(slot);
     }
+    this._slotIds = [null, null, null, null, null];
 
     this.container.appendChild(this.inventoryContainer);
   }
@@ -172,9 +222,27 @@ class RecordingUI {
       if (isOccupied) {
         // Occupied - colored background
         slot.style.background = 'rgba(0, 200, 100, 0.8)';
+        if (slot.countEl) slot.countEl.textContent = inventory[index].data.length;
       } else {
         // Empty - black background
         slot.style.background = 'rgba(0, 0, 0, 0.8)';
+        if (slot.countEl) slot.countEl.textContent = '';
+      }
+
+      // A NEW recording landing in a slot pops it (wordless confirmation)
+      const id = inventory[index] ? inventory[index].id : null;
+      if (id !== this._slotIds[index]) {
+        if (id !== null && slot.animate) {
+          slot.animate(
+            [
+              { transform: 'scale(1)' },
+              { transform: 'scale(1.35)', boxShadow: '0 0 14px rgba(0,255,140,0.9)', offset: 0.4 },
+              { transform: 'scale(1)' },
+            ],
+            { duration: 500 }
+          );
+        }
+        this._slotIds[index] = id;
       }
     });
   }
@@ -187,7 +255,8 @@ class RecordingUI {
     // Show/hide mic overlay based on creatures in range
     if (count > 0) {
       this.micOverlay.style.opacity = '1';
-      this.creatureCount.textContent = count;
+      // "×N" = creatures in earshot (a bare number reads as a slot label)
+      this.creatureCount.textContent = `×${count}`;
 
       // Position mic overlay at upper-right corner of active slot
       const activeSlotElement = this.inventorySlots[activeSlot];
@@ -212,11 +281,29 @@ class RecordingUI {
       this.recordingIndicator.style.opacity = '0';
       this.recordingIndicator.style.animation = 'none';
     }
+
+    // Contextual hint for the core record/playback loop
+    const { inventory, activeSlot: slot } = gameState.player;
+    if (isRecording) {
+      const captured = gameState.recording.capturedNotes.length;
+      this.setActionHint(
+        `Recording — ${captured} note${captured === 1 ? '' : 's'} captured… press R to stop`
+      );
+    } else if (count > 0) {
+      this.setActionHint("Press R to record the creature's song");
+    } else if (inventory[slot]) {
+      this.setActionHint('Space plays your recording — use it near a gate or fountain');
+    } else {
+      this.setActionHint(null);
+    }
   }
 
   dispose() {
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
+    }
+    if (this.actionHint && this.actionHint.parentNode) {
+      this.actionHint.parentNode.removeChild(this.actionHint);
     }
   }
 }

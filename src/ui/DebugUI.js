@@ -8,7 +8,13 @@ import { getDistance } from 'core/utils';
 class DebugUI {
   constructor() {
     this.container = null;
+    this.enabled = false; // Hidden by default; toggled with F3
     this.init();
+  }
+
+  toggle() {
+    this.enabled = !this.enabled;
+    return this.enabled;
   }
 
   init() {
@@ -37,7 +43,7 @@ class DebugUI {
    * Update debug UI - call every frame
    */
   update() {
-    if (gameState.mode !== 'PLAYING') {
+    if (!this.enabled || gameState.mode !== 'PLAYING') {
       this.container.style.display = 'none';
       return;
     }
@@ -45,6 +51,26 @@ class DebugUI {
     this.container.style.display = 'block';
 
     let html = '<strong>DEBUG INFO</strong><br/><br/>';
+
+    // Player position
+    const p = gameState.player.position;
+    html += `<strong>Player:</strong> (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) elev ${
+      gameState.player.elevation
+    }<br/><br/>`;
+
+    // Creatures (distance + whether recordable from here)
+    const creatures = gameState.entities.filter((e) => e.type === 'creature');
+    if (creatures.length > 0) {
+      html += '<strong>Creatures:</strong><br/>';
+      creatures.forEach((c) => {
+        const d = getDistance(gameState.player.position, c.position);
+        const flag = c.isRecordable ? '[IN RECORDING RANGE]' : '';
+        html += `${this.formatSong(c.song)} (${Math.round(d)}m, range ${c.audibleRange}, rec ≤ ${
+          c.recordingRange
+        }) ${flag}<br/>`;
+      });
+      html += '<br/>';
+    }
 
     // Show harmony detections
     if (gameState.harmonyLog && gameState.harmonyLog.length > 0) {
@@ -83,11 +109,19 @@ class DebugUI {
         const songPreview = this.formatRequiredSong(entity);
 
         if (entity.type === 'gate') {
-          const status = entity.isActivated ? '[OPEN]' : '[CLOSED]';
+          const status = entity.isActivated ? '[OPEN]' : '[LISTENING]';
           html += `Gate ${status} (${distance}m): ${songPreview}<br/>`;
         } else if (entity.type === 'fountain') {
-          const status = entity.isActivated ? '[COMPLETE]' : '[ACTIVE]';
+          const status = entity.isActivated ? '[DONE]' : '[LISTENING]';
           html += `Fountain ${status} (${distance}m): ${songPreview}<br/>`;
+        }
+
+        // Last judged phrase (mirrors the in-world mismatch flash for
+        // testers/automation that can't catch a 600ms animation)
+        if (entity.lastPhraseResult && !entity.isActivated) {
+          const r = entity.lastPhraseResult;
+          const ago = ((Date.now() - r.at) / 1000).toFixed(0);
+          html += `<span style="color: #ff6666">  ↳ heard ${r.noteCount}-note phrase — NO MATCH (${ago}s ago)</span><br/>`;
         }
       });
     }

@@ -75,15 +75,17 @@ class MainMenu extends Menu {
     name.className = 'puzzle-name';
     name.textContent = puzzle.name;
 
+    item.appendChild(name);
+
+    // Checkmark AFTER the name: "playtest-r3 ✓" — leading checkmarks read as
+    // belonging to the previous row in list/reading order.
     const isComplete = this.progressManager && this.progressManager.isComplete(puzzle.id);
     if (isComplete) {
       const checkmark = document.createElement('span');
       checkmark.className = 'checkmark';
-      checkmark.textContent = '✓';
+      checkmark.textContent = ' ✓';
       item.appendChild(checkmark);
     }
-
-    item.appendChild(name);
 
     item.addEventListener('click', () => {
       if (this.onSelectPuzzle) {
