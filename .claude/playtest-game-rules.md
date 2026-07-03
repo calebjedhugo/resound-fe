@@ -197,12 +197,19 @@ JSON.stringify((window.__ears||[]).splice(0))
   must be matchable with exactness kept → anchored rhythm-timeline matching
   (SongMatcher.targetTimeline + core/phraseMatching.js, polyphony-safe);
   mouse-position camera is intended (see DESIGN.md).
-- R7 (2026-07-03, first /playtest skill run): final convergence verification
-  in flight when the session's connection window closed — mission: clean
-  take succeeds / rotated + over-long fail / no false completion on
-  repeated playback (trim-horizon regression). If no R7 report exists in
-  the session transcript, re-run `/playtest` with that focus; any steps its
-  report marks SKIPPED still need verification.
+- R7 (2026-07-03, first /playtest skill run): CONVERGED on correctness.
+  Clean 3-note take activated the fountain (fanfare + [DONE] + completion
+  overlay); 6-note over-long and 5-note rotated takes correctly rejected
+  with accurate phrase-length reporting; repeated wrong playbacks + >45s
+  idle never falsely completed (trim-horizon regression HOLDS). Recording
+  timing behaved per design (takes start at whatever sounds after R-press,
+  no auto-trim). Open follow-ups for a narrow future round, NO rulings yet:
+  menu isn't keyboard-navigable; F3 slot listing ellipsizes unconditionally;
+  failure toast timing vs judgment unverified; exactly-3 rotated take
+  unverified; mismatch feedback invisible when facing away from the target
+  (proposal: red slot flash, mirrors the green record pop); persistent ✓
+  with no progress-reset affordance (designer call); fresh-eyes sweep
+  skipped.
 - Testing tip: the dev build exposes `window.__resoundDebug` ({gameState,
   scene, entityManager, PlaybackManager, ListeningManager}) — for
   coordinator/diagnostic use, NOT for code-blind agents.
