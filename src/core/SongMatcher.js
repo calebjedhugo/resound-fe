@@ -106,6 +106,56 @@ class SongMatcher {
   }
 
   /**
+   * Build the rhythm timeline of a required song: pitched ONSETS at real
+   * quarter-note beat offsets, with rests advancing the clock silently.
+   * Voices are walked independently at their true positions (unlike
+   * flattenSong, which collapses voices to a sequential list), so
+   * polyphonic targets keep their rhythm. Used by anchored matching:
+   * a rest is an EXPECTED GAP in the pattern, not an entry to compare.
+   * @param {Array|Object} requiredSong - Flat array or { voices: [...] }
+   * @returns {{onsets: Array<{beat: number, notes: Array}>, totalBeats: number}}
+   *   onsets sorted by beat; totalBeats spans trailing rests/sustains
+   */
+  static targetTimeline(requiredSong) {
+    const byBeat = new Map();
+    const addOnset = (beat, note) => {
+      const key = Math.round(beat * 1e6) / 1e6;
+      if (!byBeat.has(key)) byBeat.set(key, { beat: key, notes: [] });
+      byBeat.get(key).notes.push({ pitch: note.pitch, length: note.length });
+    };
+    const walkSequence = (entries) => {
+      let clock = 0;
+      for (const entry of entries || []) {
+        if (Array.isArray(entry)) {
+          if (entry.length > 0) {
+            const beatHere = clock;
+            entry.filter((n) => n && n.pitch).forEach((n) => addOnset(beatHere, n));
+            clock += Math.min(...entry.map((n) => this.lengthToBeats(n && n.length)));
+          }
+        } else if (entry && entry.pitch) {
+          addOnset(clock, entry);
+          clock += this.lengthToBeats(entry.length);
+        } else if (entry) {
+          // Rest: advances the clock, emits no onset
+          clock += this.lengthToBeats(entry.length);
+        }
+      }
+      return clock;
+    };
+
+    let totalBeats = 0;
+    if (Array.isArray(requiredSong)) {
+      totalBeats = walkSequence(requiredSong);
+    } else if (requiredSong && Array.isArray(requiredSong.voices)) {
+      for (const voice of requiredSong.voices) {
+        totalBeats = Math.max(totalBeats, walkSequence(voice.notes));
+      }
+    }
+    const onsets = [...byBeat.values()].sort((a, b) => a.beat - b.beat);
+    return { onsets, totalBeats };
+  }
+
+  /**
    * Split a beat-grouped note stream into PHRASES: contiguous utterances
    * separated by silence. A listener hears everything over time (creature
    * passes, stray notes, the player's playback); each phrase is evaluated
