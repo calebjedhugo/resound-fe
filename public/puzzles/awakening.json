@@ -2,31 +2,31 @@
   "id": "awakening",
   "name": "Awakening",
   "difficulty": 1,
-  "gridSize": 34,
+  "gridSize": 20,
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
   "playerStart": {
-    "x": 17,
+    "x": 11,
     "y": 0,
-    "z": 30
+    "z": 18
   },
   "floors": [
     {
       "elevation": 1,
-      "x1": 0,
-      "z1": 11,
-      "x2": 33,
-      "z2": 16
+      "x1": 8,
+      "z1": 2,
+      "x2": 15,
+      "z2": 7
     }
   ],
   "entities": [
     {
       "type": "creature",
       "position": {
-        "x": 17,
+        "x": 11,
         "y": 0,
-        "z": 25
+        "z": 16
       },
       "data": {
         "song": [
@@ -36,6 +36,42 @@
           }
         ],
         "interval": 8,
+        "audibleRange": 12
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 15,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "E4",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 6
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 11,
+        "y": 1,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "C5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 6,
         "audibleRange": 15
       }
     },
@@ -44,7 +80,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -52,7 +88,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -60,7 +96,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -68,7 +104,7 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -76,7 +112,7 @@
       "position": {
         "x": 4,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -84,7 +120,7 @@
       "position": {
         "x": 5,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -92,7 +128,7 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -100,7 +136,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -108,7 +144,7 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -116,7 +152,7 @@
       "position": {
         "x": 9,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -124,63 +160,15 @@
       "position": {
         "x": 10,
         "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 12,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 13,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 14,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 15,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 16,
-        "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
       "type": "gate",
       "position": {
-        "x": 17,
+        "x": 11,
         "y": 0,
-        "z": 19
+        "z": 11
       },
       "song": [
         {
@@ -192,9 +180,57 @@
     {
       "type": "wall",
       "position": {
+        "x": 12,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 14,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 15,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 16,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 17,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
         "x": 18,
         "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
@@ -202,681 +238,24 @@
       "position": {
         "x": 19,
         "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 20,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 21,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 22,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 23,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 24,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 25,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 26,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 27,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 28,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 29,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 30,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 31,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 32,
-        "y": 0,
-        "z": 19
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 33,
-        "y": 0,
-        "z": 19
+        "z": 11
       }
     },
     {
       "type": "ramp",
       "position": {
-        "x": 17,
+        "x": 11,
         "y": 0,
-        "z": 17
+        "z": 8
       },
       "direction": "north"
     },
     {
-      "type": "creature",
-      "position": {
-        "x": 11,
-        "y": 1,
-        "z": 14
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "E4",
-            "length": "1/1"
-          }
-        ],
-        "interval": 8,
-        "audibleRange": 15
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 0,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 6,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 12,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 13,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 14,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 15,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 16,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "gate",
-      "position": {
-        "x": 17,
-        "y": 1,
-        "z": 13
-      },
-      "song": [
-        {
-          "pitch": "E4",
-          "length": "1/1"
-        }
-      ]
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 18,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 19,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 20,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 21,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 22,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 23,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 24,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 25,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 26,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 27,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 28,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 29,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 30,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 31,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 32,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 33,
-        "y": 1,
-        "z": 13
-      }
-    },
-    {
-      "type": "ramp",
-      "position": {
-        "x": 17,
-        "y": 0,
-        "z": 10
-      },
-      "direction": "south"
-    },
-    {
-      "type": "creature",
-      "position": {
-        "x": 25,
-        "y": 0,
-        "z": 8
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "C5",
-            "length": "1/1"
-          }
-        ],
-        "interval": 8,
-        "audibleRange": 15
-      }
-    },
-    {
-      "type": "creature",
-      "position": {
-        "x": 17,
-        "y": 0,
-        "z": 0
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "F#4",
-            "length": "1/2"
-          }
-        ],
-        "interval": 16,
-        "audibleRange": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 16,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 16,
-        "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 17,
-        "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 18,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 18,
-        "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "creature",
-      "position": {
-        "x": 14,
-        "y": 0,
-        "z": 5
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "F#4",
-            "length": "1/2"
-          }
-        ],
-        "interval": 16,
-        "audibleRange": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 13,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 13,
-        "y": 0,
-        "z": 5
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 13,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 14,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 14,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 15,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 15,
-        "y": 0,
-        "z": 5
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 15,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
-      "type": "creature",
-      "position": {
-        "x": 20,
-        "y": 0,
-        "z": 5
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "F#4",
-            "length": "1/2"
-          }
-        ],
-        "interval": 16,
-        "audibleRange": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 19,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 19,
-        "y": 0,
-        "z": 5
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 19,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 20,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 20,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 21,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 21,
-        "y": 0,
-        "z": 5
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 21,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
       "type": "fountain",
       "position": {
-        "x": 17,
+        "x": 4,
         "y": 0,
-        "z": 3
+        "z": 10
       },
       "song": [
         [

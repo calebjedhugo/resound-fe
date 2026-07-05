@@ -12,10 +12,16 @@ class Ramp extends Entity {
 
   createMesh() {
     const geometry = this.createWedgeGeometry();
+    // DoubleSide: the wedge must read from EVERY angle (it used to vanish
+    // when viewed against its culled faces), and the glow keeps it findable
+    // when scanning a ledge for the way down.
     const material = new THREE.MeshStandardMaterial({
-      color: 0x88ff88,
-      roughness: 0.8,
+      color: 0x66dd88,
+      roughness: 0.6,
       metalness: 0.1,
+      emissive: 0x115522,
+      emissiveIntensity: 0.5,
+      side: THREE.DoubleSide,
     });
     this.mesh = new THREE.Mesh(geometry, material);
 
@@ -29,6 +35,22 @@ class Ramp extends Entity {
       west: -Math.PI / 2,
     };
     this.mesh.rotation.y = rotations[this.direction] || 0;
+
+    // Marker posts at the TOP corners: visible from up on the ledge, so a
+    // player looking for the descent can spot the ramp without hanging over
+    // the edge. Local space: high edge is at -Z before rotation.
+    const hw = WORLD_SCALE / 2;
+    const postGeometry = new THREE.BoxGeometry(0.22, 1.1, 0.22);
+    const postMaterial = new THREE.MeshStandardMaterial({
+      color: 0x66dd88,
+      emissive: 0x22aa44,
+      emissiveIntensity: 0.9,
+    });
+    [-hw + 0.15, hw - 0.15].forEach((x) => {
+      const post = new THREE.Mesh(postGeometry, postMaterial);
+      post.position.set(x, ELEVATION_HEIGHT + 0.55, -hw + 0.15);
+      this.mesh.add(post);
+    });
   }
 
   createWedgeGeometry() {

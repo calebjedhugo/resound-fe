@@ -18,7 +18,9 @@ class CollisionDetector {
       const rampY = ramp.getYAtPosition(position.x, position.z);
       if (rampY !== null) return rampY / ELEVATION_HEIGHT;
     }
-    return gameState.elevationGrid.getElevation(grid.x, grid.z);
+    // Derive the layer from the position's actual height, not the cell's top
+    // floor — an entity UNDER an elevated slab is on the ground layer
+    return Math.max(0, Math.floor((position.y + 0.001) / ELEVATION_HEIGHT));
   }
 
   /**
@@ -46,8 +48,9 @@ class CollisionDetector {
           return true;
         }
       } else if (entity.type === 'gate') {
-        // Only collide with closed gates
-        if (!entity.isActivated) {
+        // Only collide with closed gates (gates are play-to-pass: open is a
+        // temporary window held by a correct performance)
+        if (!entity.isOpen) {
           if (this.checkCircleBoxCollision(position, radius, entity.position, 1.5)) {
             return true;
           }

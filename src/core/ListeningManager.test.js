@@ -121,13 +121,13 @@ describe('Gates and Fountains recognizing songs', () => {
 
       // Play the song from close range
       ctx.pressKey('space');
-      await ctx.advanceBeats(8);
+      await ctx.advanceBeats(5);
 
-      // Assert: gate should now be open
+      // Assert: gate should now be open (within the play-to-pass grace)
       expect(ctx.isGateOpen(gates[0])).toBe(true);
     });
 
-    it('gate stays open permanently after activation', async () => {
+    it('gate closes again once the open grace expires (play-to-pass)', async () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
@@ -136,16 +136,37 @@ describe('Gates and Fountains recognizing songs', () => {
 
       const gates = ctx.getGates();
 
-      // Activate gate
+      // Open the gate with a correct performance
       ctx.pressKey('space');
-      await ctx.advanceBeats(8);
+      await ctx.advanceBeats(5);
 
       expect(ctx.isGateOpen(gates[0])).toBe(true);
 
-      // Advance more time
-      await ctx.advanceBeats(10);
+      // Wait out the grace window: gates never latch
+      await ctx.advanceBeats(12);
 
-      // Gate should still be open
+      expect(ctx.isGateOpen(gates[0])).toBe(false);
+    });
+
+    it('gate reopens for a fresh performance after closing', async () => {
+      ctx.loadPuzzle('listening-gate-basic');
+      await ctx.tick(16);
+
+      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
+      ctx.setActiveSlot(0);
+
+      const gates = ctx.getGates();
+
+      ctx.pressKey('space');
+      await ctx.advanceBeats(5);
+      expect(ctx.isGateOpen(gates[0])).toBe(true);
+
+      await ctx.advanceBeats(12);
+      expect(ctx.isGateOpen(gates[0])).toBe(false);
+
+      // Play it again — the gate answers every correct performance
+      ctx.pressKey('space');
+      await ctx.advanceBeats(5);
       expect(ctx.isGateOpen(gates[0])).toBe(true);
     });
   });
@@ -283,7 +304,7 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       ctx.pressKey('space');
-      await ctx.advanceBeats(8);
+      await ctx.advanceBeats(5);
 
       // Should be within range (boundary inclusive)
       expect(ctx.isGateOpen(gates[0])).toBe(true);

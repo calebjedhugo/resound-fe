@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import WebGL from 'isWebGLAvailable';
-import motion from 'resoundModules/playerControls/motion/motion';
+import motion, { camera, syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 import gameState from 'core/GameState';
 import GameLoop from 'core/GameLoop';
@@ -214,7 +214,15 @@ async function initializeGame() {
 
 // Dev-only introspection handle (used by tests/tooling; not part of the game)
 if (import.meta.env.DEV) {
-  window.__resoundDebug = { gameState, scene, entityManager, PlaybackManager, ListeningManager };
+  window.__resoundDebug = {
+    gameState,
+    scene,
+    entityManager,
+    PlaybackManager,
+    ListeningManager,
+    camera,
+    syncCameraToPlayer,
+  };
 }
 
 // Start the game

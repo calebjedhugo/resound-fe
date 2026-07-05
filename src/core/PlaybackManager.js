@@ -120,7 +120,7 @@ class PlaybackManager {
     // Snapshot which targets are still locked, so we can tell the player
     // whether this playback unlocked anything.
     const lockedTargets = gameState.entities.filter(
-      (e) => (e.type === 'fountain' || e.type === 'gate') && !e.isActivated
+      (e) => (e.type === 'fountain' && !e.isActivated) || (e.type === 'gate' && !e.isOpen)
     );
 
     // Wait for startDelay, then begin playback
@@ -141,7 +141,7 @@ class PlaybackManager {
       // Give the match a moment to process, then report a miss (success is
       // loudly announced by the target itself).
       setTimeout(() => {
-        const unlockedAny = lockedTargets.some((e) => e.isActivated);
+        const unlockedAny = lockedTargets.some((e) => e.isActivated || e.isOpen);
         if (lockedTargets.length > 0 && !unlockedAny && gameState.mode === 'PLAYING') {
           showToast(this.describeMiss(lockedTargets), { duration: 5000 });
         }

@@ -101,12 +101,29 @@ instead of "fixing" it.
   exceed the song's length or the creature sings continuously (and never
   moves, and clean recording takes become nearly impossible)
 
+### Gates & elevation
+- **Gates are play-to-pass**: `gate.open()` holds `isOpen` for a short grace
+  then `close()`s; the notation never hides. No permanent `isActivated` on
+  gates (fountains still latch). Collision/hints/miss-reporting key off
+  `isOpen`. See DESIGN.md.
+- **Walk-under**: elevated floors are platforms with walkable space beneath.
+  `ElevationGrid.levels[z][x]` lists a cell's walkable levels; movers pass a
+  `priorLevel` to `getFloorY`/`getEffectiveElevation`/`canTraverse` to stay on
+  their own layer. Change layers only via ramps. `motion.js` and the test
+  harness's movement integrator (`testUtils.js`) must stay in sync.
+- **Level `awakening` is generated** by `puzzles/gen-awakening.js` (has a
+  built-in constraint checker: `node puzzles/gen-awakening.js
+  public/puzzles/awakening.json`). Edit the generator + rerun; don't hand-edit
+  `public/puzzles/awakening.json`.
+
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +
   `core/HintMemory.js`, retire-once, localStorage `resound-hints`)
 - Game boots into the FIRST manifest puzzle (`awakening`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
 - `ui/StartGate.js` freezes the world per level start until a key/click
+- Dev-only `window.__resoundDebug` exposes `camera` + `syncCameraToPlayer`
+  for scripted browser verification (reposition + screenshot)
 
 ### Notation Coordinate System
 - All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model

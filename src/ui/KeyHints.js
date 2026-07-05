@@ -241,8 +241,7 @@ class KeyHints {
     }
     const target = gameState.entities.find(
       (e) =>
-        (e.type === 'gate' || e.type === 'fountain') &&
-        !e.isActivated &&
+        ((e.type === 'gate' && !e.isOpen) || (e.type === 'fountain' && !e.isActivated)) &&
         getDistance(gameState.player.position, e.position) <= recording.sourceRange
     );
     if (!target) {

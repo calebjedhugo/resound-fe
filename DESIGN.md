@@ -50,6 +50,15 @@ automated playtesters can observe them.)
   elapses, and stale earlier sounds neither help nor hurt. Polyphonic
   targets (chords, multi-voice) keep their true rhythm. A failed utterance
   flashes the target red (wordless feedback) and is logged in the F3 panel.
+- **Gates are PLAY-TO-PASS, not latching** (ruled 2026-07-05, designer's
+  idea). A correct performance opens a gate for a short grace
+  (`Gate.OPEN_GRACE_BEATS`, ~10 beats) and it closes again; the notation
+  **stays displayed forever** so the song is a permanent part of the world.
+  You perform the gate's song every time you want to cross. `isOpen` is the
+  transient state (drives collision + green tint); there is no permanent
+  `isActivated` on gates any more. Fountains still latch (they're the goal).
+  Design leverage: because crossing always costs the gate's song, a gate can
+  gate *access to a recording* — see the awakening two-slot forcing below.
 
 - **Mouse-position camera is intended** (ruled 2026-07-03): the cursor's
   offset from screen center steers the view, and a cursor resting outside
@@ -66,6 +75,15 @@ automated playtesters can observe them.)
   The editor rejects E0 regions with an explanatory toast.
 - **Perimeter walls auto-generate OUTSIDE the grid** (rows/cols −1 and
   gridSize). Designers never place border walls; every grid cell is playable.
+- **Elevated floors are raised platforms you can walk UNDER** (2026-07-05).
+  A cell under an E1 slab is walkable at BOTH level 0 (beneath) and level 1
+  (on top); `ElevationGrid.levels[z][x]` tracks the set, and movers carry
+  their current layer (`getFloorY`/`getEffectiveElevation`/`canTraverse` take
+  a `priorLevel`). You change layers only via a ramp; stepping off a
+  platform edge onto a cell that lacks your level is blocked (cliff). Floors
+  render as thin **slabs** (visible undersides + edge faces), and ramps are
+  double-sided + glow with **marker posts** at the top edge so they read from
+  every angle, including when hunting for the way down.
 
 ## Onboarding (settled 2026-07-05)
 
@@ -85,29 +103,36 @@ automated playtesters can observe them.)
   behind a dark scrim with a pulsing ring; any key/click wakes the world.
   While it's up, the clock and creatures hold still (self-solve protection)
   and the waking gesture satisfies the browser audio-interaction rule.
-- **`awakening` teaches by geometry**: creature → walled gate → ramp → ridge
-  → second creature/gate → the **duet fountain** finale. Self-solve margins:
-  every keyed creature ≥ 18 world units from its gate (range 15).
-- **The duet fountain HARD-forces slot use** (settled 2026-07-05, after the
-  designer showed the first draft was single-slot solvable by backtracking):
-  - The fountain wants the chord **C4+C5 sounding together**. Playback is
-    single-channel, so the C5 must come from creature B singing live in
-    fountain earshot.
-  - B is lurable only by consonance: E4 (the ridge creature's song, also the
-    gate-2 key). C4↔C5 is an octave ⇒ 'perfect' ⇒ the C4 recording exerts
-    no pull — it can't double as the lure.
-  - Three penned **sentinels** ("guardian stones", F♯4 = tritone vs C5,
-    interval 16, audibleRange 8) ring the fountain 120° apart. Their push
-    discs jointly cover the fountain's entire audible disc, so B can never
-    PARK in earshot — one sentinel alone always leaves a safe crescent on
-    its far side (verified empirically; don't reduce to one). audibleRange
-    8 < their 9–10.8 distance keeps the fountain deaf to them.
-  - Net effect: lured progress decays in seconds-to-a-minute, far faster
-    than any walk-back-and-re-record round trip ⇒ the player must hold the
-    lure (E4) AND the duet voice (C4) in slots at the same time.
-  - **Accepted depth**: clapping B desyncs it from the sentinels' shared
-    beat grid, weakening eviction — a legal advanced shortcut (clap
-    displacement is intended solution space), not a bug.
+- **`awakening` teaches by geometry** (compact grid 20; rebuilt 2026-07-05):
+  Creature A (C4) → Gate 1 (C4, play-to-pass) → Creature X (E4) → ramp UP to
+  a platform where Creature B (C5) lives → lure B DOWN the ramp → **duet
+  fountain** (chord C4+C5). The ramp is part of the *solution* (you walk B
+  down it), not scenery. The whole geometry is generated + self-checked by
+  `gen-awakening.js` (17 interference/forcing/connectivity assertions).
+- **The lure is taught by NECESSITY, not a scripted reveal.** The fountain
+  wants C4+C5 together; playback is single-channel, so C5 must be sung LIVE
+  by B at the fountain. The only way to move B is sound — E4 (minor sixth
+  below C5 = consonant) pulls B; C4 (octave = perfect) does not. The player
+  must lead B down the ramp (pied-piper) with E4, then sing C4 for the duet.
+  Discoverability rests on the play-instinct + necessity; flag it for
+  playtest if players stall.
+- **Two-slot use is forced by the play-to-pass gate + geometry**, NOT by
+  force-balance (settled 2026-07-05):
+  - Gate 1 wants C4; C4's only source (creature A) is SOUTH of the gate.
+    Creature X (E4) and the fountain are NORTH. Since gates never latch,
+    reaching X costs a C4 performance, and once north **C4 cannot be
+    re-recorded** — A sits behind a gate that needs C4 to cross back.
+  - The duet needs C4 (+ B's live C5); the lure needs E4. C4 being
+    unrecoverable-once-north means the player must hold C4 AND E4 at the
+    same time → two slots, robustly. No delicate tuning, no time pressure.
+  - **Superseded design:** an earlier draft evicted B from the fountain with
+    three dissonant "guardian" sentinels. Removed — the gate forces slots on
+    its own, and equal force radii (sentinel reach = fountain reach = B's
+    range) always left a dead annulus at range 15 where B simply parked
+    (empirically confirmed). Cleaner, and it showcases the designer's own
+    play-to-pass gate idea. If a level ever needs to teach dissonance-repulsion
+    specifically, design the coverage so no zero-force parking spot lies
+    inside the target's reach disc.
   - The fountain still exists only to close the completion loop until the
     open-world conversion lands.
 

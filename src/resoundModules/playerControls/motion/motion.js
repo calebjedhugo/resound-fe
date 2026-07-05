@@ -124,16 +124,20 @@ const updateMotion = () => {
   // Elevation check
   const { elevationGrid } = gameState;
   if (elevationGrid) {
+    // The mover's current layer: keeps the player on their own level in
+    // cells that are walkable at several elevations (under elevated floors)
+    const priorLevel = gameState.player.elevation;
     const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
     const newGrid = elevationGrid.worldToGrid(camera.position.x, camera.position.z);
 
     if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
-      const oldElevation = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid);
+      const oldElevation = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid, priorLevel);
       const newElevation = getEffectiveElevation(
         camera.position.x,
         camera.position.z,
         newGrid,
-        elevationGrid
+        elevationGrid,
+        priorLevel
       );
 
       if (!canTraverse(oldGrid, newGrid, oldElevation, newElevation, elevationGrid)) {
@@ -148,9 +152,10 @@ const updateMotion = () => {
       camera.position.x,
       camera.position.z,
       currentGrid,
-      elevationGrid
+      elevationGrid,
+      priorLevel
     );
-    const floorY = getFloorY(camera.position.x, camera.position.z, elevationGrid);
+    const floorY = getFloorY(camera.position.x, camera.position.z, elevationGrid, priorLevel);
     camera.position.y = floorY + fixedYPosition;
   }
 

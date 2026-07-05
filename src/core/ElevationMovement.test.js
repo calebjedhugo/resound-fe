@@ -95,24 +95,29 @@ describe('Player elevation movement', () => {
   });
 
   describe('elevation boundary blocking', () => {
-    it('player cannot walk from elevation 0 onto elevation 1 without a ramp', async () => {
+    it('player walks UNDER an elevated floor, staying at elevation 0', async () => {
+      // Elevated floors are raised platforms with open space beneath them:
+      // ground level (0) is walkable everywhere, including under an E1 slab.
       ctx.loadPuzzle('elevation-ramp');
 
-      // Place player at grid (5, 9) - elevation 0, no ramp at this cell
+      // Place player at grid (5, 9) - elevation 0, just south of the E1
+      // platform footprint (x4-10, z4-8), away from the ramp at x7
       ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 9 * WORLD_SCALE });
       await ctx.tick(16);
+      expect(ctx.getPlayerElevation()).toBe(0);
 
-      // Try to walk north into elevation 1 area (grid 5, 8)
+      // Walk north into the platform footprint (grid 5, 8 and beyond)
       ctx.holdKey('w');
-      await ctx.tick(500);
+      await ctx.tick(1500);
       ctx.releaseKey('w');
 
-      // Player should still be on elevation 0
-      expect(ctx.getPlayerElevation()).toBe(0);
-      // Player's grid cell should still be elevation 0
+      // Player crossed under the slab (into the footprint) but stayed on the
+      // ground layer — not blocked by the platform, not lifted onto it
       const pos = ctx.getPlayerPosition();
+      expect(pos.z).toBeLessThan(8 * WORLD_SCALE + WORLD_SCALE / 2); // inside footprint
+      expect(ctx.getPlayerElevation()).toBe(0);
       const grid = gameState.elevationGrid.worldToGrid(pos.x, pos.z);
-      expect(gameState.elevationGrid.getElevation(grid.x, grid.z)).toBe(0);
+      expect(gameState.elevationGrid.getElevation(grid.x, grid.z)).toBe(1); // slab overhead
     });
 
     it('player cannot walk off elevation 1 onto elevation 0 without a ramp', async () => {
@@ -199,22 +204,76 @@ describe('Player elevation movement', () => {
       expect(canTraverse(from, to, 0, 1, grid)).toBe(true);
     });
 
-    it('blocks movement between cells differing by 1 elevation with no ramp', () => {
+    it('allows walking under an elevated floor at ground level', () => {
+      // Ground (0) is walkable everywhere; a cell under an E1 slab is
+      // traversable at level 0 (you pass beneath it).
       const grid = new ElevationGrid(10);
       grid.applyFloors([{ elevation: 1, x1: 5, z1: 5, x2: 9, z2: 9 }]);
 
-      const from = { x: 4, z: 5 };
-      const to = { x: 5, z: 5 };
-      expect(canTraverse(from, to, 0, 1, grid)).toBe(false);
+      const from = { x: 4, z: 5 }; // ground, outside footprint
+      const to = { x: 5, z: 5 }; // under the E1 slab
+      expect(canTraverse(from, to, 0, 0, grid)).toBe(true);
     });
 
-    it('blocks movement between cells differing by more than 1 elevation', () => {
+    it('allows walking under a higher floor at ground level', () => {
       const grid = new ElevationGrid(10);
       grid.applyFloors([{ elevation: 2, x1: 5, z1: 5, x2: 9, z2: 9 }]);
 
       const from = { x: 4, z: 5 };
       const to = { x: 5, z: 5 };
-      expect(canTraverse(from, to, 0, 2, grid)).toBe(false);
+      expect(canTraverse(from, to, 0, 0, grid)).toBe(true);
+    });
+
+    it('blocks stepping off an elevated floor edge onto ground (cliff)', () => {
+      // On the platform (level 1), walking off its edge onto a cell that has
+      // no level-1 floor is blocked — you would fall.
+      const grid = new ElevationGrid(10);
+      grid.applyFloors([{ elevation: 1, x1: 5, z1: 5, x2: 9, z2: 9 }]);
+
+      const from = { x: 5, z: 5 }; // on the platform
+      const to = { x: 4, z: 5 }; // off the edge, ground only
+      expect(canTraverse(from, to, 1, 1, grid)).toBe(false);
+    });
+
+    it('allows walking across the top of an elevated floor at its level', () => {
+      const grid = new ElevationGrid(10);
+      grid.applyFloors([{ elevation: 1, x1: 5, z1: 5, x2: 9, z2: 9 }]);
+
+      const from = { x: 5, z: 5 };
+      const to = { x: 6, z: 5 };
+      expect(canTraverse(from, to, 1, 1, grid)).toBe(true);
+    });
+
+    it('lets you leave a ramp onto adjacent ground at ANY height (no mid-ramp seam)', () => {
+      // Regression: canTraverse used Math.round(fractional ramp elevation), so
+      // strafing off a ramp's side was allowed on the lower half (round->0) but
+      // blocked on the upper half (round->1) — an invisible wall at mid-ramp.
+      const grid = new ElevationGrid(10);
+      grid.applyFloors([{ elevation: 1, x1: 5, z1: 0, x2: 9, z2: 9 }]);
+      const ramp = new Ramp(
+        { x: 4 * WORLD_SCALE, y: 0, z: 5 * WORLD_SCALE },
+        { direction: 'east' }
+      );
+      grid.registerRamp(4, 5, ramp);
+
+      const rampCell = { x: 4, z: 5 };
+      const groundBeside = { x: 4, z: 4 }; // adjacent ground, levels [0]
+      // Lower half of the ramp (elevation 0.3) AND upper half (0.7) both allow
+      // stepping off the side — uniformly, no discontinuity.
+      expect(canTraverse(rampCell, groundBeside, 0.3, 0, grid)).toBe(true);
+      expect(canTraverse(rampCell, groundBeside, 0.7, 0, grid)).toBe(true);
+    });
+
+    it('lets you leave a ramp onto the top platform', () => {
+      const grid = new ElevationGrid(10);
+      grid.applyFloors([{ elevation: 1, x1: 5, z1: 0, x2: 9, z2: 9 }]);
+      const ramp = new Ramp(
+        { x: 4 * WORLD_SCALE, y: 0, z: 5 * WORLD_SCALE },
+        { direction: 'east' }
+      );
+      grid.registerRamp(4, 5, ramp);
+      // From high on the ramp onto the platform cell (levels [0,1])
+      expect(canTraverse({ x: 4, z: 5 }, { x: 5, z: 5 }, 0.9, 1, grid)).toBe(true);
     });
   });
 

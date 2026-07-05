@@ -112,7 +112,7 @@ class DebugUI {
         const songPreview = this.formatRequiredSong(entity);
 
         if (entity.type === 'gate') {
-          const status = entity.isActivated ? '[OPEN]' : '[LISTENING]';
+          const status = entity.isOpen ? '[OPEN]' : '[LISTENING]';
           html += `Gate ${status} (${distance}m): ${songPreview}<br/>`;
         } else if (entity.type === 'fountain') {
           const status = entity.isActivated ? '[DONE]' : '[LISTENING]';
@@ -121,7 +121,7 @@ class DebugUI {
 
         // Last judged phrase (mirrors the in-world mismatch flash for
         // testers/automation that can't catch a 600ms animation)
-        if (entity.lastPhraseResult && !entity.isActivated) {
+        if (entity.lastPhraseResult && !(entity.type === 'fountain' && entity.isActivated)) {
           const r = entity.lastPhraseResult;
           const ago = ((Date.now() - r.at) / 1000).toFixed(0);
           html += `<span style="color: #ff6666">  ↳ heard ${r.noteCount}-note phrase — NO MATCH (${ago}s ago)</span><br/>`;

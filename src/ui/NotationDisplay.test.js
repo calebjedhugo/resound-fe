@@ -79,7 +79,7 @@ describe('NotationDisplay on Gates and Fountains', () => {
   });
 
   describe('activation behavior', () => {
-    it('gate notation meshes become invisible after gate activation', () => {
+    it('gate notation stays visible while the gate is held open (play-to-pass)', () => {
       const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: singleNoteSong });
       const notationChildren = gate.mesh.children.filter((c) => c._isNotationMesh);
 
@@ -88,10 +88,11 @@ describe('NotationDisplay on Gates and Fountains', () => {
         expect(child.visible).toBe(true);
       }
 
-      gate.activate();
+      gate.open();
 
+      // Gates never latch: the song stays part of the world
       for (const child of notationChildren) {
-        expect(child.visible).toBe(false);
+        expect(child.visible).toBe(true);
       }
     });
 
