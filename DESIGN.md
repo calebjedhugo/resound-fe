@@ -51,14 +51,25 @@ automated playtesters can observe them.)
   targets (chords, multi-voice) keep their true rhythm. A failed utterance
   flashes the target red (wordless feedback) and is logged in the F3 panel.
 - **Gates are PLAY-TO-PASS, not latching** (ruled 2026-07-05, designer's
-  idea). A correct performance opens a gate for a short grace
-  (`Gate.OPEN_GRACE_BEATS`, ~10 beats) and it closes again; the notation
-  **stays displayed forever** so the song is a permanent part of the world.
-  You perform the gate's song every time you want to cross. `isOpen` is the
-  transient state (drives collision + green tint); there is no permanent
-  `isActivated` on gates any more. Fountains still latch (they're the goal).
-  Design leverage: because crossing always costs the gate's song, a gate can
-  gate *access to a recording* — see the awakening two-slot forcing below.
+  idea). A gate opens **AS its song is performed** — the moment the heard
+  notes are a correct in-progress rendering of the target, not after a
+  completed match — and holds open while the song keeps sounding, then closes
+  after a short step-through grace (`Gate.OPEN_GRACE_BEATS`, ~3 beats). The
+  notation **stays displayed forever** so the song is a permanent part of the
+  world. You perform the gate's song every time you want to cross. `isOpen`
+  is the transient state (drives collision + green tint); there is no
+  permanent `isActivated` on gates any more. Mechanism: `phraseMatching`
+  returns `'in-progress'` for a valid ongoing prefix, which `Gate` treats as
+  open; `true` (full song + trailing silence) additionally consumes the
+  performance. Fountains ignore `'in-progress'` and still latch on the exact
+  full match (they're the goal). Design leverage: because crossing always
+  costs the gate's song, a gate can gate *access to a recording* — see the
+  awakening two-slot forcing below.
+  - **Prefix caveat (future multi-note gates):** opening on a valid prefix
+    means a *partial* performance briefly cracks a gate. The current level's
+    only gate is single-note, so prefix = whole song (no exploit). If
+    multi-note gates appear and a partial-then-walk-through feels cheap, add a
+    "must complete before it commits to fully open" rule.
 
 - **Mouse-position camera is intended** (ruled 2026-07-03): the cursor's
   offset from screen center steers the view, and a cursor resting outside

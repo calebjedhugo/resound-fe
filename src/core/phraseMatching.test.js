@@ -117,7 +117,11 @@ describe('evaluatePhrases — exact anchored matching', () => {
     expect(evaluatePhrases(listener)).toBe(true);
   });
 
-  it('does not judge a take early (prefix cannot match before silence)', () => {
+  it('does not COMPLETE a take early, but reports it in-progress (prefix before silence)', () => {
+    // All three notes have landed but the trailing silence has not elapsed:
+    // not a completed match (never returns true early), yet a correct
+    // performance IS underway — reported as 'in-progress' so play-to-pass
+    // gates open as the song is performed.
     const listener = makeListener({
       notes: [
         [0, 'B4'],
@@ -126,7 +130,17 @@ describe('evaluatePhrases — exact anchored matching', () => {
       ],
       nowBeats: 3.5, // window not closed yet
     });
-    expect(evaluatePhrases(listener)).toBe(false);
+    expect(evaluatePhrases(listener)).toBe('in-progress');
+  });
+
+  it('reports a partial correct prefix as in-progress (gate opens on the first note)', () => {
+    // Only the first note has sounded and the second is not yet due: a valid
+    // start of the target, so a play-to-pass gate should open immediately.
+    const listener = makeListener({
+      notes: [[0, 'B4']],
+      nowBeats: 0.5, // before the second onset at beat 1
+    });
+    expect(evaluatePhrases(listener)).toBe('in-progress');
   });
 
   it('rejects a rotated take', () => {
@@ -291,13 +305,13 @@ describe('evaluatePhrases — rests in the target', () => {
 
   it('does not flash a mismatch mid-performance during a long rest', () => {
     // Only the first note has sounded; the rest is still elapsing and the
-    // performance could still complete — no premature miss
+    // performance could still complete — reported in-progress, never a miss.
     const listener = makeListener({
       requiredSong: RESTED_TARGET,
       notes: [[0, 'B4']],
       nowBeats: 2.5, // inside the rest window
     });
-    expect(evaluatePhrases(listener)).toBe(false);
+    expect(evaluatePhrases(listener)).toBe('in-progress');
   });
 });
 
