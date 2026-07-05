@@ -86,10 +86,30 @@ automated playtesters can observe them.)
   While it's up, the clock and creatures hold still (self-solve protection)
   and the waking gesture satisfies the browser audio-interaction rule.
 - **`awakening` teaches by geometry**: creature → walled gate → ramp → ridge
-  → second creature/gate → fountain finale that wants the FIRST creature's
-  song (the slot-retention lesson). The fountain exists only to close the
-  completion loop until the open-world conversion lands. Self-solve margins:
-  every creature ≥ 21 world units from every target (range 15).
+  → second creature/gate → the **duet fountain** finale. Self-solve margins:
+  every keyed creature ≥ 18 world units from its gate (range 15).
+- **The duet fountain HARD-forces slot use** (settled 2026-07-05, after the
+  designer showed the first draft was single-slot solvable by backtracking):
+  - The fountain wants the chord **C4+C5 sounding together**. Playback is
+    single-channel, so the C5 must come from creature B singing live in
+    fountain earshot.
+  - B is lurable only by consonance: E4 (the ridge creature's song, also the
+    gate-2 key). C4↔C5 is an octave ⇒ 'perfect' ⇒ the C4 recording exerts
+    no pull — it can't double as the lure.
+  - Three penned **sentinels** ("guardian stones", F♯4 = tritone vs C5,
+    interval 16, audibleRange 8) ring the fountain 120° apart. Their push
+    discs jointly cover the fountain's entire audible disc, so B can never
+    PARK in earshot — one sentinel alone always leaves a safe crescent on
+    its far side (verified empirically; don't reduce to one). audibleRange
+    8 < their 9–10.8 distance keeps the fountain deaf to them.
+  - Net effect: lured progress decays in seconds-to-a-minute, far faster
+    than any walk-back-and-re-record round trip ⇒ the player must hold the
+    lure (E4) AND the duet voice (C4) in slots at the same time.
+  - **Accepted depth**: clapping B desyncs it from the sentinels' shared
+    beat grid, weakening eviction — a legal advanced shortcut (clap
+    displacement is intended solution space), not a bug.
+  - The fountain still exists only to close the completion loop until the
+    open-world conversion lands.
 
 ## Deferred features (wanted, not yet built)
 
