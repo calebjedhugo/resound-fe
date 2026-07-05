@@ -114,36 +114,44 @@ automated playtesters can observe them.)
   behind a dark scrim with a pulsing ring; any key/click wakes the world.
   While it's up, the clock and creatures hold still (self-solve protection)
   and the waking gesture satisfies the browser audio-interaction rule.
-- **`awakening` teaches by geometry** (compact grid 20; rebuilt 2026-07-05):
-  Creature A (C4) → Gate 1 (C4, play-to-pass) → Creature X (E4) → ramp UP to
-  a platform where Creature B (C5) lives → lure B DOWN the ramp → **duet
-  fountain** (chord C4+C5). The ramp is part of the *solution* (you walk B
-  down it), not scenery. The whole geometry is generated + self-checked by
-  `gen-awakening.js` (17 interference/forcing/connectivity assertions).
-- **The lure is taught by NECESSITY, not a scripted reveal.** The fountain
-  wants C4+C5 together; playback is single-channel, so C5 must be sung LIVE
-  by B at the fountain. The only way to move B is sound — E4 (minor sixth
-  below C5 = consonant) pulls B; C4 (octave = perfect) does not. The player
-  must lead B down the ramp (pied-piper) with E4, then sing C4 for the duet.
-  Discoverability rests on the play-instinct + necessity; flag it for
-  playtest if players stall.
-- **Two-slot use is forced by the play-to-pass gate + geometry**, NOT by
-  force-balance (settled 2026-07-05):
-  - Gate 1 wants C4; C4's only source (creature A) is SOUTH of the gate.
-    Creature X (E4) and the fountain are NORTH. Since gates never latch,
-    reaching X costs a C4 performance, and once north **C4 cannot be
-    re-recorded** — A sits behind a gate that needs C4 to cross back.
-  - The duet needs C4 (+ B's live C5); the lure needs E4. C4 being
-    unrecoverable-once-north means the player must hold C4 AND E4 at the
-    same time → two slots, robustly. No delicate tuning, no time pressure.
-  - **Superseded design:** an earlier draft evicted B from the fountain with
-    three dissonant "guardian" sentinels. Removed — the gate forces slots on
-    its own, and equal force radii (sentinel reach = fountain reach = B's
-    range) always left a dead annulus at range 15 where B simply parked
-    (empirically confirmed). Cleaner, and it showcases the designer's own
-    play-to-pass gate idea. If a level ever needs to teach dissonance-repulsion
-    specifically, design the coverage so no zero-force parking spot lies
-    inside the target's reach disc.
+- **`awakening` teaches by geometry** (compact grid 18; rebuilt 2026-07-05):
+  Creature A (C4) → Gate 1 (C4, play-to-pass) → Creature X (E4) on the ground
+  + ramp UP to a platform where Creature Y (G4) lives → **melody fountain**
+  wanting **[E4, G4]** played in sequence. The ramp is part of the *solution*
+  (you must climb it to record G4). The whole geometry is generated +
+  self-checked by `puzzles/gen-awakening.js` (18 interference / forcing /
+  non-stuck / connectivity assertions).
+- **Two-slot use is forced by TIMING, and CANNOT soft-lock** (settled
+  2026-07-05):
+  - The fountain wants the melody [E4, G4]: E4 from creature X, G4 from
+    creature Y. X and Y are too far apart to capture in one recording (the
+    generator asserts `dist(X,Y) > recordRange_X + recordRange_Y`), so each
+    goes in its own slot. To solve, you play E4, switch slots (←/→), and play
+    G4 — the two onsets must land in the SAME phrase. A one-slot player must
+    re-record G4 between the notes; that walk is many beats of silence, so the
+    fountain hears two separate phrases and never matches. Verified in-browser:
+    two-slot solve lands first try; a 9-second re-record gap fails.
+  - **No stuck state, by construction.** The gate's key (C4) is deliberately
+    NOT one of the melody notes, so C4 is only ever needed to cross Gate 1 —
+    never again. Overwrite any slot and just re-record; ramps are two-way;
+    every creature stays reachable; there is no one-way trap. This *replaces*
+    the earlier "C4 unrecoverable once north" forcing, which could soft-lock a
+    player who overwrote their C4 recording (the designer's deal-breaker).
+  - Whole-note melody: the fountain wants two whole notes because the playback
+    lock holds the second note until the first (a whole note) finishes, so the
+    onsets land ~4 beats apart on their own — "play E4, then play G4 when it
+    lets you," no tight timing. A quarter-note target would demand a 1-beat
+    gap the lock can't produce from whole-note recordings.
+  - **Superseded designs (do not resurrect without solving their flaw):** (1)
+    a duet fountain (chord C4+C5) with a lured live creature B and three
+    dissonant "guardian" sentinels — the sentinels' equal force-radii left a
+    dead annulus where B parked, and the whole duet forced slots only via
+    fragile force-balance. (2) forcing via an unrecoverable C4 behind the gate
+    — soft-locks. The melody approach forces slots through timing with zero
+    force-tuning and zero lock risk.
+  - **The lure/consonance-movement mechanic is NOT taught in this intro** now
+    (it was tied to the removed duet). It deserves its own later level as the
+    game opens up — an open design item, not a regression.
   - The fountain still exists only to close the completion loop until the
     open-world conversion lands.
 

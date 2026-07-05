@@ -1,28 +1,27 @@
-// Generates public/puzzles/awakening.json — the wordless intro level (v5).
+// Generates public/puzzles/awakening.json — the wordless intro level (v6).
 //
 // Teaches, in order, with NO words:
 //   move (WASD) → record (R) + play (Space) + play-to-pass gate (Gate 1, C4)
-//   → ramp UP to a platform → LURE a creature down the ramp (consonance)
-//   → DUET at the fountain (which forces holding two recordings at once).
+//   → ramp UP to a platform → SLOTS: play a two-note melody by switching
+//   inventory slots (←/→) at the fountain.
 //
-// TWO-SLOT FORCING — via geometry + the play-to-pass gate, no force-balance:
-//   * Gate 1 wants C4. C4 comes from creature A, which is SOUTH of the gate.
-//   * Creature X (E4, the lure key) and the fountain are NORTH of the gate.
-//   * Gates never latch: crossing needs the song performed each time. So to
-//     reach X you must pass Gate 1 (play C4). Once north, C4 cannot be
-//     re-recorded — A sits behind a gate that needs C4 to cross back.
-//   * The fountain duet needs C4 (+ B's live C5); the lure needs E4. Since C4
-//     is unrecoverable once north, the player must hold BOTH C4 and E4 at the
-//     same time → two slots, forced. (An earlier draft used dissonant
-//     "guardian" creatures to evict B from the fountain; the gate makes them
-//     unnecessary, and equal force-radii made their coverage leave a dead
-//     annulus where B just parked. Removed.)
+// TWO-SLOT FORCING — via TIMING, not scarcity, so nothing can ever get stuck:
+//   * The fountain wants the melody [E4, G4]. E4 is creature X's song, G4 is
+//     creature Y's. X and Y are far apart (Y is up on the platform), so you
+//     can't capture both in one recording — each goes in its own slot.
+//   * To solve it you play E4, switch slots, and play G4 in the SAME phrase
+//     (a beat later). A one-slot player would have to re-record between the
+//     two notes; that walk is many beats long, so the fountain hears two
+//     separate phrases and never matches. Two slots + a slot switch: required.
+//   * NO stuck state: every creature stays reachable, and the gate's key (C4)
+//     is NOT one of the melody notes — so C4 is only ever needed to cross
+//     Gate 1, never again. Overwrite any slot you like and just re-record;
+//     ramps are two-way; there is no one-way trap anywhere. (This replaces the
+//     old "C4 unrecoverable once north" forcing, which could soft-lock the
+//     player if they overwrote their C4 recording.)
 //
-// THE LURE (taught by necessity): the fountain wants C4+C5; playback is
-// single-channel, so C5 must be sung LIVE at the fountain by creature B. The
-// only way to move B is sound — E4 (a minor sixth below C5 = consonant) pulls
-// B; C4 (an octave = perfect) does not. So the player leads B down the ramp
-// with E4 (pied-piper), then sings the low C4 for the duet.
+// The lure/duet is intentionally NOT taught here — it belongs in a later
+// level. See DESIGN.md.
 //
 // north = decreasing z. 3D world units (WORLD_SCALE=3); a note reaches a
 // target within the SOURCE's audibleRange; recordRange = range/2.
@@ -30,18 +29,18 @@ const fs = require('fs');
 
 const WORLD_SCALE = 3;
 const ELEVATION_HEIGHT = 3;
-const GRID = 20;
+const GRID = 18;
 const entities = [];
 
 // --- cast (grid coords; y = elevation level) ---
-const A = { x: 11, y: 0, z: 16, song: 'C4', interval: 8, range: 12 }; // gate-1 key + duet low voice (SOUTH of gate)
-const X = { x: 15, y: 0, z: 9, song: 'E4', interval: 8, range: 6 }; //  lure key (NORTH of gate)
-const B = { x: 11, y: 1, z: 3, song: 'C5', interval: 6, range: 15 }; // live duet high voice (on platform)
-const GATE1 = { x: 11, z: 11, song: 'C4' };
-const FOUNT = { x: 4, z: 10 };
-const RAMP = { x: 11, z: 8, dir: 'north' }; // low end south, high end north onto platform
-const PLATFORM = { elevation: 1, x1: 8, z1: 2, x2: 15, z2: 7 };
-const SPAWN = { x: 11, y: 0, z: 18 };
+const A = { x: 9, y: 0, z: 14, song: 'C4', interval: 8, range: 10 }; // gate-1 key (SOUTH of gate)
+const X = { x: 3, y: 0, z: 6, song: 'E4', interval: 8, range: 8 }; //  first melody note (ground, north)
+const Y = { x: 13, y: 1, z: 3, song: 'G4', interval: 8, range: 8 }; // second melody note (on the platform)
+const GATE1 = { x: 9, z: 10, song: 'C4' };
+const FOUNT = { x: 9, z: 6, melody: ['E4', 'G4'] };
+const RAMP = { x: 12, z: 5, dir: 'north' }; // low end south, high end north onto the platform
+const PLATFORM = { elevation: 1, x1: 10, z1: 1, x2: 15, z2: 4 };
+const SPAWN = { x: 9, y: 0, z: 15 };
 
 // --- build entities ---
 const creature = (c) => ({
@@ -49,7 +48,7 @@ const creature = (c) => ({
   position: { x: c.x, y: c.y, z: c.z },
   data: { song: [{ pitch: c.song, length: '1/1' }], interval: c.interval, audibleRange: c.range },
 });
-entities.push(creature(A), creature(X), creature(B));
+entities.push(creature(A), creature(X), creature(Y));
 
 // Gate 1 wall row (forces the player through the gate cell)
 for (let x = 0; x < GRID; x += 1) {
@@ -66,15 +65,16 @@ for (let x = 0; x < GRID; x += 1) {
 
 entities.push({ type: 'ramp', position: { x: RAMP.x, y: 0, z: RAMP.z }, direction: RAMP.dir });
 
+// The melody fountain: two whole notes, in order. Whole notes match how the
+// recordings naturally play back-to-back — the playback lock holds the second
+// note until the first (a whole note) finishes, so the onsets land ~4 beats
+// apart on their own. The player just plays E4, then plays G4 when it can;
+// no tight timing. (Quarter-note targets would demand a 1-beat gap the
+// playback lock can't produce from whole-note recordings.)
 entities.push({
   type: 'fountain',
   position: { x: FOUNT.x, y: 0, z: FOUNT.z },
-  song: [
-    [
-      { pitch: 'C4', length: '1/1' },
-      { pitch: 'C5', length: '1/1' },
-    ],
-  ],
+  song: FOUNT.melody.map((pitch) => ({ pitch, length: '1/1' })),
 });
 
 const puzzle = {
@@ -114,12 +114,13 @@ assert(
   `${d3(X, GATE1).toFixed(1)} > ${X.range}`
 );
 assert(
-  'B(C5) does not reach Gate1',
-  d3(B, GATE1) > B.range,
-  `${d3(B, GATE1).toFixed(1)} > ${B.range}`
+  'Y(G4) does not reach Gate1',
+  d3(Y, GATE1) > Y.range,
+  `${d3(Y, GATE1).toFixed(1)} > ${Y.range}`
 );
 
-// Fountain duet must hear ONLY player C4 + B's C5: no stray singer reaches it.
+// The fountain must hear ONLY the player's melody: no creature reaches it, so
+// nothing self-solves and no stray note corrupts the take.
 assert(
   'A(C4) does not reach Fountain',
   d3(A, FOUNT) > A.range,
@@ -131,32 +132,43 @@ assert(
   `${d3(X, FOUNT).toFixed(1)} > ${X.range}`
 );
 assert(
-  'B can reach Fountain when lured close',
-  1 * WORLD_SCALE <= B.range,
-  `dock ~${WORLD_SCALE} <= ${B.range}`
+  'Y(G4) does not reach Fountain',
+  d3(Y, FOUNT) > Y.range,
+  `${d3(Y, FOUNT).toFixed(1)} > ${Y.range}`
 );
 
-// TWO-SLOT FORCING invariant (see header): C4's source is SOUTH of the gate,
-// the lure key + fountain are NORTH, and the gate wants C4.
+// Opening Gate 1 (player C4, carrying A's range) must not spill into the
+// fountain and leave a stale note there.
+const playerC4Range = A.range;
 assert(
-  'Gate 1 wants the same song as creature A (C4)',
-  GATE1.song === A.song,
-  `${GATE1.song} === ${A.song}`
+  'C4 played at Gate1 does not reach Fountain',
+  d3(GATE1, FOUNT) > playerC4Range,
+  `${d3(GATE1, FOUNT).toFixed(1)} > ${playerC4Range}`
 );
-assert(
-  'C4 source (A) is SOUTH of Gate 1 (behind it)',
-  A.z > GATE1.z,
-  `A.z ${A.z} > gate.z ${GATE1.z}`
-);
-assert('Lure key (X) is NORTH of Gate 1', X.z < GATE1.z, `X.z ${X.z} < gate.z ${GATE1.z}`);
-assert(
-  'Fountain is NORTH of Gate 1 (duet needs no re-cross)',
-  FOUNT.z < GATE1.z,
-  `F.z ${FOUNT.z} < gate.z ${GATE1.z}`
-);
-assert('Platform (B) is NORTH of Gate 1', B.z < GATE1.z, `B.z ${B.z} < gate.z ${GATE1.z}`);
 
-// Ramp connectivity: platform must include the ramp's high-edge cell.
+// NON-STUCK invariant: the gate's key is NOT a melody note (so C4 is never
+// needed once north), and both melody sources are north of the gate.
+assert(
+  'Gate key (C4) is NOT one of the melody notes',
+  !FOUNT.melody.includes(GATE1.song),
+  FOUNT.melody.join('+')
+);
+assert('E4 source (X) is NORTH of Gate 1', X.z < GATE1.z, `X.z ${X.z} < gate.z ${GATE1.z}`);
+assert('G4 source (Y) is NORTH of Gate 1', Y.z < GATE1.z, `Y.z ${Y.z} < gate.z ${GATE1.z}`);
+assert('Fountain is NORTH of Gate 1', FOUNT.z < GATE1.z, `F.z ${FOUNT.z} < gate.z ${GATE1.z}`);
+
+// SLOT-FORCING invariant: the two melody notes come from creatures too far
+// apart to capture in one recording (no player spot is in both record radii).
+const recordGap = d3(X, Y);
+const recordReach = X.range / 2 + Y.range / 2;
+assert(
+  'X and Y cannot be co-recorded (forces two slots)',
+  recordGap > recordReach,
+  `${recordGap.toFixed(1)} > ${recordReach}`
+);
+assert('Melody has two distinct notes', new Set(FOUNT.melody).size >= 2, FOUNT.melody.join('+'));
+
+// Ramp connectivity: the platform must include the ramp's high-edge cell.
 const highCell = { x: RAMP.x, z: RAMP.z - 1 };
 const inPlatform =
   highCell.x >= PLATFORM.x1 &&
@@ -168,10 +180,23 @@ assert(
   inPlatform,
   `high cell (${highCell.x},${highCell.z})`
 );
+// Y (G4) must actually live on the platform, so the ramp is on the solve path.
+const yOnPlatform =
+  Y.y === PLATFORM.elevation &&
+  Y.x >= PLATFORM.x1 &&
+  Y.x <= PLATFORM.x2 &&
+  Y.z >= PLATFORM.z1 &&
+  Y.z <= PLATFORM.z2;
+assert(
+  'G4 creature (Y) sits on the platform (ramp is on the path)',
+  yOnPlatform,
+  `Y (${Y.x},${Y.z}) e${Y.y}`
+);
 
 // Recordability.
 assert('A is recordable', A.range / 2 >= 1, `recordRange ${A.range / 2}`);
 assert('X is recordable', X.range / 2 >= 1, `recordRange ${X.range / 2}`);
+assert('Y is recordable', Y.range / 2 >= 1, `recordRange ${Y.range / 2}`);
 
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => console.log(`${c.ok ? 'PASS' : 'FAIL'}  ${c.name}  (${c.detail})`));

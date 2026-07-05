@@ -2,31 +2,31 @@
   "id": "awakening",
   "name": "Awakening",
   "difficulty": 1,
-  "gridSize": 20,
+  "gridSize": 18,
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
   "playerStart": {
-    "x": 11,
+    "x": 9,
     "y": 0,
-    "z": 18
+    "z": 15
   },
   "floors": [
     {
       "elevation": 1,
-      "x1": 8,
-      "z1": 2,
+      "x1": 10,
+      "z1": 1,
       "x2": 15,
-      "z2": 7
+      "z2": 4
     }
   ],
   "entities": [
     {
       "type": "creature",
       "position": {
-        "x": 11,
+        "x": 9,
         "y": 0,
-        "z": 16
+        "z": 14
       },
       "data": {
         "song": [
@@ -36,15 +36,15 @@
           }
         ],
         "interval": 8,
-        "audibleRange": 12
+        "audibleRange": 10
       }
     },
     {
       "type": "creature",
       "position": {
-        "x": 15,
+        "x": 3,
         "y": 0,
-        "z": 9
+        "z": 6
       },
       "data": {
         "song": [
@@ -54,25 +54,25 @@
           }
         ],
         "interval": 8,
-        "audibleRange": 6
+        "audibleRange": 8
       }
     },
     {
       "type": "creature",
       "position": {
-        "x": 11,
+        "x": 13,
         "y": 1,
         "z": 3
       },
       "data": {
         "song": [
           {
-            "pitch": "C5",
+            "pitch": "G4",
             "length": "1/1"
           }
         ],
-        "interval": 6,
-        "audibleRange": 15
+        "interval": 8,
+        "audibleRange": 8
       }
     },
     {
@@ -80,7 +80,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -88,7 +88,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -96,7 +96,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -104,7 +104,7 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -112,7 +112,7 @@
       "position": {
         "x": 4,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -120,7 +120,7 @@
       "position": {
         "x": 5,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -128,7 +128,7 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -136,7 +136,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -144,31 +144,15 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
       "type": "gate",
       "position": {
-        "x": 11,
+        "x": 9,
         "y": 0,
-        "z": 11
+        "z": 10
       },
       "song": [
         {
@@ -180,9 +164,25 @@
     {
       "type": "wall",
       "position": {
+        "x": 10,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
         "x": 12,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -190,7 +190,7 @@
       "position": {
         "x": 13,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -198,7 +198,7 @@
       "position": {
         "x": 14,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -206,7 +206,7 @@
       "position": {
         "x": 15,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -214,7 +214,7 @@
       "position": {
         "x": 16,
         "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
@@ -222,52 +222,34 @@
       "position": {
         "x": 17,
         "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 18,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 19,
-        "y": 0,
-        "z": 11
+        "z": 10
       }
     },
     {
       "type": "ramp",
       "position": {
-        "x": 11,
+        "x": 12,
         "y": 0,
-        "z": 8
+        "z": 5
       },
       "direction": "north"
     },
     {
       "type": "fountain",
       "position": {
-        "x": 4,
+        "x": 9,
         "y": 0,
-        "z": 10
+        "z": 6
       },
       "song": [
-        [
-          {
-            "pitch": "C4",
-            "length": "1/1"
-          },
-          {
-            "pitch": "C5",
-            "length": "1/1"
-          }
-        ]
+        {
+          "pitch": "E4",
+          "length": "1/1"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/1"
+        }
       ]
     }
   ]
