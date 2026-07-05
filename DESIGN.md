@@ -67,14 +67,43 @@ automated playtesters can observe them.)
 - **Perimeter walls auto-generate OUTSIDE the grid** (rows/cols −1 and
   gridSize). Designers never place border walls; every grid cell is playable.
 
+## Onboarding (settled 2026-07-05)
+
+- **No words, no controls overlay.** The full-screen help screen is gone
+  (`ControlsOverlay` deleted). Teaching happens through wordless contextual
+  key hints (`ui/KeyHints.js`): bare keycap glyphs that appear the first time
+  a situation calls for an action and retire **permanently** once the player
+  performs it (`core/HintMemory.js`, localStorage `resound-hints`). Hints:
+  WASD cluster (idle at spawn), floating "R" over a creature in recording
+  range, floating spacebar over a target in playback reach, slot arrows when
+  recording would overwrite the active slot.
+- **Boot straight into the world, not the menu.** The first manifest entry
+  (`awakening`) is the intro level and the game's front door; the menu is
+  reachable via Esc → Main Menu. The `?puzzle=<id>` editor deep link wins
+  over the default.
+- **The start gate replaces the overlay's freeze role.** Each level starts
+  behind a dark scrim with a pulsing ring; any key/click wakes the world.
+  While it's up, the clock and creatures hold still (self-solve protection)
+  and the waking gesture satisfies the browser audio-interaction rule.
+- **`awakening` teaches by geometry**: creature → walled gate → ramp → ridge
+  → second creature/gate → fountain finale that wants the FIRST creature's
+  song (the slot-retention lesson). The fountain exists only to close the
+  completion loop until the open-world conversion lands. Self-solve margins:
+  every creature ≥ 21 world units from every target (range 15).
+
 ## Deferred features (wanted, not yet built)
 
 - **Shapeable ground floor**: letting designers cut holes/shape E0 like other
   elevations (requires a void/unwalkable cell concept in the game).
+- **Open world**: `awakening` is the seed — after the controls are learned it
+  should open into an explorable world rather than a puzzle list.
 
 ## Open design calls — ask the designer before changing
 
 - (none currently — match strictness was ruled exact-per-phrase, see above)
+- **Remaining word-toasts** (recording errors, "Recorded N notes…",
+  mouse-look toggle, metronome): DESIGN.md blesses the note-count toast, but
+  they're now the only words left in play. Keep, restyle wordlessly, or drop?
 
 ## Related docs
 

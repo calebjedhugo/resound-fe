@@ -97,6 +97,16 @@ instead of "fixing" it.
 ### Creatures
 - Only move during rest beats (not while singing)
 - Perfect intervals (unison, octave) don't affect movement
+- **`interval` = beats between song STARTS**, not the rest gap — it must
+  exceed the song's length or the creature sings continuously (and never
+  moves, and clean recording takes become nearly impossible)
+
+### Onboarding
+- No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +
+  `core/HintMemory.js`, retire-once, localStorage `resound-hints`)
+- Game boots into the FIRST manifest puzzle (`awakening`), not the menu;
+  `?puzzle=<id>` deep link wins. Menu via Esc
+- `ui/StartGate.js` freezes the world per level start until a key/click
 
 ### Notation Coordinate System
 - All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model

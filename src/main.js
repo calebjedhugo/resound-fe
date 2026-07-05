@@ -11,7 +11,8 @@ import ProgressManager from 'core/ProgressManager';
 
 import MainMenu from 'ui/MainMenu';
 import showToast from 'ui/Toast';
-import ControlsOverlay from 'ui/ControlsOverlay';
+import StartGate from 'ui/StartGate';
+import KeyHints from 'ui/KeyHints';
 import CameraModeBadge from 'ui/CameraModeBadge';
 import PauseMenu from 'ui/PauseMenu';
 import RecordingUI from 'ui/RecordingUI';
@@ -45,7 +46,8 @@ let pauseMenu = null;
 const recordingUI = new RecordingUI();
 const debugUI = new DebugUI();
 const clapVisual = new ClapVisual(scene);
-const controlsOverlay = new ControlsOverlay();
+const startGate = new StartGate();
+const keyHints = new KeyHints(scene);
 const cameraModeBadge = new CameraModeBadge();
 
 // Set up clap visual callback
@@ -64,7 +66,8 @@ async function startPuzzle(puzzleId) {
     PuzzleLoader.parse(puzzleData, entityManager, gameState);
     gameState.currentPuzzle = puzzleData;
     stateMachine.setState('PLAYING');
-    controlsOverlay.show(puzzleData.name);
+    keyHints.hideAll();
+    startGate.show();
   } catch (error) {
     console.error('Failed to load puzzle:', error);
     // A partial parse may have added entities/state — clean up before returning to menu
@@ -94,8 +97,8 @@ function exitToMenu() {
   entityManager.clear();
   clapVisual.clear();
   ClapManager.reset();
-  controlsOverlay.hide();
-  recordingUI.setActionHint(null);
+  startGate.hide();
+  keyHints.hideAll();
   cameraModeBadge.update(gameState);
   stateMachine.setState('MENU');
 }
@@ -123,10 +126,10 @@ async function nextPuzzle() {
 // Game loop callbacks
 function update(deltaTime) {
   stateMachine.update(deltaTime);
-  // The world holds still while the start/help overlay is up: creatures don't
-  // sing (a self-solving layout would otherwise complete silently before the
+  // The world holds still while the start gate is up: creatures don't sing
+  // (a self-solving layout would otherwise complete silently before the
   // player ever sees the world) and the musical clock doesn't advance.
-  if (gameState.mode === 'PLAYING' && !controlsOverlay.visible) {
+  if (gameState.mode === 'PLAYING' && !startGate.visible) {
     // Update musical clock (includes metronome)
     if (gameState.musicalClock) {
       gameState.musicalClock.update(deltaTime);
@@ -134,6 +137,7 @@ function update(deltaTime) {
     entityManager.update(deltaTime);
     clapVisual.update(deltaTime);
     recordingUI.update();
+    keyHints.update(deltaTime);
     debugUI.update();
   }
   cameraModeBadge.update(gameState);
@@ -152,11 +156,6 @@ function handleKeyDown(event) {
     } else if (gameState.mode === 'PAUSED') {
       resumeGame();
     }
-  }
-
-  // Toggle the controls/help overlay with 'H' while playing
-  if (event.code === 'KeyH' && gameState.mode === 'PLAYING') {
-    controlsOverlay.toggle(gameState.currentPuzzle && gameState.currentPuzzle.name);
   }
 
   // Toggle debug info with F3
@@ -188,13 +187,20 @@ async function initializeGame() {
   stateMachine.registerState('PLAYING', new PlayingState(gameState, entityManager, motion));
   stateMachine.registerState('PAUSED', new PausedState(gameState, pauseMenu));
 
-  // Start in menu state
-  stateMachine.setState('MENU');
-
   // Deep link from the editor's "Test in game": ?puzzle=<id> jumps straight in.
+  // Checked (and awaited) first so the menu never flashes while a puzzle loads.
   const requestedPuzzle = new URLSearchParams(window.location.search).get('puzzle');
   if (requestedPuzzle && puzzles.some((p) => p.id === requestedPuzzle)) {
-    startPuzzle(requestedPuzzle);
+    await startPuzzle(requestedPuzzle);
+  }
+  if (gameState.mode !== 'PLAYING' && puzzles.length > 0) {
+    // No menu at boot: wake up in the world. The first manifest entry is the
+    // intro level; the menu remains reachable through Esc → Exit to Menu.
+    await startPuzzle(puzzles[0].id);
+  }
+  if (gameState.mode !== 'PLAYING') {
+    // Nothing loadable (empty manifest or load failure) — fall back to menu.
+    stateMachine.setState('MENU');
   }
 
   // Setup event listeners
