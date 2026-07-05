@@ -15,16 +15,36 @@ import { NotationRenderer } from 'resound-notation/NotationRenderer';
 class NotationDisplay {
   /**
    * @param {Object} options
-   * @param {Array} options.song - Song data array (game format)
+   * @param {Array|Object} options.song - Song data (flat notes[] or {voices})
    * @param {string} options.entityType - 'gate' or 'fountain'
+   * @param {Array} [options.timeSignature] - e.g. [4, 4]; drives measure
+   *   barlines. Defaults to 4/4. Pass null for unmetered (no barlines).
+   * @param {string} [options.keySignature] - e.g. 'C'
    */
-  constructor({ song, entityType }) {
+  constructor({ song, entityType, timeSignature = [4, 4], keySignature = null }) {
     this.song = song;
     this.entityType = entityType;
+    this.timeSignature = timeSignature;
+    this.keySignature = keySignature;
     this.meshes = [];
 
     this._createMeshes();
     this._renderTexture();
+  }
+
+  /**
+   * Wrap the raw game song into the renderer's voices form, carrying a time
+   * signature so the renderer slices into measures and draws barlines (a bare
+   * note array has no meter, so multi-measure phrases showed no barline). A
+   * song already in {voices} form just gets meter/key injected.
+   */
+  _renderInput() {
+    const meta = { timeSignature: this.timeSignature, keySignature: this.keySignature };
+    if (this.song && !Array.isArray(this.song) && Array.isArray(this.song.voices)) {
+      return { ...meta, ...this.song };
+    }
+    // Flat array: single voice, clef inferred by the renderer from the notes.
+    return { ...meta, voices: [{ id: 'v0', notes: this.song }] };
   }
 
   /**
@@ -80,7 +100,7 @@ class NotationDisplay {
         width: 400,
       });
 
-      const svg = renderer.render(this.song);
+      const svg = renderer.render(this._renderInput());
       if (!svg) return;
 
       const [, , vbWidth, vbHeight] = (svg.getAttribute('viewBox') || '0 0 400 150')

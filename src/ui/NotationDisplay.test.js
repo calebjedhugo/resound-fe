@@ -34,6 +34,39 @@ describe('NotationDisplay on Gates and Fountains', () => {
     });
   });
 
+  describe('render input (measure barlines need a time signature)', () => {
+    it('wraps a flat song into voices form carrying the time/key signature', () => {
+      const fountain = new Fountain(
+        { x: 0, y: 0, z: 0 },
+        { song: multiNoteSong, timeSignature: [3, 4], keySignature: 'G' }
+      );
+      const input = fountain.notationDisplay._renderInput();
+      expect(input.timeSignature).toEqual([3, 4]);
+      expect(input.keySignature).toBe('G');
+      expect(input.voices).toHaveLength(1);
+      expect(input.voices[0].notes).toBe(multiNoteSong);
+    });
+
+    it('defaults to 4/4 when the puzzle gives no time signature', () => {
+      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: multiNoteSong });
+      const input = gate.notationDisplay._renderInput();
+      expect(input.timeSignature).toEqual([4, 4]);
+      expect(input.voices[0].notes).toBe(multiNoteSong);
+    });
+
+    it('injects meter/key into a song already in voices form', () => {
+      const voicesSong = { voices: [{ id: 'treble', clef: 'treble', notes: singleNoteSong }] };
+      const gate = new Gate(
+        { x: 0, y: 0, z: 0 },
+        { song: voicesSong, timeSignature: [4, 4], keySignature: 'C' }
+      );
+      const input = gate.notationDisplay._renderInput();
+      expect(input.timeSignature).toEqual([4, 4]);
+      expect(input.keySignature).toBe('C');
+      expect(input.voices).toBe(voicesSong.voices);
+    });
+  });
+
   describe('mesh integration', () => {
     it('gate mesh has notation child meshes after construction', () => {
       const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: singleNoteSong });

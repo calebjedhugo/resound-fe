@@ -29,6 +29,9 @@ class Gate extends Entity {
     }
 
     this.requiredSong = data.song;
+    // Meter/key drive the notation's measure barlines (see NotationDisplay).
+    this.timeSignature = data.timeSignature;
+    this.keySignature = data.keySignature;
     this.audibleRange = data.audibleRange || 15; // Same as creatures by default
     this.isOpen = false;
     this._openUntil = 0;
@@ -62,6 +65,8 @@ class Gate extends Entity {
     this.notationDisplay = new NotationDisplay({
       song: this.requiredSong,
       entityType: 'gate',
+      timeSignature: this.timeSignature,
+      keySignature: this.keySignature,
     });
     for (const noteMesh of this.notationDisplay.meshes) {
       this.mesh.add(noteMesh);

@@ -25,6 +25,9 @@ class Fountain extends Entity {
     }
 
     this.requiredSong = data.song;
+    // Meter/key drive the notation's measure barlines (see NotationDisplay).
+    this.timeSignature = data.timeSignature;
+    this.keySignature = data.keySignature;
     this.audibleRange = data.audibleRange || 15; // Same as creatures by default
     this.isComplete = false;
     this.isActivated = false; // Once activated, no repeat
@@ -67,6 +70,8 @@ class Fountain extends Entity {
     this.notationDisplay = new NotationDisplay({
       song: this.requiredSong,
       entityType: 'fountain',
+      timeSignature: this.timeSignature,
+      keySignature: this.keySignature,
     });
     for (const noteMesh of this.notationDisplay.meshes) {
       this.mesh.add(noteMesh);
