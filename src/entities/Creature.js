@@ -4,7 +4,7 @@ import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import PlaybackManager from 'core/PlaybackManager';
-import CollisionDetector from 'core/CollisionDetector';
+import resolveSlide from 'core/SlideResolver';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
   RECORDING_RANGE_PERCENTAGE,
@@ -16,7 +16,7 @@ import {
   REPULSION_FORCE_STRENGTH,
   ELEVATION_HEIGHT,
 } from 'core/constants';
-import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMovement';
+import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import Entity from './Entity';
 
 class Creature extends Entity {
@@ -384,35 +384,25 @@ class Creature extends Entity {
     const newX = this.position.x + this.velocity.x * deltaTime;
     const newZ = this.position.z + this.velocity.z * deltaTime;
 
-    // Check elevation traversal before entity collision
+    // Resolve the move with elevation-aware, axis-separated collision response
+    // (wall/cliff sliding): a creature pushed into a surface at an angle slides
+    // ALONG it instead of stopping dead. See core/SlideResolver.
     const { elevationGrid } = gameState;
-    if (elevationGrid) {
-      const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
-      const newGrid = elevationGrid.worldToGrid(newX, newZ);
-
-      if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
-        const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid, this.elevation);
-        const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid, this.elevation);
-
-        if (!canTraverse(oldGrid, newGrid, oldElev, newElev, elevationGrid)) {
-          this.velocity.x = 0;
-          this.velocity.z = 0;
-          return;
-        }
+    const resolved = resolveSlide(
+      { x: oldX, z: oldZ },
+      { x: newX, z: newZ },
+      {
+        radius: this.size,
+        ignoreId: this.id,
+        priorLevel: this.elevation,
+        grid: elevationGrid || null,
+        y: this.position.y,
       }
-    }
-
-    // Check collision at new position
-    const newPosition = { x: newX, y: this.position.y, z: newZ };
-    if (!CollisionDetector.checkCollision(newPosition, this.size, this.id)) {
-      // No collision - apply movement
-      this.position.x = newX;
-      this.position.z = newZ;
-    } else {
-      // Collision detected - stop movement
-      this.velocity.x = 0;
-      this.velocity.z = 0;
-    }
+    );
+    this.position.x = resolved.x;
+    this.position.z = resolved.z;
+    if (resolved.blockedX) this.velocity.x = 0;
+    if (resolved.blockedZ) this.velocity.z = 0;
 
     // Update Y position and elevation from elevation grid (stay on our own
     // layer in cells walkable at several levels)

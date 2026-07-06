@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
-import CollisionDetector from 'core/CollisionDetector';
-import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMovement';
+import resolveSlide from 'core/SlideResolver';
+import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 
 const fixedYPosition = 1.8; // Player height in meters
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -121,32 +121,28 @@ const updateMotion = () => {
   updateLateralPosition(cameraDirection);
   updateBackForthPosition(cameraDirection);
 
-  // Elevation check
+  // Resolve the move with elevation-aware, axis-separated collision response
+  // (wall/cliff sliding): walking into a wall or cliff edge at an angle slides
+  // ALONG it instead of stopping dead. The mover carries its current layer so
+  // it stays on its own level in walk-under cells. See core/SlideResolver.
   const { elevationGrid } = gameState;
-  if (elevationGrid) {
-    // The mover's current layer: keeps the player on their own level in
-    // cells that are walkable at several elevations (under elevated floors)
-    const priorLevel = gameState.player.elevation;
-    const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
-    const newGrid = elevationGrid.worldToGrid(camera.position.x, camera.position.z);
-
-    if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
-      const oldElevation = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid, priorLevel);
-      const newElevation = getEffectiveElevation(
-        camera.position.x,
-        camera.position.z,
-        newGrid,
-        elevationGrid,
-        priorLevel
-      );
-
-      if (!canTraverse(oldGrid, newGrid, oldElevation, newElevation, elevationGrid)) {
-        camera.position.x = oldX;
-        camera.position.z = oldZ;
-      }
+  const priorLevel = gameState.player.elevation;
+  const resolved = resolveSlide(
+    { x: oldX, z: oldZ },
+    { x: camera.position.x, z: camera.position.z },
+    {
+      radius: playerRadius,
+      ignoreId: null,
+      priorLevel,
+      grid: elevationGrid || null,
+      y: camera.position.y,
     }
+  );
+  camera.position.x = resolved.x;
+  camera.position.z = resolved.z;
 
-    // Update Y and elevation based on current position
+  // Re-derive elevation + floor height from the resolved position.
+  if (elevationGrid) {
     const currentGrid = elevationGrid.worldToGrid(camera.position.x, camera.position.z);
     gameState.player.elevation = getEffectiveElevation(
       camera.position.x,
@@ -157,19 +153,6 @@ const updateMotion = () => {
     );
     const floorY = getFloorY(camera.position.x, camera.position.z, elevationGrid, priorLevel);
     camera.position.y = floorY + fixedYPosition;
-  }
-
-  // Check collision at new position
-  const newPosition = {
-    x: camera.position.x,
-    y: camera.position.y,
-    z: camera.position.z,
-  };
-
-  if (CollisionDetector.checkCollision(newPosition, playerRadius)) {
-    // Collision detected - revert to old position
-    camera.position.x = oldX;
-    camera.position.z = oldZ;
   }
 
   updateCameraDirection();

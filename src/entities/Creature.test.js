@@ -248,6 +248,80 @@ describe('Creature movement from consonance/dissonance', () => {
 });
 
 /**
+ * Wall-sliding collision response (core/SlideResolver): a creature pushed into
+ * a wall at an angle must slide ALONG the wall, not stop dead. A creature
+ * pushed straight into a wall must still stop.
+ */
+describe('Creature wall sliding', () => {
+  // Drive the loop while KEEPING the player continuously "singing": one whole
+  // note lasts ~500ms at 480 BPM, so re-trigger playback every ~400ms so the
+  // creature feels a sustained force (long enough to reach a wall and slide).
+  const pullContinuously = async (testCtx, pitch, durationMs, stepMs = 16) => {
+    const steps = Math.ceil(durationMs / stepMs);
+    const entityManager = testCtx.getEntityManager();
+    const retriggerEvery = Math.round(400 / stepMs);
+    for (let i = 0; i < steps; i += 1) {
+      if (i % retriggerEvery === 0) {
+        testCtx.startPlayerPlayback([{ pitch, length: '1/1' }], 480);
+      }
+      const dt = stepMs / 1000;
+      const clock = testCtx.getMusicalClock();
+      if (clock) clock.update(dt);
+      entityManager.update(dt);
+      // eslint-disable-next-line no-promise-executor-return
+      await new Promise((resolve) => setTimeout(resolve, stepMs));
+    }
+  };
+
+  beforeEach(() => {
+    jest.useRealTimers();
+    ctx.resetPlaybackState();
+  });
+
+  afterEach(() => {
+    ctx.stopPlayerPlayback();
+    jest.useFakeTimers();
+  });
+
+  // Wall row spans grid z=6 (world z=18, south face z=19.5). Creature (C4) starts
+  // just south of it at world (30, 21); pressed on that face it sits at z~20.4.
+  it('slides along a wall when pushed into it diagonally', async () => {
+    ctx.loadPuzzle('creature-wall-slide');
+    const creature = ctx.getCreatures()[0];
+    const startX = creature.position.x; // 30
+    // Player NORTHEAST of the creature and BEYOND the wall: attraction (major 3rd)
+    // pulls it north (into the wall) AND east (along it).
+    ctx.setPlayerPosition({ x: 15 * 3, y: 0, z: 3 * 3 }); // world (45, 9)
+
+    await pullContinuously(ctx, 'E4', 6000); // E4 is consonant with C4 => attraction
+
+    // Slid EAST along the wall: the wall-parallel (x) axis advanced well past
+    // start even though the wall-normal (north/z) axis was blocked the whole time.
+    expect(creature.position.x).toBeGreaterThan(startX + 3);
+    // ...while the blocked axis never penetrated the wall (south face z=19.5),
+    // yet did reach it (a non-sliding creature would be stuck near its start z).
+    expect(creature.position.z).toBeGreaterThan(19.5);
+    expect(creature.position.z).toBeLessThan(23);
+  }, 15000);
+
+  it('stops dead when pushed straight into a wall (no false slide)', async () => {
+    ctx.loadPuzzle('creature-wall-slide');
+    const creature = ctx.getCreatures()[0];
+    const startX = creature.position.x; // 30
+    // Player DIRECTLY north of the creature: attraction is purely north, into the
+    // wall, with no wall-parallel component to slide on.
+    ctx.setPlayerPosition({ x: 10 * 3, y: 0, z: 3 * 3 }); // world (30, 9), same x as creature
+
+    await pullContinuously(ctx, 'E4', 6000);
+
+    // No lateral drift, and it did not cross the wall
+    expect(Math.abs(creature.position.x - startX)).toBeLessThan(0.5);
+    expect(creature.position.z).toBeGreaterThan(19.5);
+    expect(creature.position.z).toBeLessThan(23);
+  }, 15000);
+});
+
+/**
  * Creature-to-creature harmony tests using real timers
  */
 describe('Creature-to-creature harmony', () => {

@@ -1,0 +1,27 @@
+{
+  "id": "creature-wall-slide",
+  "name": "Creature Test - Wall Sliding",
+  "difficulty": 1,
+  "gridSize": 24,
+  "tempo": 480,
+  "playerStart": { "x": 15, "y": 0, "z": 3 },
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 10, "y": 0, "z": 7 },
+      "data": {
+        "song": [{ "pitch": "C4", "length": "1/1" }],
+        "interval": 1,
+        "audibleRange": 30
+      }
+    },
+    { "type": "wall", "position": { "x": 9, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 10, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 11, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 12, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 13, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 14, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 15, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 16, "y": 0, "z": 6 } }
+  ]
+}

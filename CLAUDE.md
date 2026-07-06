@@ -111,6 +111,11 @@ instead of "fixing" it.
   `priorLevel` to `getFloorY`/`getEffectiveElevation`/`canTraverse` to stay on
   their own layer. Change layers only via ramps. `motion.js` and the test
   harness's movement integrator (`testUtils.js`) must stay in sync.
+- **Collision response is centralized** in `core/SlideResolver` (`resolveSlide`):
+  elevation-aware, axis-separated **wall/cliff sliding** — a mover hitting a
+  surface at an angle slides ALONG it instead of stopping dead. Used by
+  `Creature.updateMovement`, `motion.js`, and `testUtils.js`; keep those three
+  routed through it (don't reintroduce a local "revert both axes on collision").
 - **Level `awakening` is generated** by `puzzles/gen-awakening.js` (has a
   built-in constraint checker: `node puzzles/gen-awakening.js
   public/puzzles/awakening.json`). Edit the generator + rerun; don't hand-edit

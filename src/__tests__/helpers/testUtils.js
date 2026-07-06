@@ -10,7 +10,8 @@ import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';
 import PuzzleLoader from 'core/PuzzleLoader';
-import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMovement';
+import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
+import resolveSlide from 'core/SlideResolver';
 import Creature from 'entities/Creature';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
@@ -50,6 +51,7 @@ import elevationBasic from '../fixtures/puzzles/elevation-basic.json';
 import elevationRamp from '../fixtures/puzzles/elevation-ramp.json';
 import creatureElevationRamp from '../fixtures/puzzles/creature-elevation-ramp.json';
 import creatureElevationBlocked from '../fixtures/puzzles/creature-elevation-blocked.json';
+import creatureWallSlide from '../fixtures/puzzles/creature-wall-slide.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -86,6 +88,7 @@ const TEST_PUZZLES = {
   'elevation-ramp': elevationRamp,
   'creature-elevation-ramp': creatureElevationRamp,
   'creature-elevation-blocked': creatureElevationBlocked,
+  'creature-wall-slide': creatureWallSlide,
 };
 
 /**
@@ -328,28 +331,27 @@ function createTestContext(options = {}) {
         gameState.player.position.x += movement;
       }
 
-      // Elevation check (mirrors motion.js: the mover carries its current
-      // layer so it stays on its own level in walk-under cells)
-      const elevationGrid = gameState.elevationGrid;
-      if (elevationGrid) {
-        const priorLevel = gameState.player.elevation;
-        const newX = gameState.player.position.x;
-        const newZ = gameState.player.position.z;
-        const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
-        const newGrid = elevationGrid.worldToGrid(newX, newZ);
-
-        // Check traversal when grid cell changes
-        if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
-          const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid, priorLevel);
-          const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid, priorLevel);
-
-          if (!canTraverse(oldGrid, newGrid, oldElev, newElev, elevationGrid)) {
-            gameState.player.position.x = oldX;
-            gameState.player.position.z = oldZ;
-          }
+      // Resolve the move exactly as motion.js does: elevation-aware,
+      // axis-separated collision response (wall/cliff sliding). Kept in sync
+      // with src/resoundModules/playerControls/motion/motion.js.
+      const { elevationGrid } = gameState;
+      const priorLevel = gameState.player.elevation;
+      const resolved = resolveSlide(
+        { x: oldX, z: oldZ },
+        { x: gameState.player.position.x, z: gameState.player.position.z },
+        {
+          radius: 0.4,
+          ignoreId: null,
+          priorLevel,
+          grid: elevationGrid || null,
+          y: gameState.player.position.y,
         }
+      );
+      gameState.player.position.x = resolved.x;
+      gameState.player.position.z = resolved.z;
 
-        // Always update Y and elevation based on current position
+      // Re-derive Y + elevation from the resolved position.
+      if (elevationGrid) {
         const currentX = gameState.player.position.x;
         const currentZ = gameState.player.position.z;
         const currentGrid = elevationGrid.worldToGrid(currentX, currentZ);
