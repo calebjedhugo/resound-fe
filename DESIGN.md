@@ -50,6 +50,26 @@ automated playtesters can observe them.)
   elapses, and stale earlier sounds neither help nor hurt. Polyphonic
   targets (chords, multi-voice) keep their true rhythm. A failed utterance
   flashes the target red (wordless feedback) and is logged in the F3 panel.
+- **Gates are PLAY-TO-PASS, not latching** (ruled 2026-07-05, designer's
+  idea). A gate opens **AS its song is performed** — the moment the heard
+  notes are a correct in-progress rendering of the target, not after a
+  completed match — and holds open while the song keeps sounding, then closes
+  after a short step-through grace (`Gate.OPEN_GRACE_BEATS`, ~3 beats). The
+  notation **stays displayed forever** so the song is a permanent part of the
+  world. You perform the gate's song every time you want to cross. `isOpen`
+  is the transient state (drives collision + green tint); there is no
+  permanent `isActivated` on gates any more. Mechanism: `phraseMatching`
+  returns `'in-progress'` for a valid ongoing prefix, which `Gate` treats as
+  open; `true` (full song + trailing silence) additionally consumes the
+  performance. Fountains ignore `'in-progress'` and still latch on the exact
+  full match (they're the goal). Design leverage: because crossing always
+  costs the gate's song, a gate can gate *access to a recording* — see the
+  awakening two-slot forcing below.
+  - **Prefix caveat (future multi-note gates):** opening on a valid prefix
+    means a *partial* performance briefly cracks a gate. The current level's
+    only gate is single-note, so prefix = whole song (no exploit). If
+    multi-note gates appear and a partial-then-walk-through feels cheap, add a
+    "must complete before it commits to fully open" rule.
 
 - **Mouse-position camera is intended** (ruled 2026-07-03): the cursor's
   offset from screen center steers the view, and a cursor resting outside
@@ -66,15 +86,88 @@ automated playtesters can observe them.)
   The editor rejects E0 regions with an explanatory toast.
 - **Perimeter walls auto-generate OUTSIDE the grid** (rows/cols −1 and
   gridSize). Designers never place border walls; every grid cell is playable.
+- **Elevated floors are raised platforms you can walk UNDER** (2026-07-05).
+  A cell under an E1 slab is walkable at BOTH level 0 (beneath) and level 1
+  (on top); `ElevationGrid.levels[z][x]` tracks the set, and movers carry
+  their current layer (`getFloorY`/`getEffectiveElevation`/`canTraverse` take
+  a `priorLevel`). You change layers only via a ramp; stepping off a
+  platform edge onto a cell that lacks your level is blocked (cliff). Floors
+  render as thin **slabs** (visible undersides + edge faces), and ramps are
+  double-sided + glow with **marker posts** at the top edge so they read from
+  every angle, including when hunting for the way down.
+
+## Onboarding (settled 2026-07-05)
+
+- **No words, no controls overlay.** The full-screen help screen is gone
+  (`ControlsOverlay` deleted). Teaching happens through wordless contextual
+  key hints (`ui/KeyHints.js`): bare keycap glyphs that appear the first time
+  a situation calls for an action and retire **permanently** once the player
+  performs it (`core/HintMemory.js`, localStorage `resound-hints`). Hints:
+  WASD cluster (idle at spawn), floating "R" over a creature in recording
+  range, floating spacebar over a target in playback reach, slot arrows when
+  recording would overwrite the active slot.
+- **Boot straight into the world, not the menu.** The first manifest entry
+  (`awakening`) is the intro level and the game's front door; the menu is
+  reachable via Esc → Main Menu. The `?puzzle=<id>` editor deep link wins
+  over the default.
+- **The start gate replaces the overlay's freeze role.** Each level starts
+  behind a dark scrim with a pulsing ring; any key/click wakes the world.
+  While it's up, the clock and creatures hold still (self-solve protection)
+  and the waking gesture satisfies the browser audio-interaction rule.
+- **`awakening` teaches by geometry** (compact grid 18; rebuilt 2026-07-05):
+  Creature A (C4) → Gate 1 (C4, play-to-pass) → Creature X (E4) on the ground
+  + ramp UP to a platform where Creature Y (G4) lives → **melody fountain**
+  wanting **[E4, G4]** played in sequence. The ramp is part of the *solution*
+  (you must climb it to record G4). The whole geometry is generated +
+  self-checked by `puzzles/gen-awakening.js` (18 interference / forcing /
+  non-stuck / connectivity assertions).
+- **Two-slot use is forced by TIMING, and CANNOT soft-lock** (settled
+  2026-07-05):
+  - The fountain wants the melody [E4, G4]: E4 from creature X, G4 from
+    creature Y. X and Y are too far apart to capture in one recording (the
+    generator asserts `dist(X,Y) > recordRange_X + recordRange_Y`), so each
+    goes in its own slot. To solve, you play E4, switch slots (←/→), and play
+    G4 — the two onsets must land in the SAME phrase. A one-slot player must
+    re-record G4 between the notes; that walk is many beats of silence, so the
+    fountain hears two separate phrases and never matches. Verified in-browser:
+    two-slot solve lands first try; a 9-second re-record gap fails.
+  - **No stuck state, by construction.** The gate's key (C4) is deliberately
+    NOT one of the melody notes, so C4 is only ever needed to cross Gate 1 —
+    never again. Overwrite any slot and just re-record; ramps are two-way;
+    every creature stays reachable; there is no one-way trap. This *replaces*
+    the earlier "C4 unrecoverable once north" forcing, which could soft-lock a
+    player who overwrote their C4 recording (the designer's deal-breaker).
+  - Whole-note melody: the fountain wants two whole notes because the playback
+    lock holds the second note until the first (a whole note) finishes, so the
+    onsets land ~4 beats apart on their own — "play E4, then play G4 when it
+    lets you," no tight timing. A quarter-note target would demand a 1-beat
+    gap the lock can't produce from whole-note recordings.
+  - **Superseded designs (do not resurrect without solving their flaw):** (1)
+    a duet fountain (chord C4+C5) with a lured live creature B and three
+    dissonant "guardian" sentinels — the sentinels' equal force-radii left a
+    dead annulus where B parked, and the whole duet forced slots only via
+    fragile force-balance. (2) forcing via an unrecoverable C4 behind the gate
+    — soft-locks. The melody approach forces slots through timing with zero
+    force-tuning and zero lock risk.
+  - **The lure/consonance-movement mechanic is NOT taught in this intro** now
+    (it was tied to the removed duet). It deserves its own later level as the
+    game opens up — an open design item, not a regression.
+  - The fountain still exists only to close the completion loop until the
+    open-world conversion lands.
 
 ## Deferred features (wanted, not yet built)
 
 - **Shapeable ground floor**: letting designers cut holes/shape E0 like other
   elevations (requires a void/unwalkable cell concept in the game).
+- **Open world**: `awakening` is the seed — after the controls are learned it
+  should open into an explorable world rather than a puzzle list.
 
 ## Open design calls — ask the designer before changing
 
 - (none currently — match strictness was ruled exact-per-phrase, see above)
+- **Remaining word-toasts** (recording errors, "Recorded N notes…",
+  mouse-look toggle, metronome): DESIGN.md blesses the note-count toast, but
+  they're now the only words left in play. Keep, restyle wordlessly, or drop?
 
 ## Related docs
 

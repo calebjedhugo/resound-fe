@@ -39,9 +39,12 @@ function groupMatchesOnset(group, onset) {
  * Evaluate a listener's captured notes against its required song.
  * @param {Object} listener - entity with capturedNotes, listeningStartTime,
  *   requiredSong; a _lastJudgedStartBeat marker is maintained on it
- * @returns {true|'mismatch'|false} true = a completed performance matches;
- *   'mismatch' = an utterance ended and nothing aligned (flash feedback
- *   once); false = nothing new to judge
+ * @returns {true|'in-progress'|'mismatch'|false} true = a completed
+ *   performance matches (full target + trailing silence). 'in-progress' = a
+ *   correct performance is UNDERWAY (every onset due so far matches, nothing
+ *   extra, the trailing silence hasn't elapsed yet) — used by play-to-pass
+ *   gates to open AS the song is performed. 'mismatch' = an utterance ended
+ *   and nothing aligned (flash feedback once). false = nothing to judge.
  */
 export default function evaluatePhrases(listener) {
   const tempo = gameState.musicalClock?.tempo || 120;
@@ -104,7 +107,10 @@ export default function evaluatePhrases(listener) {
       }
     }
   }
-  if (inProgress) return false;
+  // A correct performance is underway but not yet complete — report it so
+  // play-to-pass gates can open mid-performance. (Fountains ignore anything
+  // that isn't `true`, so their exact-full-match semantics are unchanged.)
+  if (inProgress) return 'in-progress';
 
   // Nothing aligned and nothing can: report a mismatch once per utterance,
   // after its final note has been followed by silence

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import ListeningManager from 'core/ListeningManager';
 import evaluatePhrases from 'core/phraseMatching';
+import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from './Entity';
@@ -9,6 +10,13 @@ class Gate extends Entity {
   // How long heard notes stay eligible for matching (must comfortably exceed
   // the longest target phrase at the slowest supported tempo)
   static CAPTURE_RETENTION_MS = 30000;
+
+  // How long the gate lingers open after a correct performance STOPS sounding,
+  // in beats — a short step-through grace. Gates are play-to-pass: they open
+  // AS the song is performed (not after) and hold while it keeps sounding;
+  // this grace only covers the moment between the last note and stepping
+  // through. They never latch, and the notation stays displayed forever.
+  static OPEN_GRACE_BEATS = 3;
 
   constructor(position, data = {}) {
     super('gate', position, data);
@@ -21,9 +29,12 @@ class Gate extends Entity {
     }
 
     this.requiredSong = data.song;
+    // Meter/key drive the notation's measure barlines (see NotationDisplay).
+    this.timeSignature = data.timeSignature;
+    this.keySignature = data.keySignature;
     this.audibleRange = data.audibleRange || 15; // Same as creatures by default
     this.isOpen = false;
-    this.isActivated = false; // Once activated, stays open permanently
+    this._openUntil = 0;
 
     // Listening state
     this.capturedNotes = [];
@@ -54,6 +65,8 @@ class Gate extends Entity {
     this.notationDisplay = new NotationDisplay({
       song: this.requiredSong,
       entityType: 'gate',
+      timeSignature: this.timeSignature,
+      keySignature: this.keySignature,
     });
     for (const noteMesh of this.notationDisplay.meshes) {
       this.mesh.add(noteMesh);
@@ -65,8 +78,6 @@ class Gate extends Entity {
    * @param {Object} noteEvent - { pitch, length, timestamp, source, sourcePosition }
    */
   onNoteCaptured(noteEvent) {
-    if (this.isActivated) return; // Already activated, ignore
-
     // A sound carries as far as its source's audible range (fall back to our
     // own range for sources that don't declare one)
     const distance = getDistance(this.position, noteEvent.sourcePosition);
@@ -77,11 +88,13 @@ class Gate extends Entity {
   }
 
   /**
-   * Update gate state - check for song match
+   * Update gate state. Gates open AS their song is performed: a correct
+   * in-progress performance holds the gate open, completion refreshes the
+   * step-through grace, and the gate closes once no correct performance has
+   * sounded for OPEN_GRACE_BEATS.
    */
   update(deltaTime) {
     this._updateMismatchFlash();
-    if (this.isActivated) return; // Already activated
 
     // Sliding window: forget notes older than the retention period. (A hard
     // periodic wipe used to split playbacks that straddled the boundary,
@@ -95,27 +108,33 @@ class Gate extends Entity {
       this._trimHorizonMs = cutoff;
     }
 
-    // Check if we have captured notes to process
-    if (this.capturedNotes.length === 0) return;
+    // Segment everything heard into silence-delimited phrases and compare
+    // against the target: `true` = the whole song landed, 'in-progress' = a
+    // correct performance is underway, 'mismatch' = a wrong utterance ended.
+    const result = this.capturedNotes.length > 0 ? evaluatePhrases(this) : false;
 
-    // Segment everything heard into silence-delimited phrases; a COMPLETED
-    // phrase must equal the target exactly (rotated/over-long takes fail;
-    // stale earlier sounds are their own phrases and don't interfere).
-    const result = evaluatePhrases(this);
-    if (result === true) {
-      this.activate();
+    if (result === true || result === 'in-progress') {
+      // A correct performance is sounding — hold the gate open as it plays.
+      this._holdOpen();
+      if (result === true) {
+        // Whole song heard: consume it so the same notes don't re-open every
+        // frame forever. The grace lets the player finish stepping through.
+        this.capturedNotes = [];
+        this._trimHorizonMs = Date.now();
+        this._lastJudgedStartBeat = undefined;
+      }
     } else if (result === 'mismatch') {
       this._flashMismatch();
+    }
+
+    if (this.isOpen && Date.now() > this._openUntil) {
+      this.close();
     }
   }
 
   /** Brief red pulse when a completed phrase failed to match (wordless feedback). */
   _flashMismatch() {
     if (!this.mesh || !this.mesh.material) return;
-    if (!this._mismatchFlashUntil) {
-      this._savedEmissive = this.mesh.material.emissive.getHex();
-      this._savedEmissiveIntensity = this.mesh.material.emissiveIntensity;
-    }
     this._mismatchFlashUntil = Date.now() + 600;
     this.mesh.material.emissive.setHex(0xaa1111);
     this.mesh.material.emissiveIntensity = 1.0;
@@ -123,37 +142,70 @@ class Gate extends Entity {
 
   _updateMismatchFlash() {
     if (!this._mismatchFlashUntil) return;
-    if (Date.now() > this._mismatchFlashUntil) {
-      this._mismatchFlashUntil = null;
-      if (this.mesh && this.mesh.material && !this.isActivated) {
-        this.mesh.material.emissive.setHex(this._savedEmissive);
-        this.mesh.material.emissiveIntensity = this._savedEmissiveIntensity;
-      }
-    }
+    if (Date.now() <= this._mismatchFlashUntil) return;
+    this._mismatchFlashUntil = null;
+    // Restore the emissive that matches the CURRENT open/closed state — never
+    // a snapshot, which could capture the wrong state if the gate flipped
+    // open/closed while the flash was up (that once left a closed gate green).
+    if (this.mesh && this.mesh.material) this._applyStateEmissive();
   }
 
   /**
-   * Activate the gate (correct song was played)
+   * Refresh the open window and, if not already open, open the gate. Called
+   * every frame a correct performance is sounding, so the gate stays open
+   * throughout the performance and for OPEN_GRACE_BEATS after it stops.
    */
-  activate() {
-    if (this.isActivated) return;
-
-    this.isActivated = true;
+  _holdOpen() {
+    const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
+    this._openUntil = Date.now() + Gate.OPEN_GRACE_BEATS * (60000 / tempo);
+    if (this.isOpen) return;
     this.isOpen = true;
-    console.log(`Gate at ${this.position.x}, ${this.position.z} activated!`);
+    this._applyLook();
+  }
 
-    // Hide notation
-    if (this.notationDisplay) {
-      this.notationDisplay.hide();
+  /** Public alias: force the gate open for the grace (tests / scripting). */
+  open() {
+    this._holdOpen();
+  }
+
+  /** Grace expired (or reset): solid again, awaiting a fresh performance. */
+  close() {
+    this.isOpen = false;
+    this._openUntil = 0;
+    // A fresh crossing needs a fresh performance: drop notes heard during the
+    // open window and cancel any pending mismatch flash.
+    this.capturedNotes = [];
+    this._trimHorizonMs = Date.now();
+    this._lastJudgedStartBeat = undefined;
+    this._mismatchFlashUntil = null;
+    this._applyLook();
+  }
+
+  /** Paint the gate for its current open/closed state (color + transparency). */
+  _applyLook() {
+    const m = this.mesh.material;
+    if (this.isOpen) {
+      m.color.setHex(0x00ff00); // green + semi-transparent when open
+      m.transparent = true;
+      m.opacity = 0.3;
+    } else {
+      m.color.setHex(0xffaa00); // solid orange when closed
+      m.transparent = false;
+      m.opacity = 1;
     }
+    this._applyStateEmissive();
+    m.needsUpdate = true;
+  }
 
-    // Update visual appearance
-    this.mesh.material.color.setHex(0x00ff00); // Green when open
-    this.mesh.material.emissive.setHex(0x003300);
-    this.mesh.material.emissiveIntensity = 0.5;
-    this.mesh.material.transparent = true;
-    this.mesh.material.opacity = 0.3; // Semi-transparent when open
-    this.mesh.material.needsUpdate = true; // Force material update
+  _applyStateEmissive() {
+    const m = this.mesh.material;
+    if (this.isOpen) {
+      m.emissive.setHex(0x003300);
+      m.emissiveIntensity = 0.5;
+    } else {
+      m.emissive.setHex(0x331100);
+      m.emissiveIntensity = 0.3;
+    }
   }
 
   dispose() {

@@ -32,40 +32,7 @@ class RecordingUI {
     // Create recording UI (mic overlay)
     this.createRecordingUI();
 
-    // Contextual action hint (bottom-center of screen)
-    this.createActionHint();
-
     document.body.appendChild(this.container);
-  }
-
-  createActionHint() {
-    this.actionHint = document.createElement('div');
-    this.actionHint.id = 'action-hint';
-    this.actionHint.style.cssText = `
-      position: fixed;
-      bottom: 96px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.72);
-      color: #fff;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font: 15px/1.4 sans-serif;
-      pointer-events: none;
-      transition: opacity 0.25s;
-      opacity: 0;
-      z-index: 1000;
-    `;
-    document.body.appendChild(this.actionHint);
-  }
-
-  setActionHint(text) {
-    if (text) {
-      if (this.actionHint.textContent !== text) this.actionHint.textContent = text;
-      this.actionHint.style.opacity = '1';
-    } else {
-      this.actionHint.style.opacity = '0';
-    }
   }
 
   createInventoryUI() {
@@ -219,7 +186,15 @@ class RecordingUI {
         slot.style.transform = 'scale(1)';
       }
 
-      if (isOccupied) {
+      const isCapturing = isActive && RecordingManager.isRecording();
+      if (isCapturing) {
+        // Live capture count in the slot being recorded into — wordless
+        // replacement for the old "N notes captured" text hint. The timing
+        // skill is the player's (never auto-trimmed); this just makes the
+        // take legible as it happens.
+        slot.style.background = 'rgba(200, 40, 40, 0.8)';
+        if (slot.countEl) slot.countEl.textContent = gameState.recording.capturedNotes.length;
+      } else if (isOccupied) {
         // Occupied - colored background
         slot.style.background = 'rgba(0, 200, 100, 0.8)';
         if (slot.countEl) slot.countEl.textContent = inventory[index].data.length;
@@ -281,29 +256,11 @@ class RecordingUI {
       this.recordingIndicator.style.opacity = '0';
       this.recordingIndicator.style.animation = 'none';
     }
-
-    // Contextual hint for the core record/playback loop
-    const { inventory, activeSlot: slot } = gameState.player;
-    if (isRecording) {
-      const captured = gameState.recording.capturedNotes.length;
-      this.setActionHint(
-        `Recording — ${captured} note${captured === 1 ? '' : 's'} captured… press R to stop`
-      );
-    } else if (count > 0) {
-      this.setActionHint("Press R to record the creature's song");
-    } else if (inventory[slot]) {
-      this.setActionHint('Space plays your recording — use it near a gate or fountain');
-    } else {
-      this.setActionHint(null);
-    }
   }
 
   dispose() {
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
-    }
-    if (this.actionHint && this.actionHint.parentNode) {
-      this.actionHint.parentNode.removeChild(this.actionHint);
     }
   }
 }

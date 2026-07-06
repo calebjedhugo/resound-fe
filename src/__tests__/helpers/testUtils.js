@@ -328,9 +328,11 @@ function createTestContext(options = {}) {
         gameState.player.position.x += movement;
       }
 
-      // Elevation check
+      // Elevation check (mirrors motion.js: the mover carries its current
+      // layer so it stays on its own level in walk-under cells)
       const elevationGrid = gameState.elevationGrid;
       if (elevationGrid) {
+        const priorLevel = gameState.player.elevation;
         const newX = gameState.player.position.x;
         const newZ = gameState.player.position.z;
         const oldGrid = elevationGrid.worldToGrid(oldX, oldZ);
@@ -338,8 +340,8 @@ function createTestContext(options = {}) {
 
         // Check traversal when grid cell changes
         if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
-          const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid);
-          const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid);
+          const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid, priorLevel);
+          const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid, priorLevel);
 
           if (!canTraverse(oldGrid, newGrid, oldElev, newElev, elevationGrid)) {
             gameState.player.position.x = oldX;
@@ -355,9 +357,11 @@ function createTestContext(options = {}) {
           currentX,
           currentZ,
           currentGrid,
-          elevationGrid
+          elevationGrid,
+          priorLevel
         );
-        gameState.player.position.y = getFloorY(currentX, currentZ, elevationGrid) + 1.8;
+        gameState.player.position.y =
+          getFloorY(currentX, currentZ, elevationGrid, priorLevel) + 1.8;
       }
     },
 
@@ -371,13 +375,22 @@ function createTestContext(options = {}) {
     },
 
     /**
-     * Set player position directly (for test setup)
+     * Set player position directly (for test setup). A teleport lands on the
+     * cell's TOP walkable surface (deterministic setup); this seeds
+     * player.elevation so the next tick's walk-under layer tracking is
+     * correct. Y is (re)derived by the movement tick, as before.
      */
     setPlayerPosition(pos) {
       gameState.player.position = {
         ...gameState.player.position,
         ...pos,
       };
+      const grid = gameState.elevationGrid;
+      if (grid) {
+        const g = grid.worldToGrid(gameState.player.position.x, gameState.player.position.z);
+        const levels = grid.getLevelsAt(g.x, g.z);
+        gameState.player.elevation = levels[levels.length - 1];
+      }
     },
 
     // --- Inventory ---
@@ -519,7 +532,7 @@ function createTestContext(options = {}) {
      */
     isGateOpen(gateOrId) {
       const gate = typeof gateOrId === 'string' ? entityManager.get(gateOrId) : gateOrId;
-      return gate?.isActivated || false;
+      return gate?.isOpen || false;
     },
 
     /**

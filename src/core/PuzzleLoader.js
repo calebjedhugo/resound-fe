@@ -100,11 +100,15 @@ class PuzzleLoader {
           case 'gate':
             entity = new Gate(scaledPosition, {
               song: entityData.song,
+              timeSignature: puzzleData.timeSignature,
+              keySignature: puzzleData.keySignature,
             });
             break;
           case 'fountain':
             entity = new Fountain(scaledPosition, {
               song: entityData.song,
+              timeSignature: puzzleData.timeSignature,
+              keySignature: puzzleData.keySignature,
             });
             break;
           case 'wall':

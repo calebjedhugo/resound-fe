@@ -128,8 +128,8 @@ describe('Backward compatibility', () => {
     // Play the song
     ctx.pressKey('space');
 
-    // Advance time for playback and gate processing
-    await ctx.advanceBeats(8);
+    // Gates open AS the song is performed; check within the open window
+    await ctx.advanceBeats(2);
 
     // Gate should now be open
     expect(ctx.isGateOpen(gates[0])).toBe(true);

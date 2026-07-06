@@ -391,8 +391,8 @@ class Creature extends Entity {
       const newGrid = elevationGrid.worldToGrid(newX, newZ);
 
       if (oldGrid.x !== newGrid.x || oldGrid.z !== newGrid.z) {
-        const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid);
-        const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid);
+        const oldElev = getEffectiveElevation(oldX, oldZ, oldGrid, elevationGrid, this.elevation);
+        const newElev = getEffectiveElevation(newX, newZ, newGrid, elevationGrid, this.elevation);
 
         if (!canTraverse(oldGrid, newGrid, oldElev, newElev, elevationGrid)) {
           this.velocity.x = 0;
@@ -414,15 +414,17 @@ class Creature extends Entity {
       this.velocity.z = 0;
     }
 
-    // Update Y position and elevation from elevation grid
+    // Update Y position and elevation from elevation grid (stay on our own
+    // layer in cells walkable at several levels)
     if (elevationGrid) {
-      this.position.y = getFloorY(this.position.x, this.position.z, elevationGrid);
+      this.position.y = getFloorY(this.position.x, this.position.z, elevationGrid, this.elevation);
       const currentGrid = elevationGrid.worldToGrid(this.position.x, this.position.z);
       this.elevation = getEffectiveElevation(
         this.position.x,
         this.position.z,
         currentGrid,
-        elevationGrid
+        elevationGrid,
+        this.elevation
       );
     }
 

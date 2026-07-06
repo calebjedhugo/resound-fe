@@ -1,0 +1,256 @@
+{
+  "id": "awakening",
+  "name": "Awakening",
+  "difficulty": 1,
+  "gridSize": 18,
+  "tempo": 100,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": {
+    "x": 9,
+    "y": 0,
+    "z": 15
+  },
+  "floors": [
+    {
+      "elevation": 1,
+      "x1": 10,
+      "z1": 1,
+      "x2": 15,
+      "z2": 4
+    }
+  ],
+  "entities": [
+    {
+      "type": "creature",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 14
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "C4",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 10
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "E4",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 8
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 13,
+        "y": 1,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "G4",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 8
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 10
+      },
+      "song": [
+        {
+          "pitch": "C4",
+          "length": "1/1"
+        }
+      ]
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 14,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 15,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 16,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 17,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "ramp",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 5
+      },
+      "direction": "north"
+    },
+    {
+      "type": "fountain",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 6
+      },
+      "song": [
+        {
+          "pitch": "E4",
+          "length": "1/1"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/1"
+        }
+      ]
+    }
+  ]
+}

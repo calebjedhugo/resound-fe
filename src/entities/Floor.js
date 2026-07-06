@@ -21,7 +21,8 @@ class Floor extends Entity {
       this.createFloorPlane(worldSize, worldSize, this.position.x, 0, this.position.z)
     );
 
-    // Elevated floor regions
+    // Elevated floor regions: thin SLABS, not planes, so they're visible
+    // from below (players can walk underneath them) and show edge faces.
     for (const floor of this.floors) {
       const width = (floor.x2 - floor.x1 + 1) * WORLD_SCALE;
       const depth = (floor.z2 - floor.z1 + 1) * WORLD_SCALE;
@@ -29,7 +30,7 @@ class Floor extends Entity {
       const centerZ = ((floor.z1 + floor.z2) / 2) * WORLD_SCALE;
       const floorY = floor.elevation * ELEVATION_HEIGHT;
 
-      this.meshGroup.add(this.createFloorPlane(width, depth, centerX, floorY, centerZ));
+      this.meshGroup.add(this.createFloorSlab(width, depth, centerX, floorY, centerZ));
     }
   }
 
@@ -43,6 +44,20 @@ class Floor extends Entity {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(centerX, y, centerZ);
+    return mesh;
+  }
+
+  /** Elevated storey: a slab whose TOP surface sits at the walk height. */
+  createFloorSlab(width, depth, centerX, topY, centerZ) {
+    const thickness = 0.4;
+    const geometry = new THREE.BoxGeometry(width, thickness, depth);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x9a805e, // slightly lighter than the ground so storeys read
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(centerX, topY - thickness / 2, centerZ);
     return mesh;
   }
 }
