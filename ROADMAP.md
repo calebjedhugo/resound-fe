@@ -2,6 +2,36 @@
 
 Update this checklist when completing features. Mark items ✅ when done, ⚠️ when in-progress, ❌ when not started.
 
+## Onboarding & Open-World Direction (designer intent, 2026-07-05)
+
+Strategy: **onboarding is a sequence of small, wordless puzzles, each
+introducing ONE element.** Keep them non-stuck (a player can never soft-lock)
+and wordless (teach by placement/necessity, not text). See DESIGN.md.
+
+Elements taught so far (both inside `awakening`, to be split into separate
+levels as the sequence grows):
+- ✅ **Gate unlocking** — perform a gate's song to pass (play-to-pass).
+- ✅ **Sequencing two songs** — hold two recordings and play them as a melody
+  at a fountain (forces two slots + slot-switching, by timing).
+
+Planned onboarding pieces (one element each):
+- ❌ **The lure** — consonance moves creatures (deferred from `awakening`).
+- ❌ **Creatures activating gates/fountains** — position a singing creature so
+  its song solves a target.
+- ❌ **Creatures moving each other** — one creature's song displaces another.
+- ❌ (later) clap timing, elevation puzzles, etc.
+
+Bigger architectural ideas (exploratory, likely the backbone of the game):
+- ❌ **Gates link to matching gates (portals)** — a gate opens a portal to
+  another gate elsewhere. This doubles as the **open-world + CPU strategy**:
+  only areas adjacent to linked gates need to be loaded, so the world stays
+  seamless without loading everything at once. Also shapes how the editor
+  models the world (a graph of gate-linked areas).
+- ❌ **Fountains reroute gates** — a fountain becomes a **toggle** (it PERSISTS
+  after the song finishes, unlike a gate, which is open only while performing)
+  that changes where a gate leads. This finally gives fountains a real
+  function beyond "level complete."
+
 ## Core Gameplay
 - ✅ First-person movement and camera
 - ✅ Recording system (5-slot inventory)

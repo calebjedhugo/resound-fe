@@ -158,7 +158,6 @@ class Fountain extends Entity {
 
     this.isActivated = true;
     this.isComplete = true;
-    console.log(`Fountain at ${this.position.x}, ${this.position.z} activated! Puzzle complete!`);
 
     // Hide notation
     if (this.notationDisplay) {
