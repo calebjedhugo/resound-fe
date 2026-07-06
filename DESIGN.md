@@ -149,11 +149,40 @@ automated playtesters can observe them.)
     fragile force-balance. (2) forcing via an unrecoverable C4 behind the gate
     — soft-locks. The melody approach forces slots through timing with zero
     force-tuning and zero lock risk.
-  - **The lure/consonance-movement mechanic is NOT taught in this intro** now
-    (it was tied to the removed duet). It deserves its own later level as the
-    game opens up — an open design item, not a regression.
+  - **The lure/consonance-movement mechanic now has its OWN level** (`the-lure`,
+    added 2026-07-05) — it was cut from this intro for scope, not as a
+    regression. See the `the-lure` entry below.
   - The fountain still exists only to close the completion loop until the
     open-world conversion lands.
+- **`the-lure` teaches the lure by necessity** (added 2026-07-05): the second
+  onboarding piece, one element (harmony moves creatures) taught wordlessly. A
+  1-wide corridor runs from the spawn room to a **sealed fountain** (wants G4)
+  with two creatures in it — **P1 (C5)** blocks the south end, **P2 (G4)**
+  stands north between P1 and the fountain. One recordable voice **V (A4)** in
+  the spawn room is the only tool, and A4 is **relational**: consonant with C5
+  (**PULL** P1 out of the corridor) and dissonant with G4 (**PUSH** P2 into the
+  fountain's range, where P2's own song activates it). The *same* note does
+  opposite things depending on the creature's pitch — that's the lesson.
+  - **Both directions are forced by the note economy, not by tuning.** You are
+    always south of each creature (blocked by its body), and no other useful
+    note is reachable: A4 can only pull P1 (nothing dissonant-with-C5 is in
+    reach) and can only push P2 (nothing consonant-with-G4 exists). So P1 leaves
+    only southward and P2 only northward — into the fountain.
+  - **The finish is hardened** (Caleb's call, 2026-07-05): P2 bodily blocks the
+    1-wide corridor and the fountain is sealed, so you can NEVER reach it to
+    play G4 yourself — the only G4 that reaches the fountain comes from P2's own
+    throat, driven there by the push. A4's range is small enough that your
+    playback never bleeds in to corrupt the match. This makes the puzzle
+    unsolvable by "record a creature, play it at the target" — the anti-pattern
+    the trivial fountain in `awakening` still allows.
+  - **Non-stuck by construction:** you only ever need ONE note (A4), always
+    re-recordable from V, so you cannot strand yourself by overwriting a slot;
+    the corridor is two-way; no elevation, no one-way trap.
+  - **Bleeds one extra element on purpose:** the hardened finish means P2's song
+    activates the fountain — a first taste of "creatures activate targets" (a
+    later planned piece). Accepted trade for a finish that resists
+    record-and-play. Generated + self-checked by `puzzles/gen-lure.js` (25
+    harmony / forcing / interference / non-stuck asserts).
 
 ## Deferred features (wanted, not yet built)
 

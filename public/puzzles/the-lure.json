@@ -1,0 +1,420 @@
+{
+  "id": "the-lure",
+  "name": "The Lure",
+  "difficulty": 1,
+  "gridSize": 18,
+  "tempo": 100,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": {
+    "x": 9,
+    "y": 0,
+    "z": 15
+  },
+  "entities": [
+    {
+      "type": "creature",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 15
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "A4",
+            "length": "1/1"
+          }
+        ],
+        "interval": 6,
+        "audibleRange": 5
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 11
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "C5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 6,
+        "audibleRange": 10
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 5
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "G4",
+            "length": "1/1"
+          }
+        ],
+        "interval": 6,
+        "audibleRange": 6
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 14,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 15,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 16,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 17,
+        "y": 0,
+        "z": 12
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 2
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 2
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 4
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 4
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 5
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 5
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 6
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 6
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 7
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 7
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 8
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 8
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 9
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 9
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "type": "fountain",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 1
+      },
+      "song": [
+        {
+          "pitch": "G4",
+          "length": "1/1"
+        }
+      ]
+    }
+  ]
+}

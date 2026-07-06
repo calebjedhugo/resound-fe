@@ -1,6 +1,7 @@
 {
   "puzzles": [
     { "id": "awakening", "name": "Awakening", "difficulty": 1 },
+    { "id": "the-lure", "name": "The Lure", "difficulty": 1 },
     { "id": "test-001", "name": "First Steps", "difficulty": 1 },
     { "id": "test-002", "name": "Opening Gates", "difficulty": 1 },
     { "id": "test-003", "name": "Harmonic Motion", "difficulty": 2 },

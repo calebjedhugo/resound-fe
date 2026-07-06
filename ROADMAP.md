@@ -8,16 +8,24 @@ Strategy: **onboarding is a sequence of small, wordless puzzles, each
 introducing ONE element.** Keep them non-stuck (a player can never soft-lock)
 and wordless (teach by placement/necessity, not text). See DESIGN.md.
 
-Elements taught so far (both inside `awakening`, to be split into separate
-levels as the sequence grows):
-- ✅ **Gate unlocking** — perform a gate's song to pass (play-to-pass).
+Elements taught so far:
+- ✅ **Gate unlocking** — perform a gate's song to pass (play-to-pass). (in
+  `awakening`)
 - ✅ **Sequencing two songs** — hold two recordings and play them as a melody
-  at a fountain (forces two slots + slot-switching, by timing).
+  at a fountain (forces two slots + slot-switching, by timing). (in `awakening`)
+- ✅ **The lure** — harmony moves creatures, and it's RELATIONAL. Its own level
+  `the-lure` (`puzzles/gen-lure.js`): one recorded note (A4) PULLS the creature
+  it's consonant with (C5 blocker, out of a corridor) and PUSHES the creature
+  it's dissonant with (G4 pusher, into a sealed fountain). Single voice, both
+  effects. Finish is hardened — you can never reach the fountain to play its
+  note; only the pushed creature's own song activates it. Non-stuck: one note
+  ever needed, always re-recordable. See DESIGN.md.
 
 Planned onboarding pieces (one element each):
-- ❌ **The lure** — consonance moves creatures (deferred from `awakening`).
-- ❌ **Creatures activating gates/fountains** — position a singing creature so
-  its song solves a target.
+- ⚠️ **Creatures activating gates/fountains** — position a singing creature so
+  its song solves a target. Partly introduced by `the-lure`'s hardened finish
+  (the pushed creature solves the fountain); a dedicated level could foreground
+  it (e.g. with a gate, or a creature you place rather than shove).
 - ❌ **Creatures moving each other** — one creature's song displaces another.
 - ❌ (later) clap timing, elevation puzzles, etc.
 
