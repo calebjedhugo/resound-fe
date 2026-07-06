@@ -1,6 +1,9 @@
 import gameState from './GameState';
 import { ELEVATION_HEIGHT, ELEVATION_COLLISION_THRESHOLD } from './constants';
 
+// Fountain collision radius — matches the radius-1.5 cylinder in Fountain.createMesh
+const FOUNTAIN_COLLISION_RADIUS = 1.5;
+
 /**
  * CollisionDetector - Handles collision detection between entities
  */
@@ -59,6 +62,21 @@ class CollisionDetector {
         // Creature-creature collision (circle-circle)
         const creatureRadius = entity.size || 0.9;
         if (this.checkCircleCircleCollision(position, radius, entity.position, creatureRadius)) {
+          return true;
+        }
+      } else if (entity.type === 'fountain') {
+        // Fountains are solid landmarks — circle-circle against the basin
+        // (matches the radius-1.5 cylinder mesh in Fountain.createMesh). Movers
+        // (creatures lured toward it, or the player) bump the rim rather than
+        // passing through; they still activate it from within audible range.
+        if (
+          this.checkCircleCircleCollision(
+            position,
+            radius,
+            entity.position,
+            FOUNTAIN_COLLISION_RADIUS
+          )
+        ) {
           return true;
         }
       }

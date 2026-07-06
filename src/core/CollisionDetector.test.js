@@ -85,6 +85,41 @@ describe('Elevation-aware collision', () => {
     expect(CollisionDetector.checkCollision(pos, 0.9)).toBe(false);
   });
 
+  it('a mover collides with a fountain basin at the same elevation', () => {
+    ctx.loadPuzzle('elevation-basic');
+    // Fountain at grid (7,10) -> world (21, 0, 30), elevation 0. Basin radius 1.5.
+    ctx.addFountain({
+      position: { x: 7 * WORLD_SCALE, y: 0, z: 10 * WORLD_SCALE },
+      song: [{ pitch: 'C4', length: '1/4' }],
+    });
+    // Creature 1.5 units away: within 1.5 (basin) + 0.9 (creature) = 2.4 -> collide
+    const pos = { x: 7 * WORLD_SCALE + 1.5, y: 0, z: 10 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(pos, 0.9)).toBe(true);
+  });
+
+  it('a mover does NOT collide with a fountain when clear of the basin', () => {
+    ctx.loadPuzzle('elevation-basic');
+    ctx.addFountain({
+      position: { x: 7 * WORLD_SCALE, y: 0, z: 10 * WORLD_SCALE },
+      song: [{ pitch: 'C4', length: '1/4' }],
+    });
+    // 2.5 units away: 2.5 > 1.5 + 0.9 = 2.4 -> clear
+    const pos = { x: 7 * WORLD_SCALE + 2.5, y: 0, z: 10 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(pos, 0.9)).toBe(false);
+  });
+
+  it('a mover does NOT collide with a fountain at a different elevation', () => {
+    ctx.loadPuzzle('elevation-basic');
+    // Fountain up on elevation 1, directly above the mover
+    ctx.addFountain({
+      position: { x: 6 * WORLD_SCALE, y: ELEVATION_HEIGHT, z: 6 * WORLD_SCALE },
+      song: [{ pitch: 'C4', length: '1/4' }],
+    });
+    // Mover on elevation 0 (under the slab), geometrically inside the basin
+    const pos = { x: 6 * WORLD_SCALE, y: 0, z: 6 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(pos, 0.9)).toBe(false);
+  });
+
   it('two creatures on the same ramp at different progress points still collide', () => {
     ctx.loadPuzzle('elevation-ramp');
 
