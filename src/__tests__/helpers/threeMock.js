@@ -37,6 +37,32 @@ class Vector3 {
     return this;
   }
 
+  sub(v) {
+    this.x -= v.x;
+    this.y -= v.y;
+    this.z -= v.z;
+    return this;
+  }
+
+  multiplyScalar(s) {
+    this.x *= s;
+    this.y *= s;
+    this.z *= s;
+    return this;
+  }
+
+  dot(v) {
+    return this.x * v.x + this.y * v.y + this.z * v.z;
+  }
+
+  length() {
+    return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+  }
+
+  applyQuaternion() {
+    return this;
+  }
+
   normalize() {
     const len = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
     if (len > 0) {
@@ -71,9 +97,55 @@ class Quaternion {
     return this;
   }
 
+  setFromUnitVectors() {
+    return this;
+  }
+
   multiply() {
     return this;
   }
+}
+
+class Matrix4 {
+  set() {
+    return this;
+  }
+
+  copy() {
+    return this;
+  }
+
+  invert() {
+    return this;
+  }
+}
+
+class Plane {
+  constructor() {
+    this.normal = new Vector3();
+    this.constant = 0;
+  }
+
+  setFromNormalAndCoplanarPoint(normal, point) {
+    this.normal.copy(normal);
+    this.constant = -(normal.x * point.x + normal.y * point.y + normal.z * point.z);
+    return this;
+  }
+}
+
+class WebGLRenderTarget {
+  constructor(width = 1, height = 1) {
+    this.width = width;
+    this.height = height;
+    this.texture = { dispose() {} };
+  }
+
+  setSize(width, height) {
+    this.width = width;
+    this.height = height;
+  }
+
+  dispose() {}
 }
 
 class Color {
@@ -205,10 +277,19 @@ class Scene {
 }
 
 class PerspectiveCamera extends Mesh {
-  constructor() {
+  constructor(fov = 75, aspect = 1, near = 0.1, far = 2000) {
     super();
     this.position = new Vector3(0, 1.8, 0);
+    this.fov = fov;
+    this.aspect = aspect;
+    this.near = near;
+    this.far = far;
+    this.quaternion = new Quaternion();
+    this.projectionMatrix = new Matrix4();
+    this.projectionMatrixInverse = new Matrix4();
   }
+
+  updateProjectionMatrix() {}
 }
 
 class WebGLRenderer {
@@ -263,15 +344,24 @@ class Raycaster {
 
 const DoubleSide = 2;
 
+const MathUtils = {
+  RAD2DEG: 180 / Math.PI,
+  DEG2RAD: Math.PI / 180,
+};
+
 module.exports = {
   Vector3,
   Quaternion,
+  Matrix4,
+  Plane,
   Color,
   Group,
   Scene,
   Mesh,
   PerspectiveCamera,
   WebGLRenderer,
+  WebGLRenderTarget,
+  MathUtils,
   SphereGeometry: Geometry,
   BoxGeometry: Geometry,
   PlaneGeometry: Geometry,

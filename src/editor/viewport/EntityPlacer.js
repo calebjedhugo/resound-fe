@@ -3,6 +3,7 @@ import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { gridToWorld } from 'editor/viewport/gridUtils';
 import ENTITY_COLORS from 'editor/viewport/entityColors';
 import { createEntityGeometry, Y_OFFSETS } from 'editor/viewport/entityGeometry';
+import { isValidGateId, nextGateId, usedGateIds } from 'editor/util/gateIds';
 
 // Entity types _createMesh knows how to place (player spawn is separate).
 const PLACEABLE_TYPES = ['creature', 'gate', 'fountain', 'wall', 'ramp'];
@@ -15,6 +16,8 @@ function defaultData(type) {
     case 'creature':
       return { song: [], interval: 8, audibleRange: 15 };
     case 'gate':
+      // gateId is assigned in placeEntity (needs the model for uniqueness)
+      return { song: [], facing: 'north' };
     case 'fountain':
       return { song: [] };
     case 'ramp':
@@ -41,6 +44,10 @@ export default class EntityPlacer {
     }
 
     const entityData = { ...defaultData(type), ...data };
+    // Gates carry a stable, puzzle-unique id so other puzzles can link to them
+    if (type === 'gate' && !isValidGateId(entityData.gateId)) {
+      entityData.gateId = nextGateId(usedGateIds(this._undoManager.getEntities()));
+    }
     const id = this._undoManager.addEntity(type, gridX, elevation, gridZ, entityData);
     this._createMesh(id, type, gridX, gridZ, elevation, entityData);
     return id;
@@ -115,6 +122,28 @@ export default class EntityPlacer {
     mesh.userData = { entityId: id, type };
     this._scene.add(mesh);
     this._entityMeshes.set(id, mesh);
+
+    if (type === 'gate') this._applyLinkBadge(mesh, Boolean(data && data.link));
+  }
+
+  /** Re-read a gate's link state from the model and restyle its mesh. */
+  refreshLinkBadge(id) {
+    const mesh = this._entityMeshes.get(id);
+    const entity = this._undoManager.getEntity(id);
+    if (!mesh || !entity || entity.type !== 'gate') return;
+    this._applyLinkBadge(mesh, Boolean(entity.data && entity.data.link));
+  }
+
+  // Linked gates (portals to another puzzle) glow violet so they read at a
+  // glance in the viewport; unlinked gates keep the flat entity color.
+  _applyLinkBadge(mesh, isLinked) {
+    if (isLinked) {
+      mesh.material.emissive.setHex(0x7733ff);
+      mesh.material.emissiveIntensity = 0.6;
+    } else {
+      mesh.material.emissive.setHex(0x000000);
+      mesh.material.emissiveIntensity = 0;
+    }
   }
 
   _applyRampRotation(mesh, direction) {

@@ -12,6 +12,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   PLAYER_SIZE,
   CREATURE_DECELERATION,
+  CREATURE_PHYSICS_PASSES,
   ATTRACTION_FORCE_STRENGTH,
   REPULSION_FORCE_STRENGTH,
   ELEVATION_HEIGHT,
@@ -60,6 +61,9 @@ class Creature extends Entity {
       // Sound carries as far as its source's audible range
       noteEvent.sourceRange = this.audibleRange;
 
+      // Tag the emitting area so seam routing applies the doorway model
+      noteEvent.sourceArea = this.area;
+
       // Emit to listening manager
       ListeningManager.emitNote(noteEvent);
     };
@@ -78,9 +82,14 @@ class Creature extends Entity {
     ListeningManager.registerListener(this);
   }
 
-  createMesh() {
+  /**
+   * Mesh-only creature look (no entity, no instrument, no listeners).
+   * @param {{x:number, y:number, z:number}} position - base world position
+   * @param {number} size - radius in world units
+   */
+  static buildBodyMesh(position, size) {
     // Simple sphere creature
-    const geometry = new THREE.SphereGeometry(this.size, 16, 16);
+    const geometry = new THREE.SphereGeometry(size, 16, 16);
     const material = new THREE.MeshStandardMaterial({
       color: 0x00ff00,
       roughness: 0.5,
@@ -88,8 +97,13 @@ class Creature extends Entity {
       emissive: 0x003300, // Slight glow
       emissiveIntensity: 0.2,
     });
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + this.size, this.position.z);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(position.x, position.y + size, position.z);
+    return mesh;
+  }
+
+  createMesh() {
+    this.mesh = Creature.buildBodyMesh(this.position, this.size);
   }
 
   update(deltaTime) {
@@ -105,16 +119,24 @@ class Creature extends Entity {
       this.nextSingBeat += this.interval;
     }
 
-    // Calculate distance to player
-    const distance = getDistance(this.position, gameState.player.position);
+    // Distance to player: direct within the player's own area; from a
+    // neighbor area, sound reaches the player only through the doorway —
+    // effective distance = player->gate + partner-gate->creature (+ leak
+    // while the door is closed), minimized over the doors joining the areas.
+    const inActiveArea = !this.area || this.area === gameState.activeArea;
+    const distance = inActiveArea
+      ? getDistance(this.position, gameState.player.position)
+      : gameState.world?.effectiveDistanceToPlayer(this.area, this.position) ?? Infinity;
 
     // Update volume based on distance (inverse square law)
     if (distance <= this.audibleRange) {
       const volume = getDistanceVolume(distance, this.audibleRange);
       this.instrument.updateVolume(volume);
 
-      // Check if in recording range
-      this.isRecordable = distance <= this.recordingRange;
+      // Check if in recording range. Recording is strictly per-area: a
+      // neighbor creature is audible through the doorway but can only be
+      // recorded from inside its own area.
+      this.isRecordable = inActiveArea && distance <= this.recordingRange;
     } else {
       // Too far - silence
       this.instrument.updateVolume(0);
@@ -127,11 +149,14 @@ class Creature extends Entity {
     // Visual "now singing" cue (audio has no visual equivalent otherwise)
     this.updateSingingVisual(deltaTime);
 
-    // Calculate forces from nearby playing sources (continuous while harmonies exist)
-    this.calculateForces();
-
-    // Apply force-based movement
-    this.updateMovement(deltaTime);
+    // Force-based movement: CREATURE_PHYSICS_PASSES full-deltaTime passes,
+    // recomputing forces between passes (a source's pull changes as the
+    // creature moves). The playtested feel is tuned to this exact cadence.
+    for (let pass = 0; pass < CREATURE_PHYSICS_PASSES; pass += 1) {
+      // Forces from nearby playing sources (continuous while harmonies exist)
+      this.calculateForces();
+      this.updateMovement(deltaTime);
+    }
   }
 
   /**
@@ -143,7 +168,7 @@ class Creature extends Entity {
 
     const singing = this.instrument.playbackState.isPlaying;
     if (singing) {
-      this.singingPhase = (this.singingPhase || 0) + deltaTime * 6;
+      this.singingPhase = (this.singingPhase || 0) + deltaTime * 12;
       const pulse = 0.5 + 0.5 * Math.sin(this.singingPhase);
       this.mesh.material.emissiveIntensity = 0.2 + pulse * 1.0;
       const scale = 1 + 0.08 * pulse;
@@ -236,8 +261,10 @@ class Creature extends Entity {
     // Only log if we're currently singing and can react
     if (!this.currentNote || !this.instrument.playbackState.isPlaying) return;
 
-    // Check if source is within audible range
-    const distance = getDistance(this.position, noteEvent.sourcePosition);
+    // Check if source is within audible range (doorway-crossing notes carry
+    // their source->partner-gate leg as extraDistance)
+    const distance =
+      (noteEvent.extraDistance || 0) + getDistance(this.position, noteEvent.sourcePosition);
     if (distance > this.audibleRange) return;
 
     // Calculate harmony for logging
@@ -275,10 +302,13 @@ class Creature extends Entity {
       return;
     }
 
-    // Helper to add force from a source
-    const addForceFromSource = (sourceNote, sourcePosition, sourceSize) => {
+    // Helper to add force from a source. For a source in ANOTHER area,
+    // sourcePosition is the doorway on OUR side (the pull/push aims at the
+    // door — sound comes through it) and extraDistance carries the
+    // source->partner-gate leg (+ closed-door leak) for the range check.
+    const addForceFromSource = (sourceNote, sourcePosition, sourceSize, extraDistance = 0) => {
       // Check if within audible range
-      const distance = getDistance(this.position, sourcePosition);
+      const distance = extraDistance + getDistance(this.position, sourcePosition);
       if (distance > this.audibleRange) return;
 
       // Skip if too close (prevents numerical instability and represents physical contact)
@@ -322,8 +352,9 @@ class Creature extends Entity {
       // 'perfect' = no force added
     };
 
-    // Check all entities for active sound sources
-    gameState.entities.forEach((entity) => {
+    // Check our own area's entities for active sound sources
+    const localEntities = this.area ? this.area.entities : gameState.entities;
+    localEntities.forEach((entity) => {
       // Skip self
       if (entity.id === this.id) return;
 
@@ -338,11 +369,27 @@ class Creature extends Entity {
       addForceFromSource(entity.currentNote, entity.position, entitySize);
     });
 
-    // Also check player's playback
+    // Also check player's playback — direct only when the player is in OUR
+    // area; otherwise the player is heard through a doorway (below)
     const playerInstrument = PlaybackManager.getPlayerInstrument();
+    const playerHere = !this.area || this.area === gameState.activeArea;
 
-    if (playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
+    if (playerHere && playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
       addForceFromSource(playerInstrument.currentNote, gameState.player.position, PLAYER_SIZE);
+    }
+
+    // Sources sounding in ADJACENT areas pull/push through the doorway: the
+    // force aims at the door on our side, and the far-side leg (+ leak while
+    // closed) attenuates eligibility via extraDistance.
+    if (this.area && gameState.world) {
+      for (const seamSource of gameState.world.seamSourcesFor(this.area)) {
+        addForceFromSource(
+          seamSource.note,
+          seamSource.doorPosition,
+          seamSource.size,
+          seamSource.extraDistance
+        );
+      }
     }
   }
 
@@ -386,8 +433,10 @@ class Creature extends Entity {
 
     // Resolve the move with elevation-aware, axis-separated collision response
     // (wall/cliff sliding): a creature pushed into a surface at an angle slides
-    // ALONG it instead of stopping dead. See core/SlideResolver.
-    const { elevationGrid } = gameState;
+    // ALONG it instead of stopping dead. See core/SlideResolver. Collision is
+    // strictly area-local: this creature moves against ITS OWN area's grid
+    // and entities (a neighbor's walls can never block it).
+    const elevationGrid = this.area ? this.area.elevationGrid : gameState.elevationGrid;
     const resolved = resolveSlide(
       { x: oldX, z: oldZ },
       { x: newX, z: newZ },
@@ -397,6 +446,7 @@ class Creature extends Entity {
         priorLevel: this.elevation,
         grid: elevationGrid || null,
         y: this.position.y,
+        area: this.area || null,
       }
     );
     this.position.x = resolved.x;

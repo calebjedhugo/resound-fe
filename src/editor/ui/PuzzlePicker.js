@@ -152,6 +152,16 @@ export default class PuzzlePicker {
     }
   }
 
+  /**
+   * Programmatically open a level (e.g. clicked in the world overview) —
+   * same load path as choosing it in the dropdown.
+   * @param {string} id
+   */
+  async open(id) {
+    if (!id || !this.hasLevel(id)) return;
+    await this._loadSelected(id);
+  }
+
   async _loadSelected(id) {
     if (!id) return;
     try {

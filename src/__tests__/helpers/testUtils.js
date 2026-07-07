@@ -4,11 +4,12 @@
  */
 
 import gameState from 'core/GameState';
-import EntityManager from 'entities/EntityManager';
+import Area from 'core/Area';
 import ListeningManager from 'core/ListeningManager';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';
+import PortalManager from 'core/PortalManager';
 import PuzzleLoader from 'core/PuzzleLoader';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import resolveSlide from 'core/SlideResolver';
@@ -52,6 +53,11 @@ import elevationRamp from '../fixtures/puzzles/elevation-ramp.json';
 import creatureElevationRamp from '../fixtures/puzzles/creature-elevation-ramp.json';
 import creatureElevationBlocked from '../fixtures/puzzles/creature-elevation-blocked.json';
 import creatureWallSlide from '../fixtures/puzzles/creature-wall-slide.json';
+import portalA from '../fixtures/puzzles/portal-a.json';
+import portalB from '../fixtures/puzzles/portal-b.json';
+import portalLiveA from '../fixtures/puzzles/portal-live-a.json';
+import portalLiveB from '../fixtures/puzzles/portal-live-b.json';
+import portalSelf from '../fixtures/puzzles/portal-self.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -89,6 +95,11 @@ const TEST_PUZZLES = {
   'creature-elevation-ramp': creatureElevationRamp,
   'creature-elevation-blocked': creatureElevationBlocked,
   'creature-wall-slide': creatureWallSlide,
+  'portal-a': portalA,
+  'portal-b': portalB,
+  'portal-live-a': portalLiveA,
+  'portal-live-b': portalLiveB,
+  'portal-self': portalSelf,
 };
 
 /**
@@ -98,14 +109,19 @@ const TEST_PUZZLES = {
 function createTestContext(options = {}) {
   const { tempo = 120 } = options;
 
-  // Reset all state
+  // Reset all state (the world orchestrator owns/disposes any leftover areas)
+  PortalManager.reset();
   gameState.reset();
   ListeningManager.clear();
   ClapManager.reset();
 
-  // Create mock scene and entity manager
+  // The world's render scene (the active area's content group lives here)
   const mockScene = new MockScene();
-  const entityManager = new EntityManager(mockScene);
+  PortalManager.initialize(mockScene);
+
+  // Sandbox area: lets tests add entities directly before (or without) a
+  // loadPuzzle call. Replaced by the real active area when a puzzle loads.
+  gameState.activeArea = new Area(null);
 
   // Initialize musical clock with default tempo
   gameState.initMusicalClock(tempo);
@@ -124,6 +140,10 @@ function createTestContext(options = {}) {
   // Input simulation state
   const heldKeys = new Set();
 
+  // The player's area's entity manager (sandbox until a puzzle loads)
+  const activeEntityManager = () =>
+    gameState.activeArea ? gameState.activeArea.entityManager : null;
+
   return {
     // --- Puzzle Loading ---
 
@@ -139,18 +159,18 @@ function createTestContext(options = {}) {
         );
       }
 
-      // Validate and parse the puzzle
+      // Validate and enter the world at this puzzle (same path as the game)
       const validated = PuzzleLoader.validate(puzzleData);
-      PuzzleLoader.parse(validated, entityManager, gameState);
+      PortalManager.enterWorld(validated);
 
       return validated;
     },
 
     /**
-     * Get the entity manager
+     * Get the active area's entity manager
      */
     getEntityManager() {
-      return entityManager;
+      return gameState.activeArea ? gameState.activeArea.entityManager : null;
     },
 
     // --- Time Control ---
@@ -179,8 +199,13 @@ function createTestContext(options = {}) {
         // Update clap manager
         ClapManager.update();
 
-        // Update all entities
-        entityManager.update(dt);
+        // Update every loaded area (the sandbox area is not registered with
+        // the world orchestrator, so tick it directly)
+        const active = gameState.activeArea;
+        if (active && active !== PortalManager.getActiveArea()) {
+          active.update(dt);
+        }
+        PortalManager.updateAreas(dt);
 
         // Advance Jest fake timers to trigger instrument callbacks. Must be
         // the async variant: instruments schedule successive notes through
@@ -454,7 +479,7 @@ function createTestContext(options = {}) {
         audibleRange: config.audibleRange || 15,
       });
 
-      entityManager.add(creature);
+      activeEntityManager().add(creature);
       return creature;
     },
 
@@ -472,7 +497,7 @@ function createTestContext(options = {}) {
         song: config.requiredSong || config.song || [],
       });
 
-      entityManager.add(gate);
+      activeEntityManager().add(gate);
       return gate;
     },
 
@@ -490,7 +515,7 @@ function createTestContext(options = {}) {
         song: config.requiredSong || config.song || [],
       });
 
-      entityManager.add(fountain);
+      activeEntityManager().add(fountain);
       return fountain;
     },
 
@@ -512,28 +537,28 @@ function createTestContext(options = {}) {
      * Get all creatures
      */
     getCreatures() {
-      return entityManager.getByType('creature');
+      return activeEntityManager().getByType('creature');
     },
 
     /**
      * Get all gates
      */
     getGates() {
-      return entityManager.getByType('gate');
+      return activeEntityManager().getByType('gate');
     },
 
     /**
      * Get all fountains
      */
     getFountains() {
-      return entityManager.getByType('fountain');
+      return activeEntityManager().getByType('fountain');
     },
 
     /**
      * Check if a gate is open
      */
     isGateOpen(gateOrId) {
-      const gate = typeof gateOrId === 'string' ? entityManager.get(gateOrId) : gateOrId;
+      const gate = typeof gateOrId === 'string' ? activeEntityManager().get(gateOrId) : gateOrId;
       return gate?.isOpen || false;
     },
 
@@ -542,7 +567,7 @@ function createTestContext(options = {}) {
      */
     isFountainActive(fountainOrId) {
       const fountain =
-        typeof fountainOrId === 'string' ? entityManager.get(fountainOrId) : fountainOrId;
+        typeof fountainOrId === 'string' ? activeEntityManager().get(fountainOrId) : fountainOrId;
       return fountain?.isActivated || false;
     },
 
@@ -653,10 +678,12 @@ function createTestContext(options = {}) {
         isRecording: RecordingManager.isRecording(),
         creaturesInRange: gameState.recording.creaturesInRange.length,
         heldKeys: Array.from(heldKeys),
-        creatures: entityManager.getByType('creature').map((c) => ({
-          id: c.id,
-          position: { ...c.position },
-        })),
+        creatures: activeEntityManager()
+          .getByType('creature')
+          .map((c) => ({
+            id: c.id,
+            position: { ...c.position },
+          })),
         emittedNotes: emittedNotes.length,
       };
     },
@@ -668,8 +695,13 @@ function createTestContext(options = {}) {
      */
     cleanup() {
       ListeningManager.emitNote = originalEmit;
+      // Dispose the sandbox area (if still active) plus every world area
+      const sandbox = gameState.activeArea;
+      PortalManager.reset();
+      if (sandbox && sandbox.id === null) {
+        sandbox.dispose();
+      }
       ListeningManager.clear();
-      entityManager.clear();
       gameState.reset();
       heldKeys.clear();
       emittedNotes.length = 0;

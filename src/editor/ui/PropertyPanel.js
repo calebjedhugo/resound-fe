@@ -6,15 +6,29 @@
  * Fields vary by entity type (creature, gate, fountain, ramp, wall).
  */
 import { addSelectRow, addInputRow } from 'editor/ui/fieldRows';
+import { GATE_FACINGS } from 'editor/util/gateIds';
+import {
+  fetchLinkTargets,
+  fetchTargetGates,
+  localTargetGates,
+  createLink,
+  clearLink,
+  renameGateId,
+} from 'editor/io/portalLinks';
 
 export default class PropertyPanel {
-  constructor(container, undoManager, entityPlacer, onDelete, onEditSong) {
+  constructor(container, undoManager, entityPlacer, onDelete, onEditSong, onToast) {
     this._container = container; // #property-panel
     this._undoManager = undoManager;
     this._entityPlacer = entityPlacer;
     this._onDelete = onDelete || null;
     this._onEditSong = onEditSong || null;
+    this._onToast = onToast || null;
     this._selectedId = null;
+  }
+
+  _toast(message, kind = 'error') {
+    if (this._onToast) this._onToast(message, kind);
   }
 
   show(entityId) {
@@ -64,6 +78,10 @@ export default class PropertyPanel {
         this._renderCreatureFields(wrapper, entity);
         break;
       case 'gate':
+        this._renderGateFields(wrapper, entity);
+        this._renderSongEditor(wrapper, entity);
+        this._renderPortalSection(wrapper, entity);
+        break;
       case 'fountain':
         this._renderSongEditor(wrapper, entity);
         break;
@@ -123,6 +141,172 @@ export default class PropertyPanel {
 
     // Song editor button
     this._renderSongEditor(wrapper, entity);
+  }
+
+  _renderGateFields(wrapper, entity) {
+    const data = entity.data || {};
+
+    // Stable gate id (rename keeps a linked partner's back-link in sync)
+    this._addTextField(
+      wrapper,
+      'Gate ID',
+      data.gateId || '',
+      (val) => {
+        renameGateId(this._undoManager, this._selectedId, val)
+          .then(() => this.show(this._selectedId))
+          .catch((err) => {
+            this._toast(err.message);
+            this.show(this._selectedId); // restore the real value
+          });
+      },
+      'Stable id other puzzles use to link to this gate. Unique within this puzzle.'
+    );
+
+    // Doorway facing: the face a portal renders on / crossing exits toward
+    addSelectRow(wrapper, 'Facing', GATE_FACINGS, data.facing || 'north', (facing) => {
+      const newData = { ...this._undoManager.getEntity(this._selectedId).data, facing };
+      this._undoManager.updateEntity(this._selectedId, { data: newData });
+    });
+  }
+
+  /**
+   * Portal link controls: shows the current cross-puzzle link, or pickers to
+   * create one (target puzzle → target gate). All link mutations go through
+   * editor/io/portalLinks so the partner puzzle's file stays in sync.
+   */
+  _renderPortalSection(wrapper, entity) {
+    const section = document.createElement('div');
+    section.className = 'panel-section portal-section';
+    section.style.marginTop = '12px';
+
+    const label = document.createElement('label');
+    label.className = 'panel-label';
+    label.textContent = 'Portal Link';
+    section.appendChild(label);
+
+    const link = entity.data && entity.data.link;
+    if (link) {
+      this._renderExistingLink(section, link);
+    } else {
+      this._renderLinkPickers(section);
+    }
+
+    wrapper.appendChild(section);
+  }
+
+  _renderExistingLink(section, link) {
+    const row = document.createElement('div');
+    row.className = 'prop-row';
+    row.textContent = `→ ${link.puzzleId} / ${link.gateId}`;
+    section.appendChild(row);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'editor-btn';
+    clearBtn.textContent = 'Clear Link';
+    clearBtn.style.width = '100%';
+    clearBtn.onclick = () => {
+      clearLink(this._undoManager, this._selectedId)
+        .then(() => {
+          this._entityPlacer.refreshLinkBadge(this._selectedId);
+          this._toast('Link cleared (both sides)', 'success');
+          this.show(this._selectedId);
+        })
+        .catch((err) => this._toast(err.message));
+    };
+    section.appendChild(clearBtn);
+  }
+
+  _renderLinkPickers(section) {
+    const puzzleSelect = document.createElement('select');
+    puzzleSelect.className = 'prop-select portal-puzzle-select';
+    puzzleSelect.style.width = '100%';
+    puzzleSelect.innerHTML = '<option value="">— link to puzzle —</option>';
+    section.appendChild(puzzleSelect);
+
+    const gateSelect = document.createElement('select');
+    gateSelect.className = 'prop-select portal-gate-select';
+    gateSelect.style.width = '100%';
+    gateSelect.style.marginTop = '4px';
+    gateSelect.disabled = true;
+    gateSelect.innerHTML = '<option value="">— gate —</option>';
+    section.appendChild(gateSelect);
+
+    const linkBtn = document.createElement('button');
+    linkBtn.className = 'editor-btn';
+    linkBtn.textContent = 'Link Gates';
+    linkBtn.style.width = '100%';
+    linkBtn.style.marginTop = '4px';
+    linkBtn.disabled = true;
+    section.appendChild(linkBtn);
+
+    const currentPuzzleId = this._undoManager.getMetadata().id;
+    fetchLinkTargets()
+      .then((puzzles) => {
+        for (const p of puzzles) {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          // Same-puzzle doors are in-level teleporters — label, don't hide
+          opt.textContent =
+            p.id === currentPuzzleId ? `${p.name || p.id} (this puzzle)` : p.name || p.id;
+          puzzleSelect.appendChild(opt);
+        }
+      })
+      .catch((err) => this._toast(`Couldn't list puzzles: ${err.message}`));
+
+    puzzleSelect.onchange = () => {
+      gateSelect.innerHTML = '<option value="">— gate —</option>';
+      gateSelect.disabled = true;
+      linkBtn.disabled = true;
+      if (!puzzleSelect.value) return;
+      // The open puzzle's gates come from the live model (fresh, and no
+      // write-on-read); another puzzle's from its repo file.
+      const gatesPromise =
+        puzzleSelect.value === currentPuzzleId
+          ? Promise.resolve(localTargetGates(this._undoManager, this._selectedId))
+          : fetchTargetGates(puzzleSelect.value);
+      gatesPromise
+        .then((gates) => {
+          if (gates.length === 0) {
+            this._toast(`"${puzzleSelect.value}" has no linkable gates`);
+            return;
+          }
+          for (const g of gates) {
+            const opt = document.createElement('option');
+            opt.value = g.gateId;
+            const at = g.position ? ` (${g.position.x}, ${g.position.z})` : '';
+            // A gate claimed by a third puzzle can't be linked to
+            if (g.link) {
+              opt.disabled = true;
+              opt.textContent = `${g.gateId}${at} — linked to ${g.link.puzzleId}`;
+            } else {
+              opt.textContent = `${g.gateId}${at}`;
+            }
+            gateSelect.appendChild(opt);
+          }
+          gateSelect.disabled = false;
+        })
+        .catch((err) => this._toast(`Couldn't load gates: ${err.message}`));
+    };
+
+    gateSelect.onchange = () => {
+      linkBtn.disabled = !gateSelect.value;
+    };
+
+    linkBtn.onclick = () => {
+      linkBtn.disabled = true;
+      createLink(this._undoManager, this._selectedId, puzzleSelect.value, gateSelect.value)
+        .then(({ warnings }) => {
+          this._entityPlacer.refreshLinkBadge(this._selectedId);
+          // One toast element: a mismatch warning outranks the success note
+          if (warnings.length > 0) this._toast(warnings.join(' • '));
+          else this._toast('Gates linked (both sides)', 'success');
+          this.show(this._selectedId);
+        })
+        .catch((err) => {
+          this._toast(err.message);
+          linkBtn.disabled = false;
+        });
+    };
   }
 
   _renderSongEditor(wrapper, entity) {

@@ -34,6 +34,7 @@ export default {
   testPathIgnorePatterns: ['/node_modules/'],
 
   // resound-sound ships an ESM bundle; babel-jest needs to transform it even
-  // though it lives under node_modules.
-  transformIgnorePatterns: ['/node_modules/(?!(resound-sound|resound-notation)/)'],
+  // though it lives under node_modules. three/examples (CameraUtils for the
+  // portal camera) is likewise ESM-only.
+  transformIgnorePatterns: ['/node_modules/(?!(resound-sound|resound-notation|three/examples)/)'],
 };

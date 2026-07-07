@@ -84,6 +84,7 @@ jest.mock('editor/viewport/EntityPlacer', () =>
     rebuildFromModel: jest.fn(),
     placeEntity: jest.fn(),
     removeEntityById: jest.fn(),
+    refreshLinkBadge: jest.fn(),
   }))
 );
 
@@ -125,6 +126,7 @@ function setupEditorDOM() {
       <div id="editor-viewport" style="width:800px;height:600px;"></div>
       <div id="toolbar-panel"></div>
       <div id="puzzle-panel"></div>
+      <div id="world-panel"></div>
       <div id="elevation-panel"></div>
       <div id="floor-panel"></div>
       <div id="entity-toolbar"></div>
@@ -337,6 +339,21 @@ describe('EditorApp wiring', () => {
       );
 
       expect(undoSpy).not.toHaveBeenCalled();
+    });
+
+    it('suppresses editor keyboard shortcuts when the world overview is open', async () => {
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ puzzles: [] }) })
+      );
+      await app.worldOverview.open();
+
+      const undoSpy = jest.spyOn(app.undoManager, 'undo');
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true })
+      );
+
+      expect(undoSpy).not.toHaveBeenCalled();
+      delete global.fetch;
     });
 
     it('allows editor keyboard shortcuts when song modal is closed', () => {

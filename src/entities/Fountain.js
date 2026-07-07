@@ -42,6 +42,8 @@ class Fountain extends Entity {
 
     // Set up note callback to emit to ListeningManager (for gates/fountains)
     this.instrument.noteCallback = (noteEvent) => {
+      // Tag the emitting area so seam routing applies the doorway model
+      noteEvent.sourceArea = this.area;
       ListeningManager.emitNote(noteEvent);
     };
 
@@ -52,7 +54,11 @@ class Fountain extends Entity {
     ListeningManager.registerListener(this);
   }
 
-  createMesh() {
+  /**
+   * Mesh-only basin look (no entity, no listeners).
+   * @param {{x:number, y:number, z:number}} position - base world position
+   */
+  static buildBasinMesh(position) {
     // Landmark-sized fountain
     const geometry = new THREE.CylinderGeometry(1.5, 1.5, 2.5, 16);
     const material = new THREE.MeshStandardMaterial({
@@ -62,8 +68,13 @@ class Fountain extends Entity {
       emissive: 0x001144,
       emissiveIntensity: 0.4,
     });
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + 1.25, this.position.z);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(position.x, position.y + 1.25, position.z);
+    return mesh;
+  }
+
+  createMesh() {
+    this.mesh = Fountain.buildBasinMesh(this.position);
   }
 
   _createNotationDisplay() {
@@ -86,8 +97,11 @@ class Fountain extends Entity {
     if (this.isActivated) return; // Already activated, ignore
 
     // A sound carries as far as its source's audible range (fall back to our
-    // own range for sources that don't declare one)
-    const distance = getDistance(this.position, noteEvent.sourcePosition);
+    // own range for sources that don't declare one). Sound from another area
+    // arrives via the doorway: sourcePosition is the door on OUR side and
+    // extraDistance is the source->partner-gate leg (+ closed-door leak).
+    const distance =
+      (noteEvent.extraDistance || 0) + getDistance(this.position, noteEvent.sourcePosition);
     if (distance > (noteEvent.sourceRange ?? this.audibleRange)) return; // Too far, ignore
 
     // Capture the note
@@ -170,9 +184,12 @@ class Fountain extends Entity {
     this.mesh.material.emissiveIntensity = 1.0; // Bright glow
     this.mesh.material.needsUpdate = true; // Force material update
 
-    // Mute all other sounds so fountain plays alone
+    // Mute all other sounds IN OUR AREA so the fountain plays alone (a
+    // neighbor fountain latching behind a doorway must not silence the
+    // player's area)
+    const areaEntities = this.area ? this.area.entities : gameState.entities;
     const savedVolumes = new Map();
-    gameState.entities.forEach((entity) => {
+    areaEntities.forEach((entity) => {
       if (entity.instrument && entity.id !== this.id) {
         savedVolumes.set(entity.id, entity.instrument.volume);
         entity.instrument.updateVolume(0);
@@ -188,18 +205,21 @@ class Fountain extends Entity {
 
     // Restore creature volumes
     savedVolumes.forEach((volume, entityId) => {
-      const entity = gameState.entities.find((e) => e.id === entityId);
+      const entity = areaEntities.find((e) => e.id === entityId);
       if (entity && entity.instrument) {
         entity.instrument.updateVolume(volume);
       }
     });
 
-    // Mark puzzle as complete
-    if (gameState.currentPuzzle) {
-      ProgressManager.markPuzzleComplete(gameState.currentPuzzle.id);
+    // Mark OUR puzzle as complete (a fountain always completes the puzzle it
+    // lives in, even when activated through a doorway) — but only pause the
+    // game when the player is actually in this area
+    const puzzle = this.area ? this.area.puzzle : gameState.currentPuzzle;
+    if (puzzle) {
+      ProgressManager.markPuzzleComplete(puzzle.id);
 
-      // Pause game using state machine
-      if (gameState.stateMachine) {
+      const playerHere = !this.area || this.area === gameState.activeArea;
+      if (playerHere && gameState.stateMachine) {
         gameState.stateMachine.setState('PAUSED');
       }
     }

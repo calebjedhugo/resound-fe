@@ -32,6 +32,16 @@ automated playtesters can observe them.)
   prevent them.
 - **No aiming.** Sound is omnidirectional and proximity-based. Recording and
   playback care only about distance. No crosshair, no facing checks — ever.
+- **Creature movement integration runs TWO physics passes per frame**
+  (`CREATURE_PHYSICS_PASSES`), each with the full frame deltaTime, forces
+  recomputed between passes. This began as an accidental double entity-update
+  in the game loop, but every playtested movement value
+  (`DEFAULT_CREATURE_MAX_SPEED`, `CREATURE_DECELERATION`, force strengths)
+  was tuned under it, so the cadence is now deliberate — kept inside
+  `Creature.update` (documented 2026-07-07, when the duplicate game-loop call
+  was removed). Halving the passes halves effective creature speed and
+  weakens per-frame damping: don't "simplify" to one pass without a designer
+  ruling and a constant retune.
 - **Sound carries by the SOURCE's `audibleRange`** (not the listener's).
   A creature's song reaches a gate/fountain iff distance ≤ the creature's
   range; playback inherits the `audibleRange` of the recorded creature.
@@ -95,6 +105,65 @@ automated playtesters can observe them.)
   render as thin **slabs** (visible undersides + edge faces), and ramps are
   double-sided + glow with **marker posts** at the top edge so they read from
   every angle, including when hunting for the way down.
+
+## Gate links / portals (ruled 2026-07-06)
+
+Cross-puzzle gate links are the open-world backbone (see ROADMAP). Designer
+rulings, in the designer's words where it matters:
+
+- **"It's a door, not a portal"** — meaning VISIBILITY: looking through an
+  open linked gate must show what's going on in the target area. The chosen
+  mechanism is true portal rendering (render the neighbor through the gate
+  face), so gates keep **full placement freedom** — no edge-of-grid
+  requirement, no connector corridors.
+- **The neighbor area is FULLY LIVE** once loaded: creatures move, sing, and
+  are audible through the doorway. One world, one clock — so linked puzzles
+  should share tempo/key. The editor **warns** on mismatch (doesn't block).
+- **Doorway sound model (ruled 2026-07-07):** sound crosses a seam with
+  effective distance = listener→gate + partner-gate→source, respecting the
+  SOURCE's audible range. Transmission is **symmetric** (you can open a
+  neighbor gate by playing through the doorway). A **closed door leaks
+  faintly** (`CLOSED_DOOR_LEAK_DISTANCE` extra effective units) — by design:
+  completing a song by singing on BOTH sides of a closed door is a puzzle
+  element. Harmony forces cross too, pulling/pushing **toward the doorway**.
+  Recording stays strictly per-area: a neighbor creature is audible but
+  never recordable through a door.
+- **A linked pair is ONE door with two faces (ruled 2026-07-07):** the same
+  song opens both sides, open state is mirrored across the pair, and each
+  face hears both areas — a creature on one side and a player on the other
+  can complete the song together.
+- **Tempo gradient (ruled 2026-07-07):** the single world clock runs at the
+  ACTIVE area's tempo but blends toward a mismatched neighbor's tempo as the
+  player nears its door (reaching the midpoint AT the doorway, symmetric on
+  both sides), so tempo is continuous through a crossing. Beat position is
+  never reset by a crossing.
+- **Crossing preserves the neighbor's state.** What you saw through the door
+  is exactly what you walk into — crossing swaps areas, never rebuilds them.
+  Areas beyond link-depth 1 unload (their state resets on the next visit;
+  deeper streaming is a later stage).
+- **Links are bidirectional and auto-synced.** Linking A→B writes B→A into
+  the target file; clearing/renaming/deleting keeps the partner in sync
+  (`editor/io/portalLinks.js`). Never hand-author a one-way link. The world
+  graph is DERIVED by scanning puzzle files — there is no world.json.
+- **Gates stay play-to-pass.** A linked gate opens exactly like any gate (by
+  performing its song); the link only changes what's on the other side.
+  Crossing = walking into the OPEN gate's cell. You arrive one cell outside
+  the partner gate, facing away from it, and your recordings come with you —
+  areas are one world, so "gate songs as keys you carry" works across seams.
+- **A closed linked gate looks like any closed gate.** The door reveals
+  itself only when opened.
+- **Same-puzzle doors are allowed (ruled 2026-07-07):** two gates of ONE
+  puzzle may link to each other — an in-level teleport door. All door rules
+  apply unchanged (one door two faces, play-to-pass, see-through shows the
+  destination, crossing exits the partner). Same-area sound stays DIRECT
+  (the seam adds nothing — the room already hears itself), and tempo/key
+  trivially match. A gate can never link to itself (validator error).
+- **Editor-side caveat (dev tool):** cross-puzzle link edits touch TWO
+  files; the local side is undoable, the partner file is not — use Clear
+  Link, not undo, to unlink. (Same-puzzle links live entirely in the open
+  model, so both sides ARE undoable — as two steps.) Listing a puzzle as a
+  link target materializes ids/facing into its file on disk (write-on-read,
+  by design).
 
 ## Onboarding (settled 2026-07-05)
 

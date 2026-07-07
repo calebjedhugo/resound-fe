@@ -32,6 +32,12 @@ class Gate extends Entity {
     // Meter/key drive the notation's measure barlines (see NotationDisplay).
     this.timeSignature = data.timeSignature;
     this.keySignature = data.keySignature;
+    // Portal identity (see puzzles/schema.md "Gate Links"): a linked gate is
+    // a door into another puzzle. PortalManager watches these.
+    this.gateId = data.id || null;
+    this.facing = data.facing || 'north';
+    this.link = data.link || null;
+    this.gridPosition = data.gridPosition || null;
     this.audibleRange = data.audibleRange || 15; // Same as creatures by default
     this.isOpen = false;
     this._openUntil = 0;
@@ -47,7 +53,11 @@ class Gate extends Entity {
     ListeningManager.registerListener(this);
   }
 
-  createMesh() {
+  /**
+   * Mesh-only closed-gate look (no entity, no listeners).
+   * @param {{x:number, y:number, z:number}} position - base world position
+   */
+  static buildClosedMesh(position) {
     // Gate fills entire grid cell (3x3 world units) when closed
     const geometry = new THREE.BoxGeometry(3, 3, 3);
     const material = new THREE.MeshStandardMaterial({
@@ -57,8 +67,13 @@ class Gate extends Entity {
       emissive: 0x331100,
       emissiveIntensity: 0.3,
     });
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.position.set(this.position.x, this.position.y + 1.5, this.position.z);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(position.x, position.y + 1.5, position.z);
+    return mesh;
+  }
+
+  createMesh() {
+    this.mesh = Gate.buildClosedMesh(this.position);
   }
 
   _createNotationDisplay() {
@@ -79,8 +94,12 @@ class Gate extends Entity {
    */
   onNoteCaptured(noteEvent) {
     // A sound carries as far as its source's audible range (fall back to our
-    // own range for sources that don't declare one)
-    const distance = getDistance(this.position, noteEvent.sourcePosition);
+    // own range for sources that don't declare one). Sound from another area
+    // arrives via the doorway: sourcePosition is the door on OUR side and
+    // extraDistance is the source->partner-gate leg (+ closed-door leak) —
+    // this is how a song can be completed by singing on both sides of a door.
+    const distance =
+      (noteEvent.extraDistance || 0) + getDistance(this.position, noteEvent.sourcePosition);
     if (distance > (noteEvent.sourceRange ?? this.audibleRange)) return; // Too far, ignore
 
     // Capture the note
@@ -158,6 +177,8 @@ class Gate extends Entity {
   _holdOpen() {
     const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
     this._openUntil = Date.now() + Gate.OPEN_GRACE_BEATS * (60000 / tempo);
+    // Opened by a real performance (or open()): no longer a mirrored hold
+    this._mirrorHeld = false;
     if (this.isOpen) return;
     this.isOpen = true;
     this._applyLook();
@@ -168,10 +189,28 @@ class Gate extends Entity {
     this._holdOpen();
   }
 
+  /**
+   * A linked gate pair is ONE door with two faces: while the partner face is
+   * held open by a performance, PortalManager holds this face open too.
+   * Mirrored holds are tracked so they stop refreshing the moment the
+   * partner's own performance lapses (each face then closes on its own
+   * grace) — otherwise two faces would keep each other open forever.
+   */
+  holdOpenMirrored() {
+    this._holdOpen();
+    this._mirrorHeld = true;
+  }
+
+  /** Is this face open by its OWN performance (not a mirrored hold)? */
+  isSelfOpen() {
+    return this.isOpen && !this._mirrorHeld;
+  }
+
   /** Grace expired (or reset): solid again, awaiting a fresh performance. */
   close() {
     this.isOpen = false;
     this._openUntil = 0;
+    this._mirrorHeld = false;
     // A fresh crossing needs a fresh performance: drop notes heard during the
     // open window and cancel any pending mismatch flash.
     this.capturedNotes = [];

@@ -122,12 +122,13 @@ describe('EntityManager', () => {
     });
 
     it('loading puzzle populates game world with entities', () => {
-      const testEntityManager = ctx.getEntityManager();
-      expect(testEntityManager.getAll().length).toBe(0);
+      // Loading a puzzle replaces the world's active area (and its entity
+      // manager), so re-query the manager after loading
+      expect(ctx.getEntityManager().getAll().length).toBe(0);
 
       ctx.loadPuzzle('recording-two-creatures');
 
-      expect(testEntityManager.getAll().length).toBeGreaterThanOrEqual(2);
+      expect(ctx.getEntityManager().getAll().length).toBeGreaterThanOrEqual(2);
     });
 
     it('entity count decreases when creature is removed', () => {

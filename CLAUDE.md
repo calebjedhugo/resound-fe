@@ -107,6 +107,29 @@ instead of "fixing" it.
   then `close()`s; the notation never hides. No permanent `isActivated` on
   gates (fountains still latch). Collision/hints/miss-reporting key off
   `isOpen`. See DESIGN.md.
+- **Gates can link across puzzles (portals)**: `link: {puzzleId, gateId}` on
+  a gate makes it a door — walking into it while OPEN swaps to the linked
+  puzzle (`core/PortalManager.js`; recordings persist). A link may target a
+  gate in the SAME puzzle (in-level teleport door; never a gate to itself).
+  Links are bidirectional and editor-managed via `editor/io/portalLinks.js`
+  — never hand-author one-way links. See DESIGN.md "Gate links / portals" +
+  `puzzles/schema.md` "Gate Links".
+- **The world is AREAS, not one puzzle**: `core/Area.js` owns each puzzle's
+  entities/scene/elevation grid; `PortalManager` keeps the active area +
+  link-depth-1 neighbors FULLY LIVE (simulating every frame).
+  `gameState.entities`/`elevationGrid`/`currentPuzzle` are getters that
+  delegate to the ACTIVE area — simulation code must use `entity.area`
+  (a neighbor's entities must never reach active-area matching, recording,
+  collision, or forces except through the doorway model).
+- **Open linked gates are see-through**: the `facing` face shows the LIVE
+  neighbor area (`core/PortalView.js` renders the neighbor's `Area.scene`).
+  The extra pass runs only while a linked gate is open; a closed linked gate
+  looks identical to a normal gate.
+- **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
+  (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
+  A linked pair is ONE door: same song, mirrored open state. Tempo blends
+  near mismatched doors; ONE world clock persists across crossings — a
+  crossing swaps areas, never rebuilds. See DESIGN.md "Gate links".
 - **Walk-under**: elevated floors are platforms with walkable space beneath.
   `ElevationGrid.levels[z][x]` lists a cell's walkable levels; movers pass a
   `priorLevel` to `getFloorY`/`getEffectiveElevation`/`canTraverse` to stay on
@@ -149,4 +172,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-07-02 — Added Design Intent section (playtest-iteration findings)*
+*Last Updated: 2026-07-07 — Gate portals stage 3: live neighbor areas (Area/PortalManager multi-area world, doorway sound model)*

@@ -6,6 +6,7 @@
  */
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import SongMatcher from 'core/SongMatcher';
+import { GATE_FACINGS, isValidGateId } from 'editor/util/gateIds';
 
 const VALID_PITCH = /^[A-G][#b]?\d$/;
 const VALID_LENGTH = /^1\/\d+$/;
@@ -100,6 +101,50 @@ export function validatePuzzle(model) {
             );
           }
         }
+      }
+    }
+  }
+
+  // 10. Gate identity + link shape (cross-file link validity — target puzzle/
+  // gate existence, reciprocity, tempo match — is checked asynchronously by
+  // the portal link UI, not here; this validator is sync and single-file).
+  const gateIdCounts = new Map();
+  for (const gate of entities.filter((e) => e.type === 'gate')) {
+    const { gateId, facing, link } = gate.data || {};
+    if (!isValidGateId(gateId)) {
+      // Not an error: import/placement auto-assign ids, so this only occurs
+      // in hand-built models — and an id-less gate is fine until linked to.
+      warnings.push(`Gate (id=${gate.id}) has no stable gate id (auto-assigned on import)`);
+    } else {
+      gateIdCounts.set(gateId, (gateIdCounts.get(gateId) || 0) + 1);
+    }
+    if (facing && !GATE_FACINGS.includes(facing)) {
+      errors.push(`Gate (id=${gate.id}) has invalid facing "${facing}"`);
+    }
+    if (link && (!link.puzzleId || !isValidGateId(link.gateId))) {
+      errors.push(`Gate (id=${gate.id}) has a malformed link (needs puzzleId and gateId)`);
+    }
+  }
+  for (const [gateId, count] of gateIdCounts) {
+    if (count > 1) {
+      errors.push(`Duplicate gate id "${gateId}" (${count} gates) — links need unique ids`);
+    }
+  }
+
+  // 10b. SAME-puzzle links (in-level teleport doors) are fully checkable
+  // here, no cross-file trip: the target gate must exist and must not be
+  // the gate itself. (Skipped for an unsaved puzzle — no id to match yet.)
+  const puzzleId = model.getMetadata().id;
+  if (puzzleId) {
+    for (const gate of entities.filter((e) => e.type === 'gate')) {
+      const { gateId, link } = gate.data || {};
+      if (!link || link.puzzleId !== puzzleId) continue;
+      if (link.gateId === gateId) {
+        errors.push(`Gate "${gateId}" links to itself`);
+      } else if (!gateIdCounts.has(link.gateId)) {
+        errors.push(
+          `Gate "${gateId}" links to "${link.gateId}", which does not exist in this puzzle`
+        );
       }
     }
   }

@@ -295,6 +295,8 @@ describe('PuzzleValidator', () => {
           { pitch: 'C4', length: '1/4' },
           { pitch: 'C4', length: '1/4' },
         ],
+        gateId: 'gate-1',
+        facing: 'north',
       });
       model.addEntity('wall', 8, 0, 7, {}); // wall adjacent to gate
       model.addEntity('fountain', 9, 0, 9, {
@@ -331,6 +333,124 @@ describe('PuzzleValidator', () => {
       // Errors should not appear in warnings and vice versa
       expect(result.warnings.some((w) => /player spawn/i.test(w))).toBe(false);
       expect(result.errors.some((e) => e === result.warnings[0])).toBe(false);
+    });
+  });
+
+  // -- Gate identity + portal link tests --
+
+  describe('gate ids and links', () => {
+    const gateData = (extra) => ({
+      song: [{ pitch: 'C4', length: '1/4' }],
+      facing: 'north',
+      ...extra,
+    });
+
+    it('reports error for duplicate gate ids', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity('gate', 3, 0, 3, gateData({ gateId: 'door' }));
+      model.addEntity('gate', 7, 0, 7, gateData({ gateId: 'door' }));
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /duplicate gate id "door"/i.test(e))).toBe(true);
+    });
+
+    it('reports error for malformed link', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity('gate', 3, 0, 3, gateData({ gateId: 'door', link: { puzzleId: 'other' } }));
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /malformed link/i.test(e))).toBe(true);
+    });
+
+    it('reports error for invalid facing', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity('gate', 3, 0, 3, gateData({ gateId: 'door', facing: 'up' }));
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /invalid facing "up"/i.test(e))).toBe(true);
+    });
+
+    it('reports error for a gate that links to itself', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.setMetadata({ id: 'here' });
+      model.addEntity(
+        'gate',
+        3,
+        0,
+        3,
+        gateData({ gateId: 'door', link: { puzzleId: 'here', gateId: 'door' } })
+      );
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /links to itself/i.test(e))).toBe(true);
+    });
+
+    it('reports error for a same-puzzle link whose target gate does not exist', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.setMetadata({ id: 'here' });
+      model.addEntity(
+        'gate',
+        3,
+        0,
+        3,
+        gateData({ gateId: 'door', link: { puzzleId: 'here', gateId: 'ghost' } })
+      );
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /does not exist in this puzzle/i.test(e))).toBe(true);
+    });
+
+    it('accepts a reciprocal same-puzzle pair (in-level teleport door)', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.setMetadata({ id: 'here' });
+      model.addEntity(
+        'gate',
+        3,
+        0,
+        3,
+        gateData({ gateId: 'door-a', link: { puzzleId: 'here', gateId: 'door-b' } })
+      );
+      model.addEntity(
+        'gate',
+        7,
+        0,
+        7,
+        gateData({ gateId: 'door-b', link: { puzzleId: 'here', gateId: 'door-a' } })
+      );
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /link/i.test(e))).toBe(false);
+    });
+
+    it('warns (not errors) for a gate without a stable id', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity('gate', 3, 0, 3, { song: [{ pitch: 'C4', length: '1/4' }] });
+
+      const { errors, warnings } = validatePuzzle(model);
+
+      expect(errors.some((e) => /gate id/i.test(e))).toBe(false);
+      expect(warnings.some((w) => /no stable gate id/i.test(w))).toBe(true);
+    });
+
+    it('accepts a well-formed link without errors', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity(
+        'gate',
+        3,
+        0,
+        3,
+        gateData({ gateId: 'door', link: { puzzleId: 'other', gateId: 'their-door' } })
+      );
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /link|gate id|facing/i.test(e))).toBe(false);
     });
   });
 });

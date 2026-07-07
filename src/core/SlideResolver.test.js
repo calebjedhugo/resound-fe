@@ -135,7 +135,8 @@ describe('canMoveTo', () => {
     expect(CollisionDetector.checkCollision).toHaveBeenCalledWith(
       { x: 9, y: 1.8, z: 9 },
       0.9,
-      'self-id'
+      'self-id',
+      null
     );
   });
 

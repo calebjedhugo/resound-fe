@@ -94,6 +94,8 @@ describe('Puzzle Serialization', () => {
       });
       original.addEntity('gate', 7, 0, 3, {
         song: [{ pitch: 'D4', length: '1/2' }],
+        gateId: 'gate-1',
+        facing: 'north',
       });
       original.addEntity('fountain', 8, 0, 4, {
         song: [{ pitch: 'E4', length: '1/1' }],
@@ -541,6 +543,125 @@ describe('Puzzle Serialization', () => {
       const meta = model.getMetadata();
 
       expect(meta.timeSignature).toEqual([4, 4]);
+    });
+  });
+
+  describe('gate identity + portal link serialization', () => {
+    it('serializes gateId as root id, facing, and link at gate root', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'portal-src' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('gate', 5, 0, 3, {
+        song: [{ pitch: 'C4', length: '1/4' }],
+        gateId: 'east-door',
+        facing: 'east',
+        link: { puzzleId: 'the-lure', gateId: 'west-door' },
+      });
+
+      const gate = serializePuzzle(model).entities[0];
+
+      expect(gate.id).toBe('east-door');
+      expect(gate.facing).toBe('east');
+      expect(gate.link).toEqual({ puzzleId: 'the-lure', gateId: 'west-door' });
+      expect(gate.data).toBeUndefined();
+    });
+
+    it('unlinked gate serializes with no link field', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'no-link' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('gate', 5, 0, 3, {
+        song: [],
+        gateId: 'gate-1',
+        facing: 'north',
+      });
+
+      const gate = serializePuzzle(model).entities[0];
+
+      expect(gate.link).toBeUndefined();
+    });
+
+    it('deserializes id/facing/link into gate data', () => {
+      const model = deserializePuzzle({
+        id: 'portal-load',
+        name: 'Portal Load',
+        difficulty: 1,
+        gridSize: 10,
+        tempo: 120,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [
+          {
+            type: 'gate',
+            position: { x: 5, y: 0, z: 3 },
+            id: 'east-door',
+            facing: 'east',
+            link: { puzzleId: 'the-lure', gateId: 'west-door' },
+            song: [{ pitch: 'C4', length: '1/4' }],
+          },
+        ],
+      });
+
+      const gate = model.getEntities()[0];
+
+      expect(gate.data.gateId).toBe('east-door');
+      expect(gate.data.facing).toBe('east');
+      expect(gate.data.link).toEqual({ puzzleId: 'the-lure', gateId: 'west-door' });
+    });
+
+    it('auto-assigns unique gate ids and default facing to pre-portal gates', () => {
+      const model = deserializePuzzle({
+        id: 'legacy',
+        name: 'Legacy',
+        difficulty: 1,
+        gridSize: 10,
+        tempo: 120,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [
+          { type: 'gate', position: { x: 1, y: 0, z: 1 }, song: [] },
+          { type: 'gate', position: { x: 2, y: 0, z: 2 }, song: [], id: 'gate-1' },
+          // Duplicate id: first occurrence keeps it, this one is reassigned
+          { type: 'gate', position: { x: 3, y: 0, z: 3 }, song: [], id: 'gate-1' },
+        ],
+      });
+
+      const ids = model.getEntities().map((e) => e.data.gateId);
+
+      expect(new Set(ids).size).toBe(3);
+      expect(ids[1]).toBe('gate-1');
+      ids.forEach((id) => expect(id).toMatch(/^gate-\d+$/));
+      model.getEntities().forEach((e) => expect(e.data.facing).toBe('north'));
+    });
+
+    it('invalid facing falls back to north on import', () => {
+      const model = deserializePuzzle({
+        id: 'bad-facing',
+        name: 'Bad Facing',
+        difficulty: 1,
+        gridSize: 10,
+        tempo: 120,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [
+          { type: 'gate', position: { x: 1, y: 0, z: 1 }, song: [], id: 'g', facing: 'up' },
+        ],
+      });
+
+      expect(model.getEntities()[0].data.facing).toBe('north');
+    });
+
+    it('gate id/facing/link round-trips through serialize + deserialize', () => {
+      const original = new EditorPuzzleModel();
+      original.setMetadata({ id: 'rt-link' });
+      original.setPlayerSpawn(0, 0, 0);
+      original.addEntity('gate', 5, 0, 3, {
+        song: [{ pitch: 'C4', length: '1/4' }],
+        gateId: 'east-door',
+        facing: 'west',
+        link: { puzzleId: 'other', gateId: 'their-door' },
+      });
+
+      const restored = deserializePuzzle(serializePuzzle(original));
+
+      expect(restored.getEntities()[0].data).toEqual(original.getEntities()[0].data);
     });
   });
 

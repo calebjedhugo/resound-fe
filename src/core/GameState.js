@@ -1,11 +1,26 @@
 import { MusicalClock } from 'resound-sound';
 
+// Stable empty list for "no area loaded" reads of gameState.entities
+const NO_ENTITIES = Object.freeze([]);
+
 class GameState {
   constructor() {
     this.mode = 'MENU'; // MENU, PLAYING, PAUSED
-    this.currentPuzzle = null;
 
-    // Musical timing (set when puzzle loads)
+    // The area the player stands in. Linked puzzles are one world of many
+    // live areas (core/Area); `currentPuzzle`/`entities`/`elevationGrid`
+    // below delegate here, so player-scoped systems (UI, input, playback,
+    // claps) always mean "the player's area" without knowing about areas.
+    this.activeArea = null;
+
+    // The world orchestrator (PortalManager registers itself here) — lets
+    // area-scoped code reach cross-area services (doorway distances) without
+    // importing the manager (avoids import cycles).
+    this.world = null;
+
+    // Musical timing — ONE clock for the whole world (all loaded areas).
+    // Created on world entry, persists across doorway crossings; only its
+    // tempo changes (see PortalManager's tempo gradient).
     this.musicalClock = null;
 
     // State machine reference (set during initialization)
@@ -19,8 +34,6 @@ class GameState {
       activeSlot: 0, // Currently selected slot (0-4)
       maxInventorySize: 5,
     };
-
-    this.elevationGrid = null;
 
     this.input = {
       keys: {
@@ -61,8 +74,6 @@ class GameState {
       viewCenter: [0, 0], // Accumulated camera rotation
     };
 
-    this.entities = [];
-
     // Recording state
     this.recording = {
       isRecording: false,
@@ -75,16 +86,33 @@ class GameState {
     this.harmonyLog = [];
   }
 
+  // --- Active-area delegation -------------------------------------------
+  // Player-scoped systems read the world through these; they always see the
+  // player's own area. Simulation code running inside an area must use
+  // `entity.area` instead — a neighbor's creatures never appear here.
+
+  get currentPuzzle() {
+    return this.activeArea ? this.activeArea.puzzle : null;
+  }
+
+  get entities() {
+    return this.activeArea ? this.activeArea.entities : NO_ENTITIES;
+  }
+
+  get elevationGrid() {
+    return this.activeArea ? this.activeArea.elevationGrid : null;
+  }
+
   reset() {
-    this.currentPuzzle = null;
+    // Areas are owned/disposed by the world orchestrator (PortalManager);
+    // dropping the pointer here just empties the delegated views above.
+    this.activeArea = null;
     this.musicalClock = null;
     this.player.position = { x: 0, y: 1.8, z: 0 };
     this.player.rotation = { x: 0, y: 0 };
     this.player.elevation = 0;
     this.player.inventory = [null, null, null, null, null];
     this.player.activeSlot = 0;
-    this.elevationGrid = null;
-    this.entities = [];
     this.recording = {
       isRecording: false,
       creaturesInRange: [],

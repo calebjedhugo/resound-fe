@@ -11,12 +11,15 @@ class CollisionDetector {
   /**
    * Get the elevation level for a world position using the elevation grid and ramps.
    * @param {Object} position - World position {x, y, z}
+   * @param {?Area} area - the area whose grid applies (defaults to the
+   *   player's/active area — every area simulates against its OWN floor plan)
    * @returns {number} Elevation level (integer on flat floors, fractional on ramps)
    */
-  static getElevationForPosition(position) {
-    if (!gameState.elevationGrid) return 0;
-    const grid = gameState.elevationGrid.worldToGrid(position.x, position.z);
-    const ramp = gameState.elevationGrid.getRamp(grid.x, grid.z);
+  static getElevationForPosition(position, area = null) {
+    const elevationGrid = area ? area.elevationGrid : gameState.elevationGrid;
+    if (!elevationGrid) return 0;
+    const grid = elevationGrid.worldToGrid(position.x, position.z);
+    const ramp = elevationGrid.getRamp(grid.x, grid.z);
     if (ramp) {
       const rampY = ramp.getYAtPosition(position.x, position.z);
       if (rampY !== null) return rampY / ELEVATION_HEIGHT;
@@ -31,18 +34,22 @@ class CollisionDetector {
    * @param {Object} position - Position to check {x, y, z}
    * @param {number} radius - Radius of the entity
    * @param {string} ignoreId - Entity ID to ignore (self)
+   * @param {?Area} area - the mover's area: collision is strictly area-local
+   *   (a neighbor's entities can never block a mover here). Defaults to the
+   *   player's/active area.
    * @returns {boolean} True if collision detected
    */
-  static checkCollision(position, radius, ignoreId = null) {
-    const positionElevation = this.getElevationForPosition(position);
+  static checkCollision(position, radius, ignoreId = null, area = null) {
+    const positionElevation = this.getElevationForPosition(position, area);
+    const entities = area ? area.entities : gameState.entities;
 
     // Check against all entities
-    for (const entity of gameState.entities) {
+    for (const entity of entities) {
       // Skip self
       if (entity.id === ignoreId) continue;
 
       // Skip entities at different elevations
-      const entityElevation = this.getElevationForPosition(entity.position);
+      const entityElevation = this.getElevationForPosition(entity.position, area);
       if (Math.abs(positionElevation - entityElevation) > ELEVATION_COLLISION_THRESHOLD) continue;
 
       // Check collision based on entity type

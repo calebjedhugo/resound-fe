@@ -21,9 +21,17 @@ export const DEFAULT_CREATURE_SIZE = 0.9;
 // Player size (radius in world units, for force calculations)
 export const PLAYER_SIZE = 0.5;
 
-// Deceleration factor applied each frame (0-1)
+// Deceleration factor applied each physics pass (0-1)
 // Lower = faster deceleration. Applied as: velocity *= factor
 export const CREATURE_DECELERATION = 0.85;
+
+// Creature physics runs this many force+integration passes per frame, each
+// with the full frame deltaTime. The game loop historically updated entities
+// twice per frame; every playtested movement value (max speed, deceleration,
+// force strengths) was tuned under that cadence, so the double pass is kept
+// deliberately. Changing this changes creature feel — designer ruling + retune
+// required (see DESIGN.md "Creature movement integration").
+export const CREATURE_PHYSICS_PASSES = 2;
 
 // Force strength for attraction/repulsion (units/sec per consonant/dissonant source)
 // Applied continuously every frame while harmonies exist
@@ -45,6 +53,16 @@ export const DEFAULT_CLAP_DISPLACEMENT = 0.0625;
 
 // Visual feedback duration for clap effect (seconds)
 export const CLAP_VISUAL_FADE_DURATION = 0.3;
+
+// Doorway sound model (cross-area gate links, portal stage 3)
+// Sound crossing a linked-gate seam travels listener -> gate plus
+// partner-gate -> source, respecting the SOURCE's audible range. A CLOSED
+// door still leaks, muffled: this many extra world units of effective
+// distance are added to the path. Tuned so a source one cell from the door
+// (~3 units) still reaches a listener near the other face (3 + 6 = 9 < the
+// default 15-unit range) — completing a song by singing on BOTH sides of a
+// closed door is a designed puzzle element.
+export const CLOSED_DOOR_LEAK_DISTANCE = 6.0;
 
 // Height of one elevation level in world units
 // Equal to WORLD_SCALE so one elevation step = one grid cell vertically

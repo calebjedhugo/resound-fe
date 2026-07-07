@@ -3,9 +3,11 @@ import { randomInstrument } from 'createEventListeners';
 import ClapManager from 'core/ClapManager';
 
 class PlayingState {
-  constructor(gameState, entityManager) {
+  /**
+   * @param {GameState} gameState
+   */
+  constructor(gameState) {
     this.gameState = gameState;
-    this.entityManager = entityManager;
   }
 
   enter() {
@@ -21,14 +23,12 @@ class PlayingState {
     }
   }
 
-  update(deltaTime) {
+  update() {
     // Update clap manager (handles quantization)
     ClapManager.update();
-
-    // Update all entities
-    if (this.entityManager) {
-      this.entityManager.update(deltaTime);
-    }
+    // Areas/entities are NOT updated here: main.js's update() drives the
+    // world exactly once per frame, gated on the start gate (the world must
+    // hold still while the gate is up).
   }
 
   exit() {

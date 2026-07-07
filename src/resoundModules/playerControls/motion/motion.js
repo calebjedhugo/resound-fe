@@ -165,13 +165,18 @@ const updateMotion = () => {
   updateCameraDirection();
 };
 
-const motion = (scene) => {
+const motion = (scene, beforeRender) => {
   updateMotion();
 
   // Sync gameState.player.position with camera position
   gameState.player.position.x = camera.position.x;
   gameState.player.position.z = camera.position.z;
   gameState.player.position.y = camera.position.y;
+
+  // Extra render passes (portal doorway views) run after the camera settles
+  // but before the main scene draws, so their textures are current for this
+  // frame.
+  if (beforeRender) beforeRender(renderer, camera);
 
   renderer.render(scene, camera);
 };

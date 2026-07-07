@@ -1,0 +1,26 @@
+{
+  "id": "portal-self",
+  "name": "Portal Self",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": [
+    {
+      "type": "gate",
+      "id": "door-a",
+      "facing": "north",
+      "link": { "puzzleId": "portal-self", "gateId": "door-b" },
+      "position": { "x": 5, "y": 0, "z": 2 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    {
+      "type": "gate",
+      "id": "door-b",
+      "facing": "south",
+      "link": { "puzzleId": "portal-self", "gateId": "door-a" },
+      "position": { "x": 5, "y": 0, "z": 8 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    }
+  ]
+}

@@ -15,12 +15,14 @@ import PropertyPanel from 'editor/ui/PropertyPanel';
 import MetadataPanel from 'editor/ui/MetadataPanel';
 import ValidationPanel from 'editor/ui/ValidationPanel';
 import PuzzlePicker from 'editor/ui/PuzzlePicker';
+import WorldOverview from 'editor/ui/WorldOverview';
 import EditorToolbar from 'editor/ui/EditorToolbar';
 import ExportPanel from 'editor/ui/ExportPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
 import { savePuzzleToRepo, listRepoPuzzles, loadRepoPuzzle } from 'editor/io/repoPersistence';
+import { releaseLinkBeforeDelete } from 'editor/io/portalLinks';
 import { importPuzzle } from 'editor/io/importPuzzle';
 
 export default class EditorApp {
@@ -78,11 +80,12 @@ export default class EditorApp {
       this.undoManager,
       this.entityPlacer,
       () => {
-        this.selectionManager.deleteSelected();
+        this._deleteSelectedEntity();
       },
       (entityId) => {
         this.songEditorModal.open(entityId);
-      }
+      },
+      (message, kind) => this._showToast(message, kind)
     );
     this.metadataPanel = new MetadataPanel(
       document.getElementById('metadata-panel'),
@@ -118,6 +121,10 @@ export default class EditorApp {
       () => this._newPuzzle(),
       () => this._newPuzzle() // after delete: drop to a fresh, unsaved puzzle
     );
+    this.worldOverview = new WorldOverview(document.getElementById('world-panel'), {
+      onOpenPuzzle: (id) => this.puzzlePicker.open(id),
+      getCurrentPuzzleId: () => this.undoManager.getMetadata().id,
+    });
     this.exportPanel = new ExportPanel(document.getElementById('export-panel'), this.undoManager);
     this.entityDragger = new EntityDragger(
       this.scene,
@@ -209,6 +216,22 @@ export default class EditorApp {
       },
       kind === 'error' ? 4200 : 2600
     );
+  }
+
+  /**
+   * Delete the selected entity. A linked gate first releases its partner's
+   * back-link (best effort — the far side of a portal must not dangle);
+   * local deletion proceeds even if that cleanup fails.
+   */
+  async _deleteSelectedEntity() {
+    const id = this.selectionManager.selectedId;
+    if (id === null) return;
+    try {
+      await releaseLinkBeforeDelete(this.undoManager, id);
+    } catch (err) {
+      this._showToast(`Couldn't clear the far side of the link: ${err.message}`);
+    }
+    this.selectionManager.deleteSelected();
   }
 
   _scheduleValidation() {
@@ -538,8 +561,9 @@ export default class EditorApp {
 
   _setupKeyboard() {
     document.addEventListener('keydown', (e) => {
-      // Skip editor keyboard handling while song editor modal is open
+      // Skip editor keyboard handling while a modal is open
       if (this.songEditorModal && this.songEditorModal.isOpen) return;
+      if (this.worldOverview && this.worldOverview.isOpen) return;
 
       // Cmd+Z / Ctrl+Z = undo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
@@ -561,7 +585,7 @@ export default class EditorApp {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (this.selectionManager.selectedId !== null) {
           e.preventDefault();
-          this.selectionManager.deleteSelected();
+          this._deleteSelectedEntity();
         }
       }
     });
@@ -592,6 +616,7 @@ export default class EditorApp {
     clearTimeout(this._autoSaveTimer);
     clearTimeout(this._toastTimer);
     this.songEditorModal.dispose();
+    this.worldOverview.dispose();
     this.contextMenu.dispose();
     this.ghostPreview.dispose();
     this.controls.dispose();

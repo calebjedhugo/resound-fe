@@ -37,7 +37,17 @@ export async function loadRepoPuzzle(id) {
  * @returns {Promise<boolean>} true if written, false if skipped
  */
 export async function savePuzzleToRepo(model) {
-  const json = serializePuzzle(model);
+  return savePuzzleJsonToRepo(serializePuzzle(model));
+}
+
+/**
+ * Write an already-serialized puzzle JSON to its repo file. Used when
+ * editing a puzzle OTHER than the open one (e.g. keeping the far side of a
+ * gate link in sync) — no model round-trip, so unrelated fields are untouched.
+ * @param {object} json - Full puzzle JSON (must carry a valid id)
+ * @returns {Promise<boolean>} true if written, false if skipped
+ */
+export async function savePuzzleJsonToRepo(json) {
   const { id } = json;
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return false;
   const response = await fetch(`/api/puzzles/${id}`, {

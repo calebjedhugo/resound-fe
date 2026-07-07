@@ -1,11 +1,26 @@
 import { quantizeToBeat, groupBy } from 'core/utils';
+import gameState from 'core/GameState';
 
 /**
  * ListeningManager - Global system for entities to listen to all sound sources
  * Gates and Fountains use this to capture notes from creatures and player
+ *
+ * Portal stage 3: listeners and sources are area-tagged (entity.area, note
+ * event sourceArea). Same-area sound is delivered directly, exactly as
+ * before. Sound crossing an area seam is delivered ONLY through the doorway
+ * model: the seam router (installed by PortalManager) rewrites the event so
+ * it appears to come from the door, with the source->partner-gate leg (plus
+ * a leak penalty while the door is closed) carried as `extraDistance` —
+ * listeners add it to their range checks. No router or no area info means
+ * no seams exist (single-area world, unit tests): everything is one area.
  */
 class ListeningManager {
   static listeners = []; // Entities that are listening
+
+  // (noteEvent, sourceArea, listenerArea) => transformed event | null.
+  // Installed by PortalManager; null result = the areas share no doorway
+  // (or the sound can't make the trip), so the listener hears nothing.
+  static seamRouter = null;
 
   /**
    * Register an entity as a listener
@@ -30,10 +45,20 @@ class ListeningManager {
    * @param {Object} noteEvent - { pitch, length, timestamp, source, sourcePosition }
    */
   static emitNote(noteEvent) {
-    // Notify all listeners
+    const sourceArea = noteEvent.sourceArea || gameState.activeArea;
     this.listeners.forEach((listener) => {
-      if (listener.onNoteCaptured) {
+      if (!listener.onNoteCaptured) return;
+
+      const listenerArea = listener.area || gameState.activeArea;
+      if (listenerArea === sourceArea || !this.seamRouter) {
+        // Same area (or a world with no seams): direct delivery
         listener.onNoteCaptured(noteEvent);
+        return;
+      }
+
+      const throughDoor = this.seamRouter(noteEvent, sourceArea, listenerArea);
+      if (throughDoor) {
+        listener.onNoteCaptured(throughDoor);
       }
     });
   }

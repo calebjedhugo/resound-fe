@@ -1,8 +1,13 @@
-import gameState from 'core/GameState';
-
 class EntityManager {
-  constructor(scene) {
+  /**
+   * @param {THREE.Scene|THREE.Group} scene - container the entity meshes go in
+   * @param {?Area} area - the area this manager belongs to (portal stage 3:
+   *   every entity set is area-scoped; `gameState.entities` delegates to the
+   *   ACTIVE area's list)
+   */
+  constructor(scene, area = null) {
     this.scene = scene;
+    this.area = area;
     this.entities = new Map(); // id -> entity
   }
 
@@ -12,8 +17,12 @@ class EntityManager {
       this.scene.add(entity.mesh);
     }
 
-    // Sync with gameState.entities for game logic access
-    gameState.entities.push(entity);
+    // Scope the entity to its area: simulation code (forces, collision,
+    // listening) must interact with this entity through its own area only
+    entity.area = this.area;
+    if (this.area) {
+      this.area.entities.push(entity);
+    }
 
     return entity;
   }
@@ -33,10 +42,11 @@ class EntityManager {
     // Remove from map
     this.entities.delete(entityId);
 
-    // Sync with gameState.entities
-    const index = gameState.entities.indexOf(entity);
-    if (index !== -1) {
-      gameState.entities.splice(index, 1);
+    if (this.area) {
+      const index = this.area.entities.indexOf(entity);
+      if (index !== -1) {
+        this.area.entities.splice(index, 1);
+      }
     }
   }
 
@@ -76,8 +86,9 @@ class EntityManager {
     });
     this.entities.clear();
 
-    // Sync with gameState.entities
-    gameState.entities = [];
+    if (this.area) {
+      this.area.entities.length = 0;
+    }
   }
 }
 

@@ -5,7 +5,6 @@ import motion, { camera, syncCameraToPlayer } from 'resoundModules/playerControl
 import gameState from 'core/GameState';
 import GameLoop from 'core/GameLoop';
 import StateMachine from 'core/StateMachine';
-import EntityManager from 'entities/EntityManager';
 import PuzzleLoader from 'core/PuzzleLoader';
 import ProgressManager from 'core/ProgressManager';
 
@@ -21,6 +20,7 @@ import ClapVisual from 'ui/ClapVisual';
 import ClapManager from 'core/ClapManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ListeningManager from 'core/ListeningManager';
+import PortalManager from 'core/PortalManager';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
@@ -37,9 +37,6 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(50, 100, 50);
 scene.add(directionalLight);
 
-// Entity manager
-const entityManager = new EntityManager(scene);
-
 // UI
 let mainMenu = null;
 let pauseMenu = null;
@@ -55,6 +52,10 @@ ClapManager.setVisualCallback((position, range) => {
   clapVisual.show(position, range);
 });
 
+// The world orchestrator: owns the active area + live neighbor areas; the
+// active area's content group is parented into this render scene
+PortalManager.initialize(scene);
+
 // State machine
 const stateMachine = new StateMachine(gameState);
 gameState.stateMachine = stateMachine;
@@ -63,16 +64,15 @@ gameState.stateMachine = stateMachine;
 async function startPuzzle(puzzleId) {
   try {
     const puzzleData = await PuzzleLoader.load(puzzleId);
-    PuzzleLoader.parse(puzzleData, entityManager, gameState);
-    gameState.currentPuzzle = puzzleData;
+    PortalManager.enterWorld(puzzleData);
     stateMachine.setState('PLAYING');
     keyHints.hideAll();
     startGate.show();
   } catch (error) {
     console.error('Failed to load puzzle:', error);
-    // A partial parse may have added entities/state — clean up before returning to menu
+    // A partial build may have created areas/state — clean up before returning to menu
+    PortalManager.reset();
     gameState.reset();
-    entityManager.clear();
     showToast(`Couldn't load puzzle "${puzzleId}": ${error.message}`, {
       type: 'error',
       duration: 9000,
@@ -93,8 +93,8 @@ function resumeGame() {
 }
 
 function exitToMenu() {
+  PortalManager.reset();
   gameState.reset();
-  entityManager.clear();
   clapVisual.clear();
   ClapManager.reset();
   startGate.hide();
@@ -111,9 +111,9 @@ async function nextPuzzle() {
   const nextUnsolved = ProgressManager.getNextUnsolvedPuzzle(puzzles);
 
   if (nextUnsolved) {
-    // Clear current puzzle
+    // Clear current puzzle (startPuzzle rebuilds the world from scratch)
+    PortalManager.reset();
     gameState.reset();
-    entityManager.clear();
 
     // Start next puzzle
     await startPuzzle(nextUnsolved.id);
@@ -134,7 +134,11 @@ function update(deltaTime) {
     if (gameState.musicalClock) {
       gameState.musicalClock.update(deltaTime);
     }
-    entityManager.update(deltaTime);
+    // Every loaded area simulates — the neighbor behind an open doorway is
+    // exactly as alive as the one the player stands in
+    PortalManager.updateAreas(deltaTime);
+    // Crossing an open linked gate hands the world to the neighbor puzzle
+    PortalManager.update();
     clapVisual.update();
     recordingUI.update();
     keyHints.update(deltaTime);
@@ -145,7 +149,9 @@ function update(deltaTime) {
 
 function render() {
   stateMachine.render();
-  motion(scene);
+  // Open linked gates draw their see-through neighbor view first, so the
+  // doorway texture is current when the main scene renders
+  motion(scene, (renderer, playerCamera) => PortalManager.renderPortals(renderer, playerCamera));
 }
 
 // Keyboard handler for pause and metronome
@@ -184,7 +190,7 @@ async function initializeGame() {
 
   // Register states
   stateMachine.registerState('MENU', new MenuState(gameState, mainMenu));
-  stateMachine.registerState('PLAYING', new PlayingState(gameState, entityManager));
+  stateMachine.registerState('PLAYING', new PlayingState(gameState));
   stateMachine.registerState('PAUSED', new PausedState(gameState, pauseMenu));
 
   // Deep link from the editor's "Test in game": ?puzzle=<id> jumps straight in.
@@ -217,9 +223,9 @@ if (import.meta.env.DEV) {
   window.__resoundDebug = {
     gameState,
     scene,
-    entityManager,
     PlaybackManager,
     ListeningManager,
+    PortalManager,
     camera,
     syncCameraToPlayer,
   };

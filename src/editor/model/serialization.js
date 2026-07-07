@@ -13,6 +13,7 @@
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
 import { isValidKeySignature } from 'resound-notation/lib/keySignatures';
+import { GATE_FACINGS, isValidGateId, nextGateId, usedGateIds } from 'editor/util/gateIds';
 
 /**
  * Serialize an EditorPuzzleModel into a puzzle JSON object.
@@ -84,6 +85,19 @@ function serializeEntity(entity) {
         position,
         song: entity.data.song || [],
       };
+      // Stable id + doorway facing (always present — assigned on place/import).
+      // `id` lets other puzzles reference this gate; `facing` is the doorway
+      // plane a portal renders on and the direction a crossing exits toward.
+      if (isValidGateId(entity.data.gateId)) gateResult.id = entity.data.gateId;
+      if (entity.data.facing) gateResult.facing = entity.data.facing;
+      // Cross-puzzle link (portal): this gate is a door into another puzzle.
+      // Links are bidirectional — the target puzzle's gate links back here.
+      if (entity.data.link && entity.data.link.puzzleId && entity.data.link.gateId) {
+        gateResult.link = {
+          puzzleId: entity.data.link.puzzleId,
+          gateId: entity.data.link.gateId,
+        };
+      }
       if (entity.data.staffGroups && entity.data.staffGroups.length > 0) {
         gateResult.staffGroups = entity.data.staffGroups;
       }
@@ -173,7 +187,33 @@ export function deserializePuzzle(json) {
     deserializeEntity(model, entity);
   }
 
+  assignMissingGateIds(model);
+
   return model;
+}
+
+/**
+ * Give every gate that imported without a stable id (hand-authored or
+ * pre-portal files) a unique `gate-N` id. Duplicate ids keep the first
+ * occurrence and reassign the rest (the validator also flags duplicates).
+ * @param {EditorPuzzleModel} model
+ */
+function assignMissingGateIds(model) {
+  const entities = model.getEntities();
+  const used = usedGateIds(entities);
+  const seen = new Set();
+  for (const entity of entities) {
+    if (entity.type !== 'gate') continue;
+    const current = entity.data.gateId;
+    if (isValidGateId(current) && !seen.has(current)) {
+      seen.add(current);
+      continue;
+    }
+    const fresh = nextGateId(used);
+    used.add(fresh);
+    seen.add(fresh);
+    model.updateEntity(entity.id, { data: { ...entity.data, gateId: fresh } });
+  }
 }
 
 /**
@@ -200,6 +240,13 @@ function deserializeEntity(model, entity) {
 
     case 'gate': {
       const gateData = { song: entity.song };
+      // Stable id + facing; missing ones are auto-assigned/defaulted by the
+      // post-pass in deserializePuzzle (needs the full gate list for uniqueness).
+      if (isValidGateId(entity.id)) gateData.gateId = entity.id;
+      gateData.facing = GATE_FACINGS.includes(entity.facing) ? entity.facing : 'north';
+      if (entity.link && entity.link.puzzleId && entity.link.gateId) {
+        gateData.link = { puzzleId: entity.link.puzzleId, gateId: entity.link.gateId };
+      }
       if (entity.staffGroups) {
         gateData.staffGroups = entity.staffGroups;
       }

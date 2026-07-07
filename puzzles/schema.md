@@ -30,6 +30,14 @@ This document defines the structure for Resound puzzle files.
   "entities": [                      // Array of game entities
     {
       "type": "string",              // Entity type: "creature", "gate", "fountain", "wall", "ramp"
+      "id": "string",                // Gates only: stable id, unique within the puzzle
+                                     // (e.g., "east-door"). Auto-assigned by the editor.
+      "facing": "string",            // Gates only: doorway plane — "north", "south",
+                                     // "east", "west" (default "north")
+      "link": {                      // Gates only, OPTIONAL: portal to a gate in another puzzle
+        "puzzleId": "string",        // Target puzzle id
+        "gateId": "string"           // Target gate's stable id in that puzzle
+      },
       "position": {
         "x": number,                 // Grid X
         "y": number,                 // Elevation level (integer)
@@ -108,6 +116,30 @@ The `direction` field indicates which edge is the **high end**:
 - Players and creatures can traverse ramps to change elevation
 - Movement between different elevation levels is blocked without a ramp
 - Elevation boundaries act as implicit walls
+
+## Gate Links (Portals)
+
+A gate may carry a `link` referencing a gate in **another puzzle** — the gate
+becomes a door between the two areas. While such a gate is open (play-to-pass,
+as always), the target area is visible through the doorway and walking through
+transitions the player there, arriving at the linked partner gate.
+
+A link may also target a gate in the **same puzzle** (an in-level teleport
+door): the two gates form one door with the same rules. A gate can never
+link to **itself** (validation error).
+
+- **`id` (stable gate id):** unique within its puzzle, required for a gate to
+  be linked to. The editor auto-assigns `gate-N` ids (renameable). Hand-authored
+  files without gate ids get ids assigned on first editor save.
+- **`facing`:** which face of the gate's cell is the doorway plane. Determines
+  the portal render surface and the exit direction when crossing.
+- **Links are bidirectional:** if puzzle A's `east-door` links to puzzle B's
+  `west-door`, B's `west-door` links back to A's `east-door`. The editor keeps
+  both files in sync automatically; do not hand-author one-way links.
+- **The world graph is derived**, not stored: scanning all puzzle files' links
+  yields the graph of gate-connected areas (used for on-demand area loading).
+- **Tempo/key should match** across linked puzzles (both areas are live at
+  once and share the musical clock). The editor warns on mismatch.
 
 ## Note Format
 

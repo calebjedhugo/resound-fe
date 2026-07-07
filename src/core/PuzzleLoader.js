@@ -5,6 +5,7 @@ import Wall from 'entities/Wall';
 import Ramp from 'entities/Ramp';
 import Floor from 'entities/Floor';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import Area from 'core/Area';
 import ElevationGrid from 'core/ElevationGrid';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
@@ -35,51 +36,51 @@ class PuzzleLoader {
     return puzzleData;
   }
 
-  static parse(puzzleData, entityManager, gameState) {
-    // Clear existing entities
-    entityManager.clear();
+  /**
+   * World-space positions of the auto-generated perimeter walls: rows/cols
+   * -1 and gridSize, just OUTSIDE the grid so every grid cell is playable
+   * (walls on edge cells used to trap entities placed there). Shared with
+   * the portal view so a neighbor seen through a doorway has its walls.
+   */
+  static perimeterWallPositions(gridSize) {
+    const positions = [];
+    for (let i = -1; i <= gridSize; i += 1) {
+      // Top edge (z = -1) and bottom edge (z = gridSize), including corners
+      positions.push({ x: i * WORLD_SCALE, y: 0, z: -1 * WORLD_SCALE });
+      positions.push({ x: i * WORLD_SCALE, y: 0, z: gridSize * WORLD_SCALE });
+    }
+    for (let i = 0; i < gridSize; i += 1) {
+      // Left edge (x = -1) and right edge (x = gridSize)
+      positions.push({ x: -1 * WORLD_SCALE, y: 0, z: i * WORLD_SCALE });
+      positions.push({ x: gridSize * WORLD_SCALE, y: 0, z: i * WORLD_SCALE });
+    }
+    return positions;
+  }
 
-    // Store puzzle data in game state
-    gameState.currentPuzzle = puzzleData;
-
-    // Initialize musical clock with puzzle tempo
-    const tempo = puzzleData.tempo || 120; // Default 120 BPM
-    gameState.initMusicalClock(tempo);
+  /**
+   * Build a fully-populated LIVE Area from validated puzzle JSON (portal
+   * stage 3). No global side effects: the caller (PortalManager, which owns
+   * the set of loaded areas) decides whether this area is the player's or a
+   * neighbor simulating behind a doorway. Player placement is separate —
+   * see placePlayerAtStart.
+   * @returns {Area}
+   */
+  static buildArea(puzzleData) {
+    const area = new Area(puzzleData);
+    const { entityManager } = area;
 
     // Build elevation grid
     const elevationGrid = new ElevationGrid(puzzleData.gridSize);
     elevationGrid.applyFloors(puzzleData.floors || []);
-    gameState.elevationGrid = elevationGrid;
+    area.elevationGrid = elevationGrid;
 
     // Create floor with elevation data
     const floor = new Floor(puzzleData.gridSize, puzzleData.floors || []);
     entityManager.add(floor);
 
-    // Generate perimeter walls just OUTSIDE the grid (rows/cols -1 and
-    // gridSize), so every grid cell is playable — walls on edge cells used to
-    // trap entities placed there.
-    const { gridSize } = puzzleData;
-    for (let i = -1; i <= gridSize; i += 1) {
-      // Top edge (z = -1) and bottom edge (z = gridSize), including corners
-      entityManager.add(new Wall({ x: i * WORLD_SCALE, y: 0, z: -1 * WORLD_SCALE }));
-      entityManager.add(new Wall({ x: i * WORLD_SCALE, y: 0, z: gridSize * WORLD_SCALE }));
+    for (const position of this.perimeterWallPositions(puzzleData.gridSize)) {
+      entityManager.add(new Wall(position));
     }
-    for (let i = 0; i < gridSize; i += 1) {
-      // Left edge (x = -1) and right edge (x = gridSize)
-      entityManager.add(new Wall({ x: -1 * WORLD_SCALE, y: 0, z: i * WORLD_SCALE }));
-      entityManager.add(new Wall({ x: gridSize * WORLD_SCALE, y: 0, z: i * WORLD_SCALE }));
-    }
-
-    // Set player start position (scaled, with eye height above floor)
-    gameState.player.position = {
-      x: puzzleData.playerStart.x * WORLD_SCALE,
-      y: puzzleData.playerStart.y * ELEVATION_HEIGHT + 1.8,
-      z: puzzleData.playerStart.z * WORLD_SCALE,
-    };
-    gameState.player.elevation = puzzleData.playerStart.y;
-
-    // Sync camera to player start position
-    syncCameraToPlayer(gameState.player.position);
 
     // Create entities
     puzzleData.entities.forEach((entityData) => {
@@ -102,6 +103,12 @@ class PuzzleLoader {
               song: entityData.song,
               timeSignature: puzzleData.timeSignature,
               keySignature: puzzleData.keySignature,
+              // Portal identity: stable id, doorway facing, and (optionally)
+              // the cross-puzzle link this gate is a door to
+              id: entityData.id,
+              facing: entityData.facing,
+              link: entityData.link,
+              gridPosition: entityData.position,
             });
             break;
           case 'fountain':
@@ -133,7 +140,22 @@ class PuzzleLoader {
       }
     });
 
-    return puzzleData;
+    return area;
+  }
+
+  /**
+   * Put the player at a puzzle's start position (scaled, with eye height
+   * above floor) and sync the camera. Used on world entry — doorway
+   * crossings place the player at the partner gate instead.
+   */
+  static placePlayerAtStart(puzzleData, gameState) {
+    gameState.player.position = {
+      x: puzzleData.playerStart.x * WORLD_SCALE,
+      y: puzzleData.playerStart.y * ELEVATION_HEIGHT + 1.8,
+      z: puzzleData.playerStart.z * WORLD_SCALE,
+    };
+    gameState.player.elevation = puzzleData.playerStart.y;
+    syncCameraToPlayer(gameState.player.position);
   }
 
   static async loadPuzzleList() {

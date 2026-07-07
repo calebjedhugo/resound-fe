@@ -100,3 +100,22 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .song-modal-close:hover { color: #e0e0e0; }
 .song-modal-body { flex: 1; padding: 16px; overflow: auto; }
 .song-modal-footer { padding: 12px 16px; border-top: 1px solid #0f3460; display: flex; justify-content: flex-end; }
+.world-modal { width: 90vw; max-width: 1100px; height: 80vh; }
+.world-map-body { display: flex; flex-direction: column; gap: 8px; }
+.world-map-svg { flex: 1; min-height: 0; width: 100%; background: #0a1628; border: 1px solid #0f3460; border-radius: 4px; }
+.world-node { cursor: pointer; }
+.world-node circle { fill: #0f3460; stroke: #1a4a7a; stroke-width: 2; }
+.world-node:hover circle { fill: #1a4a7a; stroke: #e0e0e0; }
+.world-node text { fill: #e0e0e0; font-size: 13px; text-anchor: middle; pointer-events: none; }
+.world-node-current circle { stroke: #44ff88; stroke-width: 3; }
+.world-node-orphan circle { opacity: 0.55; stroke-dasharray: 3 3; }
+.world-node-orphan text { fill: #8899aa; }
+.world-node-error circle { stroke: #ff4444; }
+.world-legend { display: flex; align-items: center; gap: 16px; font-size: 12px; color: #8899aa; flex-wrap: wrap; }
+.world-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.world-legend-swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+.world-summary { margin-left: auto; color: #8899aa; }
+.world-issues { max-height: 96px; overflow-y: auto; font-size: 12px; font-family: ui-monospace, monospace; }
+.world-issue { padding: 2px 0; }
+.world-issue-one-way { color: #ffaa44; }
+.world-issue-dangling { color: #ff4444; }

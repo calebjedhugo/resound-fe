@@ -30,11 +30,40 @@ Planned onboarding pieces (one element each):
 - ❌ (later) clap timing, elevation puzzles, etc.
 
 Bigger architectural ideas (exploratory, likely the backbone of the game):
-- ❌ **Gates link to matching gates (portals)** — a gate opens a portal to
+- ⚠️ **Gates link to matching gates (portals)** — a gate opens a portal to
   another gate elsewhere. This doubles as the **open-world + CPU strategy**:
   only areas adjacent to linked gates need to be loaded, so the world stays
   seamless without loading everything at once. Also shapes how the editor
   models the world (a graph of gate-linked areas).
+  Design ruled 2026-07-06 (see DESIGN.md "Gate links"). Staged build:
+  - ✅ Stage 0 — editor modeling: stable gate ids + `facing` + `link` in the
+    schema, PropertyPanel portal UI, bidirectional file sync
+    (`editor/io/portalLinks.js`), violet viewport badge
+  - ✅ Stage 1 — runtime crossing: walking through an OPEN linked gate swaps
+    to the linked puzzle at the partner gate, recordings persist
+    (`core/PortalManager.js`)
+  - ✅ Stage 2 — see-through: while a linked gate is open, its doorway face
+    (the `facing` side) shows the neighbor area, rendered live to texture
+    from a portal-transformed off-axis camera (`core/PortalView.js`; pass
+    runs only while open)
+  - ✅ Stage 3 — live neighbor: the multi-area refactor (`core/Area.js`; one
+    world of live areas orchestrated by `core/PortalManager.js`). Neighbor
+    areas simulate every frame and are audible through the doorway
+    (player→gate + partner-gate→source; closed doors leak faintly), linked
+    pairs act as ONE door (shared song, mirrored open state, completable
+    from both sides), crossing preserves neighbor state + the world clock,
+    and tempo blends near mismatched doors. Open-world streaming beyond
+    link-depth 1 sits on this.
+  - ✅ Editor world-overview view over the derived gate-link graph: "World
+    Map" modal (`editor/ui/WorldOverview.js` + `editor/io/worldGraph.js`) —
+    puzzles as nodes, links as edges, one-way/dangling links flagged,
+    orphaned areas dimmed, click a node to open that puzzle. Same-puzzle
+    doors draw as loops on their node
+  - ✅ Same-puzzle doors (in-level teleporters): two gates of one puzzle
+    link to each other — editor offers "(this puzzle)" as a link target
+    (both sides edited in the model, fully undoable), runtime reuses the
+    door machinery unchanged, see-through renders the main scene. A gate
+    can't link to itself. See DESIGN.md "Gate links" ruling 2026-07-07
 - ❌ **Fountains reroute gates** — a fountain becomes a **toggle** (it PERSISTS
   after the song finishes, unlike a gate, which is open only while performing)
   that changes where a gate leads. This finally gives fountains a real

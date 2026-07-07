@@ -1,0 +1,174 @@
+/**
+ * PortalView — see-through rendering for ONE linked gate.
+ *
+ * While its gate is open, the neighbor area's LIVE scene (Area.scene — the
+ * same entities that are simulating: creatures mid-move, gates flashing) is
+ * drawn each frame into a WebGLRenderTarget from a portal-transformed
+ * camera, and that texture is shown on a doorway surface covering the
+ * gate's facing face. The camera uses an off-axis projection fitted exactly
+ * to the doorway quad (CameraUtils.frameCorners), so the image lines up
+ * with the player's eye no matter where they stand — "it's a door, not a
+ * portal": looking through it simply shows the area beyond, as it happens.
+ *
+ * The doorway surface is hidden while the gate is closed, so a closed linked
+ * gate is pixel-identical to a normal closed gate, and the extra render pass
+ * only runs while the gate is open (see PortalManager.renderPortals).
+ */
+import * as THREE from 'three';
+// three's exports map substitutes the subpath literally, so the .js is required
+// eslint-disable-next-line import/extensions
+import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
+import { WORLD_SCALE } from 'core/constants';
+import { FACING_VECTORS, DOORWAY_OFFSET, doorwayCorners, portalMapping } from 'core/portalMath';
+
+// Doorway surface rotation: PlaneGeometry's +Z normal turned to face outward.
+const DOORWAY_ROTATION_Y = {
+  north: Math.PI,
+  south: 0,
+  east: Math.PI / 2,
+  west: -Math.PI / 2,
+};
+
+// Below this eye-to-doorway distance the quad is edge-on or behind the eye:
+// the off-axis projection degenerates, and the surface is invisible anyway
+// (back-face culled / viewed edge-on), so the pass is skipped.
+const MIN_EYE_DISTANCE = 0.05;
+
+const scratchSize = new THREE.Vector2();
+
+class PortalView {
+  /**
+   * @param {Gate} gate - the linked source gate (in the player's area)
+   * @param {Gate} partnerGate - the partner gate ENTITY in the live neighbor
+   *   area (world coords)
+   * @param {Area} neighborArea - the live neighbor area whose scene is shown
+   * @param {THREE.Scene} [sceneOverride] - render this scene instead of
+   *   neighborArea.scene. Used for SAME-puzzle doors: the "neighbor" is the
+   *   active area, whose content group lives in the main render scene
+   *   (Area.scene is empty while active).
+   */
+  constructor(gate, partnerGate, neighborArea, sceneOverride = null) {
+    this.gate = gate;
+
+    const mapping = portalMapping(
+      gate.position,
+      gate.facing,
+      partnerGate.position,
+      partnerGate.facing
+    );
+    this._map = mapping.map;
+    this._corners = doorwayCorners(gate.position, gate.facing);
+    this._outward = FACING_VECTORS[gate.facing] || FACING_VECTORS.north;
+
+    // Gates never move, so the doorway quad's neighbor-space corners are fixed.
+    const bl = this._map(this._corners.bottomLeft);
+    const br = this._map(this._corners.bottomRight);
+    const tl = this._map(this._corners.topLeft);
+    this._mappedBottomLeft = new THREE.Vector3(bl.x, bl.y, bl.z);
+    this._mappedBottomRight = new THREE.Vector3(br.x, br.y, br.z);
+    this._mappedTopLeft = new THREE.Vector3(tl.x, tl.y, tl.z);
+
+    // Clip everything on the eye side of the mapped doorway plane: neighbor
+    // geometry "behind the door" (including where the partner gate stands)
+    // must not occlude the view through it.
+    const mappedCenter = this._map(this._corners.center);
+    this._clipPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+      new THREE.Vector3(mapping.outward.x, mapping.outward.y, mapping.outward.z),
+      new THREE.Vector3(mappedCenter.x, mappedCenter.y, mappedCenter.z)
+    );
+
+    // The neighbor's LIVE scene. The partner gate is this same door seen
+    // from the other side — its box would fill the whole view, so its mesh
+    // is hidden just for this view's render pass.
+    this._scene = sceneOverride || neighborArea.scene;
+    this._partnerGate = partnerGate;
+
+    // frameCorners overwrites the projection every pass; only near/far apply.
+    this._camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
+    this._target = new THREE.WebGLRenderTarget(1, 1);
+
+    this._buildDoorwaySurface();
+  }
+
+  _buildDoorwaySurface() {
+    const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
+    const material = new THREE.MeshBasicMaterial({ map: this._target.texture });
+    this.surface = new THREE.Mesh(geometry, material);
+    // Local to the gate mesh, which sits at the box CENTER
+    this.surface.position.set(
+      this._outward.x * DOORWAY_OFFSET,
+      0,
+      this._outward.z * DOORWAY_OFFSET
+    );
+    this.surface.rotation.y = DOORWAY_ROTATION_Y[this.gate.facing] ?? Math.PI;
+    this.surface.visible = false;
+    // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)
+    this.surface._isPortalSurface = true;
+    this.gate.mesh.add(this.surface);
+  }
+
+  /** Show/hide the doorway surface (open/closed gate). */
+  setVisible(visible) {
+    this.surface.visible = visible;
+  }
+
+  /**
+   * Draw the neighbor view for this frame's eye position into the doorway
+   * texture. Call only while the gate is open.
+   * @param {THREE.WebGLRenderer} renderer - the game's renderer
+   * @param {THREE.Camera} camera - the player camera (world position)
+   */
+  render(renderer, camera) {
+    const eye = camera.position;
+    const { center } = this._corners;
+    const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
+    if (eyeDistance < MIN_EYE_DISTANCE) return;
+
+    renderer.getDrawingBufferSize(scratchSize);
+    if (this._target.width !== scratchSize.x || this._target.height !== scratchSize.y) {
+      this._target.setSize(scratchSize.x, scratchSize.y);
+    }
+
+    const mappedEye = this._map({ x: eye.x, y: eye.y, z: eye.z });
+    this._camera.position.set(mappedEye.x, mappedEye.y, mappedEye.z);
+    frameCorners(
+      this._camera,
+      this._mappedBottomLeft,
+      this._mappedBottomRight,
+      this._mappedTopLeft
+    );
+
+    // Hide the partner gate (this same door from the other side) for just
+    // this pass — everything else in the neighbor renders live as-is.
+    // Our own doorway surface hides too: for a same-puzzle door it lives in
+    // the rendered scene, and sampling the texture being rendered to is a
+    // GL feedback loop.
+    const partnerMesh = this._partnerGate.mesh;
+    const partnerWasVisible = partnerMesh ? partnerMesh.visible : true;
+    if (partnerMesh) partnerMesh.visible = false;
+    const surfaceWasVisible = this.surface.visible;
+    this.surface.visible = false;
+
+    const previousPlanes = renderer.clippingPlanes;
+    renderer.clippingPlanes = [this._clipPlane];
+    renderer.setRenderTarget(this._target);
+    renderer.render(this._scene, this._camera);
+    renderer.setRenderTarget(null);
+    renderer.clippingPlanes = previousPlanes;
+
+    this.surface.visible = surfaceWasVisible;
+    if (partnerMesh) partnerMesh.visible = partnerWasVisible;
+  }
+
+  dispose() {
+    if (this.surface.parent) {
+      this.surface.parent.remove(this.surface);
+    }
+    this.surface.geometry.dispose();
+    this.surface.material.dispose();
+    this._target.dispose();
+    // The neighbor scene belongs to its Area — not ours to dispose
+  }
+}
+
+export default PortalView;

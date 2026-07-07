@@ -14,7 +14,7 @@ import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMov
  *
  * @returns {boolean}
  */
-function canMoveTo(fromX, fromZ, toX, toZ, radius, ignoreId, priorLevel, grid, y) {
+function canMoveTo(fromX, fromZ, toX, toZ, radius, ignoreId, priorLevel, grid, y, area = null) {
   // Y used for the wall gate. CollisionDetector filters entities by elevation
   // layer (derived from this Y), so it must reflect the layer the mover is
   // ENTERING — the CANDIDATE cell's floor — not the stale departure Y. (With no
@@ -30,7 +30,12 @@ function canMoveTo(fromX, fromZ, toX, toZ, radius, ignoreId, priorLevel, grid, y
     }
     candidateY = getFloorY(toX, toZ, grid, priorLevel);
   }
-  return !CollisionDetector.checkCollision({ x: toX, y: candidateY, z: toZ }, radius, ignoreId);
+  return !CollisionDetector.checkCollision(
+    { x: toX, y: candidateY, z: toZ },
+    radius,
+    ignoreId,
+    area
+  );
 }
 
 /**
@@ -61,11 +66,13 @@ function canMoveTo(fromX, fromZ, toX, toZ, radius, ignoreId, priorLevel, grid, y
  * @param {number}  opts.priorLevel  mover's current elevation layer (walk-under)
  * @param {?Object} [opts.grid]      elevation grid, or null to skip the cliff gate
  * @param {number}  opts.y           mover world Y (for elevation-based collision filtering)
+ * @param {?Object} [opts.area]      the mover's area — collision stays area-local
+ *                                   (defaults to the player's/active area)
  * @returns {{x:number,z:number,blockedX:boolean,blockedZ:boolean}}
  */
 function resolveSlide(old, next, opts) {
-  const { radius, ignoreId = null, priorLevel, grid = null, y } = opts;
-  const can = (x, z) => canMoveTo(old.x, old.z, x, z, radius, ignoreId, priorLevel, grid, y);
+  const { radius, ignoreId = null, priorLevel, grid = null, y, area = null } = opts;
+  const can = (x, z) => canMoveTo(old.x, old.z, x, z, radius, ignoreId, priorLevel, grid, y, area);
 
   // 1. Full diagonal move.
   if (can(next.x, next.z)) {

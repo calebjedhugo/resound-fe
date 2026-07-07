@@ -133,6 +133,9 @@ function puzzleWriterPlugin() {
 export default defineConfig({
   plugins: [jsconfigPaths(), puzzleWriterPlugin()],
   server: {
+    // Honor an externally assigned port (tooling that can't use 5173);
+    // defaults to Vite's standard 5173 otherwise
+    port: Number(process.env.PORT) || 5173,
     watch: {
       // Editor autosave writes puzzle JSON into public/ constantly; Vite's
       // default watcher full-reloads EVERY open tab on any public/ change,

@@ -34,6 +34,9 @@ export default class SelectionManager {
       if (mesh) {
         mesh.material.emissive = new THREE.Color(0x000000);
       }
+      // Linked gates carry a persistent emissive badge — reapply it now that
+      // the selection highlight (also emissive-based) is gone.
+      this._entityPlacer.refreshLinkBadge(this._selectedId);
       this._selectedId = null;
       if (this._onSelectionChange) this._onSelectionChange(null);
     }

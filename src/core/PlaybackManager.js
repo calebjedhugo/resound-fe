@@ -26,6 +26,10 @@ class PlaybackManager {
       // Playback carries as far as the creature it was recorded from
       noteEvent.sourceRange = this.playbackSourceRange;
 
+      // The player always sounds from their own area; neighbor areas hear
+      // this only through the doorway model (ListeningManager seam routing)
+      noteEvent.sourceArea = gameState.activeArea;
+
       // Emit to listening manager
       ListeningManager.emitNote(noteEvent);
     };

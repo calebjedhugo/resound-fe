@@ -82,6 +82,44 @@ edits show up in the game on a manual reload.
   localStorage snapshot only for a not-yet-saved puzzle (no id / not in the
   manifest).
 
+## Portal links (cross-puzzle gate links)
+
+Gates carry a stable `id` (auto-assigned `gate-N`, renameable), a `facing`
+(doorway plane), and optionally `link: { puzzleId, gateId }` — a door into
+another puzzle. See `puzzles/schema.md` "Gate Links" and DESIGN.md "Gate
+links / portals".
+
+- **All link mutations go through `io/portalLinks.js`** (create/clear/rename/
+  release-on-delete). Links are bidirectional: every operation also updates
+  the PARTNER — a cross-puzzle partner's file via the dev endpoint, a
+  SAME-puzzle partner (in-level teleport door) through the UndoManager
+  (never the file: that would race autosave). Don't set `data.link`
+  directly on the model.
+- **Same-puzzle doors:** the puzzle picker in the Portal Link section lists
+  the open puzzle as "(this puzzle)"; its gates come from the LIVE model
+  (`localTargetGates`), not disk. A gate can't link to itself
+  (create throws; validator errors).
+- **Undo caveat:** the local side of a cross-puzzle link edit is undoable;
+  the partner file is not. Unlink with Clear Link, not Cmd+Z. (Same-puzzle
+  links are fully undoable — both sides live in the model, two undo steps.)
+- **Materialization:** listing a puzzle as a link target assigns missing gate
+  ids/facing into its file on disk (write-on-read) — otherwise a
+  never-resaved puzzle would have nothing linkable.
+- PropertyPanel renders the Gate ID / Facing fields and the Portal Link
+  section; linked gates glow violet in the viewport (`EntityPlacer`
+  `refreshLinkBadge`; `SelectionManager.deselect` reapplies it after the
+  selection highlight).
+- **World overview** — the sidebar "World Map" button (`ui/WorldOverview.js`)
+  opens a modal SVG map of the DERIVED gate-link graph (`io/worldGraph.js`
+  reads the manifest + every puzzle file; nothing is stored). Nodes =
+  puzzles (click to open via `PuzzlePicker.open(id)`), edges = link pairs
+  classified ok / one-way / dangling (catches undo desyncs), orphaned areas
+  dimmed.
+- Validator: duplicate gate ids / malformed links / bad facing are errors;
+  a missing gate id is only a warning (auto-assigned on import). Cross-file
+  checks (partner exists, reciprocity, tempo/key match) happen in the link
+  UI flow, not the sync validator.
+
 ## Future: its own package
 
 The editor is a self-contained consumer of the renderer's public API, so if a

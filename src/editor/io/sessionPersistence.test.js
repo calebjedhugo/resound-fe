@@ -30,6 +30,8 @@ describe('Session Persistence', () => {
     });
     model.addEntity('gate', 7, 0, 3, {
       song: [{ pitch: 'D4', length: '1/2' }],
+      gateId: 'gate-1',
+      facing: 'north',
     });
     model.addEntity('wall', 2, 1, 6, {});
     model.addEntity('ramp', 5, 0, 8, { direction: 'north' });

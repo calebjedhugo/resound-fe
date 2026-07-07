@@ -1,0 +1,18 @@
+{
+  "id": "portal-live-a",
+  "name": "Portal Live A",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 5 },
+  "entities": [
+    {
+      "type": "gate",
+      "id": "door-a",
+      "facing": "north",
+      "link": { "puzzleId": "portal-live-b", "gateId": "door-b" },
+      "position": { "x": 5, "y": 0, "z": 2 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    }
+  ]
+}
