@@ -6,8 +6,6 @@ class GameLoop {
     this.lastTime = 0;
     this.deltaTime = 0;
     this.frameId = null;
-    this.targetFPS = 60;
-    this.frameInterval = 1000 / this.targetFPS;
   }
 
   start() {

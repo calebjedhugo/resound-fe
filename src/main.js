@@ -184,7 +184,7 @@ async function initializeGame() {
 
   // Register states
   stateMachine.registerState('MENU', new MenuState(gameState, mainMenu));
-  stateMachine.registerState('PLAYING', new PlayingState(gameState, entityManager, motion));
+  stateMachine.registerState('PLAYING', new PlayingState(gameState, entityManager));
   stateMachine.registerState('PAUSED', new PausedState(gameState, pauseMenu));
 
   // Deep link from the editor's "Test in game": ?puzzle=<id> jumps straight in.

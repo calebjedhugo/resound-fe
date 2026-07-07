@@ -283,12 +283,7 @@ export default class EditorApp {
   }
 
   _applyRestoredModel(importedModel) {
-    this.undoManager._model._metadata = { ...importedModel.getMetadata() };
-    this.undoManager._model._playerSpawn = importedModel.getPlayerSpawn();
-    this.undoManager._model._floors = importedModel.getFloors();
-    this.undoManager._model._entities = importedModel.getEntities();
-    this.undoManager._model._nextEntityId =
-      Math.max(...importedModel.getEntities().map((e) => e.id), 0) + 1;
+    this.undoManager.replaceModel(importedModel);
     this.entityPlacer.rebuildFromModel();
     this.floorRegionPanel.refresh();
     this.elevationSelector.refresh();
@@ -461,46 +456,34 @@ export default class EditorApp {
     container.addEventListener('contextmenu', (e) => {
       e.preventDefault();
 
-      const rect = container.getBoundingClientRect();
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const entityId = this._entityIdAtEvent(e);
+      if (entityId !== null) {
+        this.selectionManager.select(entityId);
+        const entity = this.undoManager.getEntity(entityId);
+        const items = [];
 
-      // Raycast to find entity under cursor
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), this.camera);
-      const meshes = this.entityPlacer.getAllMeshes();
-      const hits = raycaster.intersectObjects(meshes);
-
-      if (hits.length > 0) {
-        const hitMesh = hits[0].object;
-        const entityId = this.entityPlacer.getEntityIdFromMesh(hitMesh);
-        if (entityId !== null) {
-          this.selectionManager.select(entityId);
-          const entity = this.undoManager.getEntity(entityId);
-          const items = [];
-
-          if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
-            items.push({
-              label: 'Edit Song',
-              action: () => this.songEditorModal.open(entityId),
-            });
-          }
-
-          if (items.length > 0) {
-            this.controls.enabled = false;
-            this.contextMenu.show(e.clientX - rect.left, e.clientY - rect.top, items);
-            // Re-enable controls after menu hides
-            const checkHidden = () => {
-              if (!container.querySelector('.context-menu')) {
-                this.controls.enabled = true;
-              } else {
-                requestAnimationFrame(checkHidden);
-              }
-            };
-            requestAnimationFrame(checkHidden);
-          }
-          return;
+        if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
+          items.push({
+            label: 'Edit Song',
+            action: () => this.songEditorModal.open(entityId),
+          });
         }
+
+        if (items.length > 0) {
+          const rect = container.getBoundingClientRect();
+          this.controls.enabled = false;
+          this.contextMenu.show(e.clientX - rect.left, e.clientY - rect.top, items);
+          // Re-enable controls after menu hides
+          const checkHidden = () => {
+            if (!container.querySelector('.context-menu')) {
+              this.controls.enabled = true;
+            } else {
+              requestAnimationFrame(checkHidden);
+            }
+          };
+          requestAnimationFrame(checkHidden);
+        }
+        return;
       }
 
       this.contextMenu.hide();

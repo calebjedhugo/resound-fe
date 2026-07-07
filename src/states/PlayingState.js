@@ -3,10 +3,9 @@ import { randomInstrument } from 'createEventListeners';
 import ClapManager from 'core/ClapManager';
 
 class PlayingState {
-  constructor(gameState, entityManager, motion) {
+  constructor(gameState, entityManager) {
     this.gameState = gameState;
     this.entityManager = entityManager;
-    this.motion = motion;
   }
 
   enter() {

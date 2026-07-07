@@ -103,6 +103,21 @@ export default class UndoManager {
     };
   }
 
+  /**
+   * Replace the wrapped model's contents wholesale (loading a level or
+   * restoring a session). Intentionally bypasses the mutation wrappers:
+   * no undo entry is recorded and onChange does not fire, so opening a
+   * puzzle never autosaves it back.
+   * @param {EditorPuzzleModel} source - model whose contents to copy in
+   */
+  replaceModel(source) {
+    this._model._metadata = { ...source.getMetadata() };
+    this._model._playerSpawn = source.getPlayerSpawn();
+    this._model._floors = source.getFloors();
+    this._model._entities = source.getEntities();
+    this._model._nextEntityId = Math.max(...source.getEntities().map((e) => e.id), 0) + 1;
+  }
+
   _restoreState(snapshot) {
     this._model._metadata = { ...snapshot.metadata };
     this._model._playerSpawn = snapshot.playerSpawn ? { ...snapshot.playerSpawn } : null;

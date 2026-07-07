@@ -76,6 +76,7 @@ class RecordingUI {
       this.inventoryContainer.appendChild(slot);
     }
     this._slotIds = [null, null, null, null, null];
+    this._micSlot = null; // Slot the mic overlay was last positioned over
 
     this.container.appendChild(this.inventoryContainer);
   }
@@ -233,17 +234,22 @@ class RecordingUI {
       // "×N" = creatures in earshot (a bare number reads as a slot label)
       this.creatureCount.textContent = `×${count}`;
 
-      // Position mic overlay at upper-right corner of active slot
-      const activeSlotElement = this.inventorySlots[activeSlot];
-      const slotWidth = 50; // px
-      const micSize = 32; // px
+      // Position mic overlay at upper-right corner of active slot.
+      // offsetLeft/offsetTop force a layout pass, so only re-read them when
+      // the active slot changes (slot geometry is otherwise static).
+      if (activeSlot !== this._micSlot) {
+        const activeSlotElement = this.inventorySlots[activeSlot];
+        const slotWidth = 50; // px
+        const micSize = 32; // px
 
-      // Calculate position: half in, half out of upper-right corner
-      const left = activeSlotElement.offsetLeft + slotWidth - micSize / 2;
-      const top = activeSlotElement.offsetTop - micSize / 2;
+        // Calculate position: half in, half out of upper-right corner
+        const left = activeSlotElement.offsetLeft + slotWidth - micSize / 2;
+        const top = activeSlotElement.offsetTop - micSize / 2;
 
-      this.micOverlay.style.left = `${left}px`;
-      this.micOverlay.style.top = `${top}px`;
+        this.micOverlay.style.left = `${left}px`;
+        this.micOverlay.style.top = `${top}px`;
+        this._micSlot = activeSlot;
+      }
     } else {
       this.micOverlay.style.opacity = '0';
     }

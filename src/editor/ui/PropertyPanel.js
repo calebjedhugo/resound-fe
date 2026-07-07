@@ -5,6 +5,7 @@
  * Shown when an entity is selected, hidden when deselected.
  * Fields vary by entity type (creature, gate, fountain, ramp, wall).
  */
+import { addSelectRow, addInputRow } from 'editor/ui/fieldRows';
 
 export default class PropertyPanel {
   constructor(container, undoManager, entityPlacer, onDelete, onEditSong) {
@@ -142,74 +143,32 @@ export default class PropertyPanel {
     const data = entity.data || {};
     const directions = ['north', 'south', 'east', 'west'];
 
-    const row = document.createElement('div');
-    row.className = 'prop-row';
-
-    const label = document.createElement('label');
-    label.textContent = 'Direction: ';
-    row.appendChild(label);
-
-    const select = document.createElement('select');
-    select.className = 'prop-select';
-    directions.forEach((dir) => {
-      const opt = document.createElement('option');
-      opt.value = dir;
-      opt.textContent = dir;
-      if (data.direction === dir) opt.selected = true;
-      select.appendChild(opt);
-    });
-    select.onchange = () => {
+    addSelectRow(wrapper, 'Direction', directions, data.direction, (direction) => {
       const newData = {
         ...this._undoManager.getEntity(this._selectedId).data,
-        direction: select.value,
+        direction,
       };
       this._undoManager.updateEntity(this._selectedId, { data: newData });
       // Update mesh rotation
       const mesh = this._entityPlacer.getMeshById(this._selectedId);
       if (mesh) {
         mesh.rotation.set(0, 0, 0);
-        this._entityPlacer._applyRampRotation(mesh, select.value);
+        this._entityPlacer._applyRampRotation(mesh, direction);
       }
-    };
-    row.appendChild(select);
-    wrapper.appendChild(row);
+    });
   }
 
   _addNumberField(wrapper, labelText, value, onChange) {
-    const row = document.createElement('div');
-    row.className = 'prop-row';
-
-    const label = document.createElement('label');
-    label.textContent = `${labelText}: `;
-    row.appendChild(label);
-
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.step = 'any';
-    input.className = 'prop-input';
-    input.value = value;
-    input.onchange = () => onChange(Number(input.value));
-    row.appendChild(input);
-
-    wrapper.appendChild(row);
+    addInputRow(wrapper, {
+      type: 'number',
+      step: 'any',
+      label: labelText,
+      value,
+      onChange: (val) => onChange(Number(val)),
+    });
   }
 
   _addTextField(wrapper, labelText, value, onChange, tooltip) {
-    const row = document.createElement('div');
-    row.className = 'prop-row';
-    if (tooltip) row.title = tooltip;
-
-    const label = document.createElement('label');
-    label.textContent = `${labelText}: `;
-    row.appendChild(label);
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'prop-input';
-    input.value = value;
-    input.onchange = () => onChange(input.value);
-    row.appendChild(input);
-
-    wrapper.appendChild(row);
+    addInputRow(wrapper, { type: 'text', label: labelText, value, onChange, tooltip });
   }
 }

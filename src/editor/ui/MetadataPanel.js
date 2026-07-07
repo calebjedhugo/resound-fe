@@ -11,6 +11,7 @@
  */
 import { isValidKeySignature } from 'resound-notation/lib/keySignatures';
 import slugify from 'editor/util/slugify';
+import { addSelectRow, addInputRow } from 'editor/ui/fieldRows';
 
 const KEY_SIGNATURE_OPTIONS = [
   'C',
@@ -203,46 +204,11 @@ export default class MetadataPanel {
   }
 
   _addSelect(wrapper, labelText, options, current, onChange) {
-    const row = document.createElement('div');
-    row.className = 'prop-row';
-    const label = document.createElement('label');
-    label.textContent = `${labelText}: `;
-    row.appendChild(label);
-    const select = document.createElement('select');
-    select.className = 'prop-select';
-    options.forEach((o) => {
-      const opt = document.createElement('option');
-      opt.value = o;
-      opt.textContent = o;
-      if (current === o) opt.selected = true;
-      select.appendChild(opt);
-    });
-    select.onchange = () => onChange(select.value);
-    row.appendChild(select);
-    wrapper.appendChild(row);
+    addSelectRow(wrapper, labelText, options, current, onChange);
   }
 
   _addField(wrapper, type, labelText, value, onChange, constraints) {
-    const row = document.createElement('div');
-    row.className = 'prop-row';
-
-    const label = document.createElement('label');
-    label.textContent = `${labelText}: `;
-    row.appendChild(label);
-
-    const input = document.createElement('input');
-    input.type = type;
-    input.className = 'prop-input';
-    input.value = value;
-    if (constraints) {
-      if (constraints.min != null) input.min = constraints.min;
-      if (constraints.max != null) input.max = constraints.max;
-      if (constraints.step != null) input.step = constraints.step;
-    }
-    input.onchange = () => onChange(input.value);
-    row.appendChild(input);
-
-    wrapper.appendChild(row);
+    addInputRow(wrapper, { type, label: labelText, value, onChange, ...constraints });
   }
 
   refresh() {

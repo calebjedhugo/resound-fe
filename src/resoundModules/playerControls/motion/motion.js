@@ -25,6 +25,15 @@ const getSpeed = () => {
 // would otherwise move ~0). Held keys move continuously and clear impulses.
 const IMPULSE_STEP = 0.35;
 
+// Scratch objects reused every frame — each helper fully overwrites the ones
+// it uses, so nothing carries over between frames.
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const scratchDirection = new THREE.Vector3();
+const scratchSide = new THREE.Vector3();
+const scratchYaw = new THREE.Quaternion();
+const scratchPitch = new THREE.Quaternion();
+
 // Consume ALL queued impulses for a direction, returning how many steps to
 // apply this frame. Draining fully (not one per frame) keeps burst taps and
 // background-throttled tabs responsive. While the key is held, leave the
@@ -59,8 +68,7 @@ const updateBackForthPosition = (cameraDirection) => {
 const updateLateralPosition = (cameraDirection) => {
   const { latLeft, latRight } = gameState.input.keys;
 
-  const cameraSide = new THREE.Vector3();
-  cameraSide.crossVectors(camera.up, cameraDirection).normalize();
+  const cameraSide = scratchSide.crossVectors(camera.up, cameraDirection).normalize();
 
   camera.position.addScaledVector(cameraSide, IMPULSE_STEP * consumeImpulse('latLeft'));
   camera.position.addScaledVector(cameraSide, -IMPULSE_STEP * consumeImpulse('latRight'));
@@ -89,18 +97,17 @@ const updateCameraDirection = () => {
 
   const [viewX, viewY] = CameraController.getView(gameState);
 
-  // Create quaternions for each rotation
-  const horizantal = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), viewX);
-  const vertical = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), viewY);
+  const horizontal = scratchYaw.setFromAxisAngle(Y_AXIS, viewX);
+  const vertical = scratchPitch.setFromAxisAngle(X_AXIS, viewY);
 
-  const mousePosRotation = horizantal.multiply(vertical);
+  const mousePosRotation = horizontal.multiply(vertical);
 
   // Apply the rotation to the camera
   camera.setRotationFromQuaternion(mousePosRotation);
 };
 
 const updateMotion = () => {
-  const cameraDirection = new THREE.Vector3();
+  const cameraDirection = scratchDirection;
   camera.getWorldDirection(cameraDirection);
 
   // Walking is ground-based: flatten the view direction so looking up/down

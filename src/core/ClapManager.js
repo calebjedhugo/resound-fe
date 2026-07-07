@@ -8,8 +8,6 @@ import gameState from './GameState';
  */
 class ClapManager {
   static clapInstrument = new Clap('player-clap');
-  static isClapping = false;
-  static nextClapBeat = -1; // Track next allowed clap time
   static pendingClap = false; // Track if a clap is pending (waiting for quantization)
   static targetBeat = -1; // The beat boundary we're waiting for (quantized to displacement grid)
   static clapVisualCallback = null; // Callback for visual feedback
@@ -157,8 +155,6 @@ class ClapManager {
    * Reset state (called when loading new puzzle)
    */
   static reset() {
-    this.isClapping = false;
-    this.nextClapBeat = -1;
     this.pendingClap = false;
     this.targetBeat = -1;
   }
