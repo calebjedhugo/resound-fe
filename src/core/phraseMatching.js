@@ -14,9 +14,9 @@
  * sit outside the margins and neither help nor hurt, and rests inside the
  * target are matchable as required silence.
  */
-import ListeningManager from './ListeningManager';
-import SongMatcher from './SongMatcher';
-import gameState from './GameState';
+import ListeningManager from 'core/ListeningManager';
+import SongMatcher from 'core/SongMatcher';
+import gameState from 'core/GameState';
 
 // Required silence (in beats) immediately before and after a performance
 export const PHRASE_GAP_BEATS = 1;

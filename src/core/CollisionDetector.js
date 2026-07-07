@@ -1,5 +1,5 @@
-import gameState from './GameState';
-import { ELEVATION_HEIGHT, ELEVATION_COLLISION_THRESHOLD } from './constants';
+import gameState from 'core/GameState';
+import { ELEVATION_HEIGHT, ELEVATION_COLLISION_THRESHOLD } from 'core/constants';
 
 // Fountain collision radius — matches the radius-1.5 cylinder in Fountain.createMesh
 const FOUNTAIN_COLLISION_RADIUS = 1.5;

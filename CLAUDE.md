@@ -15,8 +15,9 @@
 ```bash
 npm start          # Dev server (port 5173) - game at /, editor at /editor.html
 npm test           # Jest tests (watch mode)
+npm run test:ci    # Jest tests (single run)
 npm run build      # Production build
-npm run lint       # ESLint
+npm run lint       # ESLint (errors fail; must stay clean)
 ```
 
 ---

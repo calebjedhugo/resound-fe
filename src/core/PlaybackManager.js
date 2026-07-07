@@ -1,10 +1,10 @@
 import { Piano } from 'resound-sound';
 import showToast from 'ui/Toast';
-import { PLAYBACK_BEAT_TOLERANCE } from './constants';
-import ListeningManager from './ListeningManager';
-import SongMatcher from './SongMatcher';
-import { getDistance } from './utils';
-import gameState from './GameState';
+import { PLAYBACK_BEAT_TOLERANCE } from 'core/constants';
+import ListeningManager from 'core/ListeningManager';
+import SongMatcher from 'core/SongMatcher';
+import { getDistance } from 'core/utils';
+import gameState from 'core/GameState';
 
 // How far playback carries when a recording doesn't declare a source range
 const DEFAULT_PLAYBACK_RANGE = 15;

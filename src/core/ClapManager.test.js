@@ -8,7 +8,7 @@
  * 4. Verifying range and displacement configuration work correctly
  */
 
-import { DEFAULT_CLAP_DISPLACEMENT } from './constants';
+import { DEFAULT_CLAP_DISPLACEMENT } from 'core/constants';
 
 describe('Clapping to displace creature timing', () => {
   describe('affecting nearby creatures', () => {

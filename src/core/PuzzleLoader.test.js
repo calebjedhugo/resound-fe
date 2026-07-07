@@ -5,7 +5,7 @@
 
 import PuzzleLoader from 'core/PuzzleLoader';
 import gameState from 'core/GameState';
-import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import { WORLD_SCALE } from 'core/constants';
 
 describe('PuzzleLoader', () => {
   describe('load()', () => {

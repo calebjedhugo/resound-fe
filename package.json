@@ -8,7 +8,10 @@
   },
   "scripts": {
     "test": "jest --watch",
+    "test:ci": "jest",
     "start": "npx vite --config vite.config.js",
+    "build": "vite build --config vite.config.js",
+    "lint": "eslint . --ext .js --ignore-pattern dist",
     "prepare": "husky install"
   },
   "repository": {

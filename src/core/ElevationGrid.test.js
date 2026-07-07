@@ -5,7 +5,6 @@
 
 import ElevationGrid from 'core/ElevationGrid';
 import { WORLD_SCALE } from 'core/constants';
-import gameState from 'core/GameState';
 
 describe('ElevationGrid', () => {
   describe('default state', () => {

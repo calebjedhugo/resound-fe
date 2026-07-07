@@ -3,7 +3,7 @@
  * Tests player Y tracking, ramp traversal, elevation boundary blocking, and helper functions
  */
 
-import { getFloorY, getEffectiveElevation, canTraverse } from 'core/ElevationMovement';
+import { getFloorY, canTraverse } from 'core/ElevationMovement';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import gameState from 'core/GameState';
 import ElevationGrid from 'core/ElevationGrid';

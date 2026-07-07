@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import Entity from './Entity';
+import Entity from 'entities/Entity';
 
 class Wall extends Entity {
   constructor(position, data = {}) {

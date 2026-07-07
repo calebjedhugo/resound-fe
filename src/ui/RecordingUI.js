@@ -10,6 +10,7 @@ class RecordingUI {
     this.inventorySlots = [];
     this.microphoneIcon = null;
     this.creatureCount = null;
+    this._creatureCountShown = null;
     this.recordingIndicator = null;
     this.init();
   }
@@ -177,32 +178,41 @@ class RecordingUI {
     this.inventorySlots.forEach((slot, index) => {
       const isActive = index === activeSlot;
       const isOccupied = inventory[index] !== null;
-
-      // Update styles
-      if (isActive) {
-        slot.style.border = '3px solid rgba(255, 255, 255, 0.9)';
-        slot.style.transform = 'scale(1.1)';
-      } else {
-        slot.style.border = '2px solid rgba(255, 255, 255, 0.3)';
-        slot.style.transform = 'scale(1)';
-      }
-
       const isCapturing = isActive && RecordingManager.isRecording();
+      let count = '';
       if (isCapturing) {
         // Live capture count in the slot being recorded into — wordless
         // replacement for the old "N notes captured" text hint. The timing
         // skill is the player's (never auto-trimmed); this just makes the
         // take legible as it happens.
-        slot.style.background = 'rgba(200, 40, 40, 0.8)';
-        if (slot.countEl) slot.countEl.textContent = gameState.recording.capturedNotes.length;
+        count = gameState.recording.capturedNotes.length;
       } else if (isOccupied) {
-        // Occupied - colored background
-        slot.style.background = 'rgba(0, 200, 100, 0.8)';
-        if (slot.countEl) slot.countEl.textContent = inventory[index].data.length;
-      } else {
-        // Empty - black background
-        slot.style.background = 'rgba(0, 0, 0, 0.8)';
-        if (slot.countEl) slot.countEl.textContent = '';
+        count = inventory[index].data.length;
+      }
+
+      // This runs every frame; skip the DOM writes when the slot is unchanged
+      const stateKey = `${isActive}|${isCapturing}|${isOccupied}|${count}`;
+      if (slot._stateKey !== stateKey) {
+        slot._stateKey = stateKey;
+
+        if (isActive) {
+          slot.style.border = '3px solid rgba(255, 255, 255, 0.9)';
+          slot.style.transform = 'scale(1.1)';
+        } else {
+          slot.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+          slot.style.transform = 'scale(1)';
+        }
+
+        if (isCapturing) {
+          slot.style.background = 'rgba(200, 40, 40, 0.8)';
+        } else if (isOccupied) {
+          // Occupied - colored background
+          slot.style.background = 'rgba(0, 200, 100, 0.8)';
+        } else {
+          // Empty - black background
+          slot.style.background = 'rgba(0, 0, 0, 0.8)';
+        }
+        if (slot.countEl) slot.countEl.textContent = count;
       }
 
       // A NEW recording landing in a slot pops it (wordless confirmation)
@@ -231,8 +241,12 @@ class RecordingUI {
     // Show/hide mic overlay based on creatures in range
     if (count > 0) {
       this.micOverlay.style.opacity = '1';
-      // "×N" = creatures in earshot (a bare number reads as a slot label)
-      this.creatureCount.textContent = `×${count}`;
+      // "×N" = creatures in earshot (a bare number reads as a slot label).
+      // Guarded: this runs every frame and the count rarely changes.
+      if (count !== this._creatureCountShown) {
+        this.creatureCount.textContent = `×${count}`;
+        this._creatureCountShown = count;
+      }
 
       // Position mic overlay at upper-right corner of active slot.
       // offsetLeft/offsetTop force a layout pass, so only re-read them when

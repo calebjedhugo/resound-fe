@@ -17,7 +17,7 @@ import {
   ELEVATION_HEIGHT,
 } from 'core/constants';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
-import Entity from './Entity';
+import Entity from 'entities/Entity';
 
 class Creature extends Entity {
   constructor(position, data = {}) {

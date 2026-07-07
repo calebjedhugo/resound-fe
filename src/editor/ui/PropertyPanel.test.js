@@ -14,7 +14,8 @@ import UndoManager from 'editor/model/UndoManager';
 import PropertyPanel from 'editor/ui/PropertyPanel';
 
 describe('PropertyPanel logic', () => {
-  let model, undoManager;
+  let model;
+  let undoManager;
 
   beforeEach(() => {
     model = new EditorPuzzleModel();
@@ -85,7 +86,10 @@ describe('PropertyPanel logic', () => {
 });
 
 describe('PropertyPanel Edit Song button', () => {
-  let model, undoManager, container, panel;
+  let model;
+  let undoManager;
+  let container;
+  let panel;
 
   beforeEach(() => {
     model = new EditorPuzzleModel();

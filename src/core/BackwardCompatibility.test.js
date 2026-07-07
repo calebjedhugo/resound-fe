@@ -71,7 +71,9 @@ describe('Backward compatibility', () => {
       // Play a consonant note (E4 = major 3rd above C4)
       ctx.startPlayerPlayback([{ pitch: 'E4', length: '1/1' }], 480);
       // Wait for instrument to start
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
 
       // Run real-time updates
       const entityManager = ctx.getEntityManager();
@@ -81,7 +83,9 @@ describe('Backward compatibility', () => {
         const clock = ctx.getMusicalClock();
         if (clock) clock.update(dt);
         entityManager.update(dt);
-        await new Promise((resolve) => setTimeout(resolve, 16));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 16);
+        });
       }
 
       // Creature should have moved toward the player (lower X)

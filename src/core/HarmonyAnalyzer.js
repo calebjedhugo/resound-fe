@@ -1,4 +1,4 @@
-import { HARMONY_TIMING_SUBDIVISION } from './constants';
+import { HARMONY_TIMING_SUBDIVISION } from 'core/constants';
 
 /**
  * HarmonyAnalyzer - Analyzes harmonic relationships between notes
@@ -121,10 +121,9 @@ class HarmonyAnalyzer {
       return 'none'; // Notes are sequential, not simultaneous
     }
 
-    // Count interval types
+    // Count interval types (perfect intervals don't vote — see below)
     let consonantCount = 0;
     let dissonantCount = 0;
-    let perfectCount = 0;
 
     // Analyze all intervals between the two sources
     notes1.forEach((note1) => {
@@ -136,8 +135,6 @@ class HarmonyAnalyzer {
           consonantCount += 1;
         } else if (classification === 'dissonant') {
           dissonantCount += 1;
-        } else {
-          perfectCount += 1;
         }
       });
     });

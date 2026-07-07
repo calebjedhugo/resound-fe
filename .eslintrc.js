@@ -27,6 +27,16 @@ module.exports = {
         ctx: 'readonly',
       },
     },
+    {
+      // Node CLI generators — console output is their job
+      files: ['puzzles/**/*.js'],
+      env: {
+        node: true,
+      },
+      rules: {
+        'no-console': 'off',
+      },
+    },
   ],
   settings: {
     'import/resolver': {
@@ -41,7 +51,19 @@ module.exports = {
   },
   rules: {
     'no-console': ['warn', { allow: ['warn', 'error'] }],
-    'no-unused-vars': 'warn',
+    'no-unused-vars': ['warn', { args: 'after-used', argsIgnorePattern: '^_' }],
+    // resound-notation/resound-sound expose subpaths via package `exports`,
+    // which the node import resolver can't read — runtime/Vite resolve fine
+    'import/no-unresolved': [
+      'error',
+      { ignore: ['^resound-notation(/|$)', '^resound-sound(/|$)'] },
+    ],
+    // Function declarations are hoisted; serialize/deserialize pairs read
+    // top-down with helpers below their callers
+    'no-use-before-define': ['error', { functions: false }],
+    'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
+    'no-bitwise': 'off',
+    'no-continue': 'off',
     'no-param-reassign': ['error', { props: false }],
     'class-methods-use-this': 'off',
     'max-classes-per-file': 'off',

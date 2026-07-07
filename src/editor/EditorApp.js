@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+// eslint-disable-next-line import/extensions -- three's ESM subpath requires the .js extension
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
 import UndoManager from 'editor/model/UndoManager';
@@ -420,7 +421,7 @@ export default class EditorApp {
       }
 
       // If entity toolbar has active tool, place entity at hovered grid cell
-      const activeTool = this.entityToolbar.activeTool;
+      const { activeTool } = this.entityToolbar;
       if (activeTool) {
         const elevation = this.editorScene.activeElevation;
         // One thing per tile: don't stack entities (or drop one on the player).
@@ -514,13 +515,13 @@ export default class EditorApp {
         this.controls.enabled = false; // Disable orbit while dragging
       }
 
-      const gridSize = this.undoManager.getMetadata().gridSize;
+      const { gridSize } = this.undoManager.getMetadata();
       this.entityDragger.updateDrag(mouseX, mouseY, gridSize, this.editorScene.activeElevation);
     });
 
     const endDrag = () => {
       if (this.entityDragger.isDragging) {
-        const gridSize = this.undoManager.getMetadata().gridSize;
+        const { gridSize } = this.undoManager.getMetadata();
         this.entityDragger.endDrag(gridSize, this.editorScene.activeElevation);
         this.controls.enabled = true; // Re-enable orbit
         // Refresh property panel with updated position

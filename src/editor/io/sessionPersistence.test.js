@@ -5,7 +5,6 @@
  * Covers round-trip fidelity, clearing state, and graceful error handling.
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
-import { serializePuzzle } from 'editor/model/serialization';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
 
 describe('Session Persistence', () => {

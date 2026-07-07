@@ -551,14 +551,14 @@ function createTestContext(options = {}) {
     /**
      * Start player playback for a song (for test setup)
      * @param {Object} song - Song object with data array
-     * @param {number} tempo - Tempo in BPM (default: puzzle tempo)
+     * @param {number} tempoBpm - Tempo in BPM (default: puzzle tempo)
      */
-    startPlayerPlayback(song, tempo) {
+    startPlayerPlayback(song, tempoBpm) {
       const playerInstrument = PlaybackManager.getPlayerInstrument();
       playerInstrument.sourcePosition = this.getPlayerPosition();
       playerInstrument.play({
         data: song.data || song,
-        tempo: tempo || gameState.musicalClock?.tempo || 120,
+        tempo: tempoBpm || gameState.musicalClock?.tempo || 120,
         basis: 4,
       });
       PlaybackManager.isPlaying = true;

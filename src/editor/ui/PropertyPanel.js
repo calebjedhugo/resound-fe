@@ -70,7 +70,8 @@ export default class PropertyPanel {
       case 'ramp':
         this._renderRampFields(wrapper, entity);
         break;
-      // wall and player: position only
+      default:
+        break; // wall and player: position only
     }
 
     // Delete button

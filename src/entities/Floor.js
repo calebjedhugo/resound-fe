@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
-import Entity from './Entity';
+import Entity from 'entities/Entity';
 
 class Floor extends Entity {
   constructor(gridSize, floors = []) {

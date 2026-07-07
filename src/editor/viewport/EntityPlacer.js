@@ -2,16 +2,10 @@ import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { gridToWorld } from 'editor/viewport/gridUtils';
 import ENTITY_COLORS from 'editor/viewport/entityColors';
+import { createEntityGeometry, Y_OFFSETS } from 'editor/viewport/entityGeometry';
 
-// Vertical offset (in WORLD_SCALE units) that sits each mesh on its floor.
-// Shared by mesh creation and repositioning so they can't drift apart.
-const Y_OFFSETS = {
-  creature: 0.35,
-  gate: 0.75,
-  fountain: 0.25,
-  wall: 0.5,
-  ramp: 0.25,
-};
+// Entity types _createMesh knows how to place (player spawn is separate).
+const PLACEABLE_TYPES = ['creature', 'gate', 'fountain', 'wall', 'ramp'];
 
 // Sensible starting data for a freshly-placed entity, so a new creature is
 // immediately usable and the properties panel reflects what is actually stored
@@ -92,10 +86,10 @@ export default class EntityPlacer {
     const y = elevation * ELEVATION_HEIGHT;
 
     // Spawn marker: cone pointing down
-    const geo = new THREE.ConeGeometry(WORLD_SCALE * 0.3, WORLD_SCALE * 0.6, 8);
+    const geo = createEntityGeometry('player');
     const mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.player });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(world.x, y + WORLD_SCALE * 0.6, world.z);
+    mesh.position.set(world.x, y + WORLD_SCALE * Y_OFFSETS.player, world.z);
     mesh.rotation.x = Math.PI; // Point downward
     this._scene.add(mesh);
     this._playerSpawnMesh = mesh;
@@ -103,46 +97,18 @@ export default class EntityPlacer {
   }
 
   _createMesh(id, type, gridX, gridZ, elevation, data) {
+    if (!PLACEABLE_TYPES.includes(type)) return;
+
     const world = gridToWorld(gridX, gridZ);
     const y = elevation * ELEVATION_HEIGHT;
-    let geo, mat, mesh;
 
-    switch (type) {
-      case 'creature':
-        geo = new THREE.SphereGeometry(WORLD_SCALE * 0.35, 16, 12);
-        mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.creature });
-        mesh = new THREE.Mesh(geo, mat);
-        break;
-      case 'gate':
-        geo = new THREE.BoxGeometry(WORLD_SCALE * 0.8, WORLD_SCALE * 1.5, WORLD_SCALE * 0.3);
-        mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.gate });
-        mesh = new THREE.Mesh(geo, mat);
-        break;
-      case 'fountain':
-        geo = new THREE.CylinderGeometry(
-          WORLD_SCALE * 0.4,
-          WORLD_SCALE * 0.4,
-          WORLD_SCALE * 0.5,
-          16
-        );
-        mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.fountain });
-        mesh = new THREE.Mesh(geo, mat);
-        break;
-      case 'wall':
-        geo = new THREE.BoxGeometry(WORLD_SCALE * 0.95, WORLD_SCALE, WORLD_SCALE * 0.95);
-        mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.wall });
-        mesh = new THREE.Mesh(geo, mat);
-        break;
-      case 'ramp': {
-        geo = new THREE.BoxGeometry(WORLD_SCALE * 0.9, WORLD_SCALE * 0.5, WORLD_SCALE * 0.9);
-        mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.ramp });
-        mesh = new THREE.Mesh(geo, mat);
-        // Rotate based on direction (default: north)
-        this._applyRampRotation(mesh, (data && data.direction) || 'north');
-        break;
-      }
-      default:
-        return;
+    const geo = createEntityGeometry(type);
+    const mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS[type] });
+    const mesh = new THREE.Mesh(geo, mat);
+
+    if (type === 'ramp') {
+      // Rotate based on direction (default: north)
+      this._applyRampRotation(mesh, (data && data.direction) || 'north');
     }
 
     mesh.position.set(world.x, y + WORLD_SCALE * Y_OFFSETS[type], world.z);
@@ -165,6 +131,8 @@ export default class EntityPlacer {
         break;
       case 'west':
         mesh.rotation.z = -0.3;
+        break;
+      default:
         break;
     }
   }

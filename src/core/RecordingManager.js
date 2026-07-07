@@ -1,6 +1,6 @@
 import showToast from 'ui/Toast';
-import gameState from './GameState';
-import { quantizeToBeat, groupBy } from './utils';
+import gameState from 'core/GameState';
+import { quantizeToBeat, groupBy } from 'core/utils';
 
 // Throttle the out-of-range warning (key repeat fires startRecording rapidly)
 let lastRangeWarning = 0;

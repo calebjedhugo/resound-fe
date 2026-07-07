@@ -103,7 +103,7 @@ describe('NotationEditor', () => {
   });
 
   it('clears every note via the Clear button', () => {
-    const { editor, container, changes } = makeEditor({
+    const { container, changes } = makeEditor({
       song: [
         { pitch: 'C4', length: '1/4' },
         { pitch: 'E4', length: '1/4' },

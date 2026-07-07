@@ -52,9 +52,9 @@ class ClapVisual {
 
   /**
    * Update active visual effects (fade out over time)
-   * @param {number} deltaTime - Time elapsed in seconds
    */
-  update(deltaTime) {
+  update() {
+    if (this.activeFeedback.length === 0) return;
     const currentTime = performance.now();
 
     // Update each active feedback

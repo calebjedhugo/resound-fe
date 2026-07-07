@@ -43,7 +43,7 @@ export default class EntityDragger {
     const hits = this._raycaster.intersectObject(this._groundPlane);
     if (hits.length === 0) return;
 
-    const point = hits[0].point;
+    const { point } = hits[0];
     const grid = snapToGrid(point.x, point.z, gridSize);
     if (!grid) return;
 

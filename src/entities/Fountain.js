@@ -7,7 +7,7 @@ import ProgressManager from 'core/ProgressManager';
 import { Fountain as FountainInstrument } from 'resound-sound';
 import { getDistance } from 'core/utils';
 import NotationDisplay from 'ui/NotationDisplay';
-import Entity from './Entity';
+import Entity from 'entities/Entity';
 
 class Fountain extends Entity {
   // How long heard notes stay eligible for matching (must comfortably exceed
@@ -97,7 +97,7 @@ class Fountain extends Entity {
   /**
    * Update fountain state - check for song match
    */
-  update(deltaTime) {
+  update(_deltaTime) {
     this._updateMismatchFlash();
     if (this.isActivated) return; // Already activated
 

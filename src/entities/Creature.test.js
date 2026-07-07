@@ -508,8 +508,11 @@ describe('Creature audible range', () => {
  * Phase 5: Creatures track elevation, traverse ramps, are blocked by
  * elevation boundaries, and 3D distance affects audio naturally.
  */
+/* eslint-disable import/first -- section header for the suite below; imports
+   are hoisted by babel-jest so the placement is cosmetic */
 import { ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
 import { getDistance, getDistanceVolume } from 'core/utils';
+/* eslint-enable import/first */
 
 describe('Creature elevation behavior', () => {
   describe('elevation tracking', () => {

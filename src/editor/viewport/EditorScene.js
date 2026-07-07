@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WORLD_SCALE } from 'core/constants';
+import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { snapToGrid, gridToWorld } from 'editor/viewport/gridUtils';
 
 export default class EditorScene {
@@ -76,11 +76,11 @@ export default class EditorScene {
     this._raycaster.setFromCamera(this._mouse, camera);
     const hits = this._raycaster.intersectObject(this._groundPlane);
     if (hits.length > 0) {
-      const point = hits[0].point;
+      const { point } = hits[0];
       const grid = snapToGrid(point.x, point.z, this._gridSize);
       if (grid) {
         const world = gridToWorld(grid.x, grid.z);
-        const elevY = this._activeElevation * 3.0; // ELEVATION_HEIGHT
+        const elevY = this._activeElevation * ELEVATION_HEIGHT;
         this._hoverMesh.position.set(world.x, elevY + 0.05, world.z);
         this._hoverMesh.visible = true;
       } else {

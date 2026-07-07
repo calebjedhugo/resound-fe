@@ -1,4 +1,4 @@
-import { quantizeToBeat, groupBy } from './utils';
+import { quantizeToBeat, groupBy } from 'core/utils';
 
 /**
  * ListeningManager - Global system for entities to listen to all sound sources

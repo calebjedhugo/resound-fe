@@ -1,5 +1,5 @@
 import gameState from 'core/GameState';
-import Menu from './Menu';
+import Menu from 'ui/Menu';
 
 class PauseMenu extends Menu {
   constructor(onContinue, onExit, onNextPuzzle) {

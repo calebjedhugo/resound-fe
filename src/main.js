@@ -24,7 +24,7 @@ import ListeningManager from 'core/ListeningManager';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
-import createEventListeners from './createEventListeners';
+import createEventListeners from 'createEventListeners';
 
 // Three.js scene
 const scene = new THREE.Scene();
@@ -135,7 +135,7 @@ function update(deltaTime) {
       gameState.musicalClock.update(deltaTime);
     }
     entityManager.update(deltaTime);
-    clapVisual.update(deltaTime);
+    clapVisual.update();
     recordingUI.update();
     keyHints.update(deltaTime);
     debugUI.update();

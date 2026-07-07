@@ -217,7 +217,7 @@ describe('Song Editor Integration', () => {
       select.dispatchEvent(new Event('change'));
 
       // Verify entity data saved
-      let entity = env.undoManager.getEntity(id);
+      const entity = env.undoManager.getEntity(id);
       expect(entity.data.clef).toBe('bass');
 
       // Close and reopen

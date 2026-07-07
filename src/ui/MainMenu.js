@@ -1,4 +1,4 @@
-import Menu from './Menu';
+import Menu from 'ui/Menu';
 
 class MainMenu extends Menu {
   constructor(puzzles, onSelectPuzzle, progressManager) {

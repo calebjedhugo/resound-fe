@@ -133,7 +133,7 @@ describe('Elevation-aware collision', () => {
       audibleRange: 15,
     });
 
-    const creatureB = ctx.addCreature({
+    ctx.addCreature({
       position: { x: 7 * WORLD_SCALE, y: 0, z: 9 * WORLD_SCALE - 0.5 },
       song: [{ pitch: 'E4', length: '1/4' }],
       interval: 4,

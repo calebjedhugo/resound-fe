@@ -1,7 +1,7 @@
 import { Clap } from 'resound-sound';
-import { CLAP_RANGE, DEFAULT_CLAP_DISPLACEMENT } from './constants';
-import { getDistance } from './utils';
-import gameState from './GameState';
+import { CLAP_RANGE, DEFAULT_CLAP_DISPLACEMENT } from 'core/constants';
+import { getDistance } from 'core/utils';
+import gameState from 'core/GameState';
 
 /**
  * ClapManager - Handles player clapping to displace creature timing
@@ -84,13 +84,7 @@ class ClapManager {
     // Play clap sound
     this.clapInstrument.clap();
 
-    // Get default displacement from puzzle, or use system default
-    const defaultDisplacement = this.parseDisplacement(
-      currentPuzzle?.clapDisplacement || DEFAULT_CLAP_DISPLACEMENT
-    );
-
     // Find creatures in clap range and apply displacement
-    let affectedCount = 0;
     entities.forEach((entity) => {
       if (entity.type !== 'creature') return;
 
@@ -106,7 +100,6 @@ class ClapManager {
         // Tell creature to handle the clap
         if (entity.handleClap) {
           entity.handleClap(displacement);
-          affectedCount++;
         }
       }
     });
@@ -115,8 +108,6 @@ class ClapManager {
     if (this.clapVisualCallback) {
       this.clapVisualCallback(player.position, CLAP_RANGE);
     }
-
-    console.log(`Clap affected ${affectedCount} creature(s)`);
   }
 
   /**

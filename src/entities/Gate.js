@@ -4,7 +4,7 @@ import evaluatePhrases from 'core/phraseMatching';
 import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
 import NotationDisplay from 'ui/NotationDisplay';
-import Entity from './Entity';
+import Entity from 'entities/Entity';
 
 class Gate extends Entity {
   // How long heard notes stay eligible for matching (must comfortably exceed
@@ -93,7 +93,7 @@ class Gate extends Entity {
    * step-through grace, and the gate closes once no correct performance has
    * sounded for OPEN_GRACE_BEATS.
    */
-  update(deltaTime) {
+  update(_deltaTime) {
     this._updateMismatchFlash();
 
     // Sliding window: forget notes older than the retention period. (A hard

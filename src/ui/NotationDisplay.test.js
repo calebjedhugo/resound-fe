@@ -1,6 +1,5 @@
 /** @jest-environment jsdom */
 
-import * as THREE from 'three';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 

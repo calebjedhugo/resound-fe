@@ -111,9 +111,12 @@ jest.mock('editor/io/sessionPersistence', () => ({
   clearSession: jest.fn(),
 }));
 
+/* eslint-disable import/first -- these imports must stay BELOW the mock consts:
+   the jest.mock factories above reference them when the first import loads */
 import EditorApp from 'editor/EditorApp';
 import { loadSession } from 'editor/io/sessionPersistence';
 import { deserializePuzzle } from 'editor/model/serialization';
+/* eslint-enable import/first */
 
 function setupEditorDOM() {
   document.body.innerHTML = `
