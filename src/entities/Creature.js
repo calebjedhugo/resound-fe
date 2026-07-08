@@ -119,24 +119,27 @@ class Creature extends Entity {
       this.nextSingBeat += this.interval;
     }
 
-    // Distance to player: direct within the player's own area; from a
-    // neighbor area, sound reaches the player only through the doorway —
-    // effective distance = player->gate + partner-gate->creature (+ leak
-    // while the door is closed), minimized over the doors joining the areas.
+    // Distance to player: sound takes the SHORTEST path — direct within the
+    // player's own area, and/or through a doorway: player->gate +
+    // partner-gate->creature (+ leak while the door is closed), minimized
+    // over the doors reaching this creature's area. An in-level teleport
+    // door is a shortcut: a creature far across the map is right there
+    // through the open doorway.
     const inActiveArea = !this.area || this.area === gameState.activeArea;
-    const distance = inActiveArea
-      ? getDistance(this.position, gameState.player.position)
-      : gameState.world?.effectiveDistanceToPlayer(this.area, this.position) ?? Infinity;
+    const direct = inActiveArea ? getDistance(this.position, gameState.player.position) : Infinity;
+    const viaDoors =
+      gameState.world?.effectiveDistanceToPlayer(this.area, this.position) ?? Infinity;
+    const distance = Math.min(direct, viaDoors);
 
     // Update volume based on distance (inverse square law)
     if (distance <= this.audibleRange) {
       const volume = getDistanceVolume(distance, this.audibleRange);
       this.instrument.updateVolume(volume);
 
-      // Check if in recording range. Recording is strictly per-area: a
-      // neighbor creature is audible through the doorway but can only be
-      // recorded from inside its own area.
-      this.isRecordable = inActiveArea && distance <= this.recordingRange;
+      // Check if in recording range. Recording takes real proximity, never a
+      // doorway: a creature audible through a door (neighbor area OR an
+      // in-level teleport) must be approached on its own side to record.
+      this.isRecordable = inActiveArea && direct <= this.recordingRange;
     } else {
       // Too far - silence
       this.instrument.updateVolume(0);

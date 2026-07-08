@@ -43,7 +43,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   PLAYER_SIZE,
 } from 'core/constants';
-import { FACING_VECTORS } from 'core/portalMath';
+import { FACING_VECTORS, sideOfGate } from 'core/portalMath';
 import { getDistance } from 'core/utils';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
@@ -178,10 +178,20 @@ class PortalManager {
   renderPortals(renderer, camera) {
     for (const gate of this._linkedGates) {
       let view = this._views.get(gate);
-      if (view === undefined && gate.isOpen) {
-        view = this._createView(gate);
-        // undefined = neighbor not loaded yet: retry next frame, don't memoize
-        if (view !== undefined) this._views.set(gate, view);
+      if (gate.isOpen && view !== null) {
+        // Doors are omnidirectional: the doorway surface lives on whichever
+        // face the player is currently on — rounding the gate rebuilds the
+        // view for the new side (cheap and rare; null = dangling, keep off)
+        const side = sideOfGate(gate.position, camera.position);
+        if (view === undefined || view.facing !== side) {
+          const fresh = this._createView(gate, side);
+          // undefined = neighbor not loaded yet: retry next frame, don't memoize
+          if (fresh !== undefined) {
+            if (view) view.dispose();
+            this._views.set(gate, fresh);
+            view = fresh;
+          }
+        }
       }
       if (view) {
         view.setVisible(gate.isOpen);
@@ -193,20 +203,38 @@ class PortalManager {
   // --- Doorway sound model (stage 3) -------------------------------------
 
   /**
-   * Effective distance from the player to a position in a NEIGHBOR area:
+   * Effective distance from the player to a position, through doors:
    * player->gate + partner-gate->position, plus the leak penalty while the
-   * door is closed, minimized over the doors joining the two areas.
-   * @returns {number} Infinity when the areas share no door
+   * door is closed, minimized over the doors reaching `area`. Covers both
+   * NEIGHBOR areas and doors joining two spots of the player's OWN area
+   * (in-level teleport doors are sound shortcuts — a creature far across
+   * the map is right there through the doorway).
+   * @returns {number} Infinity when no door connects
    */
   effectiveDistanceToPlayer(area, position) {
+    const player = gameState.player.position;
     let best = Infinity;
     for (const door of this._doors) {
+      const leak = this._doorLeak(door);
+      if (door.areaA === area && door.areaB === area && area === this._activeArea) {
+        // Same-area door: either gate can be the near end
+        best = Math.min(
+          best,
+          getDistance(player, door.gateA.position) +
+            getDistance(position, door.gateB.position) +
+            leak,
+          getDistance(player, door.gateB.position) +
+            getDistance(position, door.gateA.position) +
+            leak
+        );
+        continue; // eslint-disable-line no-continue
+      }
       const side = this._doorSides(door, area, this._activeArea);
-      if (!side) continue;
+      if (!side) continue; // eslint-disable-line no-continue
       const d =
-        getDistance(gameState.player.position, side.remoteGate.position) +
+        getDistance(player, side.remoteGate.position) +
         getDistance(position, side.localGate.position) +
-        this._doorLeak(door);
+        leak;
       if (d < best) best = d;
     }
     return best;
@@ -465,11 +493,14 @@ class PortalManager {
   }
 
   /**
+   * @param {Gate} gate
+   * @param {string} [sourceFacing] - which face of `gate` the view renders
+   *   on (the player's current side); defaults to the gate's facing
    * @returns {PortalView | null | undefined} null = permanently not
    *   renderable (dangling link — the gate stays an ordinary gate);
    *   undefined = neighbor area not loaded yet.
    */
-  _createView(gate) {
+  _createView(gate, sourceFacing = gate.facing) {
     const neighbor = this._areas.get(gate.link.puzzleId);
     if (!neighbor) return undefined;
     const partner = neighbor.entityManager
@@ -480,7 +511,10 @@ class PortalManager {
     // group lives in the main scene (Area.scene is empty while active) —
     // render the main scene through the doorway instead.
     const sceneOverride = neighbor === this._activeArea ? this._mainScene : null;
-    return new PortalView(gate, partner, neighbor, sceneOverride);
+    // Look out the partner's ARRIVAL side, so the view through the door
+    // shows exactly where a crossing lands
+    const partnerFacing = this._arrivalDirection(neighbor, partner);
+    return new PortalView(gate, partner, neighbor, sceneOverride, sourceFacing, partnerFacing);
   }
 
   /**
@@ -517,10 +551,12 @@ class PortalManager {
 
     this._setActiveArea(neighbor);
 
-    // Arrive just OUTSIDE the partner gate, on its doorway side, facing away
-    // from it — as if having just stepped through. (partner.position is in
-    // world units; its y is the floor height of the gate's level.)
-    const outward = FACING_VECTORS[partner.facing] || FACING_VECTORS.north;
+    // Arrive just OUTSIDE the partner gate, facing away from it — as if
+    // having just stepped through. Doors are omnidirectional: prefer the
+    // partner's facing side, but never arrive inside a wall — fall back to
+    // the first clear side. (partner.position is in world units; its y is
+    // the floor height of the gate's level.)
+    const outward = FACING_VECTORS[this._arrivalDirection(neighbor, partner)];
     gameState.player.position = {
       x: partner.position.x + outward.x * WORLD_SCALE,
       y: partner.position.y + 1.8,
@@ -533,6 +569,46 @@ class PortalManager {
 
     this._afterActiveChange();
     if (this._onCrossed) this._onCrossed(neighbor.puzzle);
+  }
+
+  /**
+   * Pick the side of the partner gate to arrive on: its facing side when
+   * clear, else the first unblocked side (doors are omnidirectional, and
+   * arriving inside a wall would soft-lock — never allowed). Falls back to
+   * the facing side if somehow every side is blocked.
+   * @returns {'north'|'south'|'east'|'west'}
+   */
+  _arrivalDirection(area, partnerGate) {
+    const preferred = FACING_VECTORS[partnerGate.facing] ? partnerGate.facing : 'north';
+    const order = [preferred, ...Object.keys(FACING_VECTORS).filter((d) => d !== preferred)];
+    for (const dir of order) {
+      if (!this._arrivalBlocked(area, partnerGate, FACING_VECTORS[dir])) {
+        return dir;
+      }
+    }
+    return preferred;
+  }
+
+  /** True if the cell one step from the partner gate along `v` is not open floor. */
+  // eslint-disable-next-line class-methods-use-this
+  _arrivalBlocked(area, partnerGate, v) {
+    // Outside the grid = the perimeter, always blocked
+    if (partnerGate.gridPosition) {
+      const gx = partnerGate.gridPosition.x + v.x;
+      const gz = partnerGate.gridPosition.z + v.z;
+      const gridSize = (area.puzzle && area.puzzle.gridSize) || Infinity;
+      if (gx < 0 || gx >= gridSize || gz < 0 || gz >= gridSize) return true;
+    }
+    const cx = partnerGate.position.x + v.x * WORLD_SCALE;
+    const cz = partnerGate.position.z + v.z * WORLD_SCALE;
+    const cy = partnerGate.position.y;
+    return area.entities.some(
+      (e) =>
+        (e.type === 'wall' || e.type === 'gate' || e.type === 'fountain') &&
+        Math.abs(e.position.x - cx) < WORLD_SCALE / 2 &&
+        Math.abs(e.position.z - cz) < WORLD_SCALE / 2 &&
+        Math.abs(e.position.y - cy) < ELEVATION_HEIGHT / 2
+    );
   }
 }
 

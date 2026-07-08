@@ -85,9 +85,14 @@ edits show up in the game on a manual reload.
 ## Portal links (cross-puzzle gate links)
 
 Gates carry a stable `id` (auto-assigned `gate-N`, renameable), a `facing`
-(doorway plane), and optionally `link: { puzzleId, gateId }` — a door into
-another puzzle. See `puzzles/schema.md` "Gate Links" and DESIGN.md "Gate
-links / portals".
+(doorway plane, default "north"), and optionally `link: { puzzleId, gateId }`
+— a door into another puzzle. See `puzzles/schema.md` "Gate Links" and
+DESIGN.md "Gate links / portals".
+
+Doors are OMNIDIRECTIONAL (every side walkable; the runtime picks view and
+arrival sides itself), so the Facing dropdown is PARKED — commented out in
+`PropertyPanel._renderGateFields`, kept for possible revival. `facing`
+remains in the schema/serialization untouched.
 
 - **All link mutations go through `io/portalLinks.js`** (create/clear/rename/
   release-on-delete). Links are bidirectional: every operation also updates

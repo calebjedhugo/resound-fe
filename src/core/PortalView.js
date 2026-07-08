@@ -46,19 +46,31 @@ class PortalView {
    *   neighborArea.scene. Used for SAME-puzzle doors: the "neighbor" is the
    *   active area, whose content group lives in the main render scene
    *   (Area.scene is empty while active).
+   * @param {string} [sourceFacing] - the gate face to render the doorway on.
+   *   Doors are omnidirectional: PortalManager passes the side the player is
+   *   on (rebuilding the view when they round the gate); defaults to the
+   *   gate's authored facing.
+   * @param {string} [partnerFacing] - the partner face the view looks out of
+   *   (PortalManager passes the arrival side so the view shows where a
+   *   crossing lands); defaults to the partner's authored facing.
    */
-  constructor(gate, partnerGate, neighborArea, sceneOverride = null) {
+  constructor(
+    gate,
+    partnerGate,
+    neighborArea,
+    sceneOverride = null,
+    sourceFacing = gate.facing,
+    partnerFacing = partnerGate.facing
+  ) {
     this.gate = gate;
+    // The face this view renders on — PortalManager compares it against the
+    // player's current side to know when to rebuild
+    this.facing = sourceFacing;
 
-    const mapping = portalMapping(
-      gate.position,
-      gate.facing,
-      partnerGate.position,
-      partnerGate.facing
-    );
+    const mapping = portalMapping(gate.position, sourceFacing, partnerGate.position, partnerFacing);
     this._map = mapping.map;
-    this._corners = doorwayCorners(gate.position, gate.facing);
-    this._outward = FACING_VECTORS[gate.facing] || FACING_VECTORS.north;
+    this._corners = doorwayCorners(gate.position, sourceFacing);
+    this._outward = FACING_VECTORS[sourceFacing] || FACING_VECTORS.north;
 
     // Gates never move, so the doorway quad's neighbor-space corners are fixed.
     const bl = this._map(this._corners.bottomLeft);
@@ -100,7 +112,7 @@ class PortalView {
       0,
       this._outward.z * DOORWAY_OFFSET
     );
-    this.surface.rotation.y = DOORWAY_ROTATION_Y[this.gate.facing] ?? Math.PI;
+    this.surface.rotation.y = DOORWAY_ROTATION_Y[this.facing] ?? Math.PI;
     this.surface.visible = false;
     // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)
     this.surface._isPortalSurface = true;
@@ -161,8 +173,11 @@ class PortalView {
   }
 
   dispose() {
-    if (this.surface.parent) {
-      this.surface.parent.remove(this.surface);
+    // Remove from the gate mesh directly (where _buildDoorwaySurface put it)
+    // rather than via surface.parent — parent tracking isn't guaranteed
+    // outside real THREE (the test mock doesn't set it)
+    if (this.gate.mesh) {
+      this.gate.mesh.remove(this.surface);
     }
     this.surface.geometry.dispose();
     this.surface.material.dispose();

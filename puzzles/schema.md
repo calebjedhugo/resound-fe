@@ -33,7 +33,9 @@ This document defines the structure for Resound puzzle files.
       "id": "string",                // Gates only: stable id, unique within the puzzle
                                      // (e.g., "east-door"). Auto-assigned by the editor.
       "facing": "string",            // Gates only: doorway plane — "north", "south",
-                                     // "east", "west" (default "north")
+                                     // "east", "west" (default "north"). Doors are
+                                     // omnidirectional at runtime (any side walks
+                                     // through); the editor no longer exposes this.
       "link": {                      // Gates only, OPTIONAL: portal to a gate in another puzzle
         "puzzleId": "string",        // Target puzzle id
         "gateId": "string"           // Target gate's stable id in that puzzle

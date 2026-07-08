@@ -129,6 +129,25 @@ describe('PortalManager crossing', () => {
     expect(gates[0].link).toEqual({ puzzleId: 'portal-a', gateId: 'north-door' });
   });
 
+  it('arrival never lands inside a wall: a blocked side falls back to a clear one', async () => {
+    const walled = JSON.parse(JSON.stringify(portalB));
+    // Wall the cell south of south-door (its facing side)
+    walled.entities.push({ type: 'wall', position: { x: 5, y: 0, z: 8 } });
+    installFetchMock({ 'portal-b': walled });
+    ctx.loadPuzzle('portal-a'); // re-enter so the neighbor loads walled
+    [gate] = ctx.getGates();
+    gate.open();
+    placePlayerAtCell(5, 2);
+
+    PortalManager.update();
+    await flushCrossing();
+
+    expect(gameState.currentPuzzle.id).toBe('portal-b');
+    // The facing side (5, 8) is walled — arrive on the clear north side (5, 6)
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(6 * WORLD_SCALE);
+  });
+
   it('a dangling link (missing partner gate) disables the door instead of crashing', async () => {
     const broken = JSON.parse(JSON.stringify(portalB));
     broken.entities = []; // partner gate gone
@@ -518,5 +537,109 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     const rendered = renderer.renderCalls[0].scene;
     expect(rendered).not.toBe(gameState.activeArea.scene);
     expect(rendered.children).toContain(gameState.activeArea.group);
+  });
+
+  it('the doorway surface follows the player around the gate (omnidirectional)', () => {
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render() {},
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorA.open();
+    const surfaces = () => doorA.mesh.children.filter((c) => c._isPortalSurface);
+
+    // Approach from the SOUTH (door-a's authored facing is north)
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 3 * WORLD_SCALE },
+    });
+    expect(surfaces()).toHaveLength(1);
+    expect(surfaces()[0].position.z).toBeGreaterThan(0); // on the south face
+
+    // Round the gate to the NORTH: the view rebuilds on that face
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE },
+    });
+    expect(surfaces()).toHaveLength(1); // the south-face surface was disposed
+    expect(surfaces()[0].position.z).toBeLessThan(0); // on the north face
+  });
+});
+
+describe('PortalManager same-area doorway sound (teleport doors are shortcuts)', () => {
+  let doorA; // grid (5, 2) -> world z 6
+  let doorB; // grid (5, 8) -> world z 24
+
+  beforeEach(() => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-self');
+    [doorA, doorB] = ctx.getGates();
+  });
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  const shortcut = (source) =>
+    getDistance(gameState.player.position, doorB.position) + getDistance(source, doorA.position);
+
+  it('effectiveDistanceToPlayer takes the shorter path through the door, either way around', () => {
+    // Player just south of door-b; sound source just north of door-a:
+    // direct is 24 world units, the open door is a few steps
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 9 * WORLD_SCALE });
+    const source = { x: 5 * WORLD_SCALE, y: 0, z: 1 * WORLD_SCALE };
+    doorA.open();
+
+    expect(PortalManager.effectiveDistanceToPlayer(gameState.activeArea, source)).toBeCloseTo(
+      shortcut(source)
+    );
+
+    // Swap ends: player near door-a, source near door-b — same shortcut
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 1 * WORLD_SCALE });
+    const swapped = { x: 5 * WORLD_SCALE, y: 0, z: 9 * WORLD_SCALE };
+    expect(PortalManager.effectiveDistanceToPlayer(gameState.activeArea, swapped)).toBeCloseTo(
+      getDistance(gameState.player.position, doorA.position) + getDistance(swapped, doorB.position)
+    );
+  });
+
+  it('a closed teleport door leaks with the distance penalty', () => {
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 9 * WORLD_SCALE });
+    const source = { x: 5 * WORLD_SCALE, y: 0, z: 1 * WORLD_SCALE };
+
+    expect(PortalManager.effectiveDistanceToPlayer(gameState.activeArea, source)).toBeCloseTo(
+      shortcut(source) + CLOSED_DOOR_LEAK_DISTANCE
+    );
+  });
+
+  it('a creature far across the map is audible through the OPEN door', async () => {
+    // Just north of door-a; direct distance to the player is 24 — well
+    // beyond its 15 audible range. Through the door it is 6 away.
+    const creature = ctx.addCreature({
+      position: { x: 5 * WORLD_SCALE, z: 1 * WORLD_SCALE },
+      audibleRange: 15,
+    });
+    const volumeSpy = jest.spyOn(creature.instrument, 'updateVolume');
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 9 * WORLD_SCALE });
+    doorA.open();
+
+    await ctx.tick(32);
+
+    const volumes = volumeSpy.mock.calls.map(([v]) => v);
+    expect(Math.max(...volumes)).toBeGreaterThan(0);
+  });
+
+  it('...but is NOT recordable through the door (recording takes real proximity)', async () => {
+    const creature = ctx.addCreature({
+      position: { x: 5 * WORLD_SCALE, z: 1 * WORLD_SCALE },
+      audibleRange: 15,
+    });
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 9 * WORLD_SCALE });
+    doorA.open();
+
+    await ctx.tick(32);
+
+    expect(creature.isRecordable).toBe(false);
+    expect(ctx.getCreaturesInRange()).not.toContain(creature);
   });
 });

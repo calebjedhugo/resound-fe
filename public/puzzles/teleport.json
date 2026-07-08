@@ -1,0 +1,53 @@
+{
+  "id": "teleport",
+  "name": "teleport",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": { "x": 7, "y": 0, "z": 10 },
+  "floors": [],
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 6, "y": 0, "z": 6 },
+      "data": {
+        "song": [
+          { "pitch": "C5", "length": "1/4" },
+          { "pitch": "A4", "length": "1/4" },
+          { "pitch": "G5", "length": "1/4" },
+          { "pitch": "B4", "length": "1/4" }
+        ],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 7, "y": 0, "z": 6 },
+      "song": [
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "G5", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" }
+      ],
+      "id": "gate-1",
+      "facing": "north",
+      "link": { "puzzleId": "teleport", "gateId": "gate-2" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 14, "y": 0, "z": 9 },
+      "song": [
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "G5", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" }
+      ],
+      "id": "gate-2",
+      "facing": "north",
+      "link": { "puzzleId": "teleport", "gateId": "gate-1" }
+    }
+  ]
+}

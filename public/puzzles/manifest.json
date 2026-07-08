@@ -11,6 +11,7 @@
     { "id": "playtest-r2", "name": "playtest-r2", "difficulty": 1 },
     { "id": "playtest-r3", "name": "playtest-r3", "difficulty": 1 },
     { "id": "playtest-r4-selfsolve", "name": "playtest-r4-selfsolve", "difficulty": 1 },
-    { "id": "playtest-r4-legit", "name": "playtest-r4-legit", "difficulty": 1 }
+    { "id": "playtest-r4-legit", "name": "playtest-r4-legit", "difficulty": 1 },
+    { "id": "teleport", "name": "teleport", "difficulty": 1 }
   ]
 }

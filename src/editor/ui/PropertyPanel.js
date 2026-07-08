@@ -6,7 +6,6 @@
  * Fields vary by entity type (creature, gate, fountain, ramp, wall).
  */
 import { addSelectRow, addInputRow } from 'editor/ui/fieldRows';
-import { GATE_FACINGS } from 'editor/util/gateIds';
 import {
   fetchLinkTargets,
   fetchTargetGates,
@@ -162,11 +161,17 @@ export default class PropertyPanel {
       'Stable id other puzzles use to link to this gate. Unique within this puzzle.'
     );
 
-    // Doorway facing: the face a portal renders on / crossing exits toward
-    addSelectRow(wrapper, 'Facing', GATE_FACINGS, data.facing || 'north', (facing) => {
-      const newData = { ...this._undoManager.getEntity(this._selectedId).data, facing };
-      this._undoManager.updateEntity(this._selectedId, { data: newData });
-    });
+    // Facing dropdown PARKED (2026-07-07): doors are omnidirectional by
+    // default — every side of a gate can be walked through, and arrival
+    // picks a clear side (PortalManager._arrivalDirection) — so the editor
+    // no longer asks. `facing` still exists in the schema/model (defaulted
+    // "north") and still orients the see-through render surface; Caleb may
+    // bring the affordance back later. To restore, uncomment and re-import
+    // GATE_FACINGS from 'editor/util/gateIds'.
+    // addSelectRow(wrapper, 'Facing', GATE_FACINGS, data.facing || 'north', (facing) => {
+    //   const newData = { ...this._undoManager.getEntity(this._selectedId).data, facing };
+    //   this._undoManager.updateEntity(this._selectedId, { data: newData });
+    // });
   }
 
   /**
