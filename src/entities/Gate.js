@@ -220,13 +220,26 @@ class Gate extends Entity {
     this._applyLook();
   }
 
+  /**
+   * Linked-door look: while open, the gate box vanishes entirely — only the
+   * doorway views (and the notation) show, so a working door never shows a
+   * green shell from any angle. PortalManager enables this once the door's
+   * see-through views are viable; unlinked gates and dangling links keep
+   * the ordinary open-gate green.
+   */
+  setDoorLook(enabled) {
+    if (this._doorLook === Boolean(enabled)) return;
+    this._doorLook = Boolean(enabled);
+    this._applyLook();
+  }
+
   /** Paint the gate for its current open/closed state (color + transparency). */
   _applyLook() {
     const m = this.mesh.material;
     if (this.isOpen) {
       m.color.setHex(0x00ff00); // green + semi-transparent when open
       m.transparent = true;
-      m.opacity = 0.3;
+      m.opacity = this._doorLook ? 0 : 0.3; // a working door has no shell
     } else {
       m.color.setHex(0xffaa00); // solid orange when closed
       m.transparent = false;

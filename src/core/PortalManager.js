@@ -43,7 +43,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   PLAYER_SIZE,
 } from 'core/constants';
-import { FACING_VECTORS, sideOfGate } from 'core/portalMath';
+import { FACING_VECTORS } from 'core/portalMath';
 import { getDistance } from 'core/utils';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
@@ -57,7 +57,9 @@ class PortalManager {
     this._areas = new Map(); // puzzleId -> live Area (includes the active one)
     this._doors = []; // one entry per linked gate PAIR with both areas loaded
     this._linkedGates = []; // active area's linked gates (crossing + views)
-    this._views = new Map(); // gate -> PortalView | null (null = dangling link)
+    // gate -> Map<facing, PortalView> (a view per player-visible face) or
+    // null once the link proves dangling (the gate stays an ordinary gate)
+    this._views = new Map();
     this._transitioning = false;
     this._onCrossed = null;
     this._generation = 0; // bumped on reset: discards in-flight neighbor loads
@@ -168,34 +170,57 @@ class PortalManager {
 
   /**
    * Render-loop hook (called before the main scene renders each frame): draw
-   * each OPEN linked gate's neighbor view into its doorway surface. Views
-   * are built lazily on first open (once the neighbor area is loaded) and
-   * kept until the active area changes; while every linked gate is closed
-   * this is a no-op, so the see-through pass costs nothing.
+   * each OPEN linked gate's neighbor view into its doorway surfaces. Doors
+   * are omnidirectional: EVERY face the eye is on the outward side of gets a
+   * live view (two at a corner — both visible sides see through; a working
+   * door never shows a green shell). Views are built lazily per face (once
+   * the neighbor area is loaded) and kept until the active area changes;
+   * while every linked gate is closed this is a no-op, so the see-through
+   * pass costs nothing.
    * @param {THREE.WebGLRenderer} renderer
    * @param {THREE.Camera} camera - the player camera
    */
   renderPortals(renderer, camera) {
     for (const gate of this._linkedGates) {
-      let view = this._views.get(gate);
-      if (gate.isOpen && view !== null) {
-        // Doors are omnidirectional: the doorway surface lives on whichever
-        // face the player is currently on — rounding the gate rebuilds the
-        // view for the new side (cheap and rare; null = dangling, keep off)
-        const side = sideOfGate(gate.position, camera.position);
-        if (view === undefined || view.facing !== side) {
-          const fresh = this._createView(gate, side);
-          // undefined = neighbor not loaded yet: retry next frame, don't memoize
-          if (fresh !== undefined) {
-            if (view) view.dispose();
-            this._views.set(gate, fresh);
-            view = fresh;
+      let faces = this._views.get(gate);
+      if (faces === null) continue; // eslint-disable-line no-continue -- dangling link: ordinary gate
+      if (!gate.isOpen) {
+        if (faces) for (const view of faces.values()) view.setVisible(false);
+        continue; // eslint-disable-line no-continue
+      }
+      if (!faces) {
+        faces = new Map(); // facing -> PortalView
+        this._views.set(gate, faces);
+      }
+      let broken = false;
+      for (const facing of Object.keys(FACING_VECTORS)) {
+        const out = FACING_VECTORS[facing];
+        const onThisSide =
+          out.x * (camera.position.x - gate.position.x) +
+            out.z * (camera.position.z - gate.position.z) >
+          0.05;
+        let view = faces.get(facing);
+        if (onThisSide && !view) {
+          view = this._createView(gate, facing);
+          if (view === undefined) break; // neighbor not loaded yet: retry next frame
+          if (view === null) {
+            broken = true; // dangling link — the gate stays an ordinary gate
+            break;
           }
+          faces.set(facing, view);
+        }
+        if (view) {
+          view.setVisible(onThisSide);
+          if (onThisSide) view.render(renderer, camera);
         }
       }
-      if (view) {
-        view.setVisible(gate.isOpen);
-        if (gate.isOpen) view.render(renderer, camera);
+      if (broken) {
+        for (const view of faces.values()) view.dispose();
+        this._views.set(gate, null);
+        gate.setDoorLook(false);
+      } else if (faces.size > 0) {
+        // The door is working: the open box vanishes — only the views show
+        gate.setDoorLook(true);
       }
     }
   }
@@ -486,8 +511,9 @@ class PortalManager {
   }
 
   _disposeViews() {
-    for (const view of this._views.values()) {
-      if (view) view.dispose();
+    for (const faces of this._views.values()) {
+      if (!faces) continue; // eslint-disable-line no-continue -- null = dangling marker
+      for (const view of faces.values()) view.dispose();
     }
     this._views.clear();
   }

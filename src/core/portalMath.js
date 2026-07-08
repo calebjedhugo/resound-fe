@@ -27,21 +27,6 @@ export const FACING_VECTORS = {
 export const DOORWAY_OFFSET = WORLD_SCALE / 2 + 0.01;
 
 /**
- * Which side of a gate a world position is on (dominant horizontal axis).
- * Doors are omnidirectional: the see-through surface renders on whichever
- * face the player approaches, regardless of the gate's authored facing.
- * @param {{x:number, z:number}} gatePosition
- * @param {{x:number, z:number}} position - e.g. the player camera
- * @returns {'north'|'south'|'east'|'west'}
- */
-export function sideOfGate(gatePosition, position) {
-  const dx = position.x - gatePosition.x;
-  const dz = position.z - gatePosition.z;
-  if (Math.abs(dx) > Math.abs(dz)) return dx >= 0 ? 'east' : 'west';
-  return dz >= 0 ? 'south' : 'north';
-}
-
-/**
  * World-space corners of a gate's doorway quad — the full facing face of the
  * gate box (WORLD_SCALE wide, floor to WORLD_SCALE high). Corner names are
  * from the viewpoint of a player standing on the doorway side looking at the

@@ -160,12 +160,15 @@ rulings, in the designer's words where it matters:
 - **A closed linked gate looks like any closed gate.** The door reveals
   itself only when opened.
 - **Doors are omnidirectional (ruled 2026-07-07):** every side of a linked
-  gate can be walked through — the see-through surface renders on whichever
-  face the player approaches, and arrival picks the partner's facing side
-  when clear, else the first unblocked side (never inside a wall — the
-  no-soft-lock rule). `facing` still exists in the schema (default "north")
-  but the editor's Facing dropdown is PARKED (commented in PropertyPanel);
-  Caleb may bring it back.
+  gate can be walked through, and EVERY face the player can see shows the
+  view through the door (two at a corner — a working open door never shows
+  a green shell from any angle; only unlinked and dangling gates keep the
+  open-gate green). Arrival picks the partner's facing side when clear,
+  else the first unblocked side (never inside a wall — the no-soft-lock
+  rule). Applies to ALL links — same-puzzle teleports and cross-puzzle
+  doors are one mechanism. `facing` still exists in the schema (default
+  "north") but the editor's Facing dropdown is PARKED (commented in
+  PropertyPanel); Caleb may bring it back.
 - **A door is a sound shortcut, even within one puzzle:** sound takes the
   shortest path — direct or through a door (player→gate + partner→source,
   leak while closed). A creature far across the map is loud through an open

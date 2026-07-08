@@ -539,7 +539,49 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(rendered.children).toContain(gameState.activeArea.group);
   });
 
-  it('the doorway surface follows the player around the gate (omnidirectional)', () => {
+  it('every player-visible face sees through: a corner view renders BOTH sides', () => {
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render() {
+        this.renderCalls.push(1);
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorA.open();
+    const visibleSurfaces = () =>
+      doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
+
+    // Straight south of the gate: exactly one face sees through
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
+    });
+    expect(visibleSurfaces()).toHaveLength(1);
+    expect(renderer.renderCalls).toHaveLength(1);
+
+    // At the SOUTH-EAST corner: both visible faces see through, two passes
+    renderer.renderCalls = [];
+    PortalManager.renderPortals(renderer, {
+      position: { x: 7 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
+    });
+    expect(visibleSurfaces()).toHaveLength(2);
+    expect(renderer.renderCalls).toHaveLength(2);
+    // One on the south face (+z), one on the east face (+x)
+    const offsets = visibleSurfaces().map((s) => ({ x: s.position.x, z: s.position.z }));
+    expect(offsets.some((o) => o.z > 0 && o.x === 0)).toBe(true);
+    expect(offsets.some((o) => o.x > 0 && o.z === 0)).toBe(true);
+
+    // Back to straight south: the east view is kept but hidden
+    renderer.renderCalls = [];
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
+    });
+    expect(visibleSurfaces()).toHaveLength(1);
+    expect(renderer.renderCalls).toHaveLength(1);
+  });
+
+  it('a working open door shows no green shell; unlinked gates keep theirs', () => {
     const renderer = {
       clippingPlanes: [],
       renderCalls: [],
@@ -547,22 +589,24 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
       render() {},
       getDrawingBufferSize: (size) => size.set(800, 600),
     };
+    const unlinked = ctx.addGate({
+      position: { x: 3 * WORLD_SCALE, z: 5 * WORLD_SCALE },
+      song: [{ pitch: 'C4', length: '1/4' }],
+    });
     doorA.open();
-    const surfaces = () => doorA.mesh.children.filter((c) => c._isPortalSurface);
+    unlinked.open();
 
-    // Approach from the SOUTH (door-a's authored facing is north)
     PortalManager.renderPortals(renderer, {
-      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 3 * WORLD_SCALE },
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
-    expect(surfaces()).toHaveLength(1);
-    expect(surfaces()[0].position.z).toBeGreaterThan(0); // on the south face
 
-    // Round the gate to the NORTH: the view rebuilds on that face
-    PortalManager.renderPortals(renderer, {
-      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE },
-    });
-    expect(surfaces()).toHaveLength(1); // the south-face surface was disposed
-    expect(surfaces()[0].position.z).toBeLessThan(0); // on the north face
+    // The linked door's box vanishes — only its doorway views show
+    expect(doorA.mesh.material.opacity).toBe(0);
+    // An ordinary gate stays green + semi-transparent
+    expect(unlinked.mesh.material.opacity).toBeCloseTo(0.3);
+    // Closing restores the solid closed look
+    doorA.close();
+    expect(doorA.mesh.material.opacity).toBe(1);
   });
 });
 
