@@ -59,8 +59,13 @@ class CollisionDetector {
         }
       } else if (entity.type === 'gate') {
         // Only collide with closed gates (gates are play-to-pass: open is a
-        // temporary window held by a correct performance)
-        if (!entity.isOpen) {
+        // temporary window held by a correct performance). A gate in
+        // OCCUPIED OVERTIME (its grace lapsed with the player inside) is
+        // solid from the outside too — but never for the occupant: the
+        // player (movers report the player with ignoreId null) roams the
+        // doorway freely and leaves whenever they choose.
+        const solid = !entity.isOpen || (entity.occupiedOvertime && ignoreId !== null);
+        if (solid) {
           if (this.checkCircleBoxCollision(position, radius, entity.position, 1.5)) {
             return true;
           }

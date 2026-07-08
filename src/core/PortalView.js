@@ -42,50 +42,67 @@ class PortalView {
    * @param {Gate} partnerGate - the partner gate ENTITY in the live neighbor
    *   area (world coords)
    * @param {Area} neighborArea - the live neighbor area whose scene is shown
-   * @param {THREE.Scene} [sceneOverride] - render this scene instead of
-   *   neighborArea.scene. Used for SAME-puzzle doors: the "neighbor" is the
-   *   active area, whose content group lives in the main render scene
+   * @param {object} [options]
+   * @param {THREE.Scene} [options.sceneOverride] - render this scene instead
+   *   of neighborArea.scene. Used for SAME-puzzle doors: the "neighbor" is
+   *   the active area, whose content group lives in the main render scene
    *   (Area.scene is empty while active).
-   * @param {string} [sourceFacing] - the gate face to render the doorway on.
-   *   Doors are omnidirectional: PortalManager passes the side the player is
-   *   on (rebuilding the view when they round the gate); defaults to the
-   *   gate's authored facing.
-   * @param {string} [partnerFacing] - the partner face the view looks out of
-   *   (PortalManager passes the arrival side so the view shows where a
-   *   crossing lands); defaults to the partner's authored facing.
+   * @param {string} [options.sourceFacing] - the gate face to render the
+   *   doorway on. Doors are omnidirectional: PortalManager passes the side
+   *   the player is on; defaults to the gate's authored facing.
+   * @param {string} [options.partnerFacing] - the partner face the view
+   *   looks out of (opposite the source face — the pair maps by
+   *   translation); defaults to the partner's authored facing.
+   * @param {boolean} [options.interior] - view for an eye INSIDE the
+   *   doorway cell: the surface faces inward and shows the partner's world
+   *   beyond this face — standing in the door means standing in both places
+   *   at once, and every non-entry face looks out of the OTHER place.
    */
-  constructor(
-    gate,
-    partnerGate,
-    neighborArea,
-    sceneOverride = null,
-    sourceFacing = gate.facing,
-    partnerFacing = partnerGate.facing
-  ) {
+  constructor(gate, partnerGate, neighborArea, options = {}) {
+    const {
+      sceneOverride = null,
+      sourceFacing = gate.facing,
+      partnerFacing = partnerGate.facing,
+      interior = false,
+    } = options;
     this.gate = gate;
-    // The face this view renders on — PortalManager compares it against the
-    // player's current side to know when to rebuild
+    // The face this view renders on, and which side of it the eye must be on
     this.facing = sourceFacing;
+    this.interior = interior;
 
     const mapping = portalMapping(gate.position, sourceFacing, partnerGate.position, partnerFacing);
     this._map = mapping.map;
     this._corners = doorwayCorners(gate.position, sourceFacing);
     this._outward = FACING_VECTORS[sourceFacing] || FACING_VECTORS.north;
 
-    // Gates never move, so the doorway quad's neighbor-space corners are fixed.
+    // Gates never move, so the doorway quad's neighbor-space corners are
+    // fixed. An interior eye sees the quad from its other side, so the
+    // corner winding mirrors (left<->right) or the image would be flipped.
     const bl = this._map(this._corners.bottomLeft);
     const br = this._map(this._corners.bottomRight);
     const tl = this._map(this._corners.topLeft);
-    this._mappedBottomLeft = new THREE.Vector3(bl.x, bl.y, bl.z);
-    this._mappedBottomRight = new THREE.Vector3(br.x, br.y, br.z);
-    this._mappedTopLeft = new THREE.Vector3(tl.x, tl.y, tl.z);
+    const tr = this._map({
+      x: this._corners.bottomRight.x + (this._corners.topLeft.x - this._corners.bottomLeft.x),
+      y: this._corners.topLeft.y,
+      z: this._corners.bottomRight.z + (this._corners.topLeft.z - this._corners.bottomLeft.z),
+    });
+    const cBL = interior ? br : bl;
+    const cBR = interior ? bl : br;
+    const cTL = interior ? tr : tl;
+    this._mappedBottomLeft = new THREE.Vector3(cBL.x, cBL.y, cBL.z);
+    this._mappedBottomRight = new THREE.Vector3(cBR.x, cBR.y, cBR.z);
+    this._mappedTopLeft = new THREE.Vector3(cTL.x, cTL.y, cTL.z);
 
     // Clip everything on the eye side of the mapped doorway plane: neighbor
     // geometry "behind the door" (including where the partner gate stands)
-    // must not occlude the view through it.
+    // must not occlude the view through it. An interior view keeps the FAR
+    // side of the partner's face instead (the world you'd step out into).
     const mappedCenter = this._map(this._corners.center);
+    const clipDir = interior
+      ? { x: -mapping.outward.x, y: 0, z: -mapping.outward.z }
+      : mapping.outward;
     this._clipPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-      new THREE.Vector3(mapping.outward.x, mapping.outward.y, mapping.outward.z),
+      new THREE.Vector3(clipDir.x, clipDir.y, clipDir.z),
       new THREE.Vector3(mappedCenter.x, mappedCenter.y, mappedCenter.z)
     );
 
@@ -112,7 +129,8 @@ class PortalView {
       0,
       this._outward.z * DOORWAY_OFFSET
     );
-    this.surface.rotation.y = DOORWAY_ROTATION_Y[this.facing] ?? Math.PI;
+    this.surface.rotation.y =
+      (DOORWAY_ROTATION_Y[this.facing] ?? Math.PI) + (this.interior ? Math.PI : 0);
     this.surface.visible = false;
     // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)
     this.surface._isPortalSurface = true;
@@ -134,7 +152,8 @@ class PortalView {
     const eye = camera.position;
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
-    if (eyeDistance < MIN_EYE_DISTANCE) return;
+    // Exterior views need the eye outside this face; interior views inside
+    if (this.interior ? eyeDistance > -MIN_EYE_DISTANCE : eyeDistance < MIN_EYE_DISTANCE) return;
 
     renderer.getDrawingBufferSize(scratchSize);
     if (this._target.width !== scratchSize.x || this._target.height !== scratchSize.y) {

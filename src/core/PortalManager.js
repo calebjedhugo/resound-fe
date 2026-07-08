@@ -60,6 +60,12 @@ class PortalManager {
     // gate -> Map<facing, PortalView> (a view per player-visible face) or
     // null once the link proves dangling (the gate stays an ordinary gate)
     this._views = new Map();
+    // Interior views (eye INSIDE the doorway cell), same shape as _views
+    this._interiorViews = new Map();
+    // Standing in an open door = standing in BOTH places at once: the player
+    // moves freely inside the cell; the crossing commits only on exit.
+    // { gate, entrySide } while inside a doorway, else null.
+    this._insideDoor = null;
     this._transitioning = false;
     this._onCrossed = null;
     this._generation = 0; // bumped on reset: discards in-flight neighbor loads
@@ -94,6 +100,7 @@ class PortalManager {
     this._doors = [];
     this._linkedGates = [];
     this._transitioning = false;
+    this._insideDoor = null;
   }
 
   /**
@@ -146,23 +153,53 @@ class PortalManager {
     this._updateTempoGradient();
   }
 
+  /** Is the player horizontally inside this gate's cell? */
+  // eslint-disable-next-line class-methods-use-this
+  _playerInCell(gate) {
+    const { position } = gameState.player;
+    const half = WORLD_SCALE / 2;
+    return (
+      Math.abs(position.x - gate.position.x) < half && Math.abs(position.z - gate.position.z) < half
+    );
+  }
+
   /**
-   * Per-frame crossing check (PLAYING only): the player stepping into an
-   * OPEN linked gate's cell crosses to the linked puzzle.
+   * Per-frame doorway check (PLAYING only). Standing in an open linked
+   * gate's cell is standing in BOTH places at once — the player moves
+   * freely inside; nothing commits until they EXIT the cell:
+   * - out the face they entered -> they never left; no crossing
+   * - out any other face -> emerge in the partner's world on that same
+   *   face, at the same offset (translation), heading untouched
+   * A door that closes while they're inside ejects by the nearest side
+   * (never traps them in a solid box).
    */
   update() {
-    if (this._transitioning || this._linkedGates.length === 0) return;
-    const { position, elevation } = gameState.player;
-    const half = WORLD_SCALE / 2;
+    if (this._transitioning) return;
+
+    if (this._insideDoor) {
+      const { gate, entrySide } = this._insideDoor;
+      // A door never closes on its occupant (Gate holds itself in occupied
+      // overtime), so while they're in the cell they simply roam it
+      if (this._playerInCell(gate)) return;
+      const exitSide = sideOfGate(gate.position, gameState.player.position);
+      this._insideDoor = null;
+      if (exitSide !== entrySide) this._cross(gate, exitSide);
+      return;
+    }
+
+    if (this._linkedGates.length === 0) return;
+    const { elevation } = gameState.player;
     for (const gate of this._linkedGates) {
       if (!gate.isOpen) continue;
       const sameLevel = Math.round(gate.position.y / ELEVATION_HEIGHT) === elevation;
       if (!sameLevel) continue;
-      if (
-        Math.abs(position.x - gate.position.x) < half &&
-        Math.abs(position.z - gate.position.z) < half
-      ) {
-        this._cross(gate);
+      if (this._playerInCell(gate)) {
+        // Just stepped in: the side they're still biased toward is the face
+        // they came through — backing out of it later is "never left"
+        this._insideDoor = {
+          gate,
+          entrySide: sideOfGate(gate.position, gameState.player.position),
+        };
         return;
       }
     }
@@ -182,47 +219,102 @@ class PortalManager {
    */
   renderPortals(renderer, camera) {
     for (const gate of this._linkedGates) {
-      let faces = this._views.get(gate);
+      const faces = this._views.get(gate);
       if (faces === null) continue; // eslint-disable-line no-continue -- dangling link: ordinary gate
       if (!gate.isOpen) {
-        if (faces) for (const view of faces.values()) view.setVisible(false);
+        this._hideGateViews(gate);
         continue; // eslint-disable-line no-continue
       }
-      if (!faces) {
-        faces = new Map(); // facing -> PortalView
-        this._views.set(gate, faces);
-      }
-      let broken = false;
-      for (const facing of Object.keys(FACING_VECTORS)) {
-        const out = FACING_VECTORS[facing];
-        const onThisSide =
-          out.x * (camera.position.x - gate.position.x) +
-            out.z * (camera.position.z - gate.position.z) >
-          0.05;
-        let view = faces.get(facing);
-        if (onThisSide && !view) {
-          view = this._createView(gate, facing);
-          if (view === undefined) break; // neighbor not loaded yet: retry next frame
-          if (view === null) {
-            broken = true; // dangling link — the gate stays an ordinary gate
-            break;
-          }
-          faces.set(facing, view);
-        }
-        if (view) {
-          view.setVisible(onThisSide);
-          if (onThisSide) view.render(renderer, camera);
-        }
-      }
+      const inside = this._insideDoor && this._insideDoor.gate === gate;
+      const broken = inside
+        ? this._renderInteriorViews(gate, renderer, camera)
+        : this._renderExteriorViews(gate, renderer, camera);
       if (broken) {
-        for (const view of faces.values()) view.dispose();
-        this._views.set(gate, null);
+        this._hideGateViews(gate);
+        this._views.set(gate, null); // the gate stays an ordinary gate
         gate.setDoorLook(false);
-      } else if (faces.size > 0) {
-        // The door is working: the open box vanishes — only the views show
-        gate.setDoorLook(true);
       }
     }
+  }
+
+  /** Hide every view (exterior and interior) of a gate. */
+  _hideGateViews(gate) {
+    const faces = this._views.get(gate);
+    if (faces) for (const view of faces.values()) view.setVisible(false);
+    const interior = this._interiorViews.get(gate);
+    if (interior) for (const view of interior.values()) view.setVisible(false);
+  }
+
+  /**
+   * Standard door look from outside: every face the eye is on the outward
+   * side of renders the partner's world (two at a corner).
+   * @returns {boolean} true when the link proved dangling
+   */
+  _renderExteriorViews(gate, renderer, camera) {
+    let faces = this._views.get(gate);
+    if (!faces) {
+      faces = new Map(); // facing -> PortalView
+      this._views.set(gate, faces);
+    }
+    const interior = this._interiorViews.get(gate);
+    if (interior) for (const view of interior.values()) view.setVisible(false);
+    for (const facing of Object.keys(FACING_VECTORS)) {
+      const out = FACING_VECTORS[facing];
+      const onThisSide =
+        out.x * (camera.position.x - gate.position.x) +
+          out.z * (camera.position.z - gate.position.z) >
+        0.05;
+      let view = faces.get(facing);
+      if (onThisSide && !view) {
+        view = this._createView(gate, facing);
+        if (view === undefined) return false; // neighbor not loaded yet: retry next frame
+        if (view === null) return true; // dangling link
+        faces.set(facing, view);
+      }
+      if (view) {
+        view.setVisible(onThisSide);
+        if (onThisSide) view.render(renderer, camera);
+      }
+    }
+    if (faces.size > 0) {
+      // The door is working: the open box vanishes — only the views show
+      gate.setDoorLook(true);
+    }
+    return false;
+  }
+
+  /**
+   * Inside the doorway the player is in BOTH places at once: every face
+   * except the one they entered through shows the partner's world from
+   * within (step out of it and that world is real); the entry face stays
+   * their own world — real geometry, no view.
+   * @returns {boolean} true when the link proved dangling
+   */
+  _renderInteriorViews(gate, renderer, camera) {
+    let interior = this._interiorViews.get(gate);
+    if (!interior) {
+      interior = new Map(); // facing -> PortalView (interior)
+      this._interiorViews.set(gate, interior);
+    }
+    const exterior = this._views.get(gate);
+    if (exterior) for (const view of exterior.values()) view.setVisible(false);
+    const { entrySide } = this._insideDoor;
+    for (const facing of Object.keys(FACING_VECTORS)) {
+      let view = interior.get(facing);
+      const wanted = facing !== entrySide;
+      if (wanted && !view) {
+        view = this._createView(gate, facing, { interior: true });
+        if (view === undefined) return false; // neighbor not loaded yet
+        if (view === null) return true; // dangling link
+        interior.set(facing, view);
+      }
+      if (view) {
+        view.setVisible(wanted);
+        if (wanted) view.render(renderer, camera);
+      }
+    }
+    gate.setDoorLook(true);
+    return false;
   }
 
   // --- Doorway sound model (stage 3) -------------------------------------
@@ -376,8 +468,16 @@ class PortalManager {
     for (const door of this._doors) {
       const aSelf = door.gateA.isSelfOpen();
       const bSelf = door.gateB.isSelfOpen();
-      if (aSelf && !bSelf) door.gateB.holdOpenMirrored();
-      else if (bSelf && !aSelf) door.gateA.holdOpenMirrored();
+      // One door: the mirrored face follows the self-held face's open state
+      // AND its occupied overtime — while an occupant keeps one face from
+      // closing, BOTH faces read as solid-from-outside to the world
+      if (aSelf && !bSelf) {
+        door.gateB.holdOpenMirrored();
+        door.gateB.setOccupiedOvertime(door.gateA.occupiedOvertime);
+      } else if (bSelf && !aSelf) {
+        door.gateA.holdOpenMirrored();
+        door.gateA.setOccupiedOvertime(door.gateB.occupiedOvertime);
+      }
     }
   }
 
@@ -511,22 +611,27 @@ class PortalManager {
   }
 
   _disposeViews() {
-    for (const faces of this._views.values()) {
-      if (!faces) continue; // eslint-disable-line no-continue -- null = dangling marker
-      for (const view of faces.values()) view.dispose();
+    for (const map of [this._views, this._interiorViews]) {
+      for (const faces of map.values()) {
+        if (!faces) continue; // eslint-disable-line no-continue -- null = dangling marker
+        for (const view of faces.values()) view.dispose();
+      }
+      map.clear();
     }
-    this._views.clear();
   }
 
   /**
    * @param {Gate} gate
    * @param {string} [sourceFacing] - which face of `gate` the view renders
    *   on (the player's current side); defaults to the gate's facing
+   * @param {{interior?: boolean}} [options] - interior = a view for an eye
+   *   INSIDE the doorway cell (facing inward, showing the partner's world
+   *   beyond this face)
    * @returns {PortalView | null | undefined} null = permanently not
    *   renderable (dangling link — the gate stays an ordinary gate);
    *   undefined = neighbor area not loaded yet.
    */
-  _createView(gate, sourceFacing = gate.facing) {
+  _createView(gate, sourceFacing = gate.facing, { interior = false } = {}) {
     const neighbor = this._areas.get(gate.link.puzzleId);
     if (!neighbor) return undefined;
     const partner = neighbor.entityManager
@@ -539,9 +644,14 @@ class PortalManager {
     const sceneOverride = neighbor === this._activeArea ? this._mainScene : null;
     // Entry face -> opposite exit face: looking into the north end shows
     // out the partner's south end (a translation mapping — no mirror flip),
-    // matching where a crossing through this face lands.
+    // matching where walking out that face lands you.
     const partnerFacing = OPPOSITE_FACING[sourceFacing] || 'south';
-    return new PortalView(gate, partner, neighbor, sceneOverride, sourceFacing, partnerFacing);
+    return new PortalView(gate, partner, neighbor, {
+      sceneOverride,
+      sourceFacing,
+      partnerFacing,
+      interior,
+    });
   }
 
   /**
@@ -549,8 +659,10 @@ class PortalManager {
    * ACTIVE area pointer — the neighbor keeps the exact state the player saw
    * through the doorway, and the world clock keeps running.
    * @param {Gate} gate
+   * @param {'north'|'south'|'east'|'west'} exitSide - the face the player
+   *   left the doorway through (anything but their entry face)
    */
-  async _cross(gate) {
+  async _cross(gate, exitSide) {
     this._transitioning = true;
     const { puzzleId, gateId } = gate.link;
 
@@ -576,32 +688,37 @@ class PortalManager {
       return;
     }
 
-    // Entry face -> opposite exit face: stepping in the north end comes out
-    // the partner's south end, heading unchanged — exactly what the
-    // see-through view promised. Read the entry side BEFORE swapping areas
-    // (the player is just inside the cell, still biased toward that face).
-    const entrySide = sideOfGate(gate.position, gameState.player.position);
-    const preferredExit = OPPOSITE_FACING[entrySide] || 'south';
+    // The two cells are ONE shared room (identified by translation): read
+    // the player's offset inside the doorway BEFORE swapping areas.
+    const offset = {
+      x: gameState.player.position.x - gate.position.x,
+      z: gameState.player.position.z - gate.position.z,
+    };
 
     this._setActiveArea(neighbor);
 
-    // Arrive just OUTSIDE the partner gate on the exit side — but never
-    // inside a wall: fall back to the first clear side. (partner.position
-    // is in world units; its y is the floor height of the gate's level.)
-    const exitDir = this._arrivalDirection(neighbor, partner, preferredExit);
-    const outward = FACING_VECTORS[exitDir];
-    gameState.player.position = {
-      x: partner.position.x + outward.x * WORLD_SCALE,
-      y: partner.position.y + 1.8,
-      z: partner.position.z + outward.z * WORLD_SCALE,
-    };
-    gameState.player.elevation = Math.round(partner.position.y / ELEVATION_HEIGHT);
-    if (exitDir !== preferredExit) {
-      // Blocked exit rerouted the arrival: snap the view to walk outward.
-      // (On the normal opposite-face exit the mapping is a pure translation,
-      // so the player's heading is simply KEPT — seamless walk-through.)
+    // Emerge at the SAME offset from the partner — the player just walked
+    // out of the shared room by its `exitSide` face, heading untouched
+    // (pure translation; the interior views showed exactly this world).
+    const exitDir = this._arrivalDirection(neighbor, partner, exitSide);
+    if (exitDir === exitSide) {
+      gameState.player.position = {
+        x: partner.position.x + offset.x,
+        y: partner.position.y + 1.8,
+        z: partner.position.z + offset.z,
+      };
+    } else {
+      // That side of the partner is blocked: reroute to the first clear
+      // side (never inside a wall) and snap the view to walk outward
+      const outward = FACING_VECTORS[exitDir];
+      gameState.player.position = {
+        x: partner.position.x + outward.x * WORLD_SCALE,
+        y: partner.position.y + 1.8,
+        z: partner.position.z + outward.z * WORLD_SCALE,
+      };
       gameState.camera.viewCenter = [Math.atan2(-outward.x, -outward.z), 0];
     }
+    gameState.player.elevation = Math.round(partner.position.y / ELEVATION_HEIGHT);
     syncCameraToPlayer(gameState.player.position);
 
     this._afterActiveChange();

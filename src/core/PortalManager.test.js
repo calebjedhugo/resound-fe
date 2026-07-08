@@ -10,6 +10,7 @@
  */
 import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
+import CollisionDetector from 'core/CollisionDetector';
 import { WORLD_SCALE, CLOSED_DOOR_LEAK_DISTANCE } from 'core/constants';
 import { getDistance } from 'core/utils';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
@@ -41,6 +42,23 @@ function placePlayerAtCell(x, z) {
   gameState.player.elevation = 0;
 }
 
+/** Move the player to a world position and let PortalManager react. */
+async function stepTo(x, z) {
+  gameState.player.position = { x, y: 1.8, z };
+  gameState.player.elevation = 0;
+  PortalManager.update();
+  await flushCrossing();
+}
+
+/**
+ * Walk the player through a doorway: one step inside (standing in both
+ * places), one step out (the exit face decides what happens).
+ */
+async function enterAndExit(enter, exit) {
+  await stepTo(enter.x, enter.z);
+  await stepTo(exit.x, exit.z);
+}
+
 describe('PortalManager crossing', () => {
   let gate;
 
@@ -57,31 +75,56 @@ describe('PortalManager crossing', () => {
     delete global.fetch;
   });
 
-  it('walking into the OPEN linked gate crosses to the linked puzzle', async () => {
+  it('walking THROUGH the OPEN linked gate crosses to the linked puzzle', async () => {
     gate.open();
-    placePlayerAtCell(5, 2); // the gate's cell
 
-    PortalManager.update();
-    await flushCrossing();
+    // In the south face, out the north face (gate cell is at (5, 2))
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     expect(gameState.currentPuzzle.id).toBe('portal-b');
   });
 
-  it('comes out the OPPOSITE end of the partner, heading preserved', async () => {
+  it('stepping IN does not cross: the player stands in both places at once', async () => {
     gate.open();
-    // Enter through the gate's SOUTH face (walking north from the spawn):
-    // just inside the cell, still biased toward the south side
-    gameState.player.position = { x: 5 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE + 1 };
-    gameState.player.elevation = 0;
+
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1); // into the cell
+    expect(gameState.currentPuzzle.id).toBe('portal-a');
+
+    // Roam freely inside the doorway — still no crossing, position untouched
+    await stepTo(5 * WORLD_SCALE + 1, 2 * WORLD_SCALE - 1);
+    expect(gameState.currentPuzzle.id).toBe('portal-a');
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE + 1);
+    expect(gameState.player.position.z).toBeCloseTo(2 * WORLD_SCALE - 1);
+  });
+
+  it('backing out the face you entered means you never left', async () => {
+    gate.open();
+
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 2.5 }
+    );
+
+    expect(gameState.currentPuzzle.id).toBe('portal-a');
+    expect(gameState.player.position.z).toBeCloseTo(2 * WORLD_SCALE + 2.5);
+  });
+
+  it('comes out the partner at the SAME offset, heading preserved', async () => {
+    gate.open();
     gameState.camera.viewCenter = [0, 0]; // heading north
 
-    PortalManager.update();
-    await flushCrossing();
+    // In the south face, out the north face at offset (0, -2.5)
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
-    // In the south end, out the partner's NORTH end: partner south-door is
-    // at (5, 7) — arrive at (5, 6), still heading north
+    // Emerge from the partner (5, 7) at the same offset, still heading north
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
-    expect(gameState.player.position.z).toBeCloseTo(6 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE - 2.5);
     expect(gameState.player.elevation).toBe(0);
     // Heading preserved exactly: forward = (-sin(yaw), -cos(yaw)) = (0, -1)
     const [yaw] = gameState.camera.viewCenter;
@@ -89,16 +132,18 @@ describe('PortalManager crossing', () => {
     expect(-Math.cos(yaw)).toBeCloseTo(-1);
   });
 
-  it("entering through the EAST face comes out the partner's west side", async () => {
+  it("a sidestep exit emerges on the partner's matching side", async () => {
     gate.open();
-    gameState.player.position = { x: 5 * WORLD_SCALE + 1, y: 1.8, z: 2 * WORLD_SCALE };
-    gameState.player.elevation = 0;
 
-    PortalManager.update();
-    await flushCrossing();
+    // In the south face, out the EAST face
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE + 2.5, z: 2 * WORLD_SCALE }
+    );
 
-    // In the east end, out the west end: partner at (5, 7) -> arrive (4, 7)
-    expect(gameState.player.position.x).toBeCloseTo(4 * WORLD_SCALE);
+    // Emerge east of the partner (5, 7), same offset
+    expect(gameState.currentPuzzle.id).toBe('portal-b');
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE + 2.5);
     expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE);
   });
 
@@ -106,10 +151,11 @@ describe('PortalManager crossing', () => {
     const take = { notes: [{ pitch: 'C4', length: '1/4' }], sourceRange: 15 };
     gameState.player.inventory[0] = take;
     gate.open();
-    placePlayerAtCell(5, 2);
 
-    PortalManager.update();
-    await flushCrossing();
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     expect(gameState.currentPuzzle.id).toBe('portal-b');
     expect(gameState.player.inventory[0]).toBe(take);
@@ -136,9 +182,10 @@ describe('PortalManager crossing', () => {
 
   it('the far side lists its own linked gate, ready to cross back', async () => {
     gate.open();
-    placePlayerAtCell(5, 2);
-    PortalManager.update();
-    await flushCrossing();
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     const gates = ctx.getEntityManager().getByType('gate');
 
@@ -155,15 +202,15 @@ describe('PortalManager crossing', () => {
     ctx.loadPuzzle('portal-a'); // re-enter so the neighbor loads walled
     [gate] = ctx.getGates();
     gate.open();
-    // Enter through the NORTH face: preferred exit is the walled south side
-    gameState.player.position = { x: 5 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE - 1 };
-    gameState.player.elevation = 0;
 
-    PortalManager.update();
-    await flushCrossing();
+    // In the north face, out the south face — whose partner side is walled
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 2.5 }
+    );
 
     expect(gameState.currentPuzzle.id).toBe('portal-b');
-    // South (5, 8) is walled — fall back to the clear north side (5, 6)
+    // South of the partner (5, 8) is walled — fall back to the clear north (5, 6)
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
     expect(gameState.player.position.z).toBeCloseTo(6 * WORLD_SCALE);
   });
@@ -175,10 +222,11 @@ describe('PortalManager crossing', () => {
     ctx.loadPuzzle('portal-a'); // re-enter so the neighbor loads broken
     [gate] = ctx.getGates();
     gate.open();
-    placePlayerAtCell(5, 2);
 
-    PortalManager.update();
-    await flushCrossing();
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     expect(gameState.currentPuzzle.id).toBe('portal-a');
   });
@@ -298,9 +346,10 @@ describe('PortalManager see-through rendering', () => {
       'portal-b': portalB,
     });
     gate.open();
-    placePlayerAtCell(5, 2);
-    PortalManager.update();
-    await flushCrossing();
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
     await jest.runAllTimersAsync(); // prefetch of the way back
 
     [gate] = ctx.getEntityManager().getByType('gate');
@@ -458,9 +507,10 @@ describe('PortalManager live neighbor (stage 3)', () => {
     creature.testMarker = 'lived-before-crossing';
 
     gate.open();
-    placePlayerAtCell(5, 2);
-    PortalManager.update();
-    await flushCrossing();
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     expect(gameState.currentPuzzle.id).toBe('portal-live-b');
     // Same creature INSTANCE — the neighbor was not rebuilt on crossing
@@ -473,9 +523,10 @@ describe('PortalManager live neighbor (stage 3)', () => {
 
   it('after crossing, the old area stays live as the new neighbor', async () => {
     gate.open();
-    placePlayerAtCell(5, 2);
-    PortalManager.update();
-    await flushCrossing();
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     const oldArea = PortalManager.getArea('portal-live-a');
     expect(oldArea).not.toBeNull();
@@ -500,21 +551,20 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     delete global.fetch;
   });
 
-  it('walking into an OPEN face teleports to the partner gate, same puzzle', async () => {
+  it('walking through an OPEN face teleports to the partner gate, same puzzle', async () => {
     doorA.open();
-    // Enter door-a's SOUTH face (walking north from the spawn at (5, 5))
-    gameState.player.position = { x: 5 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE + 1 };
-    gameState.player.elevation = 0;
     gameState.camera.viewCenter = [0, 0]; // heading north
 
-    PortalManager.update();
-    await flushCrossing();
+    // In door-a's south face (walking north from the spawn), out its north
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     expect(gameState.currentPuzzle.id).toBe('portal-self');
-    // In the south end, out door-b's NORTH end: door-b at (5, 8) -> (5, 7),
-    // still heading north
+    // Emerge from door-b (5, 8) at the same offset, still heading north
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
-    expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE - 2.5);
     const [yaw] = gameState.camera.viewCenter;
     expect(-Math.cos(yaw)).toBeCloseTo(-1);
   });
@@ -523,13 +573,61 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     const areaBefore = gameState.activeArea;
     const entitiesBefore = gameState.entities;
     doorA.open();
-    placePlayerAtCell(5, 2);
 
-    PortalManager.update();
-    await flushCrossing();
+    await enterAndExit(
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1 },
+      { x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE - 2.5 }
+    );
 
     expect(gameState.activeArea).toBe(areaBefore);
     expect(gameState.entities).toBe(entitiesBefore);
+  });
+
+  it('the door WAITS for its occupant: grace lapse turns it solid-outside, not closed', async () => {
+    doorA.open();
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1); // stand in the doorway
+
+    // Let the grace lapse while occupied
+    doorA._openUntil = Date.now() - 1;
+    await ctx.tick(32);
+
+    expect(doorA.isOpen).toBe(true); // never closes on an occupant
+    expect(doorA.occupiedOvertime).toBe(true);
+    expect(doorB.occupiedOvertime).toBe(true); // one door: both faces read solid
+    // Looks closed from outside (front-face culling hides it from within)
+    expect(doorA.mesh.material.opacity).toBe(1);
+    // Solid for other movers (creatures pass their id), open for the player
+    // (movers report the player with ignoreId null)
+    const atDoor = { x: 5 * WORLD_SCALE, y: 0, z: 2 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(atDoor, 0.5, 'some-creature')).toBe(true);
+    expect(CollisionDetector.checkCollision(atDoor, 0.5, null)).toBe(false);
+
+    // Stepping back out the entry face releases the door: the occupied face
+    // closes at once; the mirrored face lapses on its own grace
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 2.5);
+    await ctx.tick(32);
+    expect(doorA.isOpen).toBe(false);
+    expect(doorA.occupiedOvertime).toBe(false);
+    await ctx.advanceBeats(6);
+    expect(doorB.isOpen).toBe(false);
+  });
+
+  it('exiting an overtime door through another face still crosses', async () => {
+    doorA.open();
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1);
+    doorA._openUntil = Date.now() - 1;
+    await ctx.tick(32);
+    expect(doorA.occupiedOvertime).toBe(true);
+
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE - 2.5); // out the north face
+
+    // Crossed to door-b at the same offset, and the pair closes behind them
+    // (the occupied face at once, the mirrored face on its own grace)
+    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE - 2.5);
+    await ctx.tick(32);
+    expect(doorA.isOpen).toBe(false);
+    await ctx.advanceBeats(6);
+    expect(doorB.isOpen).toBe(false);
   });
 
   it('one door, two faces: opening one face mirrors the partner open', async () => {
@@ -537,6 +635,35 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     await ctx.tick(16);
 
     expect(doorB.isOpen).toBe(true);
+  });
+
+  it('inside the doorway, every face EXCEPT the entry shows the other place', async () => {
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render() {
+        this.renderCalls.push(1);
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorA.open();
+    // Step in through the south face and stand inside
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1);
+    const camera = { position: { ...gameState.player.position } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    const visible = doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
+    // North, east, and west look into the partner's world; the south (entry)
+    // face stays the player's own world — no view
+    expect(visible).toHaveLength(3);
+    expect(renderer.renderCalls).toHaveLength(3);
+    const offsets = visible.map((s) => ({ x: s.position.x, z: s.position.z }));
+    expect(offsets.some((o) => o.z < 0)).toBe(true); // north face
+    expect(offsets.some((o) => o.x > 0)).toBe(true); // east face
+    expect(offsets.some((o) => o.x < 0)).toBe(true); // west face
+    expect(offsets.some((o) => o.z > 0)).toBe(false); // no south (entry) view
   });
 
   it('the doorway view renders the MAIN scene (the active area lives there)', () => {

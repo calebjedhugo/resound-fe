@@ -146,10 +146,22 @@ rulings, in the designer's words where it matters:
   (`editor/io/portalLinks.js`). Never hand-author a one-way link. The world
   graph is DERIVED by scanning puzzle files — there is no world.json.
 - **Gates stay play-to-pass.** A linked gate opens exactly like any gate (by
-  performing its song); the link only changes what's on the other side.
-  Crossing = walking into the OPEN gate's cell. You arrive one cell outside
-  the partner gate, facing away from it, and your recordings come with you —
-  areas are one world, so "gate songs as keys you carry" works across seams.
+  performing its song); the link only changes what's on the other side. Your
+  recordings come with you — areas are one world, so "gate songs as keys you
+  carry" works across seams.
+- **The doorway is SHARED SPACE (ruled 2026-07-08).** Stepping into an open
+  linked gate does NOT teleport: the two linked cells are one room with two
+  addresses, and standing in it is standing in both places at once. The
+  player roams the cell freely; only EXITING commits — out the face they
+  entered means they never left; out any other face they emerge in the
+  partner's world on that same face, at their exact offset (translation),
+  heading untouched. While inside, every face except the entry shows the
+  partner's world from within.
+- **A door never closes on its occupant.** If the open grace lapses while
+  the player stands in the doorway, the gate holds in OCCUPIED OVERTIME:
+  solid and closed-looking from the outside (creatures can't enter), open
+  and see-through from within — until the player steps out, when it closes
+  for real. Exits still work normally from overtime.
 - **A linked pair shares ONE song** (ruled 2026-07-07; "for now, I might
   change my mind later"). The pair mirrors its open state at runtime, so
   differing songs are ill-defined. Linking unifies: the INITIATING gate's
@@ -170,10 +182,9 @@ rulings, in the designer's words where it matters:
 - **Entry face → opposite exit face (ruled 2026-07-07):** looking into the
   north end of a door shows out the SOUTH end of its partner (and so on for
   every direction) — the pair maps by pure translation, no mirror flip —
-  and crossing matches: step in the north end, come out the partner's south
-  end with your heading unchanged. If the matching exit cell is blocked,
-  arrival falls back to the first clear side (never inside a wall — the
-  no-soft-lock rule) and snaps the view to the rerouted direction.
+  and walking straight through matches. If an exit's landing cell is
+  blocked, arrival falls back to the first clear side (never inside a wall
+  — the no-soft-lock rule) and snaps the view to the rerouted direction.
 - **A door is a sound shortcut, even within one puzzle:** sound takes the
   shortest path — direct or through a door (player→gate + partner→source,
   leak while closed). A creature far across the map is loud through an open
