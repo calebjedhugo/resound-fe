@@ -170,8 +170,8 @@ class PortalManager {
    * - out the face they entered -> they never left; no crossing
    * - out any other face -> emerge in the partner's world on that same
    *   face, at the same offset (translation), heading untouched
-   * A door that closes while they're inside ejects by the nearest side
-   * (never traps them in a solid box).
+   * A door never closes on its occupant: Gate holds itself in occupied
+   * overtime (solid outside, open within) until they step out.
    */
   update() {
     if (this._transitioning) return;
