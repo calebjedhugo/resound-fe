@@ -163,12 +163,17 @@ rulings, in the designer's words where it matters:
   gate can be walked through, and EVERY face the player can see shows the
   view through the door (two at a corner — a working open door never shows
   a green shell from any angle; only unlinked and dangling gates keep the
-  open-gate green). Arrival picks the partner's facing side when clear,
-  else the first unblocked side (never inside a wall — the no-soft-lock
-  rule). Applies to ALL links — same-puzzle teleports and cross-puzzle
-  doors are one mechanism. `facing` still exists in the schema (default
-  "north") but the editor's Facing dropdown is PARKED (commented in
-  PropertyPanel); Caleb may bring it back.
+  open-gate green). Applies to ALL links — same-puzzle teleports and
+  cross-puzzle doors are one mechanism. `facing` still exists in the schema
+  (default "north") but the editor's Facing dropdown is PARKED (commented
+  in PropertyPanel); Caleb may bring it back.
+- **Entry face → opposite exit face (ruled 2026-07-07):** looking into the
+  north end of a door shows out the SOUTH end of its partner (and so on for
+  every direction) — the pair maps by pure translation, no mirror flip —
+  and crossing matches: step in the north end, come out the partner's south
+  end with your heading unchanged. If the matching exit cell is blocked,
+  arrival falls back to the first clear side (never inside a wall — the
+  no-soft-lock rule) and snaps the view to the rerouted direction.
 - **A door is a sound shortcut, even within one puzzle:** sound takes the
   shortest path — direct or through a door (player→gate + partner→source,
   leak while closed). A creature far across the map is loud through an open

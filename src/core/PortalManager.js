@@ -43,7 +43,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   PLAYER_SIZE,
 } from 'core/constants';
-import { FACING_VECTORS } from 'core/portalMath';
+import { FACING_VECTORS, OPPOSITE_FACING, sideOfGate } from 'core/portalMath';
 import { getDistance } from 'core/utils';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
@@ -537,9 +537,10 @@ class PortalManager {
     // group lives in the main scene (Area.scene is empty while active) —
     // render the main scene through the doorway instead.
     const sceneOverride = neighbor === this._activeArea ? this._mainScene : null;
-    // Look out the partner's ARRIVAL side, so the view through the door
-    // shows exactly where a crossing lands
-    const partnerFacing = this._arrivalDirection(neighbor, partner);
+    // Entry face -> opposite exit face: looking into the north end shows
+    // out the partner's south end (a translation mapping — no mirror flip),
+    // matching where a crossing through this face lands.
+    const partnerFacing = OPPOSITE_FACING[sourceFacing] || 'south';
     return new PortalView(gate, partner, neighbor, sceneOverride, sourceFacing, partnerFacing);
   }
 
@@ -575,22 +576,32 @@ class PortalManager {
       return;
     }
 
+    // Entry face -> opposite exit face: stepping in the north end comes out
+    // the partner's south end, heading unchanged — exactly what the
+    // see-through view promised. Read the entry side BEFORE swapping areas
+    // (the player is just inside the cell, still biased toward that face).
+    const entrySide = sideOfGate(gate.position, gameState.player.position);
+    const preferredExit = OPPOSITE_FACING[entrySide] || 'south';
+
     this._setActiveArea(neighbor);
 
-    // Arrive just OUTSIDE the partner gate, facing away from it — as if
-    // having just stepped through. Doors are omnidirectional: prefer the
-    // partner's facing side, but never arrive inside a wall — fall back to
-    // the first clear side. (partner.position is in world units; its y is
-    // the floor height of the gate's level.)
-    const outward = FACING_VECTORS[this._arrivalDirection(neighbor, partner)];
+    // Arrive just OUTSIDE the partner gate on the exit side — but never
+    // inside a wall: fall back to the first clear side. (partner.position
+    // is in world units; its y is the floor height of the gate's level.)
+    const exitDir = this._arrivalDirection(neighbor, partner, preferredExit);
+    const outward = FACING_VECTORS[exitDir];
     gameState.player.position = {
       x: partner.position.x + outward.x * WORLD_SCALE,
       y: partner.position.y + 1.8,
       z: partner.position.z + outward.z * WORLD_SCALE,
     };
     gameState.player.elevation = Math.round(partner.position.y / ELEVATION_HEIGHT);
-    // Yaw that walks the outward vector: forward = (-sin(yaw), 0, -cos(yaw))
-    gameState.camera.viewCenter = [Math.atan2(-outward.x, -outward.z), 0];
+    if (exitDir !== preferredExit) {
+      // Blocked exit rerouted the arrival: snap the view to walk outward.
+      // (On the normal opposite-face exit the mapping is a pure translation,
+      // so the player's heading is simply KEPT — seamless walk-through.)
+      gameState.camera.viewCenter = [Math.atan2(-outward.x, -outward.z), 0];
+    }
     syncCameraToPlayer(gameState.player.position);
 
     this._afterActiveChange();
@@ -598,14 +609,14 @@ class PortalManager {
   }
 
   /**
-   * Pick the side of the partner gate to arrive on: its facing side when
-   * clear, else the first unblocked side (doors are omnidirectional, and
-   * arriving inside a wall would soft-lock — never allowed). Falls back to
-   * the facing side if somehow every side is blocked.
+   * Pick the side of the partner gate to arrive on: the preferred exit
+   * (opposite the entry face) when clear, else the first unblocked side
+   * (arriving inside a wall would soft-lock — never allowed). Falls back to
+   * the preferred side if somehow every side is blocked.
+   * @param {'north'|'south'|'east'|'west'} preferred
    * @returns {'north'|'south'|'east'|'west'}
    */
-  _arrivalDirection(area, partnerGate) {
-    const preferred = FACING_VECTORS[partnerGate.facing] ? partnerGate.facing : 'north';
+  _arrivalDirection(area, partnerGate, preferred) {
     const order = [preferred, ...Object.keys(FACING_VECTORS).filter((d) => d !== preferred)];
     for (const dir of order) {
       if (!this._arrivalBlocked(area, partnerGate, FACING_VECTORS[dir])) {

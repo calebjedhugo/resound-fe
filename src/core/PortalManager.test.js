@@ -67,21 +67,39 @@ describe('PortalManager crossing', () => {
     expect(gameState.currentPuzzle.id).toBe('portal-b');
   });
 
-  it('arrives just outside the partner gate, facing away from it', async () => {
+  it('comes out the OPPOSITE end of the partner, heading preserved', async () => {
     gate.open();
-    placePlayerAtCell(5, 2);
+    // Enter through the gate's SOUTH face (walking north from the spawn):
+    // just inside the cell, still biased toward the south side
+    gameState.player.position = { x: 5 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE + 1 };
+    gameState.player.elevation = 0;
+    gameState.camera.viewCenter = [0, 0]; // heading north
 
     PortalManager.update();
     await flushCrossing();
 
-    // Partner south-door is at (5, 7) facing south (+z): arrive at (5, 8)
+    // In the south end, out the partner's NORTH end: partner south-door is
+    // at (5, 7) — arrive at (5, 6), still heading north
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
-    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(6 * WORLD_SCALE);
     expect(gameState.player.elevation).toBe(0);
-    // Facing outward (south, +z): forward = (-sin(yaw), -cos(yaw)) = (0, 1)
+    // Heading preserved exactly: forward = (-sin(yaw), -cos(yaw)) = (0, -1)
     const [yaw] = gameState.camera.viewCenter;
     expect(-Math.sin(yaw)).toBeCloseTo(0);
-    expect(-Math.cos(yaw)).toBeCloseTo(1);
+    expect(-Math.cos(yaw)).toBeCloseTo(-1);
+  });
+
+  it("entering through the EAST face comes out the partner's west side", async () => {
+    gate.open();
+    gameState.player.position = { x: 5 * WORLD_SCALE + 1, y: 1.8, z: 2 * WORLD_SCALE };
+    gameState.player.elevation = 0;
+
+    PortalManager.update();
+    await flushCrossing();
+
+    // In the east end, out the west end: partner at (5, 7) -> arrive (4, 7)
+    expect(gameState.player.position.x).toBeCloseTo(4 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE);
   });
 
   it('recordings persist across the seam', async () => {
@@ -129,21 +147,23 @@ describe('PortalManager crossing', () => {
     expect(gates[0].link).toEqual({ puzzleId: 'portal-a', gateId: 'north-door' });
   });
 
-  it('arrival never lands inside a wall: a blocked side falls back to a clear one', async () => {
+  it('arrival never lands inside a wall: a blocked exit falls back to a clear side', async () => {
     const walled = JSON.parse(JSON.stringify(portalB));
-    // Wall the cell south of south-door (its facing side)
+    // Wall the cell south of south-door — the exit for a north-face entry
     walled.entities.push({ type: 'wall', position: { x: 5, y: 0, z: 8 } });
     installFetchMock({ 'portal-b': walled });
     ctx.loadPuzzle('portal-a'); // re-enter so the neighbor loads walled
     [gate] = ctx.getGates();
     gate.open();
-    placePlayerAtCell(5, 2);
+    // Enter through the NORTH face: preferred exit is the walled south side
+    gameState.player.position = { x: 5 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE - 1 };
+    gameState.player.elevation = 0;
 
     PortalManager.update();
     await flushCrossing();
 
     expect(gameState.currentPuzzle.id).toBe('portal-b');
-    // The facing side (5, 8) is walled — arrive on the clear north side (5, 6)
+    // South (5, 8) is walled — fall back to the clear north side (5, 6)
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
     expect(gameState.player.position.z).toBeCloseTo(6 * WORLD_SCALE);
   });
@@ -482,17 +502,21 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
 
   it('walking into an OPEN face teleports to the partner gate, same puzzle', async () => {
     doorA.open();
-    placePlayerAtCell(5, 2); // door-a's cell
+    // Enter door-a's SOUTH face (walking north from the spawn at (5, 5))
+    gameState.player.position = { x: 5 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE + 1 };
+    gameState.player.elevation = 0;
+    gameState.camera.viewCenter = [0, 0]; // heading north
 
     PortalManager.update();
     await flushCrossing();
 
     expect(gameState.currentPuzzle.id).toBe('portal-self');
-    // door-b at (5, 8) facing south (+z): arrive at (5, 9), facing south
+    // In the south end, out door-b's NORTH end: door-b at (5, 8) -> (5, 7),
+    // still heading north
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
-    expect(gameState.player.position.z).toBeCloseTo(9 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE);
     const [yaw] = gameState.camera.viewCenter;
-    expect(-Math.cos(yaw)).toBeCloseTo(1);
+    expect(-Math.cos(yaw)).toBeCloseTo(-1);
   });
 
   it('an in-level crossing keeps the same live area (no rebuild)', async () => {

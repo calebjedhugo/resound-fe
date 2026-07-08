@@ -22,9 +22,34 @@ export const FACING_VECTORS = {
   west: { x: -1, z: 0 },
 };
 
+// Entry face -> exit face: a door pairs each face with the partner's
+// OPPOSITE face. Looking into the north end shows out the partner's south
+// end, and crossing continues your heading (the pair maps by translation).
+export const OPPOSITE_FACING = {
+  north: 'south',
+  south: 'north',
+  east: 'west',
+  west: 'east',
+};
+
 // The doorway surface sits just outside the gate box face so it wins the
 // depth test against the (semi-transparent) open-gate shell behind it.
 export const DOORWAY_OFFSET = WORLD_SCALE / 2 + 0.01;
+
+/**
+ * Which side of a gate a world position is on (dominant horizontal axis).
+ * Used at crossing time: the side the player is on when they step into the
+ * cell is the face they entered through.
+ * @param {{x:number, z:number}} gatePosition
+ * @param {{x:number, z:number}} position - e.g. the player
+ * @returns {'north'|'south'|'east'|'west'}
+ */
+export function sideOfGate(gatePosition, position) {
+  const dx = position.x - gatePosition.x;
+  const dz = position.z - gatePosition.z;
+  if (Math.abs(dx) > Math.abs(dz)) return dx >= 0 ? 'east' : 'west';
+  return dz >= 0 ? 'south' : 'north';
+}
 
 /**
  * World-space corners of a gate's doorway quad — the full facing face of the
