@@ -50,7 +50,11 @@ export default class ContextMenu {
       if (item.disabled) {
         btn.disabled = true;
       } else {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+          // Menu clicks must not bubble into the viewport's click handler —
+          // an action that arms a click mode (e.g. teleport-pick) would be
+          // instantly cancelled by its own menu click
+          e.stopPropagation();
           item.action();
           this.hide();
         });

@@ -140,6 +140,10 @@ link to **itself** (validation error).
   yields the graph of gate-connected areas (used for on-demand area loading).
 - **Tempo/key should match** across linked puzzles (both areas are live at
   once and share the musical clock). The editor warns on mismatch.
+- **A linked pair shares one song**: both gates of a link carry the SAME
+  `song` (the pair is one door — it mirrors its open state at runtime). The
+  editor unifies songs at link time and errors when a same-puzzle pair's
+  songs drift.
 
 ## Note Format
 

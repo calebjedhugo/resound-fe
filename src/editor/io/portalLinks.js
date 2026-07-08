@@ -33,6 +33,75 @@ function linksTo(link, puzzleId, gateId) {
   return Boolean(link && link.puzzleId === puzzleId && link.gateId === gateId);
 }
 
+/** True if a gate song holds any notes (flat array or voices form). */
+function hasSong(song) {
+  if (Array.isArray(song)) return song.length > 0;
+  if (song && Array.isArray(song.voices)) return song.voices.some((v) => v.notes.length > 0);
+  return false;
+}
+
+function songsEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Linked gates are ONE DOOR and must share one song (the runtime mirrors a
+ * pair's open state, so differing songs are ill-defined). Decide which song
+ * the pair keeps: the INITIATING gate's song wins; a gate without a song
+ * adopts its partner's. When both sides have different songs, the caller's
+ * `confirmSongReplace()` must approve deleting the target's song.
+ *
+ * @param {object} ourData - initiating gate's model data
+ * @param {{song, staffGroups}} theirs - target gate's song fields
+ * @param {() => boolean|Promise<boolean>} confirmSongReplace
+ * @returns {Promise<{song, staffGroups}|null>} the unified song fields, or
+ *   null when the caller declined the replacement
+ */
+async function unifiedSong(ourData, theirs, confirmSongReplace) {
+  const oursHas = hasSong(ourData.song);
+  const theirsHas = hasSong(theirs.song);
+  if (oursHas && theirsHas && !songsEqual(ourData.song, theirs.song)) {
+    const approved = confirmSongReplace ? await confirmSongReplace() : false;
+    if (!approved) return null;
+  }
+  const winner =
+    !oursHas && theirsHas
+      ? { song: theirs.song, staffGroups: theirs.staffGroups }
+      : { song: ourData.song, staffGroups: ourData.staffGroups };
+  return { song: winner.song || [], staffGroups: winner.staffGroups };
+}
+
+/** Apply unified song fields to a model-entity data object (immutably). */
+function withSong(data, unified) {
+  const next = { ...data, song: unified.song };
+  if (unified.staffGroups && unified.staffGroups.length > 0) {
+    next.staffGroups = unified.staffGroups;
+  } else {
+    delete next.staffGroups;
+  }
+  return next;
+}
+
+/**
+ * Parse the "Link by id" input: `gate-2` targets the OPEN puzzle,
+ * `other-puzzle/gate-1` targets another puzzle.
+ * @param {string} input
+ * @param {string} currentPuzzleId
+ * @returns {{puzzleId: string, gateId: string}}
+ * @throws {Error} on malformed input
+ */
+export function parseLinkTarget(input, currentPuzzleId) {
+  const trimmed = (input || '').trim();
+  const parts = trimmed.split('/').map((p) => p.trim());
+  if (parts.length === 1 && isValidGateId(parts[0])) {
+    return { puzzleId: currentPuzzleId, gateId: parts[0] };
+  }
+  if (parts.length === 2 && isValidGateId(parts[0]) && isValidGateId(parts[1])) {
+    return { puzzleId: parts[0], gateId: parts[1] };
+  }
+  throw new Error('Enter a gate id ("gate-2") or puzzle/gate ("the-lure/gate-1")');
+}
+
 /**
  * Puzzles that can host a link target: everything in the manifest,
  * INCLUDING the one being edited (same-puzzle doors are in-level
@@ -165,7 +234,8 @@ async function clearPartnerBackLink(undoManager, partnerLink, ourPuzzleId, ourGa
  * door). Both sides live in the model, so both edits go through the
  * UndoManager — no file round-trip, fully undoable.
  */
-async function createLocalLink(undoManager, entityId, gate, ourPuzzleId, ourGateId, targetGateId) {
+async function createLocalLink(undoManager, entityId, gate, ourPuzzleId, ourGateId, options) {
+  const { targetGateId, confirmSongReplace } = options;
   if (targetGateId === ourGateId) {
     throw new Error("A gate can't link to itself — pick a different gate");
   }
@@ -178,6 +248,10 @@ async function createLocalLink(undoManager, entityId, gate, ourPuzzleId, ourGate
     );
   }
 
+  // One door, one song: unify before touching anything
+  const unified = await unifiedSong(gate.data, target.data, confirmSongReplace);
+  if (!unified) return { cancelled: true, warnings: [] };
+
   // Relinking: release our previous partner (local or remote) only now that
   // the new target has validated — a failed link must not desync the old pair
   const oldLink = gate.data.link;
@@ -186,26 +260,40 @@ async function createLocalLink(undoManager, entityId, gate, ourPuzzleId, ourGate
   }
 
   undoManager.updateEntity(target.id, {
-    data: { ...target.data, link: { puzzleId: ourPuzzleId, gateId: ourGateId } },
+    data: withSong({ ...target.data, link: { puzzleId: ourPuzzleId, gateId: ourGateId } }, unified),
   });
   undoManager.updateEntity(entityId, {
-    data: { ...gate.data, link: { puzzleId: ourPuzzleId, gateId: targetGateId } },
+    data: withSong(
+      { ...gate.data, link: { puzzleId: ourPuzzleId, gateId: targetGateId } },
+      unified
+    ),
   });
   return { warnings: [] }; // same puzzle — tempo and key always match
 }
 
 /**
  * Link a local gate to a gate in another puzzle — or in THIS puzzle
- * (both directions either way).
+ * (both directions either way). Linked gates are one door and share one
+ * song: the initiating gate's song wins; a song-less side adopts the
+ * other's; replacing a real song on the target requires the caller's
+ * `confirmSongReplace()` approval (declining cancels the link).
  *
  * @param {UndoManager} undoManager - wraps the OPEN puzzle's model
  * @param {number} entityId - local (ephemeral) entity id of the gate
  * @param {string} targetPuzzleId
  * @param {string} targetGateId
- * @returns {Promise<{warnings: string[]}>}
+ * @param {{confirmSongReplace?: () => boolean|Promise<boolean>}} [options]
+ * @returns {Promise<{warnings: string[], cancelled?: boolean}>}
  * @throws {Error} when either side can't be linked
  */
-export async function createLink(undoManager, entityId, targetPuzzleId, targetGateId) {
+export async function createLink(
+  undoManager,
+  entityId,
+  targetPuzzleId,
+  targetGateId,
+  options = {}
+) {
+  const { confirmSongReplace } = options;
   const metadata = undoManager.getMetadata();
   const ourPuzzleId = metadata.id;
   if (!ourPuzzleId) {
@@ -217,7 +305,10 @@ export async function createLink(undoManager, entityId, targetPuzzleId, targetGa
   if (!isValidGateId(ourGateId)) throw new Error('This gate has no stable id');
 
   if (targetPuzzleId === ourPuzzleId) {
-    return createLocalLink(undoManager, entityId, gate, ourPuzzleId, ourGateId, targetGateId);
+    return createLocalLink(undoManager, entityId, gate, ourPuzzleId, ourGateId, {
+      targetGateId,
+      confirmSongReplace,
+    });
   }
 
   // Target side: must exist and be unclaimed (or already ours)
@@ -233,6 +324,10 @@ export async function createLink(undoManager, entityId, targetPuzzleId, targetGa
     );
   }
 
+  // One door, one song (raw gate JSON keeps song fields at the gate root)
+  const unified = await unifiedSong(gate.data, targetGate, confirmSongReplace);
+  if (!unified) return { cancelled: true, warnings: [] };
+
   // Relinking: release our previous partner first (it may be local or remote)
   const oldLink = gate.data.link;
   if (oldLink && !linksTo(oldLink, targetPuzzleId, targetGateId)) {
@@ -242,9 +337,18 @@ export async function createLink(undoManager, entityId, targetPuzzleId, targetGa
   // Write the far side, then the near side (near side goes through the
   // UndoManager so it autosaves the open puzzle)
   targetGate.link = { puzzleId: ourPuzzleId, gateId: ourGateId };
+  targetGate.song = unified.song;
+  if (unified.staffGroups && unified.staffGroups.length > 0) {
+    targetGate.staffGroups = unified.staffGroups;
+  } else {
+    delete targetGate.staffGroups;
+  }
   await savePuzzleJsonToRepo(targetJson);
   undoManager.updateEntity(entityId, {
-    data: { ...gate.data, link: { puzzleId: targetPuzzleId, gateId: targetGateId } },
+    data: withSong(
+      { ...gate.data, link: { puzzleId: targetPuzzleId, gateId: targetGateId } },
+      unified
+    ),
   });
 
   return { warnings: musicalMismatchWarnings(metadata, targetJson) };

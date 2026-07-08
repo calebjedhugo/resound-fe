@@ -150,6 +150,13 @@ rulings, in the designer's words where it matters:
   Crossing = walking into the OPEN gate's cell. You arrive one cell outside
   the partner gate, facing away from it, and your recordings come with you —
   areas are one world, so "gate songs as keys you carry" works across seams.
+- **A linked pair shares ONE song** (ruled 2026-07-07; "for now, I might
+  change my mind later"). The pair mirrors its open state at runtime, so
+  differing songs are ill-defined. Linking unifies: the INITIATING gate's
+  song wins; a song-less side adopts the other's; replacing a real song on
+  the target requires an explicit confirm (declining cancels the link). The
+  validator errors on a same-puzzle pair whose songs drift apart after
+  linking (relink to re-unify).
 - **A closed linked gate looks like any closed gate.** The door reveals
   itself only when opened.
 - **Same-puzzle doors are allowed (ruled 2026-07-07):** two gates of ONE

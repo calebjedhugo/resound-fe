@@ -99,6 +99,18 @@ links / portals".
   the open puzzle as "(this puzzle)"; its gates come from the LIVE model
   (`localTargetGates`), not disk. A gate can't link to itself
   (create throws; validator errors).
+- **Three ways to create a link** (all call the same `createLink`):
+  right-click a gate → "Teleport: click another gate…" (two-click flow in
+  the viewport, Esc cancels); right-click → "Link by id…" (`gate-2` or
+  `puzzle-id/gate-1`, parsed by `parseLinkTarget`); or the PropertyPanel's
+  Portal Link dropdowns. The context menu also shows the current link and a
+  Clear Link item.
+- **One door, one song:** `createLink` unifies the pair's song — the
+  INITIATING gate's song wins, a song-less side adopts the other's, and
+  replacing a real target song runs the caller's `confirmSongReplace()`
+  (declining returns `{cancelled: true}` and changes nothing). The
+  validator errors on same-puzzle pairs whose songs later drift and on
+  one-way pairs (undo can desync — repair with Clear Link / relink).
 - **Undo caveat:** the local side of a cross-puzzle link edit is undoable;
   the partner file is not. Unlink with Clear Link, not Cmd+Z. (Same-puzzle
   links are fully undoable — both sides live in the model, two undo steps.)

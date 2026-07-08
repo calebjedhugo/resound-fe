@@ -145,6 +145,28 @@ export function validatePuzzle(model) {
         errors.push(
           `Gate "${gateId}" links to "${link.gateId}", which does not exist in this puzzle`
         );
+      } else {
+        const partner = entities.find(
+          (e) => e.type === 'gate' && e.data && e.data.gateId === link.gateId
+        );
+        const partnerLink = partner && partner.data.link;
+        if (!partnerLink || partnerLink.puzzleId !== puzzleId || partnerLink.gateId !== gateId) {
+          // Links are bidirectional by design; one-way pairs come from undoing
+          // half of a link edit (use Clear Link / relink to repair)
+          errors.push(
+            `Gate "${gateId}" links to "${link.gateId}", but "${link.gateId}" does not link back`
+          );
+        } else if (
+          JSON.stringify(gate.data.song) !== JSON.stringify(partner.data.song) &&
+          gateId < link.gateId // reciprocal pair: report once
+        ) {
+          // Linked gates are ONE DOOR and must share one song (the pair
+          // mirrors its open state at runtime)
+          errors.push(
+            `Linked gates "${gateId}" and "${link.gateId}" have different songs — ` +
+              'a linked pair is one door and must share one song (relink to unify)'
+          );
+        }
       }
     }
   }

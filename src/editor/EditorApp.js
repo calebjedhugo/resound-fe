@@ -22,7 +22,12 @@ import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
 import { savePuzzleToRepo, listRepoPuzzles, loadRepoPuzzle } from 'editor/io/repoPersistence';
-import { releaseLinkBeforeDelete } from 'editor/io/portalLinks';
+import {
+  createLink,
+  clearLink,
+  parseLinkTarget,
+  releaseLinkBeforeDelete,
+} from 'editor/io/portalLinks';
 import { importPuzzle } from 'editor/io/importPuzzle';
 
 export default class EditorApp {
@@ -40,6 +45,9 @@ export default class EditorApp {
     // puzzle), the id is derived live from the name; once true it is locked so
     // renaming never forks the file.
     this._puzzleCommitted = false;
+    // Entity id of the gate awaiting its teleport partner (context menu
+    // "Teleport" is a two-click flow); null = not picking
+    this._linkPickSourceId = null;
   }
 
   init() {
@@ -200,7 +208,9 @@ export default class EditorApp {
       : '';
     const tool = this.entityToolbar ? this.entityToolbar.activeTool : null;
     const toolText = tool ? `Placing ${tool} — click a tile (Esc cancels)` : '';
-    this._hudEl.textContent = [toolText, cellText].filter(Boolean).join(' · ');
+    const pickText =
+      this._linkPickSourceId !== null ? 'Teleport: click another gate to link (Esc cancels)' : '';
+    this._hudEl.textContent = [pickText, toolText, cellText].filter(Boolean).join(' · ');
   }
 
   /** Briefly show a message in the viewport (e.g. why a placement was refused). */
@@ -216,6 +226,86 @@ export default class EditorApp {
       },
       kind === 'error' ? 4200 : 2600
     );
+  }
+
+  // --- Gate linking (context-menu flows) ---------------------------------
+
+  /** Enter teleport-pick mode: the next clicked gate becomes the partner. */
+  _startLinkPick(sourceEntityId) {
+    this.entityToolbar.deselect(); // placement and picking can't coexist
+    this._linkPickSourceId = sourceEntityId;
+    this._showToast('Click another gate to link it (Esc cancels)', 'success');
+  }
+
+  _cancelLinkPick(message) {
+    if (this._linkPickSourceId === null) return;
+    this._linkPickSourceId = null;
+    if (message) this._showToast(message);
+  }
+
+  /** Viewport click while in teleport-pick mode. */
+  _handleLinkPickClick(e) {
+    const sourceId = this._linkPickSourceId;
+    const targetId = this._entityIdAtEvent(e);
+    const target = targetId !== null ? this.undoManager.getEntity(targetId) : null;
+    if (!target || target.type !== 'gate') {
+      this._cancelLinkPick('Teleport cancelled — that was not a gate');
+      return;
+    }
+    if (targetId === sourceId) {
+      this._showToast("A gate can't link to itself — pick a different gate");
+      return; // stay in pick mode
+    }
+    this._linkPickSourceId = null;
+    const { id: puzzleId } = this.undoManager.getMetadata();
+    this._linkGateTo(sourceId, { puzzleId, gateId: target.data.gateId });
+  }
+
+  /** Context menu "Link by id…": gate-2 (this puzzle) or puzzle-id/gate-id. */
+  _linkById(sourceEntityId) {
+    // eslint-disable-next-line no-alert -- dev-tool input; a typed id is the point of this flow
+    const input = window.prompt('Link to gate id ("gate-2") or puzzle/gate ("the-lure/gate-1"):');
+    if (input === null || input.trim() === '') return;
+    try {
+      const target = parseLinkTarget(input, this.undoManager.getMetadata().id);
+      this._linkGateTo(sourceEntityId, target);
+    } catch (err) {
+      this._showToast(err.message);
+    }
+  }
+
+  /**
+   * Shared tail of every context-menu link flow: create the link (unifying
+   * the pair's song — replacing a real song asks first), then refresh UI.
+   */
+  _linkGateTo(sourceEntityId, { puzzleId, gateId }) {
+    createLink(this.undoManager, sourceEntityId, puzzleId, gateId, {
+      confirmSongReplace: () =>
+        // eslint-disable-next-line no-alert -- dev-tool confirm before deleting an authored song
+        window.confirm(
+          `Both gates have songs. Linking replaces "${gateId}"'s song with this gate's ` +
+            '(linked gates are one door and share one song). Continue?'
+        ),
+    })
+      .then(({ warnings, cancelled }) => {
+        if (cancelled) {
+          this._showToast('Teleport cancelled — kept both songs');
+          return;
+        }
+        this._refreshGateLinkBadges();
+        this.selectionManager.select(sourceEntityId);
+        this.propertyPanel.show(sourceEntityId);
+        if (warnings.length > 0) this._showToast(warnings.join(' • '));
+        else this._showToast('Gates linked (both sides)', 'success');
+      })
+      .catch((err) => this._showToast(err.message));
+  }
+
+  /** Re-sync every gate's violet linked-badge with the model. */
+  _refreshGateLinkBadges() {
+    for (const entity of this.undoManager.getEntities()) {
+      if (entity.type === 'gate') this.entityPlacer.refreshLinkBadge(entity.id);
+    }
   }
 
   /**
@@ -428,6 +518,12 @@ export default class EditorApp {
     const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
 
     container.addEventListener('click', (e) => {
+      // Teleport pick mode: the next click chooses the link's target gate
+      if (this._linkPickSourceId !== null) {
+        this._handleLinkPickClick(e);
+        return;
+      }
+
       // Resolve the cell from the click itself (not the last mousemove)
       const grid = this.editorScene.gridFromEvent(e, this.camera);
       if (!grid) {
@@ -491,6 +587,36 @@ export default class EditorApp {
             label: 'Edit Song',
             action: () => this.songEditorModal.open(entityId),
           });
+        }
+
+        // Gate linking (portals / in-level teleport doors)
+        if (entity && entity.type === 'gate') {
+          const { link } = entity.data;
+          if (link) {
+            items.push({ label: `Linked → ${link.puzzleId}/${link.gateId}`, disabled: true });
+          }
+          items.push({
+            label: 'Teleport: click another gate…',
+            action: () => this._startLinkPick(entityId),
+          });
+          items.push({
+            label: 'Link by id…',
+            action: () => this._linkById(entityId),
+          });
+          if (link) {
+            items.push({
+              label: 'Clear Link',
+              action: () => {
+                clearLink(this.undoManager, entityId)
+                  .then(() => {
+                    this._refreshGateLinkBadges();
+                    this.propertyPanel.show(entityId);
+                    this._showToast('Link cleared (both sides)', 'success');
+                  })
+                  .catch((err) => this._showToast(err.message));
+              },
+            });
+          }
         }
 
         if (items.length > 0) {
@@ -575,10 +701,11 @@ export default class EditorApp {
         e.preventDefault();
         this._redo();
       }
-      // Escape cancels floor placement and deselects entity toolbar
+      // Escape cancels floor placement, teleport-pick, and selection
       if (e.key === 'Escape') {
         this.floorRegionPanel.cancelPlacing();
         this.entityToolbar.deselect();
+        this._cancelLinkPick('Teleport cancelled');
         this.selectionManager.deselect();
       }
       // Delete or Backspace deletes selected entity

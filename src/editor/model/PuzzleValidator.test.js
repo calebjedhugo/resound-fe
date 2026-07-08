@@ -428,6 +428,51 @@ describe('PuzzleValidator', () => {
       expect(errors.some((e) => /link/i.test(e))).toBe(false);
     });
 
+    it('reports error for a one-way same-puzzle link (partner does not link back)', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.setMetadata({ id: 'here' });
+      model.addEntity(
+        'gate',
+        3,
+        0,
+        3,
+        gateData({ gateId: 'door-a', link: { puzzleId: 'here', gateId: 'door-b' } })
+      );
+      model.addEntity('gate', 7, 0, 7, gateData({ gateId: 'door-b' })); // no back-link
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.some((e) => /does not link back/i.test(e))).toBe(true);
+    });
+
+    it('reports error when a linked same-puzzle pair has different songs', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.setMetadata({ id: 'here' });
+      model.addEntity(
+        'gate',
+        3,
+        0,
+        3,
+        gateData({ gateId: 'door-a', link: { puzzleId: 'here', gateId: 'door-b' } })
+      );
+      model.addEntity(
+        'gate',
+        7,
+        0,
+        7,
+        gateData({
+          gateId: 'door-b',
+          link: { puzzleId: 'here', gateId: 'door-a' },
+          song: [{ pitch: 'G4', length: '1/2' }],
+        })
+      );
+
+      const { errors } = validatePuzzle(model);
+
+      const songErrors = errors.filter((e) => /must share one song/i.test(e));
+      expect(songErrors).toHaveLength(1); // reported once per pair, not per side
+    });
+
     it('warns (not errors) for a gate without a stable id', () => {
       model.setPlayerSpawn(5, 0, 5);
       model.addEntity('gate', 3, 0, 3, { song: [{ pitch: 'C4', length: '1/4' }] });

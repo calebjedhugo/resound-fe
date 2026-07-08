@@ -294,8 +294,20 @@ export default class PropertyPanel {
 
     linkBtn.onclick = () => {
       linkBtn.disabled = true;
-      createLink(this._undoManager, this._selectedId, puzzleSelect.value, gateSelect.value)
-        .then(({ warnings }) => {
+      createLink(this._undoManager, this._selectedId, puzzleSelect.value, gateSelect.value, {
+        confirmSongReplace: () =>
+          // eslint-disable-next-line no-alert -- dev-tool confirm before deleting an authored song
+          window.confirm(
+            `Both gates have songs. Linking replaces "${gateSelect.value}"'s song with this ` +
+              "gate's (linked gates are one door and share one song). Continue?"
+          ),
+      })
+        .then(({ warnings, cancelled }) => {
+          if (cancelled) {
+            this._toast('Link cancelled — kept both songs');
+            linkBtn.disabled = false;
+            return;
+          }
           this._entityPlacer.refreshLinkBadge(this._selectedId);
           // One toast element: a mismatch warning outranks the success note
           if (warnings.length > 0) this._toast(warnings.join(' • '));

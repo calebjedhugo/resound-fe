@@ -17,6 +17,7 @@ import {
   renameGateId,
   releaseLinkBeforeDelete,
   musicalMismatchWarnings,
+  parseLinkTarget,
 } from 'editor/io/portalLinks';
 
 /** Minimal valid puzzle JSON with the given gates (raw file format). */
@@ -234,6 +235,157 @@ describe('portal links', () => {
 
       const writesAfter = fetch.mock.calls.filter(([, o]) => o && o.method === 'POST').length;
       expect(writesAfter).toBe(writesBefore);
+    });
+  });
+
+  describe('song unification (one door, one song)', () => {
+    const OUR_SONG = [{ pitch: 'C4', length: '1/4' }]; // fixture default
+    const THEIR_SONG = [{ pitch: 'G4', length: '1/2' }];
+
+    it('same songs link without asking', async () => {
+      const confirmSongReplace = jest.fn();
+
+      const result = await createLink(undoManager, localGateEntityId, 'remote', 'their-door', {
+        confirmSongReplace,
+      });
+
+      expect(result.cancelled).toBeUndefined();
+      expect(confirmSongReplace).not.toHaveBeenCalled();
+    });
+
+    it('differing songs: approval replaces the TARGET song with the initiator’s', async () => {
+      remoteGate('remote', 'their-door').song = THEIR_SONG;
+
+      const result = await createLink(undoManager, localGateEntityId, 'remote', 'their-door', {
+        confirmSongReplace: () => true,
+      });
+
+      expect(result.cancelled).toBeUndefined();
+      expect(remoteGate('remote', 'their-door').song).toEqual(OUR_SONG);
+      expect(localGateData().song).toEqual(OUR_SONG);
+      expect(remoteGate('remote', 'their-door').link).toEqual({
+        puzzleId: 'local',
+        gateId: 'my-door',
+      });
+    });
+
+    it('differing songs: declining cancels the link and keeps both songs', async () => {
+      remoteGate('remote', 'their-door').song = THEIR_SONG;
+
+      const result = await createLink(undoManager, localGateEntityId, 'remote', 'their-door', {
+        confirmSongReplace: () => false,
+      });
+
+      expect(result.cancelled).toBe(true);
+      expect(localGateData().link).toBeUndefined();
+      expect(remoteGate('remote', 'their-door').link).toBeUndefined();
+      expect(remoteGate('remote', 'their-door').song).toEqual(THEIR_SONG);
+      expect(localGateData().song).toEqual(OUR_SONG);
+    });
+
+    it('differing songs with no confirm callback: cancels (never silently deletes)', async () => {
+      remoteGate('remote', 'their-door').song = THEIR_SONG;
+
+      const result = await createLink(undoManager, localGateEntityId, 'remote', 'their-door');
+
+      expect(result.cancelled).toBe(true);
+      expect(remoteGate('remote', 'their-door').song).toEqual(THEIR_SONG);
+    });
+
+    it('a song-less initiator adopts the target’s song (and staffGroups)', async () => {
+      undoManager.updateEntity(localGateEntityId, {
+        data: { ...localGateData(), song: [] },
+      });
+      const target = remoteGate('remote', 'their-door');
+      target.song = THEIR_SONG;
+      target.staffGroups = [{ type: 'brace', voiceIds: ['treble', 'bass'] }];
+      const confirmSongReplace = jest.fn();
+
+      await createLink(undoManager, localGateEntityId, 'remote', 'their-door', {
+        confirmSongReplace,
+      });
+
+      expect(confirmSongReplace).not.toHaveBeenCalled();
+      expect(localGateData().song).toEqual(THEIR_SONG);
+      expect(localGateData().staffGroups).toEqual([
+        { type: 'brace', voiceIds: ['treble', 'bass'] },
+      ]);
+    });
+
+    it('a song-less target adopts the initiator’s song', async () => {
+      remoteGate('remote', 'their-door').song = [];
+      const confirmSongReplace = jest.fn();
+
+      await createLink(undoManager, localGateEntityId, 'remote', 'their-door', {
+        confirmSongReplace,
+      });
+
+      expect(confirmSongReplace).not.toHaveBeenCalled();
+      expect(remoteGate('remote', 'their-door').song).toEqual(OUR_SONG);
+    });
+
+    it('same-puzzle teleport link unifies songs the same way', async () => {
+      const secondGateId = undoManager.addEntity('gate', 5, 0, 5, {
+        song: THEIR_SONG,
+        gateId: 'second-door',
+        facing: 'west',
+      });
+
+      const result = await createLink(undoManager, localGateEntityId, 'local', 'second-door', {
+        confirmSongReplace: () => true,
+      });
+
+      expect(result.cancelled).toBeUndefined();
+      const second = undoManager.getEntity(secondGateId).data;
+      expect(second.song).toEqual(OUR_SONG);
+      expect(second.link).toEqual({ puzzleId: 'local', gateId: 'my-door' });
+      expect(localGateData().link).toEqual({ puzzleId: 'local', gateId: 'second-door' });
+    });
+
+    it('same-puzzle teleport link: declining leaves both gates untouched', async () => {
+      const secondGateId = undoManager.addEntity('gate', 5, 0, 5, {
+        song: THEIR_SONG,
+        gateId: 'second-door',
+        facing: 'west',
+      });
+
+      const result = await createLink(undoManager, localGateEntityId, 'local', 'second-door', {
+        confirmSongReplace: () => false,
+      });
+
+      expect(result.cancelled).toBe(true);
+      expect(undoManager.getEntity(secondGateId).data.song).toEqual(THEIR_SONG);
+      expect(undoManager.getEntity(secondGateId).data.link).toBeUndefined();
+      expect(localGateData().link).toBeUndefined();
+    });
+  });
+
+  describe('parseLinkTarget', () => {
+    it('a bare gate id targets the open puzzle', () => {
+      expect(parseLinkTarget('gate-2', 'teleport')).toEqual({
+        puzzleId: 'teleport',
+        gateId: 'gate-2',
+      });
+    });
+
+    it('puzzle/gate targets another puzzle', () => {
+      expect(parseLinkTarget('the-lure/gate-1', 'teleport')).toEqual({
+        puzzleId: 'the-lure',
+        gateId: 'gate-1',
+      });
+    });
+
+    it('tolerates surrounding whitespace', () => {
+      expect(parseLinkTarget('  the-lure / gate-1 ', 'teleport')).toEqual({
+        puzzleId: 'the-lure',
+        gateId: 'gate-1',
+      });
+    });
+
+    it('rejects malformed input', () => {
+      expect(() => parseLinkTarget('a/b/c', 'teleport')).toThrow(/gate id/i);
+      expect(() => parseLinkTarget('bad id!', 'teleport')).toThrow(/gate id/i);
+      expect(() => parseLinkTarget('', 'teleport')).toThrow(/gate id/i);
     });
   });
 
