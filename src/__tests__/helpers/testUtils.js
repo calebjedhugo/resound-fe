@@ -207,6 +207,10 @@ function createTestContext(options = {}) {
         }
         PortalManager.updateAreas(dt);
 
+        // Doorway crossing check, exactly as the game loop runs it (main.js):
+        // walking into/out of an open linked gate's cell is detected per frame
+        PortalManager.update();
+
         // Advance Jest fake timers to trigger instrument callbacks. Must be
         // the async variant: instruments schedule successive notes through
         // await/microtask chains, and the sync variant defers all of that to

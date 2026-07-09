@@ -458,6 +458,22 @@ describe('PortalManager live neighbor (stage 3)', () => {
     expect(partnerGate.isOpen).toBe(true);
   });
 
+  it('a NEIGHBOR gate never treats the player as its occupant (coordinates are per-area)', async () => {
+    // door-b sits at grid (5, 7) of portal-live-b. Put the player at the SAME
+    // coordinates — but in the ACTIVE area (portal-live-a). Areas have
+    // independent coordinate systems, so the neighbor gate must not read
+    // "occupied" and must CLOSE when its grace lapses, never hold in
+    // occupied overtime for a player who is a whole area away.
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 7 * WORLD_SCALE });
+    partnerGate.open();
+    partnerGate._openUntil = Date.now() - 1;
+
+    await ctx.tick(32);
+
+    expect(partnerGate.occupiedOvertime).toBe(false);
+    expect(partnerGate.isOpen).toBe(false);
+  });
+
   it('cross-seam sources reach creatures as forces aimed at the doorway', () => {
     // Start the neighbor creature's song directly: play() runs its
     // synchronous prefix, so it is observably mid-song right after the call
@@ -836,5 +852,181 @@ describe('PortalManager same-area doorway sound (teleport doors are shortcuts)',
 
     expect(creature.isRecordable).toBe(false);
     expect(ctx.getCreaturesInRange()).not.toContain(creature);
+  });
+});
+
+describe('Walked door crossings (real player input through the movement stack)', () => {
+  // Unlike the stepTo tests above (which set the position directly), these
+  // drive the player with held keys: movement integrates through
+  // processMovement -> resolveSlide -> CollisionDetector each frame, and the
+  // crossing check runs inside ctx.tick exactly as the game loop runs it.
+  // Walk speed is 4 units/second, so distance = 4 * seconds.
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it('walking through the open door is ONE continuous path into the next puzzle', async () => {
+    installFetchMock({ 'portal-b': portalB });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync(); // let the neighbor area load
+    const [gate] = ctx.getGates();
+    gameState.camera.viewCenter = [0, 0]; // heading north
+
+    // Start 3 cells south of the door (grid 5,2 -> world z 6) and walk north
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 3 });
+    gate.open();
+    ctx.holdKey('w');
+    await ctx.tick(1500); // 6 units: through the cell and out its north face
+    ctx.releaseKey('w');
+
+    expect(gameState.currentPuzzle.id).toBe('portal-b');
+    // The crossing is a pure translation, so the full 6 units of walking
+    // survive it: emerge from the partner (grid 5,7 -> world z 21) exactly
+    // where a 6-unit walk from (start relative to the door) lands
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE + 3 - 6, 1);
+    expect(gameState.player.elevation).toBe(0);
+    // Heading untouched: still facing north
+    const [yaw] = gameState.camera.viewCenter;
+    expect(-Math.sin(yaw)).toBeCloseTo(0);
+    expect(-Math.cos(yaw)).toBeCloseTo(-1);
+  });
+
+  it('walking into a CLOSED linked door wall-slides along it — no crossing', async () => {
+    installFetchMock({ 'portal-b': portalB });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+
+    // Just south of the closed door, pressing diagonally into it (north+west).
+    // 300ms keeps the slide on the door's face (longer and the player
+    // correctly rounds the box's SW corner and resumes north).
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 2.5 });
+    ctx.holdKey('w');
+    ctx.holdKey('a');
+    await ctx.tick(300);
+    ctx.releaseKey('w');
+    ctx.releaseKey('a');
+
+    expect(gameState.currentPuzzle.id).toBe('portal-a');
+    // Z is blocked at the door face (cell edge 7.5 + player radius 0.4)...
+    expect(gameState.player.position.z).toBeGreaterThanOrEqual(2 * WORLD_SCALE + 1.9);
+    expect(gameState.player.position.z).toBeLessThan(2 * WORLD_SCALE + 2);
+    // ...while X keeps the full 1.2 units: sliding along the wall, not sticking
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1.2);
+  });
+
+  it('the occupant of an OVERTIME door walks freely inside and back out; then it closes', async () => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-self');
+    const [doorA] = ctx.getGates();
+
+    // Walk in through the south face to the cell center (grid 5,2 -> world z 6)
+    doorA.open();
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 2.5 });
+    ctx.holdKey('w');
+    await ctx.tick(625); // 2.5 units
+    ctx.releaseKey('w');
+    expect(gameState.player.position.z).toBeCloseTo(2 * WORLD_SCALE, 1);
+
+    // Grace lapses with the player inside: the door holds in occupied overtime
+    doorA._openUntil = Date.now() - 1;
+    await ctx.tick(32);
+    expect(doorA.isOpen).toBe(true);
+    expect(doorA.occupiedOvertime).toBe(true);
+
+    // The overtime door is solid from outside, but its occupant still WALKS
+    // freely within the cell (movers report the player with ignoreId null,
+    // which CollisionDetector lets through the whole movement stack)
+    ctx.holdKey('a');
+    await ctx.tick(250); // 1 unit west, still inside the cell
+    ctx.releaseKey('a');
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1);
+    expect(doorA.isOpen).toBe(true);
+    expect(doorA.occupiedOvertime).toBe(true);
+
+    // Back out the face they entered: no teleport — they never left — and
+    // stepping out releases the door to close for real. (The exact resting
+    // Z is not asserted: the door closes the frame the player's CENTER
+    // leaves the cell, while their 0.4 body radius still overlaps the box —
+    // a known wedge at the collision margin, reported separately.)
+    ctx.holdKey('s');
+    await ctx.tick(625);
+    ctx.releaseKey('s');
+    expect(gameState.currentPuzzle.id).toBe('portal-self');
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1);
+    expect(gameState.player.position.z).toBeGreaterThan(2 * WORLD_SCALE + 1.5);
+    await ctx.tick(32);
+    expect(doorA.isOpen).toBe(false);
+    expect(doorA.occupiedOvertime).toBe(false);
+  });
+
+  it('walking out an OVERTIME door through the far face still crosses', async () => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-self');
+    const [doorA] = ctx.getGates();
+
+    doorA.open();
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 2.5 });
+    ctx.holdKey('w');
+    await ctx.tick(625); // into the cell center
+    ctx.releaseKey('w');
+    doorA._openUntil = Date.now() - 1;
+    await ctx.tick(32);
+    expect(doorA.occupiedOvertime).toBe(true);
+
+    // Keep walking north, out the far face: the crossing commits mid-walk
+    ctx.holdKey('w');
+    await ctx.tick(750); // 3 units
+    ctx.releaseKey('w');
+
+    expect(gameState.currentPuzzle.id).toBe('portal-self');
+    // Emerged from door-b (grid 5,8 -> world z 24): translation preserves the
+    // walked distance — 3 units north of where the cell-center start maps to
+    expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
+    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE - 3, 1);
+    // The exit releases the occupied face; it closes at once
+    await ctx.tick(32);
+    expect(doorA.isOpen).toBe(false);
+  });
+});
+
+describe('Cross-seam sound moves creatures (harmony forces through the doorway)', () => {
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it('an active-area creature drifts TOWARD the open door when a neighbor sings consonantly', async () => {
+    // Stretch the neighbor's D4 to a whole note so the two songs overlap
+    // for many frames of force integration
+    const liveB = JSON.parse(JSON.stringify(portalLiveB));
+    const singer = liveB.entities.find((e) => e.type === 'creature');
+    singer.data.song = [{ pitch: 'D4', length: '1/1' }];
+    installFetchMock({ 'portal-live-b': liveB });
+    ctx.loadPuzzle('portal-live-a');
+    await jest.runAllTimersAsync(); // let the neighbor area load live
+
+    const [gate] = ctx.getGates(); // door-a at grid (5,2) -> world z 6
+    // Mover: in the ACTIVE area, 6 units south of the door, singing F#4 — a
+    // major third above the neighbor's D4 (consonant -> attraction). Both
+    // creatures start singing on the first beat.
+    const mover = ctx.addCreature({
+      position: { x: 5 * WORLD_SCALE, z: 4 * WORLD_SCALE },
+      song: [{ pitch: 'F#4', length: '1/1' }],
+      interval: 32,
+      audibleRange: 15,
+    });
+    const startZ = mover.position.z;
+    gate.open();
+
+    await ctx.tick(800);
+
+    // The pull aims at the DOORWAY, north of the mover (z decreases). The
+    // singer's raw coordinates (world z 18) lie SOUTH of the mover — a force
+    // naively aimed at them would drag the mover the opposite way.
+    expect(mover.position.z).toBeLessThan(startZ - 0.05);
+    expect(mover.position.x).toBeCloseTo(5 * WORLD_SCALE, 1);
   });
 });

@@ -117,6 +117,7 @@ jest.mock('editor/io/sessionPersistence', () => ({
 import EditorApp from 'editor/EditorApp';
 import { loadSession } from 'editor/io/sessionPersistence';
 import { deserializePuzzle } from 'editor/model/serialization';
+import { createLink } from 'editor/io/portalLinks';
 /* eslint-enable import/first */
 
 function setupEditorDOM() {
@@ -321,6 +322,243 @@ describe('EditorApp wiring', () => {
       await app._restoreSession();
 
       expect(app.undoManager.getMetadata().tempo).toBe(144);
+    });
+  });
+
+  describe('gate link context-menu flows', () => {
+    let idA;
+    let idB;
+
+    const container = () => document.getElementById('editor-viewport');
+    const linkOf = (id) => app.undoManager.getEntity(id).data.link;
+    const toastText = () => container().querySelector('.viewport-toast').textContent;
+
+    /** Point the mocked viewport raycast at an entity (or at nothing). */
+    function aimRaycastAt(id) {
+      if (id === null) {
+        mockIntersectObjects.mockReturnValue([]);
+        app.entityPlacer.getEntityIdFromMesh.mockReturnValue(null);
+        return;
+      }
+      const hitMesh = { userData: { entityId: id } };
+      app.entityPlacer.getAllMeshes.mockReturnValue([hitMesh]);
+      app.entityPlacer.getEntityIdFromMesh.mockReturnValue(id);
+      mockIntersectObjects.mockReturnValue([{ object: hitMesh }]);
+    }
+
+    function rightClickOn(id) {
+      aimRaycastAt(id);
+      container().dispatchEvent(
+        new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true })
+      );
+    }
+
+    /** Click the menu item whose label starts with the given text. */
+    function clickMenuItem(labelPrefix) {
+      const item = [...container().querySelectorAll('.context-menu-item')].find((btn) =>
+        btn.textContent.startsWith(labelPrefix)
+      );
+      expect(item).toBeDefined();
+      item.click(); // a real bubbling DOM click, like the user's
+    }
+
+    function viewportClick() {
+      container().dispatchEvent(
+        new MouseEvent('click', { clientX: 200, clientY: 200, bubbles: true })
+      );
+    }
+
+    /** Let the createLink/clearLink promise chains settle (no timers involved). */
+    async function flushAsync() {
+      for (let i = 0; i < 10; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await Promise.resolve();
+      }
+    }
+
+    beforeEach(() => {
+      // PropertyPanel.show on a gate lists link targets from the manifest;
+      // serve an empty one so no error toast overwrites the ones we assert
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ puzzles: [] }) })
+      );
+      // Links need a puzzle id, and each gate a stable gateId (normally
+      // assigned by EntityPlacer.placeEntity, which is mocked here)
+      app.undoManager.setMetadata({ id: 'test-puzzle', name: 'Test Puzzle' });
+      idA = app.undoManager.addEntity('gate', 5, 0, 3, { song: [], gateId: 'gate-1' });
+      idB = app.undoManager.addEntity('gate', 8, 0, 3, { song: [], gateId: 'gate-2' });
+    });
+
+    afterEach(() => {
+      delete global.fetch;
+    });
+
+    it('the two-click Teleport flow links both gates', async () => {
+      rightClickOn(idA);
+      // Aim the raycast at NOTHING for the menu click itself: if the menu
+      // click bubbled into the viewport click handler (the stopPropagation
+      // regression), pick mode would instantly cancel as "not a gate"
+      aimRaycastAt(null);
+      clickMenuItem('Teleport:');
+
+      aimRaycastAt(idB);
+      viewportClick();
+      await flushAsync();
+
+      expect(linkOf(idA)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-2' });
+      expect(linkOf(idB)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-1' });
+      expect(toastText()).toBe('Gates linked (both sides)');
+    });
+
+    it('menu item clicks never bubble into the viewport click handler', () => {
+      const viewportClickSpy = jest.fn();
+      container().addEventListener('click', viewportClickSpy);
+      app.contextMenu.show(10, 10, [{ label: 'Do something', action: jest.fn() }]);
+
+      container().querySelector('.context-menu-item').click();
+
+      expect(viewportClickSpy).not.toHaveBeenCalled();
+      container().removeEventListener('click', viewportClickSpy);
+    });
+
+    it('Esc cancels teleport-pick mode: the next gate click just selects, no link', async () => {
+      rightClickOn(idA);
+      aimRaycastAt(null);
+      clickMenuItem('Teleport:');
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(toastText()).toBe('Teleport cancelled');
+
+      aimRaycastAt(idB);
+      viewportClick();
+      await flushAsync();
+
+      expect(linkOf(idA)).toBeUndefined();
+      expect(linkOf(idB)).toBeUndefined();
+    });
+
+    it('picking something that is not a gate cancels the teleport', async () => {
+      const idWall = app.undoManager.addEntity('wall', 2, 0, 2, {});
+      rightClickOn(idA);
+      aimRaycastAt(null);
+      clickMenuItem('Teleport:');
+
+      aimRaycastAt(idWall);
+      viewportClick();
+      expect(toastText()).toBe('Teleport cancelled — that was not a gate');
+
+      // Pick mode is gone: a later gate click no longer links
+      aimRaycastAt(idB);
+      viewportClick();
+      await flushAsync();
+      expect(linkOf(idA)).toBeUndefined();
+    });
+
+    it('picking the source gate itself stays in pick mode until a partner is chosen', async () => {
+      rightClickOn(idA);
+      aimRaycastAt(null);
+      clickMenuItem('Teleport:');
+
+      aimRaycastAt(idA);
+      viewportClick();
+      expect(toastText()).toBe("A gate can't link to itself — pick a different gate");
+
+      aimRaycastAt(idB);
+      viewportClick();
+      await flushAsync();
+      expect(linkOf(idA)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-2' });
+    });
+
+    it('"Link by id…" with a gate id links both sides of the pair', async () => {
+      jest.spyOn(window, 'prompt').mockReturnValue('gate-2');
+
+      rightClickOn(idA);
+      clickMenuItem('Link by id');
+      await flushAsync();
+
+      expect(linkOf(idA)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-2' });
+      expect(linkOf(idB)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-1' });
+      expect(toastText()).toBe('Gates linked (both sides)');
+    });
+
+    it('"Link by id…" cancelled at the prompt changes nothing', async () => {
+      jest.spyOn(window, 'prompt').mockReturnValue(null);
+
+      rightClickOn(idA);
+      clickMenuItem('Link by id');
+      await flushAsync();
+
+      expect(linkOf(idA)).toBeUndefined();
+      expect(linkOf(idB)).toBeUndefined();
+    });
+
+    it('"Link by id…" rejects malformed input with a toast, links nothing', async () => {
+      jest.spyOn(window, 'prompt').mockReturnValue('not//a//valid//target');
+
+      rightClickOn(idA);
+      clickMenuItem('Link by id');
+      await flushAsync();
+
+      expect(toastText()).toBe('Enter a gate id ("gate-2") or puzzle/gate ("the-lure/gate-1")');
+      expect(linkOf(idA)).toBeUndefined();
+    });
+
+    it('"Link by id…" toasts when the target gate does not exist', async () => {
+      jest.spyOn(window, 'prompt').mockReturnValue('gate-9');
+
+      rightClickOn(idA);
+      clickMenuItem('Link by id');
+      await flushAsync();
+
+      expect(toastText()).toBe('Gate "gate-9" not found in this puzzle');
+      expect(linkOf(idA)).toBeUndefined();
+    });
+
+    it('declining the song-replace confirm cancels the link and keeps both songs', async () => {
+      const songA = [{ pitch: 'C4', length: '1/4' }];
+      const songB = [{ pitch: 'D4', length: '1/4' }];
+      app.undoManager.updateEntity(idA, { data: { song: songA, gateId: 'gate-1' } });
+      app.undoManager.updateEntity(idB, { data: { song: songB, gateId: 'gate-2' } });
+      jest.spyOn(window, 'prompt').mockReturnValue('gate-2');
+      jest.spyOn(window, 'confirm').mockReturnValue(false);
+
+      rightClickOn(idA);
+      clickMenuItem('Link by id');
+      await flushAsync();
+
+      expect(toastText()).toBe('Teleport cancelled — kept both songs');
+      expect(linkOf(idA)).toBeUndefined();
+      expect(linkOf(idB)).toBeUndefined();
+      expect(app.undoManager.getEntity(idA).data.song).toEqual(songA);
+      expect(app.undoManager.getEntity(idB).data.song).toEqual(songB);
+    });
+
+    it('a linked gate shows its link in the menu, and Clear Link clears both sides', async () => {
+      await createLink(app.undoManager, idA, 'test-puzzle', 'gate-2');
+
+      rightClickOn(idA);
+      const labels = [...container().querySelectorAll('.context-menu-item')].map(
+        (btn) => btn.textContent
+      );
+      expect(labels).toContain('Linked → test-puzzle/gate-2');
+
+      clickMenuItem('Clear Link');
+      await flushAsync();
+
+      expect(linkOf(idA)).toBeUndefined();
+      expect(linkOf(idB)).toBeUndefined();
+      expect(toastText()).toBe('Link cleared (both sides)');
+    });
+
+    it('an unlinked gate offers no Clear Link item', () => {
+      rightClickOn(idA);
+
+      const labels = [...container().querySelectorAll('.context-menu-item')].map(
+        (btn) => btn.textContent
+      );
+      expect(labels).not.toContain('Clear Link');
+      expect(labels.some((l) => l.startsWith('Teleport:'))).toBe(true);
+      expect(labels.some((l) => l.startsWith('Link by id'))).toBe(true);
     });
   });
 
