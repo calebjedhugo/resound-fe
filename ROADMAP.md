@@ -30,7 +30,7 @@ Planned onboarding pieces (one element each):
 - ❌ (later) clap timing, elevation puzzles, etc.
 
 Bigger architectural ideas (exploratory, likely the backbone of the game):
-- ⚠️ **Gates link to matching gates (portals)** — a gate opens a portal to
+- ✅ **Gates link to matching gates (portals)** — a gate opens a portal to
   another gate elsewhere. This doubles as the **open-world + CPU strategy**:
   only areas adjacent to linked gates need to be loaded, so the world stays
   seamless without loading everything at once. Also shapes how the editor
@@ -64,6 +64,14 @@ Bigger architectural ideas (exploratory, likely the backbone of the game):
     (both sides edited in the model, fully undoable), runtime reuses the
     door machinery unchanged, see-through renders the main scene. A gate
     can't link to itself. See DESIGN.md "Gate links" ruling 2026-07-07
+  - ✅ Final doorway model (ruled 2026-07-09, shipped 2026-07-10 — target
+    hit): crossing commits ON ENTRY — stepping into an open linked gate
+    teleports at once, backing out exits the DESTINATION, every exit is
+    plain walking against the destination's real geometry (a fully
+    walled-in partner refuses to commit; a door never closes on its
+    occupant's body). View panels sit on the cell's FAR planes (no dead
+    frame at the threshold), clip at the window, and never pop with eye
+    position. See DESIGN.md "Gate links / portals"
 - ❌ **Fountains reroute gates** — a fountain becomes a **toggle** (it PERSISTS
   after the song finishes, unlike a gate, which is open only while performing)
   that changes where a gate leads. This finally gives fountains a real
