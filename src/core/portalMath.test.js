@@ -6,13 +6,7 @@
  * is where you land when you walk through it.
  */
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
-import {
-  doorwayCorners,
-  portalMapping,
-  sideOfGate,
-  DOORWAY_OFFSET,
-  OPPOSITE_FACING,
-} from 'core/portalMath';
+import { doorwayCorners, portalMapping, DOORWAY_OFFSET, OPPOSITE_FACING } from 'core/portalMath';
 
 const expectPoint = (actual, expected) => {
   expect(actual.x).toBeCloseTo(expected.x);
@@ -115,21 +109,5 @@ describe('opposite-face pairing (entry face -> exit face)', () => {
     expect(OPPOSITE_FACING.south).toBe('north');
     expect(OPPOSITE_FACING.east).toBe('west');
     expect(OPPOSITE_FACING.west).toBe('east');
-  });
-});
-
-describe('sideOfGate', () => {
-  const gate = { x: 15, y: 0, z: 6 };
-
-  it('picks the dominant horizontal axis (north = -Z, matching ramps)', () => {
-    expect(sideOfGate(gate, { x: 15, z: 3 })).toBe('north');
-    expect(sideOfGate(gate, { x: 15, z: 9 })).toBe('south');
-    expect(sideOfGate(gate, { x: 18, z: 6 })).toBe('east');
-    expect(sideOfGate(gate, { x: 12, z: 6 })).toBe('west');
-  });
-
-  it('a diagonal approach resolves to the stronger axis', () => {
-    expect(sideOfGate(gate, { x: 18.5, z: 8 })).toBe('east');
-    expect(sideOfGate(gate, { x: 16, z: 2 })).toBe('north');
   });
 });

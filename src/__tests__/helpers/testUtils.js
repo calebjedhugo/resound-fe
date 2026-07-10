@@ -13,6 +13,7 @@ import PortalManager from 'core/PortalManager';
 import PuzzleLoader from 'core/PuzzleLoader';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import resolveSlide from 'core/SlideResolver';
+import { PLAYER_COLLISION_RADIUS } from 'core/constants';
 import Creature from 'entities/Creature';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
@@ -369,7 +370,7 @@ function createTestContext(options = {}) {
         { x: oldX, z: oldZ },
         { x: gameState.player.position.x, z: gameState.player.position.z },
         {
-          radius: 0.4,
+          radius: PLAYER_COLLISION_RADIUS,
           ignoreId: null,
           priorLevel,
           grid: elevationGrid || null,

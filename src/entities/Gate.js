@@ -3,7 +3,7 @@ import ListeningManager from 'core/ListeningManager';
 import evaluatePhrases from 'core/phraseMatching';
 import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
-import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from 'entities/Entity';
 
@@ -160,13 +160,19 @@ class Gate extends Entity {
     }
   }
 
-  /** Is the player standing inside this gate's cell (same level)? */
+  /**
+   * Is the player standing inside this gate's cell (same level)? The
+   * occupant includes their BODY: the check extends past the cell edge by
+   * the player's collision radius, because closing while their body still
+   * overlaps the box would wedge them against the newly solid face — the
+   * door releases only once they are fully clear.
+   */
   _playerInside() {
     // The player's coordinates only mean anything in THEIR area — a gate in
     // a neighbor area can never be occupied (coordinates are per-area)
     if (this.area && this.area !== gameState.activeArea) return false;
     const { position, elevation } = gameState.player;
-    const half = WORLD_SCALE / 2;
+    const half = WORLD_SCALE / 2 + PLAYER_COLLISION_RADIUS;
     return (
       Math.round(this.position.y / ELEVATION_HEIGHT) === elevation &&
       Math.abs(position.x - this.position.x) < half &&

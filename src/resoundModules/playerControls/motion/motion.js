@@ -3,6 +3,7 @@ import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import resolveSlide from 'core/SlideResolver';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
+import { PLAYER_COLLISION_RADIUS } from 'core/constants';
 
 const fixedYPosition = 1.8; // Player height in meters
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -14,7 +15,7 @@ document.body.appendChild(renderer.domElement);
 
 const baseSpeed = 0.067; // 4 units/sec ÷ 60 fps = 0.067 units/frame
 const runMultiplier = 2; // Running is 2x walk speed (8 units/sec)
-const playerRadius = 0.4; // Player collision radius
+const playerRadius = PLAYER_COLLISION_RADIUS;
 
 const getSpeed = () => {
   const { running } = gameState.input.keys;

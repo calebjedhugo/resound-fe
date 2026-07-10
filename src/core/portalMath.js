@@ -37,21 +37,6 @@ export const OPPOSITE_FACING = {
 export const DOORWAY_OFFSET = WORLD_SCALE / 2 + 0.01;
 
 /**
- * Which side of a gate a world position is on (dominant horizontal axis).
- * Used at crossing time: the side the player is on when they step into the
- * cell is the face they entered through.
- * @param {{x:number, z:number}} gatePosition
- * @param {{x:number, z:number}} position - e.g. the player
- * @returns {'north'|'south'|'east'|'west'}
- */
-export function sideOfGate(gatePosition, position) {
-  const dx = position.x - gatePosition.x;
-  const dz = position.z - gatePosition.z;
-  if (Math.abs(dx) > Math.abs(dz)) return dx >= 0 ? 'east' : 'west';
-  return dz >= 0 ? 'south' : 'north';
-}
-
-/**
  * World-space corners of a gate's doorway quad — the full facing face of the
  * gate box (WORLD_SCALE wide, floor to WORLD_SCALE high). Corner names are
  * from the viewpoint of a player standing on the doorway side looking at the

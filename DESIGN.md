@@ -149,19 +149,25 @@ rulings, in the designer's words where it matters:
   performing its song); the link only changes what's on the other side. Your
   recordings come with you — areas are one world, so "gate songs as keys you
   carry" works across seams.
-- **The doorway is SHARED SPACE (ruled 2026-07-08).** Stepping into an open
-  linked gate does NOT teleport: the two linked cells are one room with two
-  addresses, and standing in it is standing in both places at once. The
-  player roams the cell freely; only EXITING commits — out the face they
-  entered means they never left; out any other face they emerge in the
-  partner's world on that same face, at their exact offset (translation),
-  heading untouched. While inside, every face except the entry shows the
-  partner's world from within.
-- **A door never closes on its occupant.** If the open grace lapses while
-  the player stands in the doorway, the gate holds in OCCUPIED OVERTIME:
-  solid and closed-looking from the outside (creatures can't enter), open
-  and see-through from within — until the player steps out, when it closes
-  for real. Exits still work normally from overtime.
+- **Crossing commits ON ENTRY (ruled 2026-07-09; supersedes the 2026-07-08
+  "shared space / only exiting commits" ruling).** Stepping into an open
+  linked gate teleports AT ONCE: the two linked cells are one room with two
+  addresses, and going in means you now stand at the DESTINATION address —
+  same offset (pure translation), heading untouched. Every perspective
+  looks out of the gate you teleported to, behind you included, and every
+  exit — backing out the way you came included — is plain walking against
+  the destination's REAL geometry: what you see is what blocks you, and
+  backing out means you exited the destination gate (you still teleported;
+  the way home is one more step through). The commit zone is inset
+  (`DOORWAY_COMMIT_DEPTH`) and re-arms only after a full step out, so
+  cell-edge jitter never flickers the world.
+- **A door never closes on its occupant — body included.** If the open
+  grace lapses while the player stands in the doorway, the gate holds in
+  OCCUPIED OVERTIME: solid and closed-looking from the outside (creatures
+  can't enter), open from within — until the player steps out, when it
+  closes for real. "Steps out" means their collision radius fully clears
+  the box (closing on a body still overlapping the face would wedge them
+  against it). Exits from overtime are plain walks like any other.
 - **A linked pair shares ONE song** (ruled 2026-07-07; "for now, I might
   change my mind later"). The pair mirrors its open state at runtime, so
   differing songs are ill-defined. Linking unifies: the INITIATING gate's
@@ -182,9 +188,11 @@ rulings, in the designer's words where it matters:
 - **Entry face → opposite exit face (ruled 2026-07-07):** looking into the
   north end of a door shows out the SOUTH end of its partner (and so on for
   every direction) — the pair maps by pure translation, no mirror flip —
-  and walking straight through matches. If an exit's landing cell is
-  blocked, arrival falls back to the first clear side (never inside a wall
-  — the no-soft-lock rule) and snaps the view to the rerouted direction.
+  and walking straight through matches. There is no arrival reroute: a
+  blocked side of the destination simply blocks, visibly, like any wall.
+  The no-soft-lock rule moved to the commit: a partner walled in on EVERY
+  side refuses to commit (never teleport into a trap) — the cell stays
+  plain walkable space and the player backs out the way they came.
 - **A door is a sound shortcut, even within one puzzle:** sound takes the
   shortest path — direct or through a door (player→gate + partner→source,
   leak while closed). A creature far across the map is loud through an open

@@ -21,6 +21,17 @@ export const DEFAULT_CREATURE_SIZE = 0.9;
 // Player size (radius in world units, for force calculations)
 export const PLAYER_SIZE = 0.5;
 
+// Player collision radius for movement (world units) — shared by motion.js,
+// the test harness's movement integrator, and Gate's occupant check (a door
+// may not close while the player's body still overlaps its box)
+export const PLAYER_COLLISION_RADIUS = 0.4;
+
+// How deep INTO an open doorway cell the player must step before the
+// crossing commits (world units, inset from the cell edge). Hysteresis:
+// jitter on the cell boundary must never flicker the world back and forth —
+// committing needs a real step in, and re-arming needs a full step out.
+export const DOORWAY_COMMIT_DEPTH = 0.3;
+
 // Deceleration factor applied each physics pass (0-1)
 // Lower = faster deceleration. Applied as: velocity *= factor
 export const CREATURE_DECELERATION = 0.85;

@@ -172,4 +172,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-07-07 — Gate portals stage 3: live neighbor areas (Area/PortalManager multi-area world, doorway sound model)*
+*Last Updated: 2026-07-09 — Door crossings commit ON ENTRY (see DESIGN.md "Gate links / portals")*
