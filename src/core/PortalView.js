@@ -23,7 +23,13 @@ import * as THREE from 'three';
 // eslint-disable-next-line import/extensions
 import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
-import { FACING_VECTORS, DOORWAY_OFFSET, doorwayCorners, portalMapping } from 'core/portalMath';
+import {
+  FACING_VECTORS,
+  DOORWAY_OFFSET,
+  PANEL_EPSILON,
+  doorwayCorners,
+  portalMapping,
+} from 'core/portalMath';
 
 // Doorway surface rotation: PlaneGeometry's +Z normal turned to face outward.
 const DOORWAY_ROTATION_Y = {
@@ -37,11 +43,6 @@ const DOORWAY_ROTATION_Y = {
 // the off-axis projection degenerates, and the surface is invisible anyway
 // (back-face culled / viewed edge-on), so the pass is skipped.
 const MIN_EYE_DISTANCE = 0.05;
-
-// The view surface hugs the INSIDE of the far panel by this margin: flush
-// against it, but in front of anything standing in the neighboring cell —
-// a wall directly behind the door must not win the depth test against it.
-const INTERIOR_EPSILON = 0.02;
 
 const scratchSize = new THREE.Vector2();
 
@@ -86,8 +87,7 @@ class PortalView {
     // on the NEAR face put the camera through it ~0.3 units before the
     // commit — a visible dead frame at the threshold.)
     this._corners = doorwayCorners(gate.position, sourceFacing);
-    const nearCenter = this._corners.center;
-    const shift = 2 * DOORWAY_OFFSET - INTERIOR_EPSILON;
+    const shift = 2 * DOORWAY_OFFSET - PANEL_EPSILON;
     for (const key of ['center', 'bottomLeft', 'bottomRight', 'topLeft']) {
       this._corners[key] = {
         x: this._corners[key].x - shift * this._outward.x,
@@ -104,16 +104,17 @@ class PortalView {
     this._mappedBottomRight = new THREE.Vector3(br.x, br.y, br.z);
     this._mappedTopLeft = new THREE.Vector3(tl.x, tl.y, tl.z);
 
-    // Clip everything "behind the door" — on the far side of the partner's
-    // NEAR plane (where the partner gate stands and the mapped eye lives) —
-    // so it can't occlude the view through the doorway. Geometry BESIDE the
-    // door stays: a wall flanking the partner must keep blocking the angled
-    // sightlines it really blocks (clipping at the window plane instead
-    // once let those rays sail past the wall into the void).
-    const mappedNearCenter = this._map(nearCenter);
+    // Clip at the WINDOW plane (this panel's own far plane): only content
+    // truly beyond the doorway paints into the view. Content on the eye
+    // side of the window — the shared doorway room and everything flanking
+    // the door — belongs to the VIEWER's world (it already renders as the
+    // real geometry around the gate box); painting the destination's
+    // version of it would double the world, and a clip through the middle
+    // of the room once sliced a creature standing near the door in half.
+    const mappedCenter = this._map(this._corners.center);
     this._clipPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
       new THREE.Vector3(mapping.outward.x, mapping.outward.y, mapping.outward.z),
-      new THREE.Vector3(mappedNearCenter.x, mappedNearCenter.y, mappedNearCenter.z)
+      new THREE.Vector3(mappedCenter.x, mappedCenter.y, mappedCenter.z)
     );
 
     // The neighbor's LIVE scene. The partner gate is this same door seen
@@ -135,7 +136,7 @@ class PortalView {
     this.surface = new THREE.Mesh(geometry, material);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
     // OPPOSITE panel, facing back at the viewer
-    const inset = DOORWAY_OFFSET - INTERIOR_EPSILON;
+    const inset = DOORWAY_OFFSET - PANEL_EPSILON;
     this.surface.position.set(-this._outward.x * inset, 0, -this._outward.z * inset);
     this.surface.rotation.y = DOORWAY_ROTATION_Y[this.facing] ?? Math.PI;
     this.surface.visible = false;

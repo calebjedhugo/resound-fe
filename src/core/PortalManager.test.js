@@ -266,8 +266,10 @@ describe('PortalManager see-through rendering', () => {
     const surface = doorwaySurface();
     expect(surface).toBeDefined();
     expect(surface.visible).toBe(true);
-    // One neighbor pass, rendered into the portal target then back to screen
-    expect(renderer.renderCalls).toHaveLength(1);
+    // Approach panel + the two (near edge-on) side panels — the doorway is
+    // a box of windows; oblique sightlines hit the sides. Each pass renders
+    // into the portal target then hands back to the screen.
+    expect(renderer.renderCalls).toHaveLength(3);
     expect(renderer.targets[0]).not.toBeNull();
     expect(renderer.targets[renderer.targets.length - 1]).toBeNull();
   });
@@ -294,22 +296,21 @@ describe('PortalManager see-through rendering', () => {
     expect(Math.abs(surface.position.z)).toBeLessThan(WORLD_SCALE / 2);
   });
 
-  it('the pass clips behind the PARTNER, keeping geometry beside the door', () => {
+  it('the pass clips at the WINDOW: near-side content never paints into a view', () => {
     gate.open();
 
     PortalManager.renderPortals(renderer, camera);
 
-    // North approach maps to the partner's south face; the clip must sit at
-    // the partner's NEAR (north) plane — z = 21 - 2.51... the partner south-door
-    // is at grid (5,7) -> world z 21, near plane at 21 - 1.51 = 19.49 — so a
-    // wall FLANKING the partner keeps blocking the angled sightlines it
-    // really blocks. (Clipping at the window plane instead deleted that
-    // wall and showed the void behind it.)
+    // North approach: window on the partner's south plane (south-door is at
+    // grid (5,7) -> world z 21; window at 21 + 1.49). Only content BEYOND
+    // the window paints — the shared doorway room and everything flanking
+    // the door belong to the viewer's own world (a clip through the middle
+    // of the room once sliced a creature standing near the door in half).
     const [plane] = renderer.renderCalls[0].clipping;
     expect(plane.normal.x).toBeCloseTo(0);
     expect(plane.normal.z).toBeCloseTo(1); // partner outward: south
-    // Plane passes through z = 19.49: normal·p + constant = 0
-    expect(plane.constant).toBeCloseTo(-(7 * WORLD_SCALE - 1.51));
+    // Plane passes through z = 22.49: normal·p + constant = 0
+    expect(plane.constant).toBeCloseTo(-(7 * WORLD_SCALE + 1.49));
   });
 
   it('closing the gate hides the doorway and stops paying for the pass', () => {
@@ -320,7 +321,7 @@ describe('PortalManager see-through rendering', () => {
     PortalManager.renderPortals(renderer, camera);
 
     expect(doorwaySurface().visible).toBe(false);
-    expect(renderer.renderCalls).toHaveLength(1); // only the open-frame pass
+    expect(renderer.renderCalls).toHaveLength(3); // only the open-frame passes
   });
 
   it('an open gate whose neighbor has not loaded yet stays an ordinary gate', () => {
@@ -368,7 +369,7 @@ describe('PortalManager see-through rendering', () => {
     PortalManager.renderPortals(renderer, camera);
 
     expect(doorwaySurface().visible).toBe(true);
-    expect(renderer.renderCalls).toHaveLength(1);
+    expect(renderer.renderCalls).toHaveLength(3); // approach + two side panels
   });
 });
 
@@ -673,12 +674,13 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
 
     PortalManager.renderPortals(renderer, camera);
 
-    expect(renderer.renderCalls).toHaveLength(1);
+    expect(renderer.renderCalls).toHaveLength(3); // approach + two side panels
     // The active area's content group lives in the main scene — the
-    // self-door view must render THAT scene, not the area's (empty) own scene
-    const rendered = renderer.renderCalls[0].scene;
-    expect(rendered).not.toBe(gameState.activeArea.scene);
-    expect(rendered.children).toContain(gameState.activeArea.group);
+    // self-door views must render THAT scene, not the area's (empty) own scene
+    for (const call of renderer.renderCalls) {
+      expect(call.scene).not.toBe(gameState.activeArea.scene);
+      expect(call.scene.children).toContain(gameState.activeArea.group);
+    }
   });
 
   it('every player-visible face sees through: a corner view renders BOTH sides', () => {
@@ -695,12 +697,15 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     const visibleSurfaces = () =>
       doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
 
-    // Straight south of the gate: exactly one face sees through
+    // Straight south of the gate: the approach panel plus the two side
+    // panels (oblique rays through the cell hit the sides — the doorway is
+    // a box of windows, and side views must never pop in or out as the eye
+    // crosses the cell's center axes)
     PortalManager.renderPortals(renderer, {
       position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
-    expect(visibleSurfaces()).toHaveLength(1);
-    expect(renderer.renderCalls).toHaveLength(1);
+    expect(visibleSurfaces()).toHaveLength(3);
+    expect(renderer.renderCalls).toHaveLength(3);
 
     // At the SOUTH-EAST corner: both visible faces see through, two passes
     renderer.renderCalls = [];
@@ -716,13 +721,13 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(offsets.some((o) => o.z < 0 && o.x === 0)).toBe(true);
     expect(offsets.some((o) => o.x < 0 && o.z === 0)).toBe(true);
 
-    // Back to straight south: the east view is kept but hidden
+    // Back to straight south: the full three-panel set again, no popping
     renderer.renderCalls = [];
     PortalManager.renderPortals(renderer, {
       position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
-    expect(visibleSurfaces()).toHaveLength(1);
-    expect(renderer.renderCalls).toHaveLength(1);
+    expect(visibleSurfaces()).toHaveLength(3);
+    expect(renderer.renderCalls).toHaveLength(3);
   });
 
   it('the doorway view stays live all the way to the commit point (no dead frame)', async () => {
@@ -754,11 +759,12 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     });
 
     const visible = doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
-    expect(visible).toHaveLength(1);
-    expect(renderer.renderCalls).toHaveLength(1);
-    // The south approach's surface sits on the NORTH panel — 2.8 units past
+    // Inside the cell every panel is live (the doorway is a box of windows)
+    expect(visible).toHaveLength(4);
+    expect(renderer.renderCalls).toHaveLength(4);
+    // The south approach's surface sits on the NORTH panel — 2.7 units past
     // the commit point, unreachable by an uncommitted camera
-    expect(visible[0].position.z).toBeLessThan(0);
+    expect(visible.some((c) => c.position.z < 0 && c.position.x === 0)).toBe(true);
   });
 
   it('a working open door shows no green shell; unlinked gates keep theirs', () => {

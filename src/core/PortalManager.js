@@ -48,7 +48,7 @@ import {
   PLAYER_SIZE,
   DOORWAY_COMMIT_DEPTH,
 } from 'core/constants';
-import { FACING_VECTORS, OPPOSITE_FACING } from 'core/portalMath';
+import { FACING_VECTORS, OPPOSITE_FACING, DOORWAY_OFFSET, PANEL_EPSILON } from 'core/portalMath';
 import { getDistance } from 'core/utils';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
@@ -263,9 +263,15 @@ class PortalManager {
     }
     for (const facing of Object.keys(FACING_VECTORS)) {
       const out = FACING_VECTORS[facing];
+      // Eligibility is measured against the PANEL's plane (the cell's far
+      // face for this approach), not the gate center: oblique sightlines
+      // through the cell legitimately hit the SIDE panels, and a view must
+      // never pop in/out as the eye crosses the cell's center axes.
+      const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
       const onThisSide =
         out.x * (camera.position.x - gate.position.x) +
-          out.z * (camera.position.z - gate.position.z) >
+          out.z * (camera.position.z - gate.position.z) +
+          panelPlane >
         0.05;
       let view = faces.get(facing);
       if (onThisSide && !view) {

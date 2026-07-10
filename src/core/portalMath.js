@@ -36,6 +36,13 @@ export const OPPOSITE_FACING = {
 // depth test against the (semi-transparent) open-gate shell behind it.
 export const DOORWAY_OFFSET = WORLD_SCALE / 2 + 0.01;
 
+// A door's view panels hug the INSIDE of the cell's far faces by this
+// margin: flush against them, but in front of anything standing in the
+// neighboring cell (a wall directly behind the door must not win the depth
+// test against a panel). Panel plane distance from the gate center is
+// DOORWAY_OFFSET - PANEL_EPSILON.
+export const PANEL_EPSILON = 0.02;
+
 /**
  * World-space corners of a gate's doorway quad — the full facing face of the
  * gate box (WORLD_SCALE wide, floor to WORLD_SCALE high). Corner names are
