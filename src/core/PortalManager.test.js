@@ -678,10 +678,12 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     });
     expect(visibleSurfaces()).toHaveLength(2);
     expect(renderer.renderCalls).toHaveLength(2);
-    // One on the south face (+z), one on the east face (+x)
+    // Each view sits on the FAR plane of the cell, facing back at its
+    // viewer: the south approach's on the north panel (-z), the east
+    // approach's on the west panel (-x)
     const offsets = visibleSurfaces().map((s) => ({ x: s.position.x, z: s.position.z }));
-    expect(offsets.some((o) => o.z > 0 && o.x === 0)).toBe(true);
-    expect(offsets.some((o) => o.x > 0 && o.z === 0)).toBe(true);
+    expect(offsets.some((o) => o.z < 0 && o.x === 0)).toBe(true);
+    expect(offsets.some((o) => o.x < 0 && o.z === 0)).toBe(true);
 
     // Back to straight south: the east view is kept but hidden
     renderer.renderCalls = [];
@@ -690,6 +692,42 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     });
     expect(visibleSurfaces()).toHaveLength(1);
     expect(renderer.renderCalls).toHaveLength(1);
+  });
+
+  it('the doorway view stays live all the way to the commit point (no dead frame)', async () => {
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render() {
+        this.renderCalls.push(1);
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorA.open();
+    // A first pass from outside builds the south-approach view
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
+    });
+
+    // Toe INSIDE the cell, just shy of the commit point: the crossing has
+    // not fired yet, and the view must still be there — the surface sits on
+    // the far plane, beyond the commit point, so the camera can never
+    // pierce it before the teleport
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1.3);
+    // No commit yet: the player stands where they stepped, not at door-b
+    expect(gameState.player.position.z).toBeCloseTo(2 * WORLD_SCALE + 1.3);
+    renderer.renderCalls = [];
+    PortalManager.renderPortals(renderer, {
+      position: { ...gameState.player.position },
+    });
+
+    const visible = doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
+    expect(visible).toHaveLength(1);
+    expect(renderer.renderCalls).toHaveLength(1);
+    // The south approach's surface sits on the NORTH panel — 2.8 units past
+    // the commit point, unreachable by an uncommitted camera
+    expect(visible[0].position.z).toBeLessThan(0);
   });
 
   it('a working open door shows no green shell; unlinked gates keep theirs', () => {

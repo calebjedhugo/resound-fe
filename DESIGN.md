@@ -160,7 +160,10 @@ rulings, in the designer's words where it matters:
   backing out means you exited the destination gate (you still teleported;
   the way home is one more step through). The commit zone is inset
   (`DOORWAY_COMMIT_DEPTH`) and re-arms only after a full step out, so
-  cell-edge jitter never flickers the world.
+  cell-edge jitter never flickers the world. The doorway view is drawn on
+  the FAR plane of the cell (the inside of the opposite panel, facing back
+  at the viewer), so an entering camera commits ~2.7 units before it could
+  ever touch the view surface — the threshold has no dead frame.
 - **A door never closes on its occupant — body included.** If the open
   grace lapses while the player stands in the doorway, the gate holds in
   OCCUPIED OVERTIME: solid and closed-looking from the outside (creatures

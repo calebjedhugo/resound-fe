@@ -4,11 +4,15 @@
  * While its gate is open, the neighbor area's LIVE scene (Area.scene — the
  * same entities that are simulating: creatures mid-move, gates flashing) is
  * drawn each frame into a WebGLRenderTarget from a portal-transformed
- * camera, and that texture is shown on a doorway surface covering the
- * gate's facing face. The camera uses an off-axis projection fitted exactly
- * to the doorway quad (CameraUtils.frameCorners), so the image lines up
- * with the player's eye no matter where they stand — "it's a door, not a
- * portal": looking through it simply shows the area beyond, as it happens.
+ * camera, and that texture is shown on a doorway surface on the FAR plane
+ * of the gate cell (the inside of the panel opposite the approach face),
+ * facing back through the cell at the viewer. The camera uses an off-axis
+ * projection fitted exactly to the doorway quad (CameraUtils.frameCorners),
+ * so the image lines up with the player's eye no matter where they stand —
+ * "it's a door, not a portal": looking through it simply shows the area
+ * beyond, as it happens. Sitting on the far plane means an entering camera
+ * commits the crossing long before it could touch the surface, so the
+ * threshold has no dead frame.
  *
  * The doorway surface is hidden while the gate is closed, so a closed linked
  * gate is pixel-identical to a normal closed gate, and the extra render pass
@@ -61,13 +65,33 @@ class PortalView {
       partnerFacing = partnerGate.facing,
     } = options;
     this.gate = gate;
-    // The face this view renders on, and which side of it the eye must be on
+    // The face this view SERVES (the approach direction), and which side of
+    // the gate the eye must be on to see it
     this.facing = sourceFacing;
 
     const mapping = portalMapping(gate.position, sourceFacing, partnerGate.position, partnerFacing);
     this._map = mapping.map;
-    this._corners = doorwayCorners(gate.position, sourceFacing);
     this._outward = FACING_VECTORS[sourceFacing] || FACING_VECTORS.north;
+
+    // The view surface sits on the FAR plane of the cell — the inside of the
+    // OPPOSITE panel, facing back through the cell toward its viewers. The
+    // commit point (just inside the near edge) is therefore reached ~2.7
+    // units before the camera could ever touch the surface: there is no
+    // frame where the eye has pierced the view but not yet crossed. (A quad
+    // on the NEAR face put the camera through it ~0.3 units before the
+    // commit — a visible dead frame at the threshold.)
+    this._corners = doorwayCorners(gate.position, sourceFacing);
+    const shift = {
+      x: -2 * DOORWAY_OFFSET * this._outward.x,
+      z: -2 * DOORWAY_OFFSET * this._outward.z,
+    };
+    for (const key of ['center', 'bottomLeft', 'bottomRight', 'topLeft']) {
+      this._corners[key] = {
+        x: this._corners[key].x + shift.x,
+        y: this._corners[key].y,
+        z: this._corners[key].z + shift.z,
+      };
+    }
 
     // Gates never move, so the doorway quad's neighbor-space corners are fixed
     const bl = this._map(this._corners.bottomLeft);
@@ -103,11 +127,12 @@ class PortalView {
     const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
     const material = new THREE.MeshBasicMaterial({ map: this._target.texture });
     this.surface = new THREE.Mesh(geometry, material);
-    // Local to the gate mesh, which sits at the box CENTER
+    // Local to the gate mesh, which sits at the box CENTER: on the far
+    // plane (the inside of the OPPOSITE panel), facing back at the viewer
     this.surface.position.set(
-      this._outward.x * DOORWAY_OFFSET,
+      -this._outward.x * DOORWAY_OFFSET,
       0,
-      this._outward.z * DOORWAY_OFFSET
+      -this._outward.z * DOORWAY_OFFSET
     );
     this.surface.rotation.y = DOORWAY_ROTATION_Y[this.facing] ?? Math.PI;
     this.surface.visible = false;
