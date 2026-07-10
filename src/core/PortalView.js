@@ -38,6 +38,11 @@ const DOORWAY_ROTATION_Y = {
 // (back-face culled / viewed edge-on), so the pass is skipped.
 const MIN_EYE_DISTANCE = 0.05;
 
+// The view surface hugs the INSIDE of the far panel by this margin: flush
+// against it, but in front of anything standing in the neighboring cell —
+// a wall directly behind the door must not win the depth test against it.
+const INTERIOR_EPSILON = 0.02;
+
 const scratchSize = new THREE.Vector2();
 
 class PortalView {
@@ -73,7 +78,7 @@ class PortalView {
     this._map = mapping.map;
     this._outward = FACING_VECTORS[sourceFacing] || FACING_VECTORS.north;
 
-    // The view surface sits on the FAR plane of the cell — the inside of the
+    // The view surface sits on the FAR plane of the cell — just inside the
     // OPPOSITE panel, facing back through the cell toward its viewers. The
     // commit point (just inside the near edge) is therefore reached ~2.7
     // units before the camera could ever touch the surface: there is no
@@ -81,15 +86,13 @@ class PortalView {
     // on the NEAR face put the camera through it ~0.3 units before the
     // commit — a visible dead frame at the threshold.)
     this._corners = doorwayCorners(gate.position, sourceFacing);
-    const shift = {
-      x: -2 * DOORWAY_OFFSET * this._outward.x,
-      z: -2 * DOORWAY_OFFSET * this._outward.z,
-    };
+    const nearCenter = this._corners.center;
+    const shift = 2 * DOORWAY_OFFSET - INTERIOR_EPSILON;
     for (const key of ['center', 'bottomLeft', 'bottomRight', 'topLeft']) {
       this._corners[key] = {
-        x: this._corners[key].x + shift.x,
+        x: this._corners[key].x - shift * this._outward.x,
         y: this._corners[key].y,
-        z: this._corners[key].z + shift.z,
+        z: this._corners[key].z - shift * this._outward.z,
       };
     }
 
@@ -101,13 +104,16 @@ class PortalView {
     this._mappedBottomRight = new THREE.Vector3(br.x, br.y, br.z);
     this._mappedTopLeft = new THREE.Vector3(tl.x, tl.y, tl.z);
 
-    // Clip everything on the eye side of the mapped doorway plane: neighbor
-    // geometry "behind the door" (including where the partner gate stands)
-    // must not occlude the view through it.
-    const mappedCenter = this._map(this._corners.center);
+    // Clip everything "behind the door" — on the far side of the partner's
+    // NEAR plane (where the partner gate stands and the mapped eye lives) —
+    // so it can't occlude the view through the doorway. Geometry BESIDE the
+    // door stays: a wall flanking the partner must keep blocking the angled
+    // sightlines it really blocks (clipping at the window plane instead
+    // once let those rays sail past the wall into the void).
+    const mappedNearCenter = this._map(nearCenter);
     this._clipPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
       new THREE.Vector3(mapping.outward.x, mapping.outward.y, mapping.outward.z),
-      new THREE.Vector3(mappedCenter.x, mappedCenter.y, mappedCenter.z)
+      new THREE.Vector3(mappedNearCenter.x, mappedNearCenter.y, mappedNearCenter.z)
     );
 
     // The neighbor's LIVE scene. The partner gate is this same door seen
@@ -127,13 +133,10 @@ class PortalView {
     const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
     const material = new THREE.MeshBasicMaterial({ map: this._target.texture });
     this.surface = new THREE.Mesh(geometry, material);
-    // Local to the gate mesh, which sits at the box CENTER: on the far
-    // plane (the inside of the OPPOSITE panel), facing back at the viewer
-    this.surface.position.set(
-      -this._outward.x * DOORWAY_OFFSET,
-      0,
-      -this._outward.z * DOORWAY_OFFSET
-    );
+    // Local to the gate mesh, which sits at the box CENTER: just inside the
+    // OPPOSITE panel, facing back at the viewer
+    const inset = DOORWAY_OFFSET - INTERIOR_EPSILON;
+    this.surface.position.set(-this._outward.x * inset, 0, -this._outward.z * inset);
     this.surface.rotation.y = DOORWAY_ROTATION_Y[this.facing] ?? Math.PI;
     this.surface.visible = false;
     // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)

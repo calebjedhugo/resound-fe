@@ -281,6 +281,37 @@ describe('PortalManager see-through rendering', () => {
     expect(renderer.clippingPlanes).toHaveLength(0); // restored after the pass
   });
 
+  it('the view surface hugs the INSIDE of the far panel — a wall behind the door cannot occlude it', () => {
+    gate.open();
+
+    PortalManager.renderPortals(renderer, camera);
+
+    // North approach -> surface on the south (far) plane, 0.02 INSIDE the
+    // cell edge (local +1.49 of the 1.5 half-cell): a wall standing flush in
+    // the next cell sits behind it, never in front
+    const surface = doorwaySurface();
+    expect(surface.position.z).toBeCloseTo(1.49);
+    expect(Math.abs(surface.position.z)).toBeLessThan(WORLD_SCALE / 2);
+  });
+
+  it('the pass clips behind the PARTNER, keeping geometry beside the door', () => {
+    gate.open();
+
+    PortalManager.renderPortals(renderer, camera);
+
+    // North approach maps to the partner's south face; the clip must sit at
+    // the partner's NEAR (north) plane — z = 21 - 2.51... the partner south-door
+    // is at grid (5,7) -> world z 21, near plane at 21 - 1.51 = 19.49 — so a
+    // wall FLANKING the partner keeps blocking the angled sightlines it
+    // really blocks. (Clipping at the window plane instead deleted that
+    // wall and showed the void behind it.)
+    const [plane] = renderer.renderCalls[0].clipping;
+    expect(plane.normal.x).toBeCloseTo(0);
+    expect(plane.normal.z).toBeCloseTo(1); // partner outward: south
+    // Plane passes through z = 19.49: normal·p + constant = 0
+    expect(plane.constant).toBeCloseTo(-(7 * WORLD_SCALE - 1.51));
+  });
+
   it('closing the gate hides the doorway and stops paying for the pass', () => {
     gate.open();
     PortalManager.renderPortals(renderer, camera);
