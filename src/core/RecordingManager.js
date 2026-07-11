@@ -1,8 +1,8 @@
-import showToast from 'ui/Toast';
+import flashSlot from 'ui/slotFlash';
 import gameState from 'core/GameState';
 import { quantizeToBeat, groupBy } from 'core/utils';
 
-// Throttle the out-of-range warning (key repeat fires startRecording rapidly)
+// Throttle the out-of-range flash (key repeat fires startRecording rapidly)
 let lastRangeWarning = 0;
 
 /**
@@ -17,12 +17,9 @@ class RecordingManager {
 
     if (creaturesInRange.length === 0) {
       const now = Date.now();
-      if (now - lastRangeWarning > 2500) {
+      if (now - lastRangeWarning > 1200) {
         lastRangeWarning = now;
-        showToast('No creature close enough to record — move closer and press R', {
-          type: 'error',
-          duration: 3000,
-        });
+        flashSlot('silent'); // no creature close enough — wordless
       }
       return;
     }
@@ -85,13 +82,12 @@ class RecordingManager {
     const { activeSlot } = gameState.player;
 
     if (processedData.length === 0) {
-      // Keep whatever was in the slot rather than overwriting it with silence
-      showToast('Nothing captured — record while the creature is singing', {
-        type: 'error',
-        duration: 4000,
-      });
+      // Keep whatever was in the slot rather than overwriting it with
+      // silence; the grey flash says "nothing landed" without words.
+      flashSlot('silent');
     } else {
-      // Store in active inventory slot (overwrite if occupied)
+      // Store in active inventory slot (overwrite if occupied). The slot's
+      // green pop + note count announce the take — no words needed.
       gameState.player.inventory[activeSlot] = {
         id: `recording_${Date.now()}`,
         data: processedData,
@@ -99,10 +95,6 @@ class RecordingManager {
         tempo: gameState.musicalClock.tempo,
         sourceRange: gameState.recording.sourceRange,
       };
-      showToast(`Recorded ${processedData.length} notes into slot ${activeSlot + 1}`, {
-        type: 'success',
-        duration: 3500,
-      });
     }
 
     // Reset recording state

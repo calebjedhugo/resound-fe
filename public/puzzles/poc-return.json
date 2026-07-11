@@ -1,0 +1,473 @@
+{
+  "id": "poc-return",
+  "name": "X. The Star",
+  "difficulty": 1,
+  "gridSize": 14,
+  "tempo": 100,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": {
+    "x": 7,
+    "y": 0,
+    "z": 12
+  },
+  "entities": [
+    {
+      "type": "creature",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 12
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "F4",
+            "length": "1/4"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 1
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "C4",
+            "length": "1/4"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 1
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "D4",
+            "length": "1/4"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 7
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "E4",
+            "length": "1/4"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 7
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "G4",
+            "length": "1/4"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 0
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "A4",
+            "length": "1/4"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 13
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 13
+      },
+      "song": [
+        {
+          "pitch": "B4",
+          "length": "1/1"
+        }
+      ],
+      "id": "entry",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-climb",
+        "gateId": "exit"
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 10
+      },
+      "song": [
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        }
+      ],
+      "id": "warmup-in",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-return",
+        "gateId": "warmup-out"
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 8
+      },
+      "song": [
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        }
+      ],
+      "id": "warmup-out",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-return",
+        "gateId": "warmup-in"
+      },
+      "alwaysOpen": true
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 4
+      },
+      "song": [
+        {
+          "pitch": "C4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "C4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "A4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "A4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "E4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "E4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "D4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "D4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "C4",
+          "length": "1/4"
+        }
+      ],
+      "id": "exit",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-threshold",
+        "gateId": "finale"
+      }
+    }
+  ]
+}

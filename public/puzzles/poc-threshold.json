@@ -1,0 +1,199 @@
+{
+  "id": "poc-threshold",
+  "name": "I. Threshold",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 100,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": {
+    "x": 5,
+    "y": 0,
+    "z": 8
+  },
+  "entities": [
+    {
+      "type": "creature",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 8
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "C4",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 8
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 1
+      },
+      "song": [
+        {
+          "pitch": "C4",
+          "length": "1/1"
+        }
+      ],
+      "id": "exit",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-two-keys",
+        "gateId": "entry"
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 4
+      },
+      "song": [
+        {
+          "pitch": "C4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "C4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "A4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "A4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "G4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "F4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "E4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "E4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "D4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "D4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "C4",
+          "length": "1/4"
+        }
+      ],
+      "id": "finale",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-return",
+        "gateId": "exit"
+      },
+      "ending": true
+    }
+  ]
+}

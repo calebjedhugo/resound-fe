@@ -1,8 +1,7 @@
 import { Piano } from 'resound-sound';
-import showToast from 'ui/Toast';
-import { PLAYBACK_BEAT_TOLERANCE } from 'core/constants';
+import flashSlot from 'ui/slotFlash';
+import { PLAYBACK_LATE_GRACE_BEATS } from 'core/constants';
 import ListeningManager from 'core/ListeningManager';
-import SongMatcher from 'core/SongMatcher';
 import { getDistance } from 'core/utils';
 import gameState from 'core/GameState';
 
@@ -16,6 +15,12 @@ class PlaybackManager {
   static playerInstrument = new Piano('player');
   static isPlaying = false;
   static playbackSourceRange = DEFAULT_PLAYBACK_RANGE;
+
+  // Wall-clock window of the last player playback, so the UI can attribute
+  // judgment failures (red slot flash) to the player's own performance and
+  // not to ambient creature noise.
+  static lastPlaybackStartMs = 0;
+  static lastPlaybackEndMs = 0;
 
   // Set up note callback to emit to ListeningManager and track current note
   static {
@@ -36,48 +41,60 @@ class PlaybackManager {
   }
 
   /**
-   * Play the song from the active inventory slot
+   * Play the TAPE: every filled slot in order, concatenated into one song.
+   *
+   * Takes are stored dense (notes and chords with lengths, no gaps — see
+   * RecordingManager.processCapturedNotes), so concatenation is seamless:
+   * each take's notes follow the previous take's exactly on the musical
+   * grid. One Space = one performance of the whole tape; every door whose
+   * song occurs cleanly within it opens (matching ruled 2026-07-11).
+   *
+   * Starts on the beat grid, with a tempo-relative late grace (a press just
+   * after a beat snaps back onto it). A Space during a playback is ignored
+   * — one performance at a time.
    */
-  static playActiveSlot() {
-    const { activeSlot, inventory, position } = gameState.player;
-    const recording = inventory[activeSlot];
+  static playTape() {
+    const takes = gameState.player.inventory.filter((s) => s && s.data && s.data.length > 0);
 
-    if (!recording || !recording.data) {
-      showToast('Nothing to play — record a creature first (R)', { duration: 3000 });
+    if (takes.length === 0) {
+      flashSlot('silent'); // nothing to play — wordless
       return;
     }
+    if (this.isPlaying) return; // one performance at a time
 
-    if (this.isPlaying) {
-      console.warn('Already playing a recording');
-      return;
-    }
+    const recording = {
+      data: takes.flatMap((t) => t.data),
+      tempo: takes[0].tempo,
+      // The performance carries as far as the loudest take it contains
+      sourceRange: Math.max(...takes.map((t) => t.sourceRange || DEFAULT_PLAYBACK_RANGE)),
+    };
 
-    // Set player position for listening
-    this.playerInstrument.sourcePosition = position;
-    this.playbackSourceRange = recording.sourceRange || DEFAULT_PLAYBACK_RANGE;
-
-    // Calculate quantized start timing
+    // Solo start: beat grid, grace expressed in beats so it scales with tempo
     const { musicalClock } = gameState;
-    const timeSinceLastBeat = musicalClock.getTimeSinceLastBeat();
-
     let startDelay = 0;
     let noteOffset = 0;
-
-    if (timeSinceLastBeat < PLAYBACK_BEAT_TOLERANCE) {
-      // Within tolerance - start immediately, snap subsequent notes to grid
-      startDelay = 0;
-      noteOffset = -timeSinceLastBeat; // Negative offset to catch up to grid
-    } else {
-      // Outside tolerance - wait for next beat
-      startDelay = musicalClock.getTimeUntilNextBeat();
-      noteOffset = 0; // Already on grid after waiting
+    if (musicalClock) {
+      const sinceMs = musicalClock.getTimeSinceLastBeat();
+      const graceMs = musicalClock.beatsToMs(PLAYBACK_LATE_GRACE_BEATS);
+      if (sinceMs < graceMs) {
+        // Just past a beat — start immediately, snap subsequent notes back
+        noteOffset = -sinceMs;
+      } else {
+        startDelay = musicalClock.getTimeUntilNextBeat();
+      }
     }
 
-    // Clone song data and inject offsets for quantization
+    this.playerInstrument.sourcePosition = gameState.player.position;
+    this.playbackSourceRange = recording.sourceRange;
     const quantizedData = this.injectOffsets(recording.data, noteOffset);
-
-    // Play the recorded song with quantized timing
     this.playSong(quantizedData, recording.tempo, startDelay);
+  }
+
+  /**
+   * Reset playback state (level change / reset).
+   */
+  static reset() {
+    this.isPlaying = false;
   }
 
   /**
@@ -120,12 +137,7 @@ class PlaybackManager {
     }
 
     this.isPlaying = true;
-
-    // Snapshot which targets are still locked, so we can tell the player
-    // whether this playback unlocked anything.
-    const lockedTargets = gameState.entities.filter(
-      (e) => (e.type === 'fountain' && !e.isActivated) || (e.type === 'gate' && !e.isOpen)
-    );
+    this.lastPlaybackStartMs = Date.now() + startDelay;
 
     // Wait for startDelay, then begin playback
     setTimeout(() => {
@@ -139,49 +151,24 @@ class PlaybackManager {
 
     // Calculate total duration to reset isPlaying flag
     const totalDuration = this.calculateSongDuration(songData, tempo);
+    const pos = { ...gameState.player.position };
+    const range = this.playbackSourceRange;
     setTimeout(() => {
       this.isPlaying = false;
+      this.lastPlaybackEndMs = Date.now();
 
-      // Give the match a moment to process, then report a miss (success is
-      // loudly announced by the target itself).
-      setTimeout(() => {
-        const unlockedAny = lockedTargets.some((e) => e.isActivated || e.isOpen);
-        if (lockedTargets.length > 0 && !unlockedAny && gameState.mode === 'PLAYING') {
-          showToast(this.describeMiss(lockedTargets), { duration: 5000 });
-        }
-      }, 700);
+      // Wordless miss feedback, silent-flavor only: if NO locked target was
+      // even in range, nothing will ever judge this performance — dim-flash
+      // the slot now. Heard-but-wrong is reported at JUDGMENT time by the
+      // red slot flash (RecordingUI watches lastPhraseResult), never here.
+      if (this.playerInstrument.playbackState.isPlaying) return;
+      const anyListener = gameState.entities.some(
+        (e) =>
+          ((e.type === 'fountain' && !e.isActivated) || (e.type === 'gate' && !e.isOpen)) &&
+          getDistance(e.position, pos) <= range
+      );
+      if (!anyListener && gameState.mode === 'PLAYING') flashSlot('silent');
     }, startDelay + totalDuration);
-  }
-
-  /**
-   * Explain why a playback unlocked nothing, using the nearest locked target.
-   * @param {Array} lockedTargets - gates/fountains that were locked at playback start
-   * @returns {string}
-   */
-  static describeMiss(lockedTargets) {
-    const pos = this.playerInstrument.sourcePosition || gameState.player.position;
-    let nearest = null;
-    let nearestDist = Infinity;
-    lockedTargets.forEach((target) => {
-      const d = getDistance(target.position, pos);
-      if (d < nearestDist) {
-        nearest = target;
-        nearestDist = d;
-      }
-    });
-    if (!nearest) return 'Nothing unlocked';
-
-    if (nearestDist > this.playbackSourceRange) {
-      return `Nothing unlocked — the nearest ${nearest.type} couldn't hear you (${Math.round(
-        nearestDist
-      )} away; your playback carries ${Math.round(this.playbackSourceRange)})`;
-    }
-
-    const requiredCount = SongMatcher.flattenSong(nearest.requiredSong).length;
-    return (
-      `The ${nearest.type} heard you, but not its song (${requiredCount} notes, shown above it) — ` +
-      'record one clean pass and play it while everything else is quiet'
-    );
   }
 
   /**

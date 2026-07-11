@@ -4,6 +4,7 @@ import { Random } from 'resound-sound';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';
+import Tape from 'core/Tape';
 import showToast from 'ui/Toast';
 
 const randomInstrument = new Random();
@@ -78,9 +79,9 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
       }
       break;
     case 'Space':
-      // Playback from active inventory slot
+      // Perform the whole tape (all filled slots, concatenated)
       if (value) {
-        PlaybackManager.playActiveSlot();
+        PlaybackManager.playTape();
       }
       break;
     case 'KeyR':
@@ -102,34 +103,31 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
       }
       break;
     case 'ArrowLeft':
-      // Cycle inventory slot left
+      // Tape cursor left
       if (value) {
-        gameState.player.activeSlot =
-          (gameState.player.activeSlot - 1 + gameState.player.maxInventorySize) %
-          gameState.player.maxInventorySize;
+        Tape.left();
       }
       break;
     case 'ArrowRight':
-      // Cycle inventory slot right
+      // Tape cursor right; on a filled last slot this appends a new one
       if (value) {
-        gameState.player.activeSlot =
-          (gameState.player.activeSlot + 1) % gameState.player.maxInventorySize;
+        Tape.right();
+      }
+      break;
+    case 'Backspace':
+    case 'Delete':
+      // Hold to delete the cursor slot (2s fade; release cancels; must
+      // release before deleting another)
+      if (value) {
+        if (!repeat) Tape.deleteDown();
+      } else {
+        Tape.deleteUp();
       }
       break;
     case 'KeyC':
       // Clap (quantized to 16th notes)
       if (value) {
         ClapManager.requestClap();
-      }
-      break;
-    case 'Digit1':
-    case 'Digit2':
-    case 'Digit3':
-    case 'Digit4':
-    case 'Digit5':
-      // Jump straight to an inventory slot (1-based, matching the UI labels)
-      if (value) {
-        gameState.player.activeSlot = Number(code.slice(-1)) - 1;
       }
       break;
     default:

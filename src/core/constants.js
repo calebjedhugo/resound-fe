@@ -6,10 +6,19 @@ export const WORLD_SCALE = 3;
 // E.g., 0.5 means you must be within 50% of the audible range to record
 export const RECORDING_RANGE_PERCENTAGE = 0.5;
 
-// Playback beat tolerance in milliseconds
-// If spacebar pressed within this time after a beat, playback starts immediately
-// Otherwise, playback waits for the next beat
-export const PLAYBACK_BEAT_TOLERANCE = 50;
+// Playback late grace, in BEATS (tempo-relative): a Space pressed within
+// this much after a beat starts immediately and snaps back onto the grid;
+// later presses wait for the next beat. Kept under the matcher's alignment
+// tolerance (0.13 beats) so a grace-path first onset still matches.
+export const PLAYBACK_LATE_GRACE_BEATS = 0.1;
+
+// The slot TAPE (ruled 2026-07-11): slots appear one at a time (ArrowRight
+// past a filled last slot appends a new empty one, up to the cap), Space
+// performs the whole tape concatenated, and holding the delete key removes
+// the cursor slot after a 2s fade (release before completion cancels; the
+// key must be released before another delete can start).
+export const TAPE_SLOT_CAP = 16;
+export const TAPE_DELETE_HOLD_MS = 2000;
 
 // Creature movement constants
 // Default max speed matches player running speed (8 units/sec)

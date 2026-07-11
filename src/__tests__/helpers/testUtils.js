@@ -319,7 +319,7 @@ function createTestContext(options = {}) {
           }
           break;
         case 'space':
-          PlaybackManager.playActiveSlot();
+          PlaybackManager.playTape();
           break;
         case 'c':
           ClapManager.requestClap();
@@ -436,9 +436,13 @@ function createTestContext(options = {}) {
     },
 
     /**
-     * Set inventory slot directly (for test setup)
+     * Set inventory slot directly (for test setup). The tape is a dynamic
+     * array — grow it (with empty slots) to reach the requested index.
      */
     setInventorySlot(slot, song) {
+      while (gameState.player.inventory.length <= slot) {
+        gameState.player.inventory.push(null);
+      }
       if (song) {
         gameState.player.inventory[slot] = {
           id: `test_${Date.now()}`,

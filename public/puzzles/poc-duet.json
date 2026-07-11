@@ -1,0 +1,272 @@
+{
+  "id": "poc-duet",
+  "name": "III. The Duet",
+  "difficulty": 1,
+  "gridSize": 12,
+  "tempo": 100,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": {
+    "x": 6,
+    "y": 0,
+    "z": 10
+  },
+  "entities": [
+    {
+      "type": "creature",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 7
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "E5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 7
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "G5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 11
+      },
+      "song": [
+        {
+          "pitch": "G4",
+          "length": "1/1"
+        }
+      ],
+      "id": "entry",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-two-keys",
+        "gateId": "exit"
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 1
+      },
+      "song": [
+        {
+          "pitch": "E5",
+          "length": "1/1"
+        },
+        {
+          "pitch": "G5",
+          "length": "1/1"
+        }
+      ],
+      "id": "exit",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-dance",
+        "gateId": "entry"
+      }
+    }
+  ]
+}

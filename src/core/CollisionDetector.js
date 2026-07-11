@@ -1,5 +1,9 @@
 import gameState from 'core/GameState';
-import { ELEVATION_HEIGHT, ELEVATION_COLLISION_THRESHOLD } from 'core/constants';
+import {
+  ELEVATION_HEIGHT,
+  ELEVATION_COLLISION_THRESHOLD,
+  PLAYER_COLLISION_RADIUS,
+} from 'core/constants';
 
 // Fountain collision radius — matches the radius-1.5 cylinder in Fountain.createMesh
 const FOUNTAIN_COLLISION_RADIUS = 1.5;
@@ -43,6 +47,29 @@ class CollisionDetector {
     const positionElevation = this.getElevationForPosition(position, area);
     const entities = area ? area.entities : gameState.entities;
 
+    // Creatures collide with the PLAYER's body (symmetric with the player
+    // colliding with creatures): a lured creature parks at contact distance
+    // instead of entering the player's space — overlapping bodies wedge the
+    // player unrecoverably, since every escape move still collides. Only
+    // meaningful in the player's own area (coordinates are per-area), and
+    // only for creature movers (the player reports ignoreId null).
+    if (ignoreId !== null && (!area || area === gameState.activeArea)) {
+      const sameLevel =
+        Math.abs(positionElevation - (gameState.player.elevation || 0)) <=
+        ELEVATION_COLLISION_THRESHOLD;
+      if (
+        sameLevel &&
+        this.checkCircleCircleCollision(
+          position,
+          radius,
+          gameState.player.position,
+          PLAYER_COLLISION_RADIUS
+        )
+      ) {
+        return true;
+      }
+    }
+
     // Check against all entities
     for (const entity of entities) {
       // Skip self
@@ -58,13 +85,11 @@ class CollisionDetector {
           return true;
         }
       } else if (entity.type === 'gate') {
-        // Only collide with closed gates (gates are play-to-pass: open is a
-        // temporary window held by a correct performance). A gate in
-        // OCCUPIED OVERTIME (its grace lapsed with the player inside) is
-        // solid from the outside too — but never for the occupant: the
-        // player (movers report the player with ignoreId null) roams the
-        // doorway freely and leaves whenever they choose.
-        const solid = !entity.isOpen || (entity.occupiedOvertime && ignoreId !== null);
+        // Only collide with closed gates. An open gate LATCHES open until
+        // the player walks through (close-on-exit, ruled 2026-07-10), so a
+        // door can never close around an occupant — no special occupant
+        // handling needed.
+        const solid = !entity.isOpen;
         if (solid) {
           if (this.checkCircleBoxCollision(position, radius, entity.position, 1.5)) {
             return true;

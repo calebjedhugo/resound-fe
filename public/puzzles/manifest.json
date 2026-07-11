@@ -1,5 +1,15 @@
 {
   "puzzles": [
+    { "id": "poc-threshold", "name": "I. Threshold", "difficulty": 1 },
+    { "id": "poc-two-keys", "name": "II. Two Keys", "difficulty": 1 },
+    { "id": "poc-duet", "name": "III. The Duet", "difficulty": 1 },
+    { "id": "poc-dance", "name": "IV. The Dance", "difficulty": 1 },
+    { "id": "poc-jam", "name": "V. The Jam", "difficulty": 1 },
+    { "id": "poc-pull", "name": "VI. The Pull", "difficulty": 1 },
+    { "id": "poc-push", "name": "VII. The Push", "difficulty": 1 },
+    { "id": "poc-clap", "name": "VIII. The Clap", "difficulty": 1 },
+    { "id": "poc-climb", "name": "IX. The Climb", "difficulty": 1 },
+    { "id": "poc-return", "name": "X. The Star", "difficulty": 1 },
     { "id": "awakening", "name": "Awakening", "difficulty": 1 },
     { "id": "the-lure", "name": "The Lure", "difficulty": 1 },
     { "id": "test-001", "name": "First Steps", "difficulty": 1 },

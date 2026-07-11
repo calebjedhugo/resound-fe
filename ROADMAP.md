@@ -21,13 +21,47 @@ Elements taught so far:
   note; only the pushed creature's own song activates it. Non-stuck: one note
   ever needed, always re-recordable. See DESIGN.md.
 
+- ✅ **The POC world (2026-07-10; restructured same day on designer feedback;
+  redesigned 2026-07-11 on round-2 feedback)** — the playable proof of
+  concept and the new boot entry: TEN small portal-linked areas
+  (`poc-threshold` → `poc-two-keys` → `poc-duet` → `poc-dance` → `poc-jam`
+  → `poc-pull` → `poc-push` → `poc-clap` → `poc-climb` → `poc-return`), ONE
+  concept each — core loop, slots, sequencing, a creatures-move-creatures
+  spectacle (the dance), the jam (a continuous singer beside a door blocks
+  it forever — taught with a caged jammer and two identical doors), the
+  pull (the jam, now free-standing and movable: consonant playback leashes
+  it away), push + creature-opens-gate, clap timing, elevation/walk-under,
+  and a finale whose exit is the locked mystery door beside area I's spawn
+  (the world loops closed). No fountains. Generated + self-checked (380+
+  asserts) by `puzzles/gen-poc.js`; every area verified in-browser.
+  Shipped with it: multi-note gates commit only on the completed song
+  (Gate.js), playback chaining quantized to the song's largest unit
+  (PlaybackManager), the slot-flash feedback language replacing gameplay
+  toasts (RecordingUI), and a wordless clap "C" key hint (KeyHints).
+  Designer feedback round 1 addressed: tighter rooms, humane duet timing,
+  fewer words, creature motion taught before it's required. Round 2
+  addressed: STRICT pitch economy (no carried note opens a later door —
+  duet is E5/G5, dance voice is C5, all skip-guard exemptions removed) and
+  the moving creature is now PART of the puzzle (the jam→pull pair).
+  Round 3 (same day) addressed: matching reclaimed its original spirit
+  (the gate must hear its song exactly, surroundings ignored — silence
+  margins removed, in-window exclusivity kept), the inventory became a
+  growable TAPE (cursor, in-place re-record, hold-to-delete, Space plays
+  all — chaining and digit keys retired), and the demo got its ENDING:
+  area X is now "The Star" (warm-up vestibule + a concert hall holding the
+  ELEMENTS of Twinkle in quarter notes), whose central portal loops to a
+  mid-room finale gate in area I and rolls a dismissible
+  thanks-for-playing → calebhugo.com card. The checker grew to 480+
+  asserts, including an empty-tape pocket-escape rule (delete can never
+  strand a player). See DESIGN.md "Onboarding".
+
 Planned onboarding pieces (one element each):
-- ⚠️ **Creatures activating gates/fountains** — position a singing creature so
-  its song solves a target. Partly introduced by `the-lure`'s hardened finish
-  (the pushed creature solves the fountain); a dedicated level could foreground
-  it (e.g. with a gate, or a creature you place rather than shove).
-- ❌ **Creatures moving each other** — one creature's song displaces another.
-- ❌ (later) clap timing, elevation puzzles, etc.
+- ✅ **Creatures activating gates/fountains** — foregrounded by `poc-push`
+  (the pushed creature's own song opens the exit door); first tasted in
+  `the-lure`'s hardened finish.
+- ✅ **Creatures moving each other** — `poc-dance`: an unreachable stage
+  where two alternating unison anchors bounce a dissonant dancer, forever.
+- ✅ **Clap timing** — `poc-clap`. ✅ **Elevation** — `poc-climb`.
 
 Bigger architectural ideas (exploratory, likely the backbone of the game):
 - ✅ **Gates link to matching gates (portals)** — a gate opens a portal to
@@ -72,6 +106,13 @@ Bigger architectural ideas (exploratory, likely the backbone of the game):
     occupant's body). View panels sit on the cell's FAR planes (no dead
     frame at the threshold), clip at the window, and never pop with eye
     position. See DESIGN.md "Gate links / portals"
+  - ✅ Gate latch rule (ruled 2026-07-10, superseding play-to-pass grace):
+    gates open on the COMPLETED song, fade toward transparency while a
+    correct performance is underway (bounded — still solid), LATCH open
+    with no timer, and close when the player walks through — deferred
+    while a parked performer holds them.
+    Occupied-overtime state removed. Plus `alwaysOpen` faces (one-way /
+    permanently-open doors — escape hatches; built, not yet used in POC).
 - ❌ **Fountains reroute gates** — a fountain becomes a **toggle** (it PERSISTS
   after the song finishes, unlike a gate, which is open only while performing)
   that changes where a gate leads. This finally gives fountains a real

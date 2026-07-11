@@ -40,6 +40,14 @@ This document defines the structure for Resound puzzle files.
         "puzzleId": "string",        // Target puzzle id
         "gateId": "string"           // Target gate's stable id in that puzzle
       },
+      "alwaysOpen": boolean,         // Gates only, OPTIONAL: this face is permanently
+                                     // open (never closes, no performance needed).
+                                     // On one side of a linked pair = a ONE-WAY door
+                                     // (mirroring is skipped for such pairs).
+      "ending": boolean,             // Gates only, OPTIONAL: arriving through this
+                                     // gate (as a crossing destination) ends the demo
+                                     // — the dismissible thanks-for-playing overlay
+                                     // appears (ui/EndingOverlay.js).
       "position": {
         "x": number,                 // Grid X
         "y": number,                 // Elevation level (integer)
@@ -146,6 +154,9 @@ link to **itself** (validation error).
   `song` (the pair is one door — it mirrors its open state at runtime). The
   editor unifies songs at link time and errors when a same-puzzle pair's
   songs drift.
+- **`alwaysOpen` faces are exempt from mirroring**: a pair with a
+  permanently-open face is a ONE-WAY door — each face keeps its own
+  openness. Crossing requires the face you enter to be open.
 
 ## Note Format
 

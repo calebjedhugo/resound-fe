@@ -37,15 +37,34 @@ unlocks/activates it. Activating fountains completes the puzzle.
   songs and timing the recording window IS the solution. The live hint shows
   a running captured-note count ("Recording — N notes captured… press R to
   stop") so the player can learn the timing skill.
-- **Matching is exact — the performance must BE the target**: the target is
-  a rhythm timeline (pitch + duration + relative beat position, quantized to
-  16ths), with rests as expected gaps. A performance matches when every
-  target note sounds at the right relative beat and nothing else sounds in
-  the window or within 1 beat of silence on either side. Rotated takes
-  fail; over-long takes fail; notes during a target's rests fail; judgment
-  waits until the trailing silence has actually elapsed. Stale earlier
-  sounds don't interfere. Polyphonic targets (chords/voices) keep their
-  rhythm. Targets display their required notes as floating notation.
+- **Matching: the gate must hear its song EXACTLY — surroundings don't
+  matter** (2026-07-11): the target is a rhythm timeline (pitch + duration
+  + relative beat position, quantized to 16ths), with rests as expected
+  gaps. A performance matches when every target note sounds at the right
+  relative beat and nothing else sounds INSIDE the aligned window. Sounds
+  before/after the window are ignored — a door opens whenever its song
+  occurs cleanly anywhere in a longer performance (so playing the whole
+  tape opens every door you've earned in range). Rotated takes fail; notes
+  during a target's rests fail; a foreign note during the window corrupts
+  (a continuous singer beside a door jams it forever). Judgment fires the
+  instant the target's last note completes. Polyphonic targets
+  (chords/voices) keep their rhythm. Targets display their required notes
+  as floating notation.
+- **Gates open on the COMPLETED song, LATCH open (no timer), and close when
+  the player walks through** (2026-07-10). A correct performance in progress
+  FADES the closed gate from opaque to fully transparent in step with the
+  song's progress (rate follows song length; the shell stays SOLID until
+  completion); a wrong note snaps it back to opaque. A
+  parked creature performing the song keeps a door open behind the player.
+  `alwaysOpen: true` faces are permanently passable (one-way doors). A gate
+  flagged `ending: true` rolls a dismissible "Thanks for playing" overlay
+  when the player ARRIVES through it (the demo's closing card).
+- **The inventory is a TAPE** (2026-07-11): boots with ONE slot; ←/→ move
+  the cursor and → on a filled last slot appends a new empty one (up to
+  16); R records into the cursor slot in place; Space performs the WHOLE
+  tape concatenated; holding Backspace/Delete deletes the cursor slot
+  after a 2s fade (release cancels, release required between deletes).
+  Digit keys no longer select slots.
 - **Mismatch feedback is visual**: a completed wrong phrase flashes the
   gate/fountain RED for ~600ms. Animations are hard to catch in single
   screenshots — use the F3 debug panel, which mirrors the last judged phrase
@@ -63,7 +82,9 @@ unlocks/activates it. Activating fountains completes the puzzle.
   every fountain in the CURRENT session is activated.
 - **Claps (C)** nudge creature song timing; harmonies attract (consonant) or
   repel (dissonant) creatures while they sing; perfect intervals do nothing.
-  Creatures only move during their rests.
+  Forces apply only WHILE a creature sings and hears another note within its
+  OWN audibleRange (the listener's range — unlike gate/recording audibility,
+  which uses the source's).
 - **Perimeter walls are auto-generated just OUTSIDE the grid** — every grid
   cell is playable; designers never place border walls.
 - **Ground floor (elevation 0) is implicit everywhere.** Floor regions are
@@ -78,9 +99,10 @@ unlocks/activates it. Activating fountains completes the puzzle.
 | Mouse | Look (offset-from-center style, no pointer lock) |
 | M | Toggle mouse-look off/on (toast + persistent badge when off) |
 | I/J/K/L | Keyboard look (up/left/down/right) |
-| R | Recording toggle (tap on/tap off); long-hold = hold-to-record |
-| Space | Play back active slot |
-| ←/→ or 1–5 | Select inventory slot (5 slots, 1-based) |
+| R | Recording toggle (tap on/tap off); long-hold = hold-to-record; records into the cursor slot |
+| Space | Perform the whole tape (all filled slots, in order) |
+| ←/→ | Move the tape cursor (→ on a filled last slot adds a new one) |
+| Backspace/Delete (hold 2s) | Delete the cursor slot (fades out; release cancels) |
 | C | Clap |
 | N | Metronome |
 | F3 | Debug info overlay (hidden by default) |

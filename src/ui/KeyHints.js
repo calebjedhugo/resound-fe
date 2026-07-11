@@ -3,6 +3,8 @@ import gameState from 'core/GameState';
 import HintMemory from 'core/HintMemory';
 import RecordingManager from 'core/RecordingManager';
 import { getDistance } from 'core/utils';
+import { CLAP_RANGE } from 'core/constants';
+import { onSlotFlash } from 'ui/slotFlash';
 
 /**
  * KeyHints - wordless contextual key hints.
@@ -16,8 +18,16 @@ import { getDistance } from 'core/utils';
  *              retires when a recording with notes lands in a slot
  *   playback - spacebar sprite over a gate/fountain in playback reach;
  *              retires on the first playback keypress
- *   slots    - arrow keycaps by the inventory, shown when recording over an
- *              occupied slot is imminent; retires on first slot change
+ *   slots    - a "►" keycap by the tape, shown when recording over the
+ *              filled LAST slot is imminent (ArrowRight would grow the tape
+ *              instead of overwriting); retires on first cursor move
+ *   delete   - a "⌫" keycap by the tape, shown after a judged miss while
+ *              the tape holds two or more takes (a wrong slot may be the
+ *              culprit); retires on the first completed hold-delete
+ *              (core/Tape.js retires it)
+ *   clap     - "C" sprite over the nearest clap-range creature while TWO OR
+ *              MORE audible creatures sing at once (the chord a clap can fix);
+ *              retires on the first C pressed at such a moment
  */
 
 const MOVE_HINT_DELAY_S = 1.5;
@@ -127,7 +137,7 @@ class KeyHints {
     this.moveEl.appendChild(bottomRow);
     document.body.appendChild(this.moveEl);
 
-    // HUD: slot-cycling arrows, sitting just left of the inventory strip
+    // HUD: the grow-the-tape arrow, sitting just left of the inventory strip
     this.slotsEl = document.createElement('div');
     this.slotsEl.id = 'hint-slots';
     this.slotsEl.style.cssText = `
@@ -142,9 +152,27 @@ class KeyHints {
       z-index: 1000;
       animation: hint-breathe 1.6s ease-in-out infinite;
     `;
-    this.slotsEl.appendChild(makeKeycapEl('◄', 28));
     this.slotsEl.appendChild(makeKeycapEl('►', 28));
     document.body.appendChild(this.slotsEl);
+
+    // HUD: the hold-to-delete keycap, beside the arrow hint's spot
+    this.deleteEl = document.createElement('div');
+    this.deleteEl.id = 'hint-delete';
+    this.deleteEl.style.cssText = `
+      position: fixed;
+      bottom: 84px;
+      right: 330px;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+      z-index: 1000;
+      animation: hint-breathe 1.6s ease-in-out infinite;
+    `;
+    this.deleteEl.appendChild(makeKeycapEl('⌫', 28));
+    document.body.appendChild(this.deleteEl);
+    this._lastMissAt = 0;
 
     const style = document.createElement('style');
     style.textContent = `
@@ -158,8 +186,10 @@ class KeyHints {
     // In-world sprites
     this.recordSprite = makeKeycapSprite('R');
     this.playbackSprite = makeKeycapSprite('space');
+    this.clapSprite = makeKeycapSprite('C');
     this.scene.add(this.recordSprite);
     this.scene.add(this.playbackSprite);
+    this.scene.add(this.clapSprite);
 
     this._bobPhase = 0;
     this._stillTime = 0;
@@ -170,11 +200,21 @@ class KeyHints {
     // key directly. Non-capture: the start gate's capture-phase dismissal
     // stops propagation, so the waking keypress can't retire the hint.
     this._keyHandler = (event) => {
-      if (event.code !== 'Space' || gameState.mode !== 'PLAYING') return;
-      const { inventory, activeSlot } = gameState.player;
-      if (inventory[activeSlot]) HintMemory.retire('playback');
+      if (gameState.mode !== 'PLAYING') return;
+      if (event.code === 'Space') {
+        if (gameState.player.inventory.some(Boolean)) HintMemory.retire('playback');
+      } else if (event.code === 'KeyC' && this.clapSprite.visible) {
+        // Clapping at the hinted moment (a clashing chorus in clap range)
+        // is the lesson performed.
+        HintMemory.retire('clap');
+      }
     };
     window.addEventListener('keydown', this._keyHandler);
+
+    // The delete hint's teachable moment arrives via the judged-miss flash
+    this._offSlotFlash = onSlotFlash((kind) => {
+      if (kind === 'miss') this._lastMissAt = Date.now();
+    });
   }
 
   /** Per-frame evaluation. Call only while PLAYING and the world is awake. */
@@ -184,6 +224,8 @@ class KeyHints {
     this._updateRecord();
     this._updatePlayback();
     this._updateSlots();
+    this._updateDelete();
+    this._updateClap();
   }
 
   _updateMove(deltaTime) {
@@ -234,15 +276,18 @@ class KeyHints {
       this.playbackSprite.visible = false;
       return;
     }
-    const recording = gameState.player.inventory[gameState.player.activeSlot];
-    if (!recording) {
+    // The whole tape plays on Space; its performance carries as far as the
+    // loudest take it contains
+    const takes = gameState.player.inventory.filter(Boolean);
+    if (takes.length === 0) {
       this.playbackSprite.visible = false;
       return;
     }
+    const reach = Math.max(...takes.map((t) => t.sourceRange || 0));
     const target = gameState.entities.find(
       (e) =>
         ((e.type === 'gate' && !e.isOpen) || (e.type === 'fountain' && !e.isActivated)) &&
-        getDistance(gameState.player.position, e.position) <= recording.sourceRange
+        getDistance(gameState.player.position, e.position) <= reach
     );
     if (!target) {
       this.playbackSprite.visible = false;
@@ -252,7 +297,7 @@ class KeyHints {
   }
 
   _updateSlots() {
-    const { activeSlot } = gameState.player;
+    const { activeSlot, inventory } = gameState.player;
     if (activeSlot !== this._prevActiveSlot) {
       this._prevActiveSlot = activeSlot;
       HintMemory.retire('slots');
@@ -261,10 +306,54 @@ class KeyHints {
       this.slotsEl.style.opacity = '0';
       return;
     }
-    // The teachable moment: recording now would overwrite the active slot.
-    const wouldOverwrite =
-      gameState.recording.creaturesInRange.length > 0 && gameState.player.inventory[activeSlot];
+    // The teachable moment: recording now would overwrite the filled LAST
+    // slot — ArrowRight would grow the tape instead.
+    const onFilledLast = activeSlot === inventory.length - 1 && inventory[activeSlot];
+    const wouldOverwrite = gameState.recording.creaturesInRange.length > 0 && onFilledLast;
     this.slotsEl.style.opacity = wouldOverwrite ? '1' : '0';
+  }
+
+  _updateDelete() {
+    if (HintMemory.isRetired('delete')) {
+      this.deleteEl.style.opacity = '0';
+      return;
+    }
+    // The teachable moment: a performance was just judged a miss and the
+    // tape holds more than one take — a wrong slot may be the culprit.
+    const filled = gameState.player.inventory.filter(Boolean).length;
+    const fresh = Date.now() - this._lastMissAt < 10000;
+    this.deleteEl.style.opacity = filled >= 2 && fresh ? '1' : '0';
+  }
+
+  _updateClap() {
+    if (HintMemory.isRetired('clap')) {
+      this.clapSprite.visible = false;
+      return;
+    }
+    // The teachable moment: two or more audible creatures are singing AT THE
+    // SAME TIME (the clash a clap untangles) and one is within clap range.
+    const { position } = gameState.player;
+    const singing = gameState.entities.filter(
+      (e) =>
+        e.type === 'creature' &&
+        e.instrument?.playbackState?.isPlaying &&
+        getDistance(position, e.position) <= e.audibleRange
+    );
+    if (singing.length < 2) {
+      this.clapSprite.visible = false;
+      return;
+    }
+    // Same level only: a clash on an unreachable stage (e.g. the dance
+    // diorama) is scenery, not a clap invitation.
+    const inClapRange = singing
+      .map((c) => ({ c, d: getDistance(position, c.position) }))
+      .filter(({ c, d }) => d <= CLAP_RANGE && Math.abs(c.position.y - (position.y - 1.8)) < 1.5)
+      .sort((a, b) => a.d - b.d);
+    if (inClapRange.length === 0) {
+      this.clapSprite.visible = false;
+      return;
+    }
+    this._floatOver(this.clapSprite, inClapRange[0].c.position);
   }
 
   _floatOver(sprite, position) {
@@ -281,18 +370,23 @@ class KeyHints {
   hideAll() {
     this.moveEl.style.opacity = '0';
     this.slotsEl.style.opacity = '0';
+    this.deleteEl.style.opacity = '0';
     this.recordSprite.visible = false;
     this.playbackSprite.visible = false;
+    this.clapSprite.visible = false;
     this._stillTime = 0;
     this._startPosition = null;
   }
 
   dispose() {
     window.removeEventListener('keydown', this._keyHandler);
+    if (this._offSlotFlash) this._offSlotFlash();
     this.moveEl.remove();
     this.slotsEl.remove();
+    this.deleteEl.remove();
     this.scene.remove(this.recordSprite);
     this.scene.remove(this.playbackSprite);
+    this.scene.remove(this.clapSprite);
   }
 }
 

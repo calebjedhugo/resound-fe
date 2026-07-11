@@ -1,0 +1,373 @@
+{
+  "id": "poc-dance",
+  "name": "IV. The Dance",
+  "difficulty": 1,
+  "gridSize": 12,
+  "tempo": 100,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": {
+    "x": 6,
+    "y": 0,
+    "z": 10
+  },
+  "floors": [
+    {
+      "elevation": 1,
+      "x1": 1,
+      "z1": 3,
+      "x2": 8,
+      "z2": 3
+    }
+  ],
+  "entities": [
+    {
+      "type": "creature",
+      "position": {
+        "x": 1,
+        "y": 1,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "G5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 12,
+        "audibleRange": 12
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 8,
+        "y": 1,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "G5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 16,
+        "audibleRange": 12
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 4,
+        "y": 1,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "A5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 7,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "C5",
+            "length": "1/1"
+          }
+        ],
+        "interval": 8,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 2
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 4
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 5
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 6
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 7
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 8
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 10
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 11
+      },
+      "song": [
+        {
+          "pitch": "E5",
+          "length": "1/1"
+        },
+        {
+          "pitch": "G5",
+          "length": "1/1"
+        }
+      ],
+      "id": "entry",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-duet",
+        "gateId": "exit"
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 9
+      },
+      "song": [
+        {
+          "pitch": "C5",
+          "length": "1/1"
+        }
+      ],
+      "id": "exit",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-jam",
+        "gateId": "entry"
+      }
+    }
+  ]
+}

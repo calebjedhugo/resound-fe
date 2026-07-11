@@ -32,6 +32,11 @@ automated playtesters can observe them.)
   prevent them.
 - **No aiming.** Sound is omnidirectional and proximity-based. Recording and
   playback care only about distance. No crosshair, no facing checks — ever.
+- **Creatures collide with the player's body, symmetrically** (fixed
+  2026-07-11): a lured creature parks at contact distance (creature radius
+  0.9 + player radius 0.4 = 1.3) instead of entering the player's space —
+  overlapping bodies wedged the player unrecoverably (every escape move
+  still collided). Active-area only (coordinates are per-area).
 - **Creature movement integration runs TWO physics passes per frame**
   (`CREATURE_PHYSICS_PASSES`), each with the full frame deltaTime, forces
   recomputed between passes. This began as an accidental double entity-update
@@ -49,38 +54,118 @@ automated playtesters can observe them.)
 - **Playback etiquette:** targets hear everything at once — notes interleaved
   during a playback corrupt the match. "Play while other sounds are quiet"
   is intended gameplay, not a bug.
-- **Matching is exact — the performance must BE the target** (ruled
-  2026-07-02): the target is a rhythm timeline of pitched onsets at real
-  beat offsets (`SongMatcher.targetTimeline`), with **rests as expected
-  gaps**; a performance matches when every target onset has a matching
-  heard note at the right relative beat and NOTHING ELSE sounds inside the
-  aligned window or within one beat of silence on either side
-  (`core/phraseMatching.js`). Rotated takes fail, over-long takes fail,
-  notes during rests fail, prefixes can't match before the trailing silence
-  elapses, and stale earlier sounds neither help nor hurt. Polyphonic
-  targets (chords, multi-voice) keep their true rhythm. A failed utterance
-  flashes the target red (wordless feedback) and is logged in the F3 panel.
-- **Gates are PLAY-TO-PASS, not latching** (ruled 2026-07-05, designer's
-  idea). A gate opens **AS its song is performed** — the moment the heard
-  notes are a correct in-progress rendering of the target, not after a
-  completed match — and holds open while the song keeps sounding, then closes
-  after a short step-through grace (`Gate.OPEN_GRACE_BEATS`, ~3 beats). The
-  notation **stays displayed forever** so the song is a permanent part of the
-  world. You perform the gate's song every time you want to cross. `isOpen`
-  is the transient state (drives collision + green tint); there is no
-  permanent `isActivated` on gates any more. Mechanism: `phraseMatching`
-  returns `'in-progress'` for a valid ongoing prefix, which `Gate` treats as
-  open; `true` (full song + trailing silence) additionally consumes the
-  performance. Fountains ignore `'in-progress'` and still latch on the exact
-  full match (they're the goal). Design leverage: because crossing always
-  costs the gate's song, a gate can gate *access to a recording* — see the
-  awakening two-slot forcing below.
-  - **Prefix caveat (future multi-note gates):** opening on a valid prefix
-    means a *partial* performance briefly cracks a gate. The current level's
-    only gate is single-note, so prefix = whole song (no exploit). If
-    multi-note gates appear and a partial-then-walk-through feels cheap, add a
-    "must complete before it commits to fully open" rule.
+- **Matching: the gate must hear its song EXACTLY — and how that happens
+  does not matter** (ruled 2026-07-11, superseding the 2026-07-02 "the
+  performance must BE the target" silence margins; the original design
+  spirit, reclaimed). The target is a rhythm timeline of pitched onsets at
+  real beat offsets (`SongMatcher.targetTimeline`), with **rests as
+  expected gaps**; a performance matches when, for some anchor, every
+  target onset has a matching heard note (pitch AND duration) at the right
+  relative beat and NOTHING ELSE sounds INSIDE the aligned window
+  (`core/phraseMatching.js`). Sounds before or after the window are none
+  of the gate's business: a target embedded in a longer performance
+  MATCHES (the whole tape plays on Space — every door whose song occurs
+  cleanly within it opens), over-long takes match, and completion fires
+  the moment the target's last note ends (no trailing-silence beat). What
+  still fails: rotated takes, prefixes, and any foreign note DURING the
+  window — a chord where a single note is due, a sound during a target
+  rest. **In-window exclusivity is load-bearing**: it is why a continuous
+  singer beside a door jams it forever (poc-jam/poc-pull) and why the
+  "premature open when a longer song contains the gate's song" worry is
+  handled by puzzle design (octave-exact pitches, duration typing), not by
+  mechanics. Polyphonic targets (chords, multi-voice) keep their true
+  rhythm. A failed utterance flashes the target red (wordless feedback)
+  and is logged in the F3 panel.
+- **Gates open on the COMPLETED song, LATCH, and close when you walk
+  through** (ruled 2026-07-10, superseding the 2026-07-05 play-to-pass grace
+  and its multi-note caveat). The full rule:
+  - **Open**: only when the whole song lands (`phraseMatching` returns
+    `true` — since the 2026-07-11 matching ruling, that is the INSTANT the
+    song's final note completes; no trailing-silence beat, so the old
+    briefly-invisible-but-solid moment is gone). A valid in-progress
+    performance never opens a gate — instead the closed shell **FADES from
+    opaque to FULLY transparent in step with the song's own progress**
+    (designer's calls, 2026-07-10: transparency is the game's vocabulary
+    for "open", so the fade literally previews the state being earned; and
+    the fade rate follows the song's length, reaching full transparency as
+    the song ends). A wrong note snaps it back to solid with the red
+    flash. For LINKED doors, the portal views render DURING the fade
+    (designer's call, 2026-07-11): the destination materializes through
+    the dissolving shell — the fade previews the real other side, not the
+    dead space behind the gate box. This kills the prefix exploit for
+    multi-note doors and unifies single- and multi-note behavior.
+  - **Stay open**: indefinitely. There is NO timer — an open gate waits.
+  - **Close**: when the player walks through (body fully clear of the cell;
+    for linked doors this means stepping out of the DESTINATION face —
+    PortalManager consumes the crossing; backing out of a refused commit
+    consumes nothing). A door can therefore never close on an occupant, and
+    the old "occupied overtime" state is gone.
+  - **Held open by performers**: if a correct performance is in progress or
+    a completion just landed (`Gate.HELD_AFTER_COMPLETION_BEATS`) at exit
+    time, the close is DEFERRED until the hold lapses — a parked creature
+    singing the song keeps the door open behind you for as long as it
+    stands there (its in-progress + just-completed windows chain into a
+    continuous hold; verified live: a door with the poc-push pusher parked
+    beside it stays open 100% of the time).
+  - The notation **stays displayed forever**; `isOpen` drives collision +
+    green tint; there is still no permanent `isActivated` on gates.
+    Fountains are unchanged (latch on the exact full match). Re-crossing a
+    consumed door costs a fresh performance, so "songs as keys you carry"
+    is intact.
+  - **Puzzle leverage gained**: open a door, then do something else — herd a
+    creature through the gap, set up a second performance — and only your
+    own crossing consumes it. Timed sprint-under-pressure gates were
+    deliberately traded away; if wanted later, a visually distinct
+    "sustain gate" (open only while its song sounds) can return as a rare
+    vocabulary element.
 
+- **The inventory is a TAPE, and Space performs all of it** (ruled
+  2026-07-11, superseding the 2026-07-10 queue-on-Space chaining — its
+  intent, effortless multi-slot sequencing, is now automatic). The slot
+  strip is a growable tape (boot = ONE slot, cap `TAPE_SLOT_CAP`):
+  - **←/→ move the cursor**; → on a FILLED last slot appends a fresh empty
+    one (progressive disclosure — new slots exist only once the previous
+    is filled). Digit keys are gone.
+  - **R records into the cursor slot, in place** — re-recording a middle
+    slot is how a wrong note gets fixed without rebuilding the tape.
+  - **Space plays the WHOLE tape**, every filled slot in order,
+    concatenated into one song. Takes are stored dense (notes with
+    lengths, no gaps — recording captures content, not silence), so
+    concatenation is seamless on the musical grid; a Space during a
+    playback is ignored (one performance at a time). Combined with the
+    matching ruling above, a door opens whenever its song occurs cleanly
+    anywhere in the tape — the tape is a key ring that plays itself.
+  - **Holding Backspace/Delete deletes the cursor slot**: it fades over 2s
+    (`TAPE_DELETE_HOLD_MS`) and is permanently gone at zero opacity; the
+    survivors close ranks. Releasing early cancels; the key must be
+    released before another delete can start. Delete is never REQUIRED by
+    a puzzle — it exists for tape hygiene (long tapes take long to
+    perform and spray notes near force puzzles). **Delete creates a new
+    soft-lock class** (destroying your key inside a locked room), so the
+    POC generator asserts every reachable pocket is escapable from an
+    EMPTY tape (see gen-poc.js).
+  Solo starts keep the beat grid with the late grace expressed in BEATS
+  (`PLAYBACK_LATE_GRACE_BEATS`, kept under the matcher tolerance so a
+  grace-path onset still matches). See `PlaybackManager`, `core/Tape.js`.
+- **Harmony forces act on a SINGING listener, gated by ITS OWN range**
+  (documented 2026-07-10 — earlier docs had this backwards): a creature is
+  pushed/pulled only WHILE it sings and another note sounds within the
+  creature's own `audibleRange` (unlike gate/recording audibility, which
+  carries by the SOURCE's range). Creature-to-creature forces exist and are
+  the basis of the dance diorama; equal-and-opposite simultaneous sources
+  cancel exactly (forces are unit-direction × strength), which is why the
+  dance's anchors ALTERNATE.
+- **Wordless failure feedback is the SLOT FLASH language** (ruled
+  2026-07-10, replacing the gameplay toasts; the R7 red-slot proposal
+  shipped): RED pulse on the active slot = a performance was judged and
+  MISSED, fired at JUDGMENT time and only for phrases inside the player's
+  own playback window (ambient creature noise never flashes it); GREY pulse
+  = nothing heard you / nothing there (playback out of every target's range,
+  Space on an empty slot, R with no creature close, an empty take). The
+  target itself still red-flashes on a heard-but-wrong phrase. The recording
+  note-count sentence is gone — the live count ticks up on the active slot.
+  Remaining words (mouse-look toggle, metronome, puzzle-load errors) are
+  settings/dev feedback, not gameplay.
 - **Mouse-position camera is intended** (ruled 2026-07-03): the cursor's
   offset from screen center steers the view, and a cursor resting outside
   the center zone keeps turning the camera. This is the designed feel — do
@@ -145,15 +230,22 @@ rulings, in the designer's words where it matters:
   the target file; clearing/renaming/deleting keeps the partner in sync
   (`editor/io/portalLinks.js`). Never hand-author a one-way link. The world
   graph is DERIVED by scanning puzzle files — there is no world.json.
-- **Gates stay play-to-pass.** A linked gate opens exactly like any gate (by
-  performing its song); the link only changes what's on the other side. Your
-  recordings come with you — areas are one world, so "gate songs as keys you
-  carry" works across seams.
+- **Linked gates follow the same latch rule as any gate** (complete the
+  song → opens → closes when you walk out of the destination face); the
+  link only changes what's on the other side. Your recordings come with
+  you — areas are one world, so "gate songs as keys you carry" works
+  across seams.
 - **Crossing commits ON ENTRY (ruled 2026-07-09; supersedes the 2026-07-08
   "shared space / only exiting commits" ruling).** Stepping into an open
   linked gate teleports AT ONCE: the two linked cells are one room with two
   addresses, and going in means you now stand at the DESTINATION address —
-  same offset (pure translation), heading untouched. Every perspective
+  same offset (pure translation — CLAMPED by up to ~0.15 units so the
+  player's body lands fully inside the destination cell: the commit fires
+  with the body's trailing edge still outside the cell, and a wall flush
+  behind the partner — e.g. a door on a grid-edge row against the
+  perimeter — would otherwise wedge the player unrecoverably, since the
+  per-frame walk step is smaller than the overlap; found & fixed
+  2026-07-10), heading untouched. Every perspective
   looks out of the gate you teleported to, behind you included, and every
   exit — backing out the way you came included — is plain walking against
   the destination's REAL geometry: what you see is what blocks you, and
@@ -180,6 +272,16 @@ rulings, in the designer's words where it matters:
   linking (relink to re-unify).
 - **A closed linked gate looks like any closed gate.** The door reveals
   itself only when opened.
+- **Permanently-open faces: `alwaysOpen` (ruled 2026-07-10, built for
+  later use).** A gate side marked `alwaysOpen: true` is passable forever —
+  it never closes and needs no performance. Its partner face can still be
+  song-locked, making a ONE-WAY door: unlock the way in once, and the way
+  back is always open (escape hatches that un-trap a player who entered a
+  room unprepared; one-way shortcuts home). Both faces `alwaysOpen` = a
+  plain standing doorway. Pairs containing an alwaysOpen face are exempt
+  from open-state mirroring (the faces are independent by design); crossing
+  still requires the face you ENTER to be open. Schema field on the gate
+  entity; round-trips through the editor. Not yet used in the POC world.
 - **Doors are omnidirectional (ruled 2026-07-07):** every side of a linked
   gate can be walked through, and EVERY face the player can see shows the
   view through the door (two at a corner — a working open door never shows
@@ -223,11 +325,72 @@ rulings, in the designer's words where it matters:
   performs it (`core/HintMemory.js`, localStorage `resound-hints`). Hints:
   WASD cluster (idle at spawn), floating "R" over a creature in recording
   range, floating spacebar over a target in playback reach, slot arrows when
-  recording would overwrite the active slot.
+  recording would overwrite the active slot, and a floating "C" over the
+  nearest clap-range creature while two or more audible creatures sing AT
+  ONCE (the clash a clap untangles; added 2026-07-10 for the POC clap area —
+  it retires on a C pressed during such a clash).
 - **Boot straight into the world, not the menu.** The first manifest entry
-  (`awakening`) is the intro level and the game's front door; the menu is
-  reachable via Esc → Main Menu. The `?puzzle=<id>` editor deep link wins
-  over the default.
+  is the intro level and the game's front door; the menu is reachable via
+  Esc → Main Menu. The `?puzzle=<id>` editor deep link wins over the default.
+  As of 2026-07-10 the front door is `poc-threshold`, area I of the POC
+  world (below); `awakening` and `the-lure` remain in the manifest.
+- **The POC world (added 2026-07-10; restructured same day after the
+  designer's first playtest; redesigned 2026-07-11 twice — round 2: STRICT
+  economy + the jam mechanic; round 3: the TAPE model, the Twinkle finale,
+  and the closing card)** is a chain of TEN small portal-linked areas
+  teaching every element except fountains, wordlessly and non-stuck:
+  I `poc-threshold` (move/record/play/first door — and a locked FINALE
+  PORTAL standing mid-room, wanting a real song in quarter notes nothing
+  before area X can perform; every player red-flashes it in minute one and
+  finally emerges FROM it at the end), II `poc-two-keys` (slots: two
+  single-note doors in series — pure inventory, no timing; room 2 holds an
+  E4 ECHO of the inner door's note, so even a fully deleted tape can
+  always leave), III `poc-duet` (ordering: a two-note door [E5,G5] —
+  record them in tape order and Space performs both; the fifth above area
+  II's notes, since matching is octave-exact), IV `poc-dance` (SPECTACLE:
+  an unreachable elevated stage where two alternating unison anchors
+  bounce a dissonant dancer forever — creatures moving creatures,
+  witnessed before the player ever needs harmony forces; the ground voice
+  is C5, the exit note — perfect against the anchors, consonant against
+  the dancer, so carrying it up to the stage still tugs the dancer), V
+  `poc-jam` (a CONTINUOUS singer — whole note, interval == song length, so
+  no silence window EVER — beside a door corrupts its matching forever;
+  two identical [A3] doors, one with a caged B5 jammer beside it, one
+  clean; the same tape opens only the clean one; the jammed door is never
+  required, and both doors land in area VI as separate entries), VI
+  `poc-pull` (the jam weaponized AND solved: a free-standing continuous C5
+  jammer stands beside the only exit; the local voice A4 is consonant with
+  it, so playback PULLS it — a leash, working only within the jammer's own
+  listening radius; drag it out of the door's earshot, then perform in the
+  quiet), VII `poc-push` (dissonance repels; the pushed creature's own
+  song opens the exit), VIII `poc-clap` (penned pair chords the door's two
+  notes; claps shift one until the chord becomes the melody), IX
+  `poc-climb` (walk-under + ramp; pillars force the climb), X `poc-return`
+  — **"The Star"**, the finale: a warm-up vestibule teaches quarter notes
+  and repetition (one F4 voice singing a single quarter; the door wants
+  [F4,F4] — record the same voice twice; its hall face is the built
+  one-way alwaysOpen escape hatch, finally used), then a concert hall of
+  five more single-quarter voices (C4 D4 E4 G4 A4) around the walls — the
+  ELEMENTS of Twinkle Twinkle Little Star, never chunks of it — and a
+  central portal wanting the full couplet (14 quarters), linked to area
+  I's mid-room finale gate. Assemble the tape, perform it, walk through,
+  and the demo's ONE sanctioned use of words appears: a dismissible
+  "Thanks for playing → calebhugo.com" overlay (`ui/EndingOverlay.js`,
+  triggered by the arrival gate's `ending: true` flag; credits after the
+  game is over don't violate the wordless-teaching rule). **Strict ELEMENT
+  economy (matching is pitch- AND duration-exact, so the economy tracks
+  (pitch, length) elements): every door's elements are first recordable in
+  the door's own area, asserted with NO exemptions** (poc-clap's D4 is
+  creature-solved; the dance stage's G5/A5 open nothing ahead — G5 exists
+  only in the duet-exit/dance-entry pair, already behind the player). The
+  finale is all quarter notes — elements that exist ONLY in area X, so
+  carried whole notes can never open it early — and F4 in any duration
+  exists only in area X. All geometry is generated + self-checked (480+
+  asserts, including the dance schedule simulation, jam audibility margins
+  with in-pen drift, the pull's far-side re-record escape, and the
+  empty-tape pocket-escape rule that keeps DELETE from ever stranding a
+  player) by `puzzles/gen-poc.js`; edit the generator and rerun, never
+  the JSONs.
 - **The start gate replaces the overlay's freeze role.** Each level starts
   behind a dark scrim with a pulsing ring; any key/click wakes the world.
   While it's up, the clock and creatures hold still (self-solve protection)
@@ -311,10 +474,9 @@ rulings, in the designer's words where it matters:
 
 ## Open design calls — ask the designer before changing
 
-- (none currently — match strictness was ruled exact-per-phrase, see above)
-- **Remaining word-toasts** (recording errors, "Recorded N notes…",
-  mouse-look toggle, metronome): DESIGN.md blesses the note-count toast, but
-  they're now the only words left in play. Keep, restyle wordlessly, or drop?
+- (none currently — gameplay word-toasts were RESOLVED 2026-07-10: replaced
+  by the slot-flash language, see above. Mouse-look toggle, metronome, and
+  puzzle-load-error toasts remain as settings/dev feedback.)
 
 ## Related docs
 

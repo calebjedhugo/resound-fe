@@ -6,19 +6,27 @@
  * offsets, with rests as expected gaps. A performance matches when, for
  * some anchor position, every target onset has a matching heard note at
  * the right relative beat — and NOTHING ELSE sounds inside the aligned
- * window or within one beat of silence on either side.
+ * window. Sounds BEFORE or AFTER the window are none of the listener's
+ * business: the gate heard its song exactly, and how that happened does
+ * not matter.
  *
- * Design rulings (2026-07-02, see DESIGN.md): playback must BE the target —
- * rotated takes fail, over-long takes fail, prefixes can't match early
- * (the trailing silence margin must actually elapse), stale earlier sounds
- * sit outside the margins and neither help nor hurt, and rests inside the
- * target are matchable as required silence.
+ * Design ruling (2026-07-11, see DESIGN.md — SUPERSEDES the 2026-07-02
+ * "playback must BE the target" silence margins): a target embedded in a
+ * longer performance MATCHES (the whole tape plays on Space, and every
+ * door whose song occurs cleanly within it opens); completion fires the
+ * moment the target's last note ends. What still fails: rotated takes,
+ * prefixes (every onset must land before the window closes), notes DURING
+ * the window that aren't the target's (a chord where a single note is due,
+ * a sound during a target rest) — in-window exclusivity is what makes a
+ * continuous singer beside a door jam it forever.
  */
 import ListeningManager from 'core/ListeningManager';
 import SongMatcher from 'core/SongMatcher';
 import gameState from 'core/GameState';
 
-// Required silence (in beats) immediately before and after a performance
+// Silence (in beats) that separates UTTERANCES — used only to segment the
+// heard stream for mismatch feedback (one red flash per utterance). Matching
+// itself requires no surrounding silence (ruled 2026-07-11).
 export const PHRASE_GAP_BEATS = 1;
 
 // Alignment tolerance: within one 16th-note grid slot (grid step = 0.25)
@@ -73,11 +81,13 @@ export default function evaluatePhrases(listener) {
   let inProgress = false;
   for (const anchorGroup of groups) {
     const anchorBeat = anchorGroup.beat - firstOffset;
-    // An anchor is only judgeable if its whole leading silence margin lies
-    // in remembered (untrimmed) history
-    const judgeable = anchorBeat - PHRASE_GAP_BEATS > trimHorizonBeat + TOL_BEATS;
+    // An anchor is only judgeable if it lies in remembered (untrimmed)
+    // history — forgotten notes must not read as silence
+    const judgeable = anchorBeat > trimHorizonBeat + TOL_BEATS;
     const endBeat = anchorBeat + timeline.totalBeats;
-    const windowClosed = nowBeat > endBeat + PHRASE_GAP_BEATS;
+    // The window closes the moment the target's own span elapses: no
+    // trailing silence is required (ruled 2026-07-11)
+    const windowClosed = nowBeat > endBeat;
 
     // Every target onset due so far must have a matching heard group
     let aligned = judgeable;
@@ -95,11 +105,12 @@ export default function evaluatePhrases(listener) {
       }
     }
     if (aligned) {
-      // Nothing else may sound inside the window or its silence margins
-      // (this is what keeps matching EXACT: extra notes, repeats, or sounds
-      // during the target's rests all disqualify this anchor)
-      const hi = windowClosed ? endBeat + PHRASE_GAP_BEATS : nowBeat;
-      const lo = anchorBeat - PHRASE_GAP_BEATS - TOL_BEATS;
+      // Nothing else may sound INSIDE the window (this is what keeps
+      // matching EXACT: extra notes, repeats, or sounds during the target's
+      // rests all disqualify this anchor). Sounds before the anchor or at/
+      // after the window's end are sequential surplus — tolerated.
+      const hi = Math.min(nowBeat, endBeat - TOL_BEATS);
+      const lo = anchorBeat - TOL_BEATS;
       const extras = groups.some((g) => g.beat >= lo && g.beat <= hi && !used.has(g));
       if (!extras) {
         if (windowClosed) return true;

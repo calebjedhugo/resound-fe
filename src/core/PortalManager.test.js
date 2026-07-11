@@ -117,6 +117,21 @@ describe('PortalManager crossing', () => {
     expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE + 2.5);
   });
 
+  it('the crossing callback receives the destination puzzle AND the arrival gate', async () => {
+    // The arrival gate is how the ending overlay knows to roll: a gate
+    // flagged `ending: true` (the finale portal into area I) triggers it.
+    const crossings = [];
+    PortalManager._onCrossed = (puzzle, arrivalGate) => {
+      crossings.push({ puzzleId: puzzle.id, arrivalEnding: !!(arrivalGate && arrivalGate.ending) });
+    };
+    gate.open();
+
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1);
+
+    expect(crossings).toEqual([{ puzzleId: 'portal-b', arrivalEnding: false }]);
+    PortalManager._onCrossed = null;
+  });
+
   it('recordings persist across the seam', async () => {
     const take = { notes: [{ pitch: 'C4', length: '1/4' }], sourceRange: 15 };
     gameState.player.inventory[0] = take;
@@ -445,14 +460,20 @@ describe('PortalManager live neighbor (stage 3)', () => {
     expect(ctx.getCreaturesInRange()).not.toContain(creature);
   });
 
-  it('one door, two faces: opening one face mirrors the other open, then both close', async () => {
+  it('one door, two faces: opening one face mirrors the other open, closing mirrors closed', async () => {
     gate.open();
     await ctx.tick(16);
 
     expect(partnerGate.isOpen).toBe(true);
 
-    // The mirrored hold lapses with the source face's grace; both close
+    // Doors LATCH: time alone never closes them (ruled 2026-07-10)
     await ctx.advanceBeats(12);
+    expect(gate.isOpen).toBe(true);
+    expect(partnerGate.isOpen).toBe(true);
+
+    // Closing one face (a consumed crossing) mirrors the partner closed
+    gate.close();
+    await ctx.tick(16);
     expect(gate.isOpen).toBe(false);
     expect(partnerGate.isOpen).toBe(false);
   });
@@ -472,17 +493,16 @@ describe('PortalManager live neighbor (stage 3)', () => {
   it('a NEIGHBOR gate never treats the player as its occupant (coordinates are per-area)', async () => {
     // door-b sits at grid (5, 7) of portal-live-b. Put the player at the SAME
     // coordinates — but in the ACTIVE area (portal-live-a). Areas have
-    // independent coordinate systems, so the neighbor gate must not read
-    // "occupied" and must CLOSE when its grace lapses, never hold in
-    // occupied overtime for a player who is a whole area away.
+    // independent coordinate systems, so moving "out of" those coordinates
+    // must never read as walking through the neighbor's door (which would
+    // wrongly consume its opening).
     ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 7 * WORLD_SCALE });
     partnerGate.open();
-    partnerGate._openUntil = Date.now() - 1;
-
+    await ctx.tick(32);
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 3 * WORLD_SCALE });
     await ctx.tick(32);
 
-    expect(partnerGate.occupiedOvertime).toBe(false);
-    expect(partnerGate.isOpen).toBe(false);
+    expect(partnerGate.isOpen).toBe(true); // still latched: nobody crossed it
   });
 
   it('cross-seam sources reach creatures as forces aimed at the doorway', () => {
@@ -597,33 +617,27 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(gameState.entities).toBe(entitiesBefore);
   });
 
-  it('the door WAITS for its occupant: grace lapse turns it solid-outside, not closed', async () => {
+  it('the door stays open around its occupant and is consumed when they step clear', async () => {
     doorA.open();
     await ctx.tick(16); // one door, two faces: door-b mirrors open
     await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1); // entry commits: standing in door-b
 
-    // Let both graces lapse while the player stands in door-b's cell
-    doorA._openUntil = Date.now() - 1;
-    doorB._openUntil = Date.now() - 1;
-    await ctx.tick(32);
+    // No timer: the door stays fully open around its occupant (a door can
+    // never close on a body — closure only happens on exit)
+    await ctx.advanceBeats(12);
+    expect(doorB.isOpen).toBe(true);
+    expect(doorA.isOpen).toBe(true);
 
-    expect(doorB.isOpen).toBe(true); // never closes on an occupant
-    expect(doorB.occupiedOvertime).toBe(true);
-    expect(doorA.isOpen).toBe(false); // the unoccupied face just closes
-    // Looks closed from outside (front-face culling hides it from within)
-    expect(doorB.mesh.material.opacity).toBe(1);
-    // Solid for other movers (creatures pass their id), open for the player
-    // (movers report the player with ignoreId null)
-    const atDoor = { x: 5 * WORLD_SCALE, y: 0, z: 8 * WORLD_SCALE };
-    expect(CollisionDetector.checkCollision(atDoor, 0.5, 'some-creature')).toBe(true);
-    expect(CollisionDetector.checkCollision(atDoor, 0.5, null)).toBe(false);
-
-    // Stepping fully clear (BODY included — the door may not close while the
-    // player's radius still overlaps its box) releases it to close for real
+    // Stepping fully clear (BODY included — closing while the player's
+    // radius still overlaps the box would wedge them) consumes the crossing:
+    // both faces close
     await stepTo(5 * WORLD_SCALE, 8 * WORLD_SCALE + 2.5);
     await ctx.tick(32);
     expect(doorB.isOpen).toBe(false);
-    expect(doorB.occupiedOvertime).toBe(false);
+    expect(doorA.isOpen).toBe(false);
+    // Closed again: solid for everyone
+    const atDoor = { x: 5 * WORLD_SCALE, y: 0, z: 8 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(atDoor, 0.5, 'some-creature')).toBe(true);
   });
 
   it('one door, two faces: opening one face mirrors the partner open', async () => {
@@ -901,11 +915,12 @@ describe('Walked door crossings (real player input through the movement stack)',
     ctx.releaseKey('w');
 
     expect(gameState.currentPuzzle.id).toBe('portal-b');
-    // The crossing is a pure translation, so the full 6 units of walking
-    // survive it: emerge from the partner (grid 5,7 -> world z 21) exactly
-    // where a 6-unit walk from (start relative to the door) lands
+    // The crossing is a pure translation — minus the arrival-offset CLAMP
+    // (<= ~0.15 units), which keeps the body fully inside the destination
+    // cell so flush walls behind a door can never wedge the player. So a
+    // 6-unit walk lands within a small tolerance of the exact translation.
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
-    expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE + 3 - 6, 1);
+    expect(gameState.player.position.z).toBeCloseTo(7 * WORLD_SCALE + 3 - 6, 0);
     expect(gameState.player.elevation).toBe(0);
     // Heading untouched: still facing north
     const [yaw] = gameState.camera.viewCenter;
@@ -936,7 +951,7 @@ describe('Walked door crossings (real player input through the movement stack)',
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1.2);
   });
 
-  it('the occupant of an OVERTIME door walks freely inside and out; it closes once clear', async () => {
+  it('the occupant walks freely inside and back out; stepping clear consumes the door', async () => {
     installFetchMock({});
     ctx.loadPuzzle('portal-self');
     const [doorA, doorB] = ctx.getGates();
@@ -948,40 +963,33 @@ describe('Walked door crossings (real player input through the movement stack)',
     ctx.holdKey('w');
     await ctx.tick(625); // 2.5 units
     ctx.releaseKey('w');
-    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE, 1);
+    // (precision 0: the arrival-offset clamp trims up to ~0.15 units)
+    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE, 0);
 
-    // Both graces lapse: the unoccupied face closes; the occupied face WAITS
-    doorA._openUntil = Date.now() - 1;
-    doorB._openUntil = Date.now() - 1;
-    await ctx.tick(32);
-    expect(doorA.isOpen).toBe(false);
-    expect(doorB.isOpen).toBe(true);
-    expect(doorB.occupiedOvertime).toBe(true);
-
-    // The overtime door is solid from outside, but its occupant still WALKS
-    // freely within the cell (movers report the player with ignoreId null,
-    // which CollisionDetector lets through the whole movement stack)
+    // The occupant roams freely within the open cell — a door never closes
+    // around a body
     ctx.holdKey('a');
     await ctx.tick(250); // 1 unit west, still inside the cell
     ctx.releaseKey('a');
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1);
-    expect(doorB.occupiedOvertime).toBe(true);
+    expect(doorB.isOpen).toBe(true);
 
-    // ...and straight back out at full stride. The door releases only once
-    // their BODY is clear of the box — it can never close into them — and
-    // then it shuts for real.
+    // ...and straight back out at full stride. Backing out still EXITED the
+    // destination (the crossing committed on entry), so stepping fully clear
+    // consumes the opening: both faces close.
     ctx.holdKey('s');
     await ctx.tick(625); // 2.5 units south
     ctx.releaseKey('s');
     expect(gameState.currentPuzzle.id).toBe('portal-self');
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1);
-    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE + 2.5, 1);
+    // (precision 0: the arrival-offset clamp trims up to ~0.15 units)
+    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE + 2.5, 0);
     await ctx.tick(32);
     expect(doorB.isOpen).toBe(false);
-    expect(doorB.occupiedOvertime).toBe(false);
+    expect(doorA.isOpen).toBe(false);
   });
 
-  it('walking on through an overtime door is plain movement — no second teleport', async () => {
+  it('walking on through the crossed door is plain movement — no second teleport', async () => {
     installFetchMock({});
     ctx.loadPuzzle('portal-self');
     const [doorA, doorB] = ctx.getGates();
@@ -991,10 +999,7 @@ describe('Walked door crossings (real player input through the movement stack)',
     ctx.holdKey('w');
     await ctx.tick(625); // entry commits: standing in door-b's cell
     ctx.releaseKey('w');
-    doorA._openUntil = Date.now() - 1;
-    doorB._openUntil = Date.now() - 1;
-    await ctx.tick(32);
-    expect(doorB.occupiedOvertime).toBe(true);
+    expect(doorB.isOpen).toBe(true);
 
     // Keep walking north, out door-b's far side: plain walking, no teleport,
     // stride still unbroken across the whole journey
@@ -1004,11 +1009,12 @@ describe('Walked door crossings (real player input through the movement stack)',
 
     expect(gameState.currentPuzzle.id).toBe('portal-self');
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
-    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE - 3, 1);
-    // Clear of the box: the occupied face releases and closes
+    // (precision 0: the arrival-offset clamp trims up to ~0.15 units)
+    expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE - 3, 0);
+    // Clear of the box: the crossing is consumed — both faces close
     await ctx.tick(32);
     expect(doorB.isOpen).toBe(false);
-    expect(doorB.occupiedOvertime).toBe(false);
+    expect(doorA.isOpen).toBe(false);
   });
 });
 

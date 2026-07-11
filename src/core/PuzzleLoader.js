@@ -108,6 +108,10 @@ class PuzzleLoader {
               id: entityData.id,
               facing: entityData.facing,
               link: entityData.link,
+              // Permanently-open face (one-way doors / escape hatches)
+              alwaysOpen: entityData.alwaysOpen,
+              // Arrival here ends the demo (thanks-for-playing overlay)
+              ending: entityData.ending,
               gridPosition: entityData.position,
             });
             break;

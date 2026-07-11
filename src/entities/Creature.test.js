@@ -88,6 +88,25 @@ describe('Creature movement from consonance/dissonance', () => {
       expect(creature.position.x).toBeLessThan(originalX);
     }, 10000);
 
+    it('a lured creature parks at contact distance — it never enters the player', async () => {
+      // Overlapping bodies wedge the player unrecoverably (every escape move
+      // still collides), so creatures collide with the player symmetrically.
+      ctx.loadPuzzle('creature-consonance');
+
+      const creature = ctx.getCreatures()[0];
+      // Start the creature just two units from the player (player at 15,15)
+      creature.position.x = 17;
+      creature.position.z = 15;
+
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 800);
+
+      const player = ctx.getPlayerPosition();
+      const dist = Math.hypot(creature.position.x - player.x, creature.position.z - player.z);
+      // Creature radius 0.9 + player collision radius 0.4 = 1.3 contact
+      expect(dist).toBeGreaterThanOrEqual(1.25);
+    }, 10000);
+
     it('moves toward player when player plays consonant interval (minor 3rd)', async () => {
       ctx.loadPuzzle('creature-consonance');
 

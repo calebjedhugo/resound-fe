@@ -156,7 +156,8 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 |----------|-------|---------|
 | Recording range | `audibleRange × 0.5` | RecordingManager tests |
 | Note quantization | 16th notes | Recording tests |
-| Beat tolerance | 50ms | Playback tests |
+| Playback late grace | 0.1 beats (tempo-relative) | Playback tests |
+| Playback chaining | queues on the song's largest-unit boundary | Playback tests |
 | Clap range | 7.5 units | ClapManager tests |
 | Clap displacement | 1/16 note | ClapManager tests |
 

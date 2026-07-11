@@ -1,5 +1,8 @@
 import gameState from 'core/GameState';
 import RecordingManager from 'core/RecordingManager';
+import PlaybackManager from 'core/PlaybackManager';
+import Tape from 'core/Tape';
+import { onSlotFlash } from 'ui/slotFlash';
 
 /**
  * RecordingUI - Manages inventory and recording UI in bottom-right corner
@@ -34,6 +37,50 @@ class RecordingUI {
     this.createRecordingUI();
 
     document.body.appendChild(this.container);
+
+    // Wordless feedback channel (see ui/slotFlash.js): red = judged and
+    // failed, grey = nothing heard you / nothing there.
+    onSlotFlash((kind) => this.flashActiveSlot(kind));
+    this._seenJudgmentAt = 0;
+  }
+
+  /**
+   * Pulse the active slot: 'miss' (red — a performance was judged and
+   * failed) or 'silent' (grey — out of range / empty take / empty slot).
+   * Mirrors the green pop a landing recording gets.
+   */
+  flashActiveSlot(kind) {
+    const slot = this.inventorySlots[gameState.player.activeSlot];
+    if (!slot || !slot.animate) return;
+    const glow = kind === 'miss' ? 'rgba(255,40,40,0.95)' : 'rgba(170,170,170,0.8)';
+    slot.animate(
+      [
+        { transform: 'scale(1)' },
+        { transform: 'scale(0.85)', boxShadow: `0 0 16px ${glow}`, offset: 0.35 },
+        { transform: 'scale(1)' },
+      ],
+      { duration: 450 }
+    );
+  }
+
+  /**
+   * Red-flash the active slot when a listener judges a phrase as a MISMATCH
+   * during (or just after) the player's own playback — visible feedback
+   * that works while facing away from the target, fired at JUDGMENT time.
+   * Ambient creature noise being judged does not flash the slot.
+   */
+  watchJudgments() {
+    let newest = 0;
+    gameState.entities.forEach((e) => {
+      const r = e.lastPhraseResult;
+      if (r && !r.matched && r.at > newest) newest = r.at;
+    });
+    if (newest <= this._seenJudgmentAt) return;
+    this._seenJudgmentAt = newest;
+    const { lastPlaybackStartMs, lastPlaybackEndMs } = PlaybackManager;
+    if (newest >= lastPlaybackStartMs && newest <= lastPlaybackEndMs + 3000) {
+      this.flashActiveSlot('miss');
+    }
   }
 
   createInventoryUI() {
@@ -44,42 +91,69 @@ class RecordingUI {
       position: relative;
     `;
 
-    // Create 5 inventory slots
-    for (let i = 0; i < 5; i += 1) {
-      const slot = document.createElement('div');
-      slot.style.cssText = `
-        width: 50px;
-        height: 50px;
-        background: rgba(0, 0, 0, 0.8);
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 4px;
-        transition: all 0.2s;
-        position: relative;
-      `;
-      slot.dataset.index = i;
-
-      // Persistent note count for occupied slots (legible without toasts)
-      const countEl = document.createElement('div');
-      countEl.style.cssText = `
-        position: absolute;
-        bottom: 2px;
-        right: 4px;
-        font-size: 13px;
-        font-weight: bold;
-        color: rgba(255, 255, 255, 0.95);
-        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-        pointer-events: none;
-      `;
-      slot.appendChild(countEl);
-      slot.countEl = countEl;
-
-      this.inventorySlots.push(slot);
-      this.inventoryContainer.appendChild(slot);
-    }
-    this._slotIds = [null, null, null, null, null];
+    // The tape is dynamic: slots are created/removed to mirror the
+    // inventory array each frame (see syncSlotCount)
+    this._slotIds = [];
     this._micSlot = null; // Slot the mic overlay was last positioned over
 
     this.container.appendChild(this.inventoryContainer);
+    this.syncSlotCount();
+  }
+
+  /** Build one slot element. */
+  static createSlotElement(index) {
+    const slot = document.createElement('div');
+    slot.style.cssText = `
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 4px;
+      transition: border 0.2s, transform 0.2s, background 0.2s;
+      position: relative;
+    `;
+    slot.dataset.index = index;
+
+    // Persistent note count for occupied slots (legible without toasts)
+    const countEl = document.createElement('div');
+    countEl.style.cssText = `
+      position: absolute;
+      bottom: 2px;
+      right: 4px;
+      font-size: 13px;
+      font-weight: bold;
+      color: rgba(255, 255, 255, 0.95);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      pointer-events: none;
+    `;
+    slot.appendChild(countEl);
+    slot.countEl = countEl;
+    return slot;
+  }
+
+  /**
+   * Mirror the tape's length in the DOM: append elements as the tape grows,
+   * drop them (the remaining slots close ranks) as deletes complete.
+   */
+  syncSlotCount() {
+    const want = gameState.player.inventory.length;
+    while (this.inventorySlots.length < want) {
+      const slot = RecordingUI.createSlotElement(this.inventorySlots.length);
+      this.inventorySlots.push(slot);
+      this.inventoryContainer.appendChild(slot);
+      this._slotIds.push(null);
+      this._micSlot = null; // geometry changed — reposition the mic overlay
+    }
+    if (this.inventorySlots.length > want) {
+      while (this.inventorySlots.length > want) {
+        const slot = this.inventorySlots.pop();
+        slot.remove();
+        this._micSlot = null;
+      }
+      // A delete shifted the takes left — resync ids WITHOUT firing the
+      // "new recording landed" pop on every surviving slot
+      this._slotIds = gameState.player.inventory.map((s) => (s ? s.id : null));
+    }
   }
 
   createRecordingUI() {
@@ -168,14 +242,21 @@ class RecordingUI {
    * Call this every frame
    */
   update() {
+    this.syncSlotCount();
     this.updateInventory();
     this.updateRecording();
+    this.watchJudgments();
   }
 
   updateInventory() {
-    const { inventory, activeSlot } = gameState.player;
+    const { inventory, activeSlot, tapeDelete } = gameState.player;
 
     this.inventorySlots.forEach((slot, index) => {
+      // A held delete fades its slot toward gone (completion splices it out
+      // — see core/Tape.js); releasing early restores full opacity
+      const fading = tapeDelete && tapeDelete.index === index;
+      const opacity = fading ? String(1 - Tape.deleteProgress()) : '1';
+      if (slot.style.opacity !== opacity) slot.style.opacity = opacity;
       const isActive = index === activeSlot;
       const isOccupied = inventory[index] !== null;
       const isCapturing = isActive && RecordingManager.isRecording();
@@ -251,7 +332,7 @@ class RecordingUI {
       // Position mic overlay at upper-right corner of active slot.
       // offsetLeft/offsetTop force a layout pass, so only re-read them when
       // the active slot changes (slot geometry is otherwise static).
-      if (activeSlot !== this._micSlot) {
+      if (activeSlot !== this._micSlot && this.inventorySlots[activeSlot]) {
         const activeSlotElement = this.inventorySlots[activeSlot];
         const slotWidth = 50; // px
         const micSize = 32; // px

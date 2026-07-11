@@ -66,11 +66,11 @@ describe('Playing recorded songs', () => {
       expect(emitted[2].pitch).toBe('G4');
     });
 
-    it('plays from a non-default inventory slot', async () => {
+    it('plays a take from a later slot when earlier slots are empty', async () => {
       ctx.loadPuzzle('playback-basic');
       await ctx.tick(16);
 
-      // Set up song in slot 3
+      // Set up song in slot 3; slots 0-2 are empty (skipped, not silence)
       const song = [{ pitch: 'G4', length: '1/4' }];
       ctx.setInventorySlot(3, song);
       ctx.setActiveSlot(3);
@@ -118,8 +118,8 @@ describe('Playing recorded songs', () => {
     });
   });
 
-  describe('handling empty slots', () => {
-    it('handles playing an empty slot gracefully', async () => {
+  describe('handling an empty tape', () => {
+    it('handles playing an empty tape gracefully', async () => {
       ctx.loadPuzzle('playback-basic');
       await ctx.tick(16);
 
@@ -137,57 +137,73 @@ describe('Playing recorded songs', () => {
       const emitted = ctx.getEmittedNotes();
       expect(emitted).toHaveLength(0);
     });
-
-    it('does not play from wrong slot when active slot is empty', async () => {
-      ctx.loadPuzzle('playback-basic');
-      await ctx.tick(16);
-
-      // Set up song in slot 1, but active is slot 0 (empty)
-      const song = [{ pitch: 'C4', length: '1/4' }];
-      ctx.setInventorySlot(1, song);
-      ctx.setInventorySlot(0, null);
-      ctx.setActiveSlot(0);
-
-      ctx.clearEmittedNotes();
-
-      // Press space to play from empty slot 0
-      ctx.pressKey('space');
-      await ctx.advanceBeats(1);
-
-      // Assert: no notes emitted since slot 0 is empty
-      const emitted = ctx.getEmittedNotes();
-      expect(emitted).toHaveLength(0);
-    });
   });
 
-  describe('playback state', () => {
-    it('prevents overlapping playback when already playing', async () => {
+  describe('tape concatenation', () => {
+    it('plays every filled slot in order as ONE seamless song', async () => {
+      // The tape model (ruled 2026-07-11): Space performs the whole tape.
+      // Takes are stored dense, so concatenated onsets land exactly a note
+      // length apart across slot boundaries.
       ctx.loadPuzzle('playback-basic');
       await ctx.tick(16);
 
-      // Use a longer song to ensure playback is still active when second press occurs
-      const song = [
-        { pitch: 'C4', length: '1/1' }, // Whole note = 4 beats
-        { pitch: 'E4', length: '1/1' },
-        { pitch: 'G4', length: '1/1' },
-      ];
-      ctx.setInventorySlot(0, song);
+      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/1' }]); // 4 beats
+      ctx.setInventorySlot(1, [{ pitch: 'E4', length: '1/1' }]);
       ctx.setActiveSlot(0);
 
       ctx.clearEmittedNotes();
 
-      // Start first playback
       ctx.pressKey('space');
+      await ctx.advanceBeats(10);
 
-      // Try to start second playback immediately
-      ctx.pressKey('space');
-
-      // Wait for everything to complete (12 beats total)
-      await ctx.advanceBeats(13);
-
-      // Assert: only one playback occurred (3 notes, not 6)
+      // Both takes played in one performance; the second slot's onset lands
+      // exactly one whole note (4 beats) after the first, within matcher
+      // tolerance — no gap, no overlap.
       const emitted = ctx.getEmittedNotes();
-      expect(emitted).toHaveLength(3);
+      expect(emitted).toHaveLength(2);
+      expect(emitted[0].pitch).toBe('C4');
+      expect(emitted[1].pitch).toBe('E4');
+      const gap = emitted[1].capturedAtBeat - emitted[0].capturedAtBeat;
+      expect(Math.abs(gap - 4)).toBeLessThan(0.13);
+    });
+
+    it('skips empty slots without inserting silence', async () => {
+      ctx.loadPuzzle('playback-basic');
+      await ctx.tick(16);
+
+      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
+      ctx.setInventorySlot(1, null);
+      ctx.setInventorySlot(2, [{ pitch: 'G4', length: '1/4' }]);
+      ctx.setActiveSlot(0);
+
+      ctx.clearEmittedNotes();
+
+      ctx.pressKey('space');
+      await ctx.advanceBeats(4);
+
+      const emitted = ctx.getEmittedNotes();
+      expect(emitted).toHaveLength(2);
+      const gap = emitted[1].capturedAtBeat - emitted[0].capturedAtBeat;
+      expect(Math.abs(gap - 1)).toBeLessThan(0.13); // contiguous quarters
+    });
+
+    it('a Space during a playback is ignored — one performance at a time', async () => {
+      ctx.loadPuzzle('playback-basic');
+      await ctx.tick(16);
+
+      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/1' }]);
+      ctx.setActiveSlot(0);
+
+      ctx.clearEmittedNotes();
+
+      ctx.pressKey('space');
+      ctx.pressKey('space'); // ignored
+      ctx.pressKey('space'); // ignored
+
+      await ctx.advanceBeats(14);
+
+      const emitted = ctx.getEmittedNotes();
+      expect(emitted).toHaveLength(1);
     });
   });
 

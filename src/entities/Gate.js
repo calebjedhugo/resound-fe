@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import ListeningManager from 'core/ListeningManager';
 import evaluatePhrases from 'core/phraseMatching';
+import SongMatcher from 'core/SongMatcher';
 import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
 import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
@@ -12,12 +13,21 @@ class Gate extends Entity {
   // the longest target phrase at the slowest supported tempo)
   static CAPTURE_RETENTION_MS = 30000;
 
-  // How long the gate lingers open after a correct performance STOPS sounding,
-  // in beats — a short step-through grace. Gates are play-to-pass: they open
-  // AS the song is performed (not after) and hold while it keeps sounding;
-  // this grace only covers the moment between the last note and stepping
-  // through. They never latch, and the notation stays displayed forever.
-  static OPEN_GRACE_BEATS = 3;
+  // How long a COMPLETION keeps counting as "actively performed" when the
+  // player steps out, in beats. With a parked performer, in-progress and
+  // just-completed windows overlap into a continuous hold, so a door with a
+  // singer beside it never closes behind you — no knowledge of the
+  // performer's cycle needed (ruled 2026-07-10).
+  static HELD_AFTER_COMPLETION_BEATS = 3;
+
+  // While a correct performance is underway, the closed shell FADES from
+  // opaque to FULLY transparent in step with the song's own progress — a
+  // literal preview of the open state being earned, whose rate depends on
+  // the song's length (designer's call, 2026-07-10). The shell reaches
+  // full transparency as the song ends and the gate opens moments later
+  // (after the trailing-silence beat). A wrong note snaps it back to solid.
+  // This recovery rate governs only the snap-back / lapse easing.
+  static FADE_RECOVER_RATE_PER_S = 4;
 
   constructor(position, data = {}) {
     super('gate', position, data);
@@ -30,6 +40,9 @@ class Gate extends Entity {
     }
 
     this.requiredSong = data.song;
+    // The song's total span in beats drives the listening fade: the shell
+    // reaches full transparency exactly as the performance completes.
+    this._songBeats = SongMatcher.targetTimeline(data.song).totalBeats || 4;
     // Meter/key drive the notation's measure barlines (see NotationDisplay).
     this.timeSignature = data.timeSignature;
     this.keySignature = data.keySignature;
@@ -40,9 +53,18 @@ class Gate extends Entity {
     this.link = data.link || null;
     this.gridPosition = data.gridPosition || null;
     this.audibleRange = data.audibleRange || 15; // Same as creatures by default
-    this.isOpen = false;
-    this.occupiedOvertime = false;
-    this._openUntil = 0;
+    // A permanently-open face (see puzzles/schema.md "Gate Links"): passable
+    // forever, never closes — the unlocked side of a one-way door, or an
+    // escape hatch. Its partner face can still be song-locked.
+    this.alwaysOpen = Boolean(data.alwaysOpen);
+    this.isOpen = this.alwaysOpen;
+    // Arriving through this gate ends the demo: the crossing callback shows
+    // the "thanks for playing" overlay (see puzzles/schema.md "Gate Links").
+    this.ending = Boolean(data.ending);
+    this._lastCompletionMs = -Infinity;
+    this._inProgress = false;
+    this._fade = 0;
+    this._wasPlayerInside = false;
 
     // Listening state
     this.capturedNotes = [];
@@ -50,6 +72,7 @@ class Gate extends Entity {
 
     this.createMesh();
     this._createNotationDisplay();
+    if (this.alwaysOpen) this._applyLook();
 
     // Register with ListeningManager
     ListeningManager.registerListener(this);
@@ -109,12 +132,17 @@ class Gate extends Entity {
   }
 
   /**
-   * Update gate state. Gates open AS their song is performed: a correct
-   * in-progress performance holds the gate open, completion refreshes the
-   * step-through grace, and the gate closes once no correct performance has
-   * sounded for OPEN_GRACE_BEATS.
+   * Update gate state (ruled 2026-07-10, superseding play-to-pass grace):
+   * a gate opens when its song has been performed TO COMPLETION, LATCHES
+   * open with no timer, and closes only when the player walks through it —
+   * unless a correct performance is still holding it (a parked performer's
+   * in-progress + just-completed windows chain into a continuous hold, so
+   * a door with a singer beside it stays open behind you). While closed, a
+   * correct performance in progress FADES the shell toward transparency
+   * (wordless "it hears you" — previewing the open state); a wrong note
+   * snaps it back to solid with the red flash.
    */
-  update(_deltaTime) {
+  update(deltaTime) {
     this._updateMismatchFlash();
 
     // Sliding window: forget notes older than the retention period. (A hard
@@ -134,29 +162,92 @@ class Gate extends Entity {
     // correct performance is underway, 'mismatch' = a wrong utterance ended.
     const result = this.capturedNotes.length > 0 ? evaluatePhrases(this) : false;
 
-    if (result === true || result === 'in-progress') {
-      // A correct performance is sounding — hold the gate open as it plays.
-      this._holdOpen();
-      if (result === true) {
-        // Whole song heard: consume it so the same notes don't re-open every
-        // frame forever. The grace lets the player finish stepping through.
-        this.capturedNotes = [];
-        this._trimHorizonMs = Date.now();
-        this._lastJudgedStartBeat = undefined;
-      }
+    this._inProgress = result === 'in-progress';
+    if (result === true) {
+      this._lastCompletionMs = Date.now();
+      // Consume the performance so the same notes don't re-open every frame.
+      this.capturedNotes = [];
+      this._trimHorizonMs = Date.now();
+      this._lastJudgedStartBeat = undefined;
+      // A fresh completion earns a fresh opening — any deferred close from a
+      // previous crossing is superseded.
+      this._closePending = false;
+      this.open();
     } else if (result === 'mismatch') {
+      // A wrong note snaps the gate back to solid (then the red flash lands)
+      this._fade = 0;
+      this._inProgressSinceMs = null;
+      this._applyLook();
       this._flashMismatch();
     }
 
-    if (this.isOpen && Date.now() > this._openUntil) {
-      if (this._playerInside()) {
-        // A door never closes on an occupant: it WAITS — solid from the
-        // outside, see-through from within — until they step out. (Free
-        // movement inside the doorway is part of the puzzle vocabulary.)
-        this.setOccupiedOvertime(true);
-      } else {
-        this.close();
+    this._updateFade(deltaTime);
+
+    // Close-on-exit for PLAIN (unlinked) gates: the player walking out of
+    // the cell consumes the opening — unless a performance is actively
+    // holding the door, in which case the close is DEFERRED until the hold
+    // lapses (a parked performer keeps the way open; a hold from the
+    // player's own just-finished performance must not leave the door open
+    // forever). Linked doors are consumed by PortalManager when the player
+    // steps out of the DESTINATION face (the origin face "exiting" is just
+    // the teleport, and a refused commit must not consume anything).
+    if (!this.link) {
+      const inside = this._playerInside();
+      if (this._wasPlayerInside && !inside && this.isOpen) {
+        if (this.isHeldByPerformance()) this._closePending = true;
+        else this.close();
       }
+      this._wasPlayerInside = inside;
+    }
+
+    // A consumed-but-held door closes as soon as nothing holds it anymore
+    // (and nobody is standing in it).
+    if (this._closePending && this.isOpen) {
+      if (!this.isHeldByPerformance() && !this._playerInside()) this.close();
+    }
+  }
+
+  /**
+   * Is a correct performance actively holding this face open? True while a
+   * correct rendition is underway or a completion just landed. A parked
+   * performer's cycles chain these windows continuously.
+   */
+  isHeldByPerformance() {
+    const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
+    const heldMs = Gate.HELD_AFTER_COMPLETION_BEATS * (60000 / tempo);
+    return this._inProgress || Date.now() - this._lastCompletionMs < heldMs;
+  }
+
+  /**
+   * While the gate is CLOSED and a correct performance is underway, the
+   * shell fades from opaque to FULLY transparent in step with the song's
+   * progress (opacity = fraction of the song still to come) — previewing
+   * the open state being earned. Anything else eases it back to solid.
+   * Wordless mid-performance feedback (the door "hears you").
+   */
+  _updateFade(deltaTime) {
+    if (!this.mesh || !this.mesh.material) return;
+    const m = this.mesh.material;
+    if (!this.isOpen && this._inProgress) {
+      if (!this._inProgressSinceMs) this._inProgressSinceMs = Date.now();
+      const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
+      const songMs = this._songBeats * (60000 / tempo);
+      const progress =
+        songMs > 0 ? Math.min(1, (Date.now() - this._inProgressSinceMs) / songMs) : 1;
+      if (progress !== this._fade) {
+        this._fade = progress;
+        m.transparent = true;
+        m.opacity = 1 - this._fade;
+        m.needsUpdate = true;
+      }
+      return;
+    }
+    this._inProgressSinceMs = null;
+    if (!this.isOpen && this._fade > 0) {
+      this._fade = Math.max(0, this._fade - Gate.FADE_RECOVER_RATE_PER_S * (deltaTime || 0.016));
+      m.transparent = this._fade > 0;
+      m.opacity = 1 - this._fade;
+      m.needsUpdate = true;
     }
   }
 
@@ -180,18 +271,6 @@ class Gate extends Entity {
     );
   }
 
-  /**
-   * Occupied overtime: the grace lapsed while the player stood inside, so
-   * the gate stays open FOR THEM but reads as closed to the world — solid
-   * orange from outside (front-face culling keeps it invisible from
-   * within), and CollisionDetector blocks every mover except the occupant.
-   */
-  setOccupiedOvertime(enabled) {
-    if (this.occupiedOvertime === Boolean(enabled)) return;
-    this.occupiedOvertime = Boolean(enabled);
-    this._applyLook();
-  }
-
   /** Brief red pulse when a completed phrase failed to match (wordless feedback). */
   _flashMismatch() {
     if (!this.mesh || !this.mesh.material) return;
@@ -211,55 +290,34 @@ class Gate extends Entity {
   }
 
   /**
-   * Refresh the open window and, if not already open, open the gate. Called
-   * every frame a correct performance is sounding, so the gate stays open
-   * throughout the performance and for OPEN_GRACE_BEATS after it stops.
+   * Latch the gate open. No timer: an open gate stays open until the player
+   * walks through it (close-on-exit in update) or close() is called.
    */
-  _holdOpen() {
-    const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
-    this._openUntil = Date.now() + Gate.OPEN_GRACE_BEATS * (60000 / tempo);
-    // Opened by a real performance (or open()): no longer a mirrored hold,
-    // and a fresh grace ends any occupied overtime (properly open again)
-    this._mirrorHeld = false;
-    this.setOccupiedOvertime(false);
+  open() {
+    this._fade = 0;
     if (this.isOpen) return;
     this.isOpen = true;
     this._applyLook();
   }
 
-  /** Public alias: force the gate open for the grace (tests / scripting). */
-  open() {
-    this._holdOpen();
-  }
-
   /**
-   * A linked gate pair is ONE door with two faces: while the partner face is
-   * held open by a performance, PortalManager holds this face open too.
-   * Mirrored holds are tracked so they stop refreshing the moment the
-   * partner's own performance lapses (each face then closes on its own
-   * grace) — otherwise two faces would keep each other open forever.
+   * The opening was consumed (the player walked through) or the level reset:
+   * solid again, awaiting a fresh performance. A permanently-open face
+   * (alwaysOpen) never closes.
    */
-  holdOpenMirrored() {
-    this._holdOpen();
-    this._mirrorHeld = true;
-  }
-
-  /** Is this face open by its OWN performance (not a mirrored hold)? */
-  isSelfOpen() {
-    return this.isOpen && !this._mirrorHeld;
-  }
-
-  /** Grace expired (or reset): solid again, awaiting a fresh performance. */
   close() {
+    if (this.alwaysOpen) return;
     this.isOpen = false;
-    this._openUntil = 0;
-    this._mirrorHeld = false;
-    this.occupiedOvertime = false;
+    this._closePending = false;
     // A fresh crossing needs a fresh performance: drop notes heard during the
     // open window and cancel any pending mismatch flash.
     this.capturedNotes = [];
     this._trimHorizonMs = Date.now();
     this._lastJudgedStartBeat = undefined;
+    this._lastCompletionMs = -Infinity;
+    this._inProgress = false;
+    this._fade = 0;
+    this._inProgressSinceMs = null;
     this._mismatchFlashUntil = null;
     this._applyLook();
   }
@@ -280,13 +338,11 @@ class Gate extends Entity {
   /** Paint the gate for its current open/closed state (color + transparency). */
   _applyLook() {
     const m = this.mesh.material;
-    if (this.isOpen && !this.occupiedOvertime) {
+    if (this.isOpen) {
       m.color.setHex(0x00ff00); // green + semi-transparent when open
       m.transparent = true;
       m.opacity = this._doorLook ? 0 : 0.3; // a working door has no shell
     } else {
-      // Closed — or in occupied overtime, which LOOKS closed from outside
-      // (front-face culling leaves the walls invisible from within)
       m.color.setHex(0xffaa00);
       m.transparent = false;
       m.opacity = 1;
@@ -297,7 +353,7 @@ class Gate extends Entity {
 
   _applyStateEmissive() {
     const m = this.mesh.material;
-    if (this.isOpen && !this.occupiedOvertime) {
+    if (this.isOpen) {
       m.emissive.setHex(0x003300);
       m.emissiveIntensity = 0.5;
     } else {

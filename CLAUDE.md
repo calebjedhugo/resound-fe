@@ -93,20 +93,29 @@ instead of "fixing" it.
 ### Musical Timing
 - **NEVER use `Date.now()` or `performance.now()` for music** - always use MusicalClock
 - Quantization happens to nearest 16th note
-- 50ms beat tolerance for playback matching
+- Playback: Space performs the WHOLE tape (all filled slots, concatenated
+  seamlessly — takes are stored dense); solo starts snap to the beat grid
+  (late grace is `PLAYBACK_LATE_GRACE_BEATS`, tempo-relative); Space
+  during a playback is ignored (one performance at a time)
+- Matching tolerates sounds OUTSIDE the aligned window (a door opens when
+  its song occurs cleanly anywhere in the performance) but a foreign note
+  INSIDE it corrupts — see DESIGN.md "Matching" (ruled 2026-07-11)
 
 ### Creatures
-- Only move during rest beats (not while singing)
+- Harmony forces apply only WHILE the creature is singing and another note
+  sounds within the creature's OWN audibleRange (the listener's range, not
+  the source's — unlike gate/recording audibility)
 - Perfect intervals (unison, octave) don't affect movement
 - **`interval` = beats between song STARTS**, not the rest gap — it must
   exceed the song's length or the creature sings continuously (and never
   moves, and clean recording takes become nearly impossible)
 
 ### Gates & elevation
-- **Gates are play-to-pass**: `gate.open()` holds `isOpen` for a short grace
-  then `close()`s; the notation never hides. No permanent `isActivated` on
-  gates (fountains still latch). Collision/hints/miss-reporting key off
-  `isOpen`. See DESIGN.md.
+- **Gates LATCH**: they open on the COMPLETED song, stay open with NO timer,
+  and close when the player walks through (`Gate.update` for plain gates;
+  `PortalManager` consumes linked crossings). The notation never hides. No
+  permanent `isActivated` on gates (fountains still latch). Collision/hints
+  key off `isOpen`. See DESIGN.md.
 - **Gates can link across puzzles (portals)**: `link: {puzzleId, gateId}` on
   a gate makes it a door — walking into it while OPEN swaps to the linked
   puzzle (`core/PortalManager.js`; recordings persist). A link may target a
@@ -144,11 +153,25 @@ instead of "fixing" it.
   built-in constraint checker: `node puzzles/gen-awakening.js
   public/puzzles/awakening.json`). Edit the generator + rerun; don't hand-edit
   `public/puzzles/awakening.json`.
+- **The POC world (`poc-*`, 10 portal-linked areas, the boot entry) is
+  generated** by `puzzles/gen-poc.js` (480+-assert checker; writes all ten
+  JSONs + their bidirectional door links): `node puzzles/gen-poc.js`.
+  Don't hand-edit the `poc-*.json` files. STRICT element economy: every
+  door's (pitch, length) elements are first recordable in the door's own
+  area (no skip-guard exemptions); the Twinkle finale is quarter notes,
+  which exist only in area X. Ends with the `ending: true` finale portal
+  into area I (thanks-for-playing overlay). See DESIGN.md "Onboarding".
+- **Gates open on the COMPLETED song, LATCH open (no timer), and close when
+  the player walks through** — a correct in-progress performance only FADES
+  the shell toward (bounded) transparency, never opens it; a parked
+  performer's completions keep a door open behind you; `alwaysOpen: true`
+  marks a permanently-open face (one-way doors). See DESIGN.md; don't "fix"
+  a door that ignores a correct first note or one that "won't close".
 
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +
   `core/HintMemory.js`, retire-once, localStorage `resound-hints`)
-- Game boots into the FIRST manifest puzzle (`awakening`), not the menu;
+- Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
 - `ui/StartGate.js` freezes the world per level start until a key/click
 - Dev-only `window.__resoundDebug` exposes `camera` + `syncCameraToPlayer`
@@ -158,9 +181,14 @@ instead of "fixing" it.
 - All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model
 - **When engraving looks wrong**: fix it in `resound-notation`, publish a new version, then bump this repo's dependency and `npm install`. Do **not** hand-copy `dist/` into `node_modules` (see `src/editor/CLAUDE.md`)
 
-### Recording
+### Recording & the tape
 - Can only record within creature's `audibleRange × 0.5`
-- 5-slot limit (keys 1–5 or ←/→ to select)
+- The inventory is a growable TAPE (`core/Tape.js`, cap `TAPE_SLOT_CAP`):
+  ←/→ move the cursor (→ on a filled last slot appends), R records into
+  the cursor slot IN PLACE, holding Backspace/Delete removes the cursor
+  slot after a 2s fade (release cancels; must release between deletes).
+  Digit keys are gone. Delete can strand a player in a creature-free
+  pocket — gen-poc.js asserts every pocket is escapable from an empty tape
 
 ---
 
@@ -172,4 +200,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-07-09 — Door crossings commit ON ENTRY (see DESIGN.md "Gate links / portals")*
+*Last Updated: 2026-07-11 — Tape model (Space plays all slots, hold-to-delete), windowed matching, Twinkle finale + ending overlay*

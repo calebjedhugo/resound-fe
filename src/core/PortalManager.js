@@ -47,6 +47,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   PLAYER_SIZE,
   DOORWAY_COMMIT_DEPTH,
+  PLAYER_COLLISION_RADIUS,
 } from 'core/constants';
 import { FACING_VECTORS, OPPOSITE_FACING, DOORWAY_OFFSET, PANEL_EPSILON } from 'core/portalMath';
 import { getDistance } from 'core/utils';
@@ -84,8 +85,10 @@ class PortalManager {
   /**
    * @param {THREE.Scene} mainScene - the render scene; the ACTIVE area's
    *   content group lives here (a neighbor's lives in its own Area.scene)
-   * @param {(puzzleData: object) => void} [onCrossed] - notified after a
-   *   crossing completes (UI refresh hooks)
+   * @param {(puzzleData: object, arrivalGate: Gate) => void} [onCrossed] -
+   *   notified after a crossing completes with the destination puzzle and
+   *   the gate the player arrived AT (UI refresh hooks; an `ending` arrival
+   *   gate triggers the thanks-for-playing overlay)
    */
   initialize(mainScene, onCrossed) {
     this._mainScene = mainScene;
@@ -188,9 +191,17 @@ class PortalManager {
 
     if (this._insideDoor) {
       // Occupying a doorway cell (normally the destination face after a
-      // swap): roam freely; re-arm once fully out
-      if (this._playerInCell(this._insideDoor.gate)) return;
+      // swap): roam freely; re-arm once fully out. Stepping out of a
+      // CROSSED door consumes its opening (close-on-exit, ruled
+      // 2026-07-10) — unless a performance is holding it, or the player
+      // merely backed out of a refused commit (no crossing happened).
+      // The exit check includes the player's BODY (negative inset): closing
+      // while their radius still overlaps the box would wedge them against
+      // the newly solid face.
+      if (this._playerInCell(this._insideDoor.gate, -PLAYER_COLLISION_RADIUS - 0.05)) return;
+      const { gate, crossed } = this._insideDoor;
       this._insideDoor = null;
+      if (crossed) this._closeUsedDoor(gate);
       return;
     }
 
@@ -223,7 +234,11 @@ class PortalManager {
     for (const gate of this._linkedGates) {
       const faces = this._views.get(gate);
       if (faces === null) continue; // eslint-disable-line no-continue -- dangling link: ordinary gate
-      if (!gate.isOpen) {
+      // Render the destination while the door is open OR while a correct
+      // performance is fading the shell: the other side materializes
+      // THROUGH the dissolving door (the fade previews the real reward,
+      // not the dead space behind the gate box).
+      if (!gate.isOpen && !(gate._fade > 0)) {
         this._hideGateViews(gate);
         continue; // eslint-disable-line no-continue
       }
@@ -435,24 +450,41 @@ class PortalManager {
   }
 
   /**
-   * One door, two faces: while either face of a linked pair is held open by
-   * its own performance, hold the partner face open too. Mirrored holds are
-   * flagged so they lapse with the performance (see Gate.holdOpenMirrored).
+   * One door, two faces: gates latch open on a completed song and close
+   * when the player walks through, so mirroring propagates the CHANGE a
+   * face made this frame — a completion on either side opens both faces, a
+   * consumed crossing closes both. A pair containing a permanently-open
+   * face (alwaysOpen) is deliberately NOT mirrored: that is the one-way
+   * door mechanic — each face keeps its own openness.
    */
   _mirrorDoorPairs() {
     for (const door of this._doors) {
-      const aSelf = door.gateA.isSelfOpen();
-      const bSelf = door.gateB.isSelfOpen();
-      // One door: the mirrored face follows the self-held face's open state
-      // AND its occupied overtime — while an occupant keeps one face from
-      // closing, BOTH faces read as solid-from-outside to the world
-      if (aSelf && !bSelf) {
-        door.gateB.holdOpenMirrored();
-        door.gateB.setOccupiedOvertime(door.gateA.occupiedOvertime);
-      } else if (bSelf && !aSelf) {
-        door.gateA.holdOpenMirrored();
-        door.gateA.setOccupiedOvertime(door.gateB.occupiedOvertime);
+      const { gateA, gateB } = door;
+      if (gateA.alwaysOpen || gateB.alwaysOpen) {
+        door._prevOpenA = gateA.isOpen;
+        door._prevOpenB = gateB.isOpen;
+        continue; // eslint-disable-line no-continue -- one-way door: faces are independent
       }
+      const aChanged = gateA.isOpen !== (door._prevOpenA ?? gateA.isOpen);
+      const bChanged = gateB.isOpen !== (door._prevOpenB ?? gateB.isOpen);
+      if (gateA.isOpen !== gateB.isOpen) {
+        if (aChanged && !bChanged) {
+          if (gateA.isOpen) gateB.open();
+          else gateB.close();
+        } else if (bChanged && !aChanged) {
+          if (gateB.isOpen) gateA.open();
+          else gateA.close();
+        } else if (gateA.isOpen) {
+          // Both changed at once, or a steady-state disagreement (e.g. a
+          // face opened before its partner's area loaded): open wins — one
+          // door, two faces.
+          gateB.open();
+        } else {
+          gateA.open();
+        }
+      }
+      door._prevOpenA = gateA.isOpen;
+      door._prevOpenB = gateB.isOpen;
     }
   }
 
@@ -666,15 +698,25 @@ class PortalManager {
     if (!this._anyExitClear(neighbor, partner)) {
       // Never teleport into a trap (authoring error): occupy the cell
       // without committing so entry doesn't retry every frame; re-arms
-      // when the player steps back out.
-      this._insideDoor = { gate };
+      // when the player steps back out. No crossing happened, so backing
+      // out must NOT consume the opening.
+      this._insideDoor = { gate, crossed: false };
       this._transitioning = false;
       return;
     }
 
+    // Preserve the player's offset within the doorway cell — but CLAMP it so
+    // their body lands fully inside the destination cell. The commit fires
+    // with the body's trailing edge still poking out of the cell
+    // (commit depth 0.3 < collision radius 0.4); if a wall sits flush behind
+    // the partner (e.g. a door on a grid-edge row against the perimeter),
+    // an unclamped offset wedges the player into it — and the per-frame walk
+    // step is smaller than the overlap, so they can never escape.
+    const maxOffset = WORLD_SCALE / 2 - PLAYER_COLLISION_RADIUS - 0.05;
+    const clamp = (v) => Math.max(-maxOffset, Math.min(maxOffset, v));
     const offset = {
-      x: gameState.player.position.x - gate.position.x,
-      z: gameState.player.position.z - gate.position.z,
+      x: clamp(gameState.player.position.x - gate.position.x),
+      z: clamp(gameState.player.position.z - gate.position.z),
     };
 
     this._setActiveArea(neighbor);
@@ -689,9 +731,37 @@ class PortalManager {
 
     this._afterActiveChange();
     // The player now occupies the DESTINATION face; crossing re-arms once
-    // they walk fully out of its cell
-    this._insideDoor = { gate: partner };
-    if (this._onCrossed) this._onCrossed(neighbor.puzzle);
+    // they walk fully out of its cell, which consumes the opening
+    this._insideDoor = { gate: partner, crossed: true };
+    // Callback gets the destination puzzle AND the arrival gate — an
+    // `ending: true` arrival gate triggers the thanks-for-playing overlay
+    if (this._onCrossed) this._onCrossed(neighbor.puzzle, partner);
+  }
+
+  /**
+   * A crossing was consumed (the player walked out of the destination face):
+   * close BOTH faces of the door — unless either face is still held open by
+   * a performance (a parked performer keeps the way back open), or a face is
+   * permanently open (alwaysOpen faces never close).
+   */
+  _closeUsedDoor(gate) {
+    const door = this._doors.find((d) => d.gateA === gate || d.gateB === gate);
+    if (!door) {
+      if (gate.isHeldByPerformance()) gate._closePending = true;
+      else gate.close();
+      return;
+    }
+    if (door.gateA.isHeldByPerformance() || door.gateB.isHeldByPerformance()) {
+      // Consumed but held (e.g. a parked performer): defer — each face
+      // closes itself once nothing holds it anymore.
+      door.gateA._closePending = true;
+      door.gateB._closePending = true;
+      return;
+    }
+    door.gateA.close();
+    door.gateB.close();
+    door._prevOpenA = door.gateA.isOpen;
+    door._prevOpenB = door.gateB.isOpen;
   }
 
   /** True if at least one side of the partner gate is open floor to walk out. */

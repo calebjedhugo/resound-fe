@@ -1,10 +1,13 @@
 /**
  * Anchored rhythm matching tests
  *
- * Design rulings under test (DESIGN.md): a performance must BE the target —
- * rotated fails, over-long fails, prefixes can't match early; stale sounds
- * don't interfere; rests in the target are matchable as required silence;
- * polyphonic (chord / multi-voice) targets keep their rhythm.
+ * Design rulings under test (DESIGN.md, 2026-07-11): the gate must hear its
+ * song EXACTLY, and how that happens does not matter — a target embedded in
+ * a longer performance matches, sounds before/after the window are ignored,
+ * and completion fires the moment the target's span elapses. What fails:
+ * rotated takes, prefixes, and any foreign note INSIDE the aligned window
+ * (in-window exclusivity is the jam mechanic). Rests in the target are
+ * matchable as required silence; polyphonic targets keep their rhythm.
  */
 import gameState from 'core/GameState';
 import SongMatcher from 'core/SongMatcher';
@@ -105,30 +108,38 @@ describe('SongMatcher.targetTimeline', () => {
 });
 
 describe('evaluatePhrases — exact anchored matching', () => {
-  it('matches a clean take once trailing silence has elapsed', () => {
+  it('matches a clean take', () => {
     const listener = makeListener({
       notes: [
         [0, 'B4'],
         [1, 'C#5'],
         [2, 'G#4'],
       ],
-      nowBeats: 5, // end (3) + gap (1) < 5
+      nowBeats: 5,
     });
     expect(evaluatePhrases(listener)).toBe(true);
   });
 
-  it('does not COMPLETE a take early, but reports it in-progress (prefix before silence)', () => {
-    // All three notes have landed but the trailing silence has not elapsed:
-    // not a completed match (never returns true early), yet a correct
-    // performance IS underway — reported as 'in-progress' so play-to-pass
-    // gates open as the song is performed.
+  it('completes the moment the last note ends — no trailing silence required', () => {
     const listener = makeListener({
       notes: [
         [0, 'B4'],
         [1, 'C#5'],
         [2, 'G#4'],
       ],
-      nowBeats: 3.5, // window not closed yet
+      nowBeats: 3.1, // just past the target's own span (3 beats)
+    });
+    expect(evaluatePhrases(listener)).toBe(true);
+  });
+
+  it('reports the take in-progress while its final note still sounds', () => {
+    const listener = makeListener({
+      notes: [
+        [0, 'B4'],
+        [1, 'C#5'],
+        [2, 'G#4'],
+      ],
+      nowBeats: 2.5, // window not closed yet
     });
     expect(evaluatePhrases(listener)).toBe('in-progress');
   });
@@ -155,7 +166,7 @@ describe('evaluatePhrases — exact anchored matching', () => {
     expect(evaluatePhrases(listener)).toBe('mismatch');
   });
 
-  it('rejects an over-long take (two passes back-to-back)', () => {
+  it('matches an over-long take: the target occurred, the surplus is ignored (superseded 2026-07-11)', () => {
     const listener = makeListener({
       notes: [
         [0, 'B4'],
@@ -167,7 +178,7 @@ describe('evaluatePhrases — exact anchored matching', () => {
       ],
       nowBeats: 9,
     });
-    expect(evaluatePhrases(listener)).toBe('mismatch');
+    expect(evaluatePhrases(listener)).toBe(true);
   });
 
   it('ignores stale earlier sounds separated by silence', () => {
@@ -185,12 +196,41 @@ describe('evaluatePhrases — exact anchored matching', () => {
     expect(evaluatePhrases(listener)).toBe(true);
   });
 
-  it('rejects when an extra note sits in the leading silence margin', () => {
+  it('matches a target embedded in a longer performance (notes right before AND after)', () => {
+    // The tape model: the whole tape plays, and a door whose song occurs
+    // cleanly anywhere within it opens. No leading or trailing margins.
     const listener = makeListener({
       notes: [
-        [-0.5, 'D4'], // inside the 1-beat leading margin
+        [-1, 'D4'],
         [0, 'B4'],
         [1, 'C#5'],
+        [2, 'G#4'],
+        [3, 'E4'], // immediately after the window — sequential surplus
+      ],
+      nowBeats: 6,
+    });
+    expect(evaluatePhrases(listener)).toBe(true);
+  });
+
+  it('rejects a foreign note DURING the window (in-window exclusivity: the jam)', () => {
+    const listener = makeListener({
+      notes: [
+        [0, 'B4'],
+        [0.5, 'D4'], // sounds between the target's onsets
+        [1, 'C#5'],
+        [2, 'G#4'],
+      ],
+      nowBeats: 6,
+    });
+    expect(evaluatePhrases(listener)).toBe('mismatch');
+  });
+
+  it('rejects a foreign note colliding with a target onset (chord where a note is due)', () => {
+    const listener = makeListener({
+      notes: [
+        [0, 'B4'],
+        [1, 'C#5'],
+        [1, 'D4'], // same grid slot as a due single note
         [2, 'G#4'],
       ],
       nowBeats: 6,
@@ -226,11 +266,11 @@ describe('evaluatePhrases — exact anchored matching', () => {
 });
 
 describe('evaluatePhrases — trim horizon (forgotten notes are not silence)', () => {
-  it('does not match a remnant whose leading silence was manufactured by trimming', () => {
-    // Regression (R6 blocker): an over-long take trimmed by the retention
-    // window once left a cycle-aligned 3-note remnant; the trimmed history
-    // read as clean leading silence and the fountain "matched" a phrase the
-    // player never performed.
+  it('an anchor at or before the trim horizon is unjudgeable (a trimmed window could hide corruption)', () => {
+    // Notes inside the aligned window that were trimmed away are unknowable
+    // — a window whose anchor predates remembered history must never read
+    // as clean. (Leading history no longer matters — margins are gone — but
+    // the window itself must be fully remembered.)
     const listener = makeListener({
       notes: [
         [0, 'B4'],
@@ -239,9 +279,8 @@ describe('evaluatePhrases — trim horizon (forgotten notes are not silence)', (
       ],
       nowBeats: 6,
     });
-    // Notes up to beat -0.5 were trimmed away — the anchor's leading margin
-    // reaches into unknowable history
-    listener._trimHorizonMs = listener.listeningStartTime + -0.5 * MS_PER_BEAT;
+    // Memory begins just AFTER the anchor — the window's start is unknowable
+    listener._trimHorizonMs = listener.listeningStartTime + 0.2 * MS_PER_BEAT;
     expect(evaluatePhrases(listener)).not.toBe(true);
   });
 

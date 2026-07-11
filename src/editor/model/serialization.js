@@ -98,6 +98,11 @@ function serializeEntity(entity) {
           gateId: entity.data.link.gateId,
         };
       }
+      // Permanently-open face (one-way doors / escape hatches): preserved
+      // through the editor round-trip.
+      if (entity.data.alwaysOpen) gateResult.alwaysOpen = true;
+      // Demo-ending arrival gate (thanks-for-playing overlay): preserved too.
+      if (entity.data.ending) gateResult.ending = true;
       if (entity.data.staffGroups && entity.data.staffGroups.length > 0) {
         gateResult.staffGroups = entity.data.staffGroups;
       }
@@ -247,6 +252,8 @@ function deserializeEntity(model, entity) {
       if (entity.link && entity.link.puzzleId && entity.link.gateId) {
         gateData.link = { puzzleId: entity.link.puzzleId, gateId: entity.link.gateId };
       }
+      if (entity.alwaysOpen) gateData.alwaysOpen = true;
+      if (entity.ending) gateData.ending = true;
       if (entity.staffGroups) {
         gateData.staffGroups = entity.staffGroups;
       }

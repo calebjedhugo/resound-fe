@@ -15,9 +15,11 @@ import KeyHints from 'ui/KeyHints';
 import CameraModeBadge from 'ui/CameraModeBadge';
 import PauseMenu from 'ui/PauseMenu';
 import RecordingUI from 'ui/RecordingUI';
+import EndingOverlay from 'ui/EndingOverlay';
 import DebugUI from 'ui/DebugUI';
 import ClapVisual from 'ui/ClapVisual';
 import ClapManager from 'core/ClapManager';
+import Tape from 'core/Tape';
 import PlaybackManager from 'core/PlaybackManager';
 import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
@@ -46,6 +48,7 @@ const clapVisual = new ClapVisual(scene);
 const startGate = new StartGate();
 const keyHints = new KeyHints(scene);
 const cameraModeBadge = new CameraModeBadge();
+const endingOverlay = new EndingOverlay();
 
 // Set up clap visual callback
 ClapManager.setVisualCallback((position, range) => {
@@ -53,8 +56,12 @@ ClapManager.setVisualCallback((position, range) => {
 });
 
 // The world orchestrator: owns the active area + live neighbor areas; the
-// active area's content group is parented into this render scene
-PortalManager.initialize(scene);
+// active area's content group is parented into this render scene.
+// Arriving through an `ending: true` gate (the finale portal back into
+// area I) rolls the demo's closing card.
+PortalManager.initialize(scene, (puzzle, arrivalGate) => {
+  if (arrivalGate && arrivalGate.ending) endingOverlay.show();
+});
 
 // State machine
 const stateMachine = new StateMachine(gameState);
@@ -97,7 +104,10 @@ function exitToMenu() {
   gameState.reset();
   clapVisual.clear();
   ClapManager.reset();
+  PlaybackManager.reset();
+  Tape.reset();
   startGate.hide();
+  endingOverlay.hide();
   keyHints.hideAll();
   cameraModeBadge.update(gameState);
   stateMachine.setState('MENU');
@@ -140,6 +150,7 @@ function update(deltaTime) {
     // Crossing an open linked gate hands the world to the neighbor puzzle
     PortalManager.update();
     clapVisual.update();
+    Tape.update();
     recordingUI.update();
     keyHints.update(deltaTime);
     debugUI.update();
