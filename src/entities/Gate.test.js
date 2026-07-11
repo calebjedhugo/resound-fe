@@ -165,6 +165,34 @@ describe('Gate completion commit + listening fade', () => {
     expect(gate.isOpen).toBe(true);
   });
 
+  it('the fade RESUMES from its current level after a momentary judgment gap (no opaque snap)', () => {
+    // Between the notes of a multi-note take, judgment can drop in-progress
+    // for a frame or two. The recover easing may nibble at the fade, but the
+    // shell must never snap back to opaque and restart the fade from zero.
+    const song = [
+      { pitch: 'E4', length: '1/1' },
+      { pitch: 'G4', length: '1/1' },
+    ];
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+    const t0 = Date.now() - 2 * MS_PER_BEAT;
+    gate.listeningStartTime = t0;
+    gate.capturedNotes.push(heard('E4', t0, gate));
+    gate.update(0.016);
+    gate._inProgressSinceMs = Date.now() - 4 * MS_PER_BEAT; // half the 8-beat song
+    gate.update(0.016);
+    const midFade = 1 - gate.mesh.material.opacity;
+    expect(midFade).toBeGreaterThan(0.4);
+
+    // One frame of not-in-progress (simulated judgment gap), then resume
+    gate._inProgress = false;
+    gate._inProgressSinceMs = null;
+    gate._updateFade(0.016);
+    gate._inProgress = true;
+    gate._updateFade(0.016);
+
+    expect(1 - gate.mesh.material.opacity).toBeGreaterThan(midFade - 0.15);
+  });
+
   it('a two-note gate stays CLOSED on a valid one-note prefix', () => {
     const song = [
       { pitch: 'E4', length: '1/1' },

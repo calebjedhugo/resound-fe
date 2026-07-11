@@ -311,21 +311,22 @@ describe('PortalManager see-through rendering', () => {
     expect(Math.abs(surface.position.z)).toBeLessThan(WORLD_SCALE / 2);
   });
 
-  it('the pass clips at the WINDOW: near-side content never paints into a view', () => {
+  it('the pass clips ONE CELL behind the window: the arrival cell paints, deeper near-side content never does', () => {
     gate.open();
 
     PortalManager.renderPortals(renderer, camera);
 
     // North approach: window on the partner's south plane (south-door is at
-    // grid (5,7) -> world z 21; window at 21 + 1.49). Only content BEYOND
-    // the window paints — the shared doorway room and everything flanking
-    // the door belong to the viewer's own world (a clip through the middle
-    // of the room once sliced a creature standing near the door in half).
+    // grid (5,7) -> world z 21; window at 21 + 1.49), pulled back one cell
+    // (+0.1 for the notation planes) so the partner's OWN doorway cell —
+    // floor, frame walls, staff — paints into the view (clipping exactly at
+    // the window left a black wedge at every threshold). Content deeper on
+    // the eye side still clips (double world / sliced-creature hazard).
     const [plane] = renderer.renderCalls[0].clipping;
     expect(plane.normal.x).toBeCloseTo(0);
     expect(plane.normal.z).toBeCloseTo(1); // partner outward: south
-    // Plane passes through z = 22.49: normal·p + constant = 0
-    expect(plane.constant).toBeCloseTo(-(7 * WORLD_SCALE + 1.49));
+    // Plane passes through z = 22.49 - 3.1: normal·p + constant = 0
+    expect(plane.constant).toBeCloseTo(-(7 * WORLD_SCALE + 1.49 - (WORLD_SCALE + 0.1)));
   });
 
   it('closing the gate hides the doorway and stops paying for the pass', () => {
@@ -781,7 +782,42 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(visible.some((c) => c.position.z < 0 && c.position.x === 0)).toBe(true);
   });
 
-  it('a working open door shows no green shell; unlinked gates keep theirs', () => {
+  it('no portal surface of EITHER end paints into a same-area view pass (no hall of mirrors)', async () => {
+    // A same-area view renders the MAIN scene — which contains both ends of
+    // the door, each carrying its own textured view surfaces. Any of them
+    // left visible during a pass paints last frame's texture into this one
+    // (the "display got weird" hall-of-mirrors).
+    const surfaceStates = [];
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {
+        for (const g of [doorA, doorB]) {
+          for (const child of g.mesh.children) {
+            if (child._isPortalSurface) surfaceStates.push(child.visible);
+          }
+        }
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorA.open();
+    await ctx.tick(16); // mirror door-b open
+
+    // Stand where BOTH doors' views are live at once (between them)
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 5 * WORLD_SCALE },
+    });
+
+    expect(surfaceStates.length).toBeGreaterThan(0);
+    expect(surfaceStates.every((v) => v === false)).toBe(true);
+    // Restored after the passes: the surfaces still show to the player
+    const anyVisible = [...doorA.mesh.children, ...doorB.mesh.children].some(
+      (c) => c._isPortalSurface && c.visible
+    );
+    expect(anyVisible).toBe(true);
+  });
+
+  it('EVERY open gate sheds its shell — linked doors and plain gates alike (ruled 2026-07-11)', () => {
     const renderer = {
       clippingPlanes: [],
       renderCalls: [],
@@ -802,11 +838,200 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
 
     // The linked door's box vanishes — only its doorway views show
     expect(doorA.mesh.material.opacity).toBe(0);
-    // An ordinary gate stays green + semi-transparent
-    expect(unlinked.mesh.material.opacity).toBeCloseTo(0.3);
+    // A plain open gate is just as transparent: no green tint (transparency
+    // IS the game's vocabulary for "open"); the notation stays.
+    expect(unlinked.mesh.material.opacity).toBe(0);
     // Closing restores the solid closed look
     doorA.close();
     expect(doorA.mesh.material.opacity).toBe(1);
+  });
+});
+
+describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () => {
+  // A sound within source-range of EITHER face corrupts (and can complete)
+  // the door's matching, with NO leak penalty between the two faces of the
+  // same door. This is what makes a jam un-bypassable from the far side:
+  // the jammer beside one face jams the door, not just the face.
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  /** live-b with its singer moved/tuned per test. */
+  function loadWithSinger({ position, song, interval, audibleRange }) {
+    const liveB = JSON.parse(JSON.stringify(portalLiveB));
+    const singer = liveB.entities.find((e) => e.type === 'creature');
+    singer.position = position;
+    singer.data.song = song;
+    singer.data.interval = interval;
+    singer.data.audibleRange = audibleRange;
+    installFetchMock({ 'portal-live-b': liveB });
+    ctx.loadPuzzle('portal-live-a');
+  }
+
+  it('a note in range of the FAR face reaches the near face with no leak penalty', async () => {
+    // Singer 12 units from door-b, range 15: in range of door-b, but the old
+    // leak route to door-a cost 12 + 6 = 18 > 15 — the corruption never
+    // crossed the seam, so the jammed door opened from the far side.
+    loadWithSinger({
+      position: { x: 5, y: 0, z: 3 },
+      song: [{ pitch: 'D4', length: '1/4' }],
+      interval: 64,
+      audibleRange: 15,
+    });
+    await jest.runAllTimersAsync();
+    const [gate] = ctx.getGates();
+
+    await ctx.advanceBeats(2);
+
+    expect(gate.capturedNotes.some((n) => n.pitch === 'D4')).toBe(true);
+  });
+
+  it('a continuous singer beside the far face JAMS the door from BOTH sides', async () => {
+    // The designer's ruling on the round-4 bypass: "That's a bug, I should
+    // not have been able to solve that gate." A continuous singer (interval
+    // == song length: no silence window, ever) beside one face must keep
+    // the door closed no matter which side the song is performed on.
+    loadWithSinger({
+      position: { x: 5, y: 0, z: 3 },
+      song: [{ pitch: 'D4', length: '1/1' }],
+      interval: 4,
+      audibleRange: 15,
+    });
+    await jest.runAllTimersAsync();
+    const [gate] = ctx.getGates();
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 3 * WORLD_SCALE });
+
+    ctx.startPlayerPlayback({ data: [{ pitch: 'C4', length: '1/4' }] });
+    await ctx.advanceBeats(6);
+
+    expect(gate.isOpen).toBe(false);
+  });
+
+  it('control: with the far singer OUT of its own door range, the near side opens as before', async () => {
+    // Same singer, parked far from door-b (out of range even of its own
+    // face): the seam carries nothing, and the near-side performance opens
+    // the door.
+    loadWithSinger({
+      position: { x: 9, y: 0, z: 1 }, // ~20 units from door-b, range 15
+      song: [{ pitch: 'D4', length: '1/1' }],
+      interval: 4,
+      audibleRange: 15,
+    });
+    await jest.runAllTimersAsync();
+    const [gate] = ctx.getGates();
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 3 * WORLD_SCALE });
+
+    ctx.startPlayerPlayback({ data: [{ pitch: 'C4', length: '1/4' }] });
+    await ctx.advanceBeats(6);
+
+    expect(gate.isOpen).toBe(true);
+  });
+
+  it('a SAME-AREA pair shares ears too: a note beside one face reaches the other', async () => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-self'); // doors 18 units apart
+    const [doorA, doorB] = ctx.getGates();
+    // A creature 3 units from door-a, range 8: far out of door-b's direct
+    // earshot (15+ units) — but the pair is one door.
+    ctx.addCreature({
+      position: { x: 5 * WORLD_SCALE, z: 1 * WORLD_SCALE },
+      song: [{ pitch: 'D4', length: '1/4' }],
+      interval: 64,
+      audibleRange: 8,
+    });
+
+    await ctx.advanceBeats(2);
+
+    expect(doorA.capturedNotes.some((n) => n.pitch === 'D4')).toBe(true);
+    expect(doorB.capturedNotes.some((n) => n.pitch === 'D4')).toBe(true);
+  });
+});
+
+describe('PortalManager one-way same-area pair (the warm-up door)', () => {
+  // Mirrors the POC warm-up vestibule: a song-locked 'vestibule' face and an
+  // alwaysOpen 'hall' face, TWO cells apart in one puzzle (one free cell
+  // between them). vestibule at grid (5,7) -> world z 21; hall at (5,5) ->
+  // world z 15; the player spawns south of the vestibule.
+  let vestibule;
+  let hall;
+
+  beforeEach(() => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-oneway');
+    [vestibule, hall] = ctx.getGates();
+  });
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it('crossing back through the alwaysOpen face lands INSIDE the closed partner — and the player can walk out', async () => {
+    // The hall face is alwaysOpen: stepping into it (from the north) commits
+    // a crossing into the VESTIBULE face, which is CLOSED. The closed box
+    // must be open from within (DESIGN.md: a door is solid from outside,
+    // open from within for its occupant) — Caleb got permanently wedged here.
+    expect(hall.isOpen).toBe(true);
+    expect(vestibule.isOpen).toBe(false);
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 5 * WORLD_SCALE - 2.5 });
+    ctx.holdKey('s');
+    await ctx.tick(700); // ~2.8 units south: into the hall cell, commit fires
+    ctx.releaseKey('s');
+
+    // Committed: standing in the vestibule's cell (still closed)
+    expect(gameState.player.position.z).toBeGreaterThan(7 * WORLD_SCALE - 1.5);
+    expect(gameState.player.position.z).toBeLessThan(7 * WORLD_SCALE + 1.5);
+    expect(vestibule.isOpen).toBe(false);
+
+    // Walk south OUT of the closed box: must not be wedged
+    ctx.holdKey('s');
+    await ctx.tick(800); // 3.2 units: fully clear of the cell
+    ctx.releaseKey('s');
+
+    expect(gameState.player.position.z).toBeGreaterThan(7 * WORLD_SCALE + 1.9);
+  });
+
+  it('a full round trip through the tight pair never wedges or ping-pongs', async () => {
+    // Forward: open the vestibule face, walk in, arrive in the hall cell
+    vestibule.open();
+    ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 7 * WORLD_SCALE + 2.5 });
+    ctx.holdKey('w');
+    await ctx.tick(700); // into the vestibule cell: commit -> hall cell
+    ctx.releaseKey('w');
+    expect(gameState.player.position.z).toBeCloseTo(5 * WORLD_SCALE - 0.3, 0);
+
+    // Continue north, fully clear: the crossing is consumed (vestibule
+    // closes; the alwaysOpen hall face stays open forever)
+    ctx.holdKey('w');
+    await ctx.tick(800);
+    ctx.releaseKey('w');
+    await ctx.tick(32);
+    expect(vestibule.isOpen).toBe(false);
+    expect(hall.isOpen).toBe(true);
+
+    // Back: step into the alwaysOpen hall face -> arrive inside the CLOSED
+    // vestibule -> walk out south. The way back must always work.
+    ctx.holdKey('s');
+    await ctx.tick(1600); // back through the hall cell and out of the vestibule
+    ctx.releaseKey('s');
+
+    expect(gameState.currentPuzzle.id).toBe('portal-oneway');
+    expect(gameState.player.position.z).toBeGreaterThan(7 * WORLD_SCALE + 1.9);
+  });
+
+  it('a creature still cannot pass a closed gate that merely contains the player', async () => {
+    // The occupant exception is for the wedged OCCUPANT only — the box stays
+    // solid for everyone else.
+    ctx.setPlayerPosition({ x: vestibule.position.x, z: vestibule.position.z });
+    expect(
+      CollisionDetector.checkCollision(
+        { x: vestibule.position.x, y: 0, z: vestibule.position.z },
+        0.9,
+        'some-creature'
+      )
+    ).toBe(true);
   });
 });
 

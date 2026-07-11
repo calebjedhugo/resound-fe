@@ -1,58 +1,96 @@
-// Generates the POC onboarding world — TEN small portal-linked areas that
-// teach every game element (except fountains) ONE at a time, wordlessly:
+// Generates the POC onboarding world — NINE small portal-linked areas that
+// teach every game element (except fountains) ONE at a time, wordlessly
+// (v5, designer's round-4 restructure, 2026-07-11):
 //
 //   I.    poc-threshold — move (WASD), record (R), play (Space), first door.
-//                         A locked FINALE PORTAL stands mid-room, wanting a
-//                         real song (Twinkle, quarter notes) nothing before
-//                         area X can perform — the demo's ending arrives
-//                         through it
+//                         A locked FINALE PORTAL stands mid-room, wanting
+//                         Twinkle (quarters + phrase-ending halves) nothing
+//                         before area IX can perform — the demo's ending
+//                         arrives through it
 //   II.   poc-two-keys  — slots: two single-note doors in series force
 //                         holding TWO notes at once (room 2 has an E4 echo,
 //                         so even a deleted tape can always re-open the way)
 //   III.  poc-duet      — sequencing: a two-note door [E5,G5] performed by
 //                         ordering the tape (Space plays all slots in order)
-//   IV.   poc-dance     — SPECTACLE: creatures move to each other's songs.
-//                         An elevated stage (unreachable, solid plinth)
-//                         where two anchors' alternating songs bounce a
-//                         dissonant dancer back and forth, forever
-//   V.    poc-jam       — a CONTINUOUS singer beside a door corrupts its
+//   IV.   poc-jam       — a CONTINUOUS singer beside a door corrupts its
 //                         matching forever: two identical doors want the
-//                         same note; the one with the caged singer never
-//                         opens, the clean one does (lesson, zero risk)
+//                         same note; the one with the VISIBLE plinth singer
+//                         over its approach never opens, the clean one does.
+//                         Both doors land in area V as separate entries —
+//                         and the jam holds from BOTH sides (one door, two
+//                         ears; ruled 2026-07-11)
+//   V.    poc-dance     — the movable jam (designer's own design): two
+//                         creatures parked before the exit, singing a
+//                         synced tension-and-release duet (B3→C4 / F4→E4,
+//                         tritone→major third: repel apart, pull together —
+//                         a breathing oscillation) that CORRUPTS the door.
+//                         The tool and the door are both a plain F4 whole:
+//                         F4 net-REPELS both dancers and never attracts —
+//                         playing it in front of the gate a few times
+//                         shoves the pair out of earshot, then opens it
 //   VI.   poc-pull      — the jam, weaponized: a free-standing continuous
 //                         singer jams the exit — consonant playback PULLS
 //                         it out of earshot, then the door hears you
 //   VII.  poc-push      — dissonant playback REPELS; the pushed creature's
 //                         own song opens the exit (creatures activate gates)
-//   VIII. poc-clap      — claps shift creature timing: two penned creatures
-//                         chord the door's two notes; clap one apart until
-//                         the chord becomes the melody
-//   IX.   poc-climb     — elevation: walk UNDER the slab, ramp up, record
-//                         the perch (pillars force the climb)
-//   X.    poc-return    — THE STAR (finale): a warm-up vestibule teaches
-//                         quarter notes + repetition ([F4,F4] from ONE
-//                         voice recorded twice), then a concert hall of six
-//                         single-quarter voices — the ELEMENTS of Twinkle,
-//                         never chunks — and a central portal wanting the
-//                         full couplet, linked back to area I's mid-room
-//                         finale gate. Crossing it rolls the closing card.
+//   VIII. poc-clap      — claps shift creature timing: a D4/A4 pair on
+//                         VISIBLE plinths flanking the exit sing in-phase
+//                         quarter notes (a chord — corruption); one clap
+//                         shifts one of them a beat and the chord becomes
+//                         the alternating melody [D4,A4,D4,A4] — the door
+//                         self-opens, forever (creatures activate gates)
+//   IX.   poc-return    — THE STAR (finale): the entry door sits in a SIDE
+//                         wall (the arrival forces a turn inside the frame
+//                         — the look-back moment). A warm-up vestibule
+//                         teaches quarter notes + repetition ([F4,F4] from
+//                         ONE voice recorded twice; its hall face is the
+//                         one-way alwaysOpen escape hatch), then a concert
+//                         hall of SEVEN more voices — the eight ELEMENTS of
+//                         Twinkle (quarter C D E F G A + HALF G + HALF C),
+//                         one voice per element, placed in SONG ORDER along
+//                         the hall path — and a central portal wanting the
+//                         full corrected couplet, linked back to area I's
+//                         mid-room finale gate. Crossing rolls the closing
+//                         card.
+//
+//   (poc-climb was CUT in v5 — "if the puzzle doesn't NEED a ramp, there
+//   should be no ramp". Elevation survives as the visible plinth pens.)
 //
 // DESIGN RULES HONORED (see DESIGN.md):
-//   * Wordless; tight rooms; one concept per area; concepts WITNESSED (the
-//     dance, the jam) before they are REQUIRED (the pull/push).
-//   * The TAPE model (ruled 2026-07-11): Space performs every slot in
-//     order; matching tolerates sounds outside the aligned window, so a
-//     door opens whenever its song occurs cleanly within the performance.
+//   * Wordless; rooms only as big as their acoustics demand; one concept
+//     per area; concepts WITNESSED (the jam, the dance) before REQUIRED.
+//   * Key hints are PUZZLE-DRIVEN: each area declares `teaches`.
+//   * ALL creatures are VISIBLE — no opaque pens. Penning, where needed,
+//     is a cliff-edged plinth in plain sight.
+//   * ONE DOOR, TWO EARS (ruled 2026-07-11): a linked pair shares its
+//     heard-note state — a sound within source-range of EITHER face
+//     corrupts (and can complete) the door, with no leak between the two
+//     faces. The jam therefore holds from the far side.
+//   * The TAPE model: Space performs every slot in order; a door opens
+//     whenever its song occurs cleanly within the performance.
 //   * STRICT element economy: matching is pitch- AND duration-exact, so
 //     the economy tracks (pitch, length) ELEMENTS. Every exit door's
-//     elements are first recordable in the door's own area; the finale is
-//     all quarter notes, which exist only in area X — carried whole notes
-//     can never fake them. F4 (any duration) exists only in area X.
-//   * Non-stuck by construction, now including DELETE (players can destroy
-//     takes): from every reachable pocket, some boundary door is openable
-//     with elements recordable INSIDE the pocket, or is an alwaysOpen face
-//     (poc-clap's door is creature-solved — the penned pair re-performs it
-//     forever).
+//     elements are first recordable in the door's own area or earlier, and
+//     never fully performable from earlier areas alone. The finale's
+//     six FRESH elements (quarter C/E/F/G + half G + half C) exist only in
+//     area IX — carried takes can never open it early. F4|1/4 exists ONLY
+//     in area IX (the named finale lock; F4 as a WHOLE is area V's tool).
+//   * Non-stuck by construction, including DELETE: from every reachable
+//     pocket, some boundary door is openable with elements recordable
+//     INSIDE the pocket, or is an alwaysOpen face. The clap door needs no
+//     exception anymore: its pair is recordable from the floor AND
+//     re-performs the door forever from its plinths.
+//   * RELAXED GUARDS (v5, forced by the dance pair entering the carried
+//     set): with pitch classes {C,E,F,G,A,B} all carried after area V,
+//     EVERY pitch class is consonant with something carried and dissonant
+//     with something carried (exhaustively checked below). The old
+//     absolute pull-guard ("nothing carried may push the pull jammer") and
+//     push-guard ("nothing carried may pull the pusher") are therefore
+//     unsatisfiable. Replacements: the pull room is an OPEN rectangle
+//     (nowhere to wedge the jammer beyond recovery — the A4 pull always
+//     reaches it) and the pusher is Bb5, the unique pitch class whose only
+//     carried consonant class is G (the oldest, least-likely-taped note).
+//     Both relaxations are flagged for the designer.
 //   * Links are written bidirectionally, one song per pair.
 //
 // Edit this generator and rerun; do NOT hand-edit the JSONs:
@@ -69,39 +107,45 @@ const CLAP_RANGE = 7.5; // core/constants.js
 const EYE = 1.8; // player eye height above their floor (GameState)
 const ELEV = 3.0; // ELEVATION_HEIGHT
 // Geometry background (documented for the level math):
-//   * A 1-cell wall ring keeps player centers >= 4.9 units from a penned
-//     creature (wall face 4.5 from center + player radius 0.4) — a penned
-//     pitch is unrecordable iff its range/2 < 4.9.
-//   * A corridor blocker keeps the player >= 1.3 units away (creature radius
-//     0.9 + player radius 0.4) — a 1-wide corridor cannot be squeezed past.
-//   * Two creatures park at 1.8 apart (0.9 + 0.9) when forces converge them.
-//   * A penned creature can drift inside its 1-cell pen: cell half (1.5)
-//     minus wall half-depth overlap leaves 0.6 of free travel per axis
-//     (3 - 1.5 wall face - 0.9 creature radius), 0.85 on the diagonal.
-const PEN_DRIFT = Math.hypot(0.6, 0.6);
+//   * A creature on a 1-cell plinth can drift within its cell: cell half
+//     (1.5) minus creature radius (0.9) leaves 0.6 of travel per axis,
+//     0.85 on the diagonal (cliff edges pen it).
+//   * Two creatures park at 1.8 apart (0.9 + 0.9) when forces converge.
+//   * Recording needs playerDist <= range/2 — a plinth at elevation 2 puts
+//     even the directly-underneath player 6 - 1.8 = 4.2 away, out of a
+//     range-8 singer's recording reach.
+const PLINTH_DRIFT = Math.hypot(0.6, 0.6);
 const CREATURE_CONTACT = 1.8;
-const PEN_STANDOFF = 4.9;
 
-// The finale song: Twinkle Twinkle Little Star, full couplet, all quarter
-// notes — six pitch elements (C4 D4 E4 F4 G4 A4), all first recordable (as
-// QUARTERS) in area X. Uniform quarters keep the element set minimal: the
-// player assembles the song from single notes, never from chunks.
+// Creature force kinematics (mirrors Creature.updateMovement + constants):
+// velocity += FORCE*dt then *= DECEL, PASSES times per frame with the full
+// frame dt. Terminal per-pass speed and the resulting sustained drift rate:
+const FORCE = 15; // ATTRACTION/REPULSION_FORCE_STRENGTH
+const DECEL = 0.85;
+const PASSES = 2;
+const FRAME_DT = 1 / 60;
+const V_TERM = (FORCE * FRAME_DT * DECEL) / (1 - DECEL); // ~1.36 u/s
+const DRIFT_PER_S = V_TERM * PASSES; // ~2.72 world units per second
+
+// The finale song: Twinkle Twinkle Little Star, full couplet, CORRECTED
+// rhythm (v5): each phrase ends on a HALF note. Eight distinct elements —
+// quarter C D E F G A, half G, half C — one hall/vestibule voice each.
 const TWINKLE = [
-  'C4',
-  'C4',
-  'G4',
-  'G4',
-  'A4',
-  'A4',
-  'G4',
-  'F4',
-  'F4',
-  'E4',
-  'E4',
-  'D4',
-  'D4',
-  'C4',
-].map((pitch) => ({ pitch, length: '1/4' }));
+  ['C4', '1/4'],
+  ['C4', '1/4'],
+  ['G4', '1/4'],
+  ['G4', '1/4'],
+  ['A4', '1/4'],
+  ['A4', '1/4'],
+  ['G4', '1/2'],
+  ['F4', '1/4'],
+  ['F4', '1/4'],
+  ['E4', '1/4'],
+  ['E4', '1/4'],
+  ['D4', '1/4'],
+  ['D4', '1/4'],
+  ['C4', '1/2'],
+].map(([pitch, length]) => ({ pitch, length }));
 
 // --- harmony helpers (mirror src/core/HarmonyAnalyzer.js) ---
 const NOTE_MAP = {
@@ -142,7 +186,15 @@ const songKey = (song) => JSON.stringify(normalizeSong(song));
 const songPitches = (song) => normalizeSong(song).map((e) => e.pitch);
 const elementOf = (pitch, length) => `${pitch}|${length}`;
 const songElements = (song) => normalizeSong(song).map((e) => elementOf(e.pitch, e.length));
-const creatureElement = (c) => elementOf(c.pitch, c.len || '1/1');
+const LENGTH_BEATS = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5 };
+const songBeats = (song) => normalizeSong(song).reduce((sum, n) => sum + LENGTH_BEATS[n.length], 0);
+
+// --- creature helpers ---
+// A creature carries a full song (array of {pitch,length}); single-pitch
+// creatures use the `note(pitch, len)` sugar.
+const note = (pitch, len = '1/1') => [{ pitch, length: len }];
+const creatureElements = (c) => c.song.map((n) => elementOf(n.pitch, n.length));
+const creaturePitches = (c) => c.song.map((n) => n.pitch);
 
 // --- geometry helpers (world units; positions carry an elevation level y) ---
 const worldY = (cell) => (cell.y || 0) * ELEV;
@@ -164,12 +216,13 @@ function makeArea(id, name, grid) {
     name,
     grid,
     walls: new Set(),
-    creatures: {}, // key -> {x,z,y,pitch,range,interval,len?}
-    gates: {}, // gateId -> {x,z,y,song,link?,alwaysOpen?,ending?}
+    creatures: {}, // key -> {x,z,y?,song,range,interval}
+    gates: {}, // gateId -> {x,z,y?,song,link?,alwaysOpen?,ending?}
     ramps: [],
     floors: [],
     spawn: null,
     clapDisplacement: null,
+    teaches: [],
   };
 }
 const key = (x, z) => `${x},${z}`;
@@ -183,10 +236,6 @@ const wallRow = (area, z, gaps = []) => {
 const wallCol = (area, x, gaps = []) => {
   for (let z = 0; z < area.grid; z += 1) if (!gaps.includes(z)) addWall(area, x, z);
 };
-const wallRing = (area, cx, cz) => {
-  for (let dx = -1; dx <= 1; dx += 1)
-    for (let dz = -1; dz <= 1; dz += 1) if (dx || dz) addWall(area, cx + dx, cz + dz);
-};
 
 // =========================================================================
 // AREA I — poc-threshold: the core loop (move, record, play, cross) — and
@@ -194,22 +243,23 @@ const wallRing = (area, cx, cz) => {
 // =========================================================================
 const A1 = makeArea('poc-threshold', 'I. Threshold', 10);
 A1.spawn = { x: 5, y: 0, z: 8 };
+A1.teaches = ['move', 'record', 'playback'];
 // The voice lives in a corner: its song (and the player's C4 performances
-// near it) must stay out of earshot of the finale portal, whose matching
-// crosses the seam into area X's concert hall.
-A1.creatures.voice = { x: 8, y: 0, z: 8, pitch: 'C4', range: 8, interval: 8 };
-wallRow(A1, 1, [5]); // north wall holding the exit door
+// near it) must stay out of earshot of both doors — the finale portal's
+// matching now spans BOTH its faces (one door, two ears).
+A1.creatures.voice = { x: 8, y: 0, z: 8, song: note('C4'), range: 8, interval: 8 };
+wallRow(A1, 0, [5]); // north wall (grid edge — no dead strip) holding the exit
 A1.gates.exit = {
   x: 5,
   y: 0,
-  z: 1,
+  z: 0,
   song: ['C4'],
   link: { puzzleId: 'poc-two-keys', gateId: 'entry' },
 };
-// The finale portal: free-standing mid-room, wanting the full Twinkle
-// couplet in QUARTER notes — elements that exist only in area X. Every
-// player red-flashes it with their whole-note C4 in minute one; crossing
-// it (from area X) ends the demo (ending: true → the closing overlay).
+// The finale portal: free-standing mid-room, wanting the full corrected
+// Twinkle couplet — elements that exist only in area IX. Every player
+// red-flashes it with their whole-note C4 in minute one; crossing it (from
+// area IX) ends the demo (ending: true → the closing overlay).
 A1.gates.finale = {
   x: 4,
   y: 0,
@@ -224,15 +274,16 @@ A1.gates.finale = {
 // =========================================================================
 const A2 = makeArea('poc-two-keys', 'II. Two Keys', 12);
 A2.spawn = { x: 6, y: 0, z: 10 };
-wallRow(A2, 11, [6]); // south wall holding the entry door
+A2.teaches = ['slots'];
+wallRow(A2, 11, [6]); // south wall (grid edge) holding the entry door
 wallRow(A2, 6, [6]); // inner wall holding the E4 door (room 1 / room 2)
-wallRow(A2, 1, [6]); // north wall holding the G4 exit door
-A2.creatures.east = { x: 2, y: 0, z: 8, pitch: 'E4', range: 7, interval: 8 };
-A2.creatures.west = { x: 10, y: 0, z: 8, pitch: 'G4', range: 7, interval: 8 };
+wallRow(A2, 0, [6]); // north wall (grid edge) holding the G4 exit door
+A2.creatures.east = { x: 2, y: 0, z: 8, song: note('E4'), range: 7, interval: 8 };
+A2.creatures.west = { x: 10, y: 0, z: 8, song: note('G4'), range: 7, interval: 8 };
 // Room 2's echo sings the inner door's own note: with the tape's DELETE
 // verb a player can destroy their E4 inside room 2 — the echo keeps the
 // pocket escapable from an empty tape (non-stuck under deletion).
-A2.creatures.echo = { x: 1, y: 0, z: 4, pitch: 'E4', range: 8, interval: 8 };
+A2.creatures.echo = { x: 1, y: 0, z: 3, song: note('E4'), range: 7, interval: 8 };
 A2.gates.entry = {
   x: 6,
   y: 0,
@@ -241,152 +292,185 @@ A2.gates.entry = {
   link: { puzzleId: 'poc-threshold', gateId: 'exit' },
 };
 A2.gates.inner = { x: 6, y: 0, z: 6, song: ['E4'] }; // plain gate, not a door
-A2.gates.exit = { x: 6, y: 0, z: 1, song: ['G4'], link: { puzzleId: 'poc-duet', gateId: 'entry' } };
+A2.gates.exit = { x: 6, y: 0, z: 0, song: ['G4'], link: { puzzleId: 'poc-duet', gateId: 'entry' } };
 
 // =========================================================================
 // AREA III — poc-duet: ordering the tape into a two-note melody
 // (E5/G5, NOT area II's E4/G4 — carried notes must never open a later
 // door; matching is octave-exact, so the fifth above is a genuinely fresh
 // pair. E5-G5 is consonant, so the pair stays out of mutual earshot.)
+// Shrunk to grid 10 in v5 (rooms only as big as their acoustics demand).
 // =========================================================================
-const A3 = makeArea('poc-duet', 'III. The Duet', 12);
-A3.spawn = { x: 6, y: 0, z: 10 };
-wallRow(A3, 11, [6]);
-wallRow(A3, 1, [6]);
-A3.creatures.east = { x: 2, y: 0, z: 7, pitch: 'E5', range: 7, interval: 8 };
-A3.creatures.west = { x: 10, y: 0, z: 7, pitch: 'G5', range: 7, interval: 8 };
+const A3 = makeArea('poc-duet', 'III. The Duet', 10);
+A3.spawn = { x: 5, y: 0, z: 8 };
+A3.teaches = ['slots'];
+wallRow(A3, 9, [5]);
+wallRow(A3, 0, [5]);
+A3.creatures.east = { x: 1, y: 0, z: 5, song: note('E5'), range: 7, interval: 8 };
+A3.creatures.west = { x: 8, y: 0, z: 5, song: note('G5'), range: 7, interval: 8 };
 A3.gates.entry = {
-  x: 6,
+  x: 5,
   y: 0,
-  z: 11,
+  z: 9,
   song: ['G4'],
   link: { puzzleId: 'poc-two-keys', gateId: 'exit' },
 };
 A3.gates.exit = {
-  x: 6,
+  x: 5,
   y: 0,
-  z: 1,
+  z: 0,
   song: ['E5', 'G5'],
-  link: { puzzleId: 'poc-dance', gateId: 'entry' },
+  link: { puzzleId: 'poc-jam', gateId: 'entry' },
 };
 
 // =========================================================================
-// AREA IV — poc-dance: creatures move to each other's songs (spectacle)
+// AREA IV — poc-jam: a continuous singer beside a door corrupts it forever
+// (the lesson for areas V/VI, at zero risk). Two IDENTICAL doors in the
+// north wall want the same note [A3]; the jammer stands ON A VISIBLE
+// PLINTH (elevation 2, cliff-penned) directly over the west door's
+// approach — the player literally walks under the singing jammer to try
+// the door that can never open. Same tape, two doors: the jammed one never
+// even fades, the clean one opens. The jammed door is never required.
+// With the both-ears rule the jam holds from area V's side too.
 // =========================================================================
-const A4 = makeArea('poc-dance', 'IV. The Dance', 12);
-A4.spawn = { x: 6, y: 0, z: 10 };
-wallRow(A4, 11, [6]);
-wallCol(A4, 11, [9]); // east wall holding the exit door
-// The stage: a 1-deep elevated lane with a SOLID plinth beneath (no
-// walk-under) and no ramp (the stage is scenery, penned by its own cliff
-// edges — creatures cannot step off, the player cannot climb on).
-A4.floors.push({ elevation: 1, x1: 1, z1: 3, x2: 8, z2: 3 });
-for (let x = 1; x <= 8; x += 1) addWall(A4, x, 3); // plinth
-// Anchors sing the SAME pitch (perfect unison: they never move each other)
-// on different intervals, so their songs ALTERNATE. Forces apply while a
-// creature SINGS and hears another note within ITS OWN audible range, so
-// the dancer's range must cover both anchors. Each solo anchor note that
-// overlaps the dancer's singing shoves it away — a perpetual, irregular
-// dance. The ground voice is C5 — the exit note, first recordable HERE
-// (strict economy): PERFECT against the anchors (they ignore the player's
-// playback) and consonant against the dancer, so carrying it up to the
-// stage still tugs the dancer — a wordless invitation to participate.
-A4.creatures.anchorWest = { x: 1, y: 1, z: 3, pitch: 'G5', range: 12, interval: 12 };
-A4.creatures.anchorEast = { x: 8, y: 1, z: 3, pitch: 'G5', range: 12, interval: 16 };
-A4.creatures.dancer = { x: 4, y: 1, z: 3, pitch: 'A5', range: 15, interval: 7 };
-A4.creatures.voice = { x: 2, y: 0, z: 9, pitch: 'C5', range: 7, interval: 8 };
+const A4 = makeArea('poc-jam', 'IV. The Jam', 13);
+A4.spawn = { x: 6, y: 0, z: 11 };
+wallRow(A4, 12, [6]); // south wall (grid edge) holding the entry door
+wallRow(A4, 0, [3, 10]); // north wall (grid edge) holding BOTH exit doors
+// The jammer's plinth: 1 cell, elevation 2, directly south of door J. The
+// slab is walkable UNDERNEATH (the door's approach), the top is cliff-
+// penned and ramp-less, and even the player directly below stands
+// 6 - 1.8 = 4.2 away — outside the range-8 singer's recording reach (4).
+A4.floors.push({ elevation: 2, x1: 3, z1: 1, x2: 3, z2: 1 });
+A4.creatures.jammer = { x: 3, y: 2, z: 1, song: note('B5'), range: 8, interval: 4 };
+A4.creatures.voice = { x: 6, y: 0, z: 6, song: note('A3'), range: 7, interval: 8 };
 A4.gates.entry = {
   x: 6,
   y: 0,
-  z: 11,
+  z: 12,
   song: ['E5', 'G5'],
   link: { puzzleId: 'poc-duet', gateId: 'exit' },
 };
-A4.gates.exit = { x: 11, y: 0, z: 9, song: ['C5'], link: { puzzleId: 'poc-jam', gateId: 'entry' } };
-
-// =========================================================================
-// AREA V — poc-jam: a continuous singer beside a door corrupts it forever
-// (the lesson for area VI, at zero risk). Two IDENTICAL doors in the north
-// wall want the same note [A3]; a caged CONTINUOUS B5 singer stands beside
-// the west one. Same tape, two doors: the jammed one never even fades, the
-// clean one opens. The jammed door is never required — non-stuck.
-// =========================================================================
-const A5 = makeArea('poc-jam', 'V. The Jam', 13);
-A5.spawn = { x: 6, y: 0, z: 11 };
-wallRow(A5, 12, [6]); // south wall holding the entry door
-wallRow(A5, 1, [3, 10]); // north wall holding BOTH exit doors
-// The jammer's pen hugs the north wall beside door J. It sits DIAGONALLY
-// off the door (not straight below it): a straight-line pen would wall off
-// the door's only approach cell.
-A5.creatures.jammer = { x: 5, y: 0, z: 2, pitch: 'B5', range: 8, interval: 4 };
-wallRing(A5, 5, 2);
-A5.creatures.voice = { x: 6, y: 0, z: 7, pitch: 'A3', range: 7, interval: 8 };
-A5.gates.entry = {
-  x: 6,
-  y: 0,
-  z: 12,
-  song: ['C5'],
-  link: { puzzleId: 'poc-dance', gateId: 'exit' },
-};
-A5.gates['exit-jammed'] = {
+A4.gates['exit-jammed'] = {
   x: 3,
   y: 0,
-  z: 1,
+  z: 0,
   song: ['A3'],
-  link: { puzzleId: 'poc-pull', gateId: 'entry-a' },
+  link: { puzzleId: 'poc-dance', gateId: 'entry-a' },
 };
-A5.gates['exit-clean'] = {
+A4.gates['exit-clean'] = {
   x: 10,
   y: 0,
-  z: 1,
+  z: 0,
   song: ['A3'],
-  link: { puzzleId: 'poc-pull', gateId: 'entry-b' },
+  link: { puzzleId: 'poc-dance', gateId: 'entry-b' },
+};
+
+// =========================================================================
+// AREA V — poc-dance: the movable jam, the designer's tension-and-release
+// design. Two creatures parked before the exit sing a synced two-note
+// duet (from test-003 "Harmonic Motion"): tension B3+F4 (tritone — they
+// REPEL), release C4+E4 (major third — they PULL back together). Forces
+// are equal-and-opposite, so the pair breathes around a fixed centroid in
+// front of the door, corrupting it forever. The player's tool and the exit
+// song are BOTH a plain F4 whole note: F4 vs B3→C4 = tritone then perfect
+// fourth; F4 vs F4→E4 = unison then minor second — NET REPULSION, and no
+// note of the duet is ever attracted. Perform F4 between the pair and the
+// door a few times: the duet is shoved out of earshot, the window goes
+// quiet, and the same F4 opens the door.
+// =========================================================================
+const A5 = makeArea('poc-dance', 'V. The Dance', 15);
+A5.spawn = { x: 7, y: 0, z: 13 };
+A5.teaches = ['delete']; // old takes spray forces here — tape hygiene pays
+wallRow(A5, 14, [3, 10]); // south wall (grid edge) holding BOTH entries
+wallRow(A5, 0, [7]); // north wall (grid edge) holding the exit door
+const DANCE_SONG_A = [
+  { pitch: 'B3', length: '1/2' },
+  { pitch: 'C4', length: '1/2' },
+];
+const DANCE_SONG_B = [
+  { pitch: 'F4', length: '1/2' },
+  { pitch: 'E4', length: '1/2' },
+];
+// interval == song length (4 beats): the duet never stops — a continuous
+// corruptor, like the jam, but ALIVE. Same phase, same interval: the
+// simultaneous intervals are tritone (beat 0) then major third (beat 2).
+A5.creatures.tension = { x: 6, y: 0, z: 2, song: DANCE_SONG_A, range: 15, interval: 4 };
+A5.creatures.release = { x: 7, y: 0, z: 2, song: DANCE_SONG_B, range: 15, interval: 4 };
+A5.creatures.voice = { x: 1, y: 0, z: 8, song: note('F4'), range: 7, interval: 8 };
+A5.gates['entry-a'] = {
+  x: 3,
+  y: 0,
+  z: 14,
+  song: ['A3'],
+  link: { puzzleId: 'poc-jam', gateId: 'exit-jammed' },
+};
+A5.gates['entry-b'] = {
+  x: 10,
+  y: 0,
+  z: 14,
+  song: ['A3'],
+  link: { puzzleId: 'poc-jam', gateId: 'exit-clean' },
+};
+A5.gates.exit = {
+  x: 7,
+  y: 0,
+  z: 0,
+  song: ['F4'],
+  link: { puzzleId: 'poc-pull', gateId: 'entry' },
 };
 
 // =========================================================================
 // AREA VI — poc-pull: the jam, weaponized — and the pull solves it
-// An open room. A free-standing CONTINUOUS C5 singer stands beside the
-// only exit, jamming it exactly like area V's caged one — but this one has
-// no cage. The local voice (A4, consonant with C5) is the tool: record it,
-// play it near the jammer, and the jammer follows you. Drag it out of the
-// door's earshot, walk back, perform A4 in the quiet.
+// An OPEN room (deliberately: nowhere to wedge the jammer beyond the
+// pull's recovery — see the relaxed-guard note in the header). A
+// free-standing CONTINUOUS C5 singer stands beside the only exit, jamming
+// it exactly like area IV's plinth singer — but this one has no pen. The
+// local voice (A4, consonant with C5) is the tool: record it, play it near
+// the jammer, and the jammer follows you. Drag it out of the door's
+// earshot, walk back, perform A4 in the quiet.
 // =========================================================================
 const A6 = makeArea('poc-pull', 'VI. The Pull', 12);
 A6.spawn = { x: 6, y: 0, z: 10 };
-wallRow(A6, 11, [3, 9]); // south wall holding BOTH entry doors (from area V)
-wallRow(A6, 1, [6]); // north wall holding the exit door
-A6.creatures.voice = { x: 2, y: 0, z: 6, pitch: 'A4', range: 7, interval: 8 };
-A6.creatures.jammer = { x: 6, y: 0, z: 3, pitch: 'C5', range: 8, interval: 4 };
-A6.gates['entry-a'] = {
-  x: 3,
+wallRow(A6, 11, [6]); // south wall (grid edge) holding the entry door
+wallRow(A6, 0, [6]); // north wall (grid edge) holding the exit door
+A6.creatures.voice = { x: 2, y: 0, z: 6, song: note('A4'), range: 7, interval: 8 };
+A6.creatures.jammer = { x: 6, y: 0, z: 2, song: note('C5'), range: 8, interval: 4 };
+A6.gates.entry = {
+  x: 6,
   y: 0,
   z: 11,
-  song: ['A3'],
-  link: { puzzleId: 'poc-jam', gateId: 'exit-jammed' },
+  song: ['F4'],
+  link: { puzzleId: 'poc-dance', gateId: 'exit' },
 };
-A6.gates['entry-b'] = {
-  x: 9,
-  y: 0,
-  z: 11,
-  song: ['A3'],
-  link: { puzzleId: 'poc-jam', gateId: 'exit-clean' },
-};
-A6.gates.exit = { x: 6, y: 0, z: 1, song: ['A4'], link: { puzzleId: 'poc-push', gateId: 'entry' } };
+A6.gates.exit = { x: 6, y: 0, z: 0, song: ['A4'], link: { puzzleId: 'poc-push', gateId: 'entry' } };
 
 // =========================================================================
-// AREA VII — poc-push: dissonance repels; the pushed creature opens the door
+// AREA VII — poc-push: dissonance repels; the pushed creature opens the
+// door. The pusher is Bb5 (v5): the tool E5 is dissonant with it (pushes),
+// and the ONLY carried consonant class is G — see the relaxed-guard note.
+// The unused flanks of the corridor band are walled off (designer note).
 // =========================================================================
 const A7 = makeArea('poc-push', 'VII. The Push', 12);
 A7.spawn = { x: 6, y: 0, z: 10 };
-wallRow(A7, 11, [6]);
-wallRow(A7, 8, [6]);
-for (let z = 3; z <= 7; z += 1) {
-  addWall(A7, 5, z);
-  addWall(A7, 7, z);
+wallRow(A7, 11, [6]); // south wall (grid edge) holding the entry door
+wallRow(A7, 8, [6]); // entry room boundary
+for (let z = 2; z <= 7; z += 1) {
+  addWall(A7, 5, z); // corridor west wall
+  addWall(A7, 7, z); // corridor east wall
 }
-wallRow(A7, 1, [9]);
-A7.creatures.voice = { x: 10, y: 0, z: 9, pitch: 'E5', range: 7, interval: 6 };
-A7.creatures.pusher = { x: 6, y: 0, z: 5, pitch: 'D5', range: 7, interval: 6 };
+wallRow(A7, 0, [9]); // north wall (grid edge) holding the exit door
+// Wall off the unused flanks — the room is exactly the corridor, the
+// door approach strip, and the entry room.
+for (let z = 1; z <= 7; z += 1) {
+  for (let x = 0; x <= 4; x += 1) addWall(A7, x, z);
+  for (let x = 8; x <= 11; x += 1) if (z >= 2) addWall(A7, x, z);
+}
+addWall(A7, 5, 1);
+addWall(A7, 10, 1);
+addWall(A7, 11, 1);
+A7.creatures.voice = { x: 10, y: 0, z: 9, song: note('E5'), range: 7, interval: 6 };
+A7.creatures.pusher = { x: 6, y: 0, z: 5, song: note('Bb5'), range: 7, interval: 6 };
 A7.gates.entry = {
   x: 6,
   y: 0,
@@ -394,71 +478,62 @@ A7.gates.entry = {
   song: ['A4'],
   link: { puzzleId: 'poc-pull', gateId: 'exit' },
 };
-A7.gates.exit = { x: 9, y: 0, z: 1, song: ['D5'], link: { puzzleId: 'poc-clap', gateId: 'entry' } };
+A7.gates.exit = {
+  x: 9,
+  y: 0,
+  z: 0,
+  song: ['Bb5'],
+  link: { puzzleId: 'poc-clap', gateId: 'entry' },
+};
 
 // =========================================================================
 // AREA VIII — poc-clap: clap timing turns the pair's chord into the melody
+// (v5 redesign): the D4/A4 pair stands on VISIBLE 1-cell plinths
+// (elevation 1, cliff-penned — a fixed position keeps the empty-tape
+// escape guarantee: the pair re-performs the door forever) flanking the
+// exit. Both sing a single QUARTER note with a one-beat rest (interval 2),
+// starting IN PHASE: a D+A chord corrupts the door. The door wants a whole
+// measure [D4,A4,D4,A4]; one clap (displacement 1/4 = one beat) shifts one
+// creature and the chord becomes a continuous alternating melody — the
+// door hears its song and self-opens. Creatures activate gates, again.
 // =========================================================================
 const A8 = makeArea('poc-clap', 'VIII. The Clap', 13);
 A8.spawn = { x: 6, y: 0, z: 11 };
-A8.clapDisplacement = '1/4'; // one clap = one beat: 4 claps resolve the chord
-wallRow(A8, 12, [6]);
-wallRow(A8, 1, [6]);
-A8.creatures.first = { x: 3, y: 0, z: 2, pitch: 'D4', range: 10, interval: 12 };
-A8.creatures.second = { x: 8, y: 0, z: 2, pitch: 'A4', range: 10, interval: 12 };
-wallRing(A8, 3, 2);
-wallRing(A8, 8, 2);
+A8.teaches = ['clap'];
+A8.clapDisplacement = '1/4'; // one clap = one beat: the chord resolves in one
+wallRow(A8, 12, [6]); // south wall (grid edge) holding the entry door
+wallRow(A8, 0, [6]); // north wall (grid edge) holding the exit door
+A8.floors.push({ elevation: 1, x1: 3, z1: 1, x2: 3, z2: 1 });
+A8.floors.push({ elevation: 1, x1: 9, z1: 1, x2: 9, z2: 1 });
+A8.creatures.first = { x: 3, y: 1, z: 1, song: note('D4', '1/4'), range: 15, interval: 2 };
+A8.creatures.second = { x: 9, y: 1, z: 1, song: note('A4', '1/4'), range: 15, interval: 2 };
 A8.gates.entry = {
   x: 6,
   y: 0,
   z: 12,
-  song: ['D5'],
+  song: ['Bb5'],
   link: { puzzleId: 'poc-push', gateId: 'exit' },
 };
 A8.gates.exit = {
   x: 6,
   y: 0,
-  z: 1,
-  song: ['D4', 'A4'],
-  link: { puzzleId: 'poc-climb', gateId: 'entry' },
-};
-
-// =========================================================================
-// AREA IX — poc-climb: walk under the slab, ramp up, record the perch
-// =========================================================================
-const A9 = makeArea('poc-climb', 'IX. The Climb', 12);
-A9.spawn = { x: 2, y: 0, z: 8 };
-wallCol(A9, 1, [9]); // west wall holding the entry door
-wallRow(A9, 10, [10]); // south wall holding the exit door
-wallRow(A9, 6, [4, 5]); // south face of the slab band (gaps lead UNDER it)
-wallRow(A9, 3, [4, 5, 9]); // north face (gaps + the ramp cell)
-A9.floors.push({ elevation: 1, x1: 3, z1: 4, x2: 9, z2: 5 });
-// Support pillars keep every ground-level approach out of recording range.
-[
-  [6, 4],
-  [5, 4],
-  [7, 4],
-  [6, 5],
-].forEach(([x, z]) => addWall(A9, x, z));
-A9.ramps.push({ x: 9, y: 0, z: 3, direction: 'south' }); // high edge abuts the slab
-A9.creatures.perch = { x: 6, y: 1, z: 4, pitch: 'B4', range: 8, interval: 8 };
-A9.gates.entry = {
-  x: 1,
-  y: 0,
-  z: 9,
-  song: ['D4', 'A4'],
-  link: { puzzleId: 'poc-clap', gateId: 'exit' },
-};
-A9.gates.exit = {
-  x: 10,
-  y: 0,
-  z: 10,
-  song: ['B4'],
+  z: 0,
+  song: [
+    { pitch: 'D4', length: '1/4' },
+    { pitch: 'A4', length: '1/4' },
+    { pitch: 'D4', length: '1/4' },
+    { pitch: 'A4', length: '1/4' },
+  ],
   link: { puzzleId: 'poc-return', gateId: 'entry' },
 };
 
 // =========================================================================
-// AREA X — poc-return: THE STAR — warm-up vestibule + concert hall finale
+// AREA IX — poc-return: THE STAR — warm-up vestibule + concert hall finale
+//
+// The ENTRY sits in the EAST wall: the player has traveled north the whole
+// game, so arriving here forces a turn inside the doorframe — and the turn
+// reveals the view back through the door (the moment the designer liked in
+// the cut climb area, preserved by orientation).
 //
 // The vestibule (south strip) teaches quarter notes and repetition: one F4
 // voice singing a single QUARTER note, and a door wanting [F4,F4] — record
@@ -466,43 +541,54 @@ A9.gates.exit = {
 // the hall: the hall face is alwaysOpen (walk back through it freely), so
 // the hall can never strand an emptied tape — F4 stays re-recordable.
 //
-// The hall holds the ELEMENTS of Twinkle — five more single-quarter voices
-// (C4 D4 E4 G4 A4) around the walls, all out of earshot of the central
-// portal — and the portal itself wants the full couplet, linked to area
-// I's mid-room finale gate. Assemble the tape, perform it in the quiet,
-// walk through, take the bow.
+// The hall holds the ELEMENTS of Twinkle — seven more voices (quarter C D
+// E G A, HALF G, HALF C), one per element, placed in SONG ORDER along the
+// hall walls (the vestibule's F4 doubles as the song's F element) — and
+// the central portal wants the full corrected couplet, linked to area I's
+// mid-room finale gate. Assemble the tape, perform it in the quiet, walk
+// through, take the bow.
 // =========================================================================
-const A10 = makeArea('poc-return', 'X. The Star', 14);
-A10.spawn = { x: 7, y: 0, z: 12 };
-wallRow(A10, 13, [7]); // south wall holding the entry door (from the climb)
-wallRow(A10, 10, [7]); // vestibule/hall divider holding the warm-up door
-A10.creatures.fVoice = { x: 1, y: 0, z: 12, pitch: 'F4', range: 7, interval: 4, len: '1/4' };
-A10.creatures.cVoice = { x: 1, y: 0, z: 1, pitch: 'C4', range: 7, interval: 4, len: '1/4' };
-A10.creatures.dVoice = { x: 12, y: 0, z: 1, pitch: 'D4', range: 7, interval: 4, len: '1/4' };
-A10.creatures.eVoice = { x: 1, y: 0, z: 7, pitch: 'E4', range: 7, interval: 4, len: '1/4' };
-A10.creatures.gVoice = { x: 12, y: 0, z: 7, pitch: 'G4', range: 7, interval: 4, len: '1/4' };
-A10.creatures.aVoice = { x: 4, y: 0, z: 0, pitch: 'A4', range: 7, interval: 4, len: '1/4' };
+const A9 = makeArea('poc-return', 'IX. The Star', 14);
+A9.spawn = { x: 10, y: 0, z: 12 };
+A9.teaches = ['slots', 'delete']; // the finale is serious tape surgery
+wallCol(A9, 13, [12]); // east wall holding the entry door (the turn moment)
+wallRow(A9, 10, [7]); // vestibule/hall divider holding the warm-up door
+A9.creatures.fVoice = { x: 1, y: 0, z: 12, song: note('F4', '1/4'), range: 7, interval: 4 };
+// Hall voices in SONG ORDER along the walls, counterclockwise from the
+// hall door: C C G G A A G(half) | F F E E D D C(half).
+A9.creatures.c1 = { x: 2, y: 0, z: 8, song: note('C4', '1/4'), range: 7, interval: 4 };
+A9.creatures.g1 = { x: 1, y: 0, z: 4, song: note('G4', '1/4'), range: 7, interval: 4 };
+A9.creatures.a1 = { x: 2, y: 0, z: 0, song: note('A4', '1/4'), range: 7, interval: 4 };
+A9.creatures.gHalf = { x: 5, y: 0, z: 0, song: note('G4', '1/2'), range: 7, interval: 4 };
+A9.creatures.e1 = { x: 9, y: 0, z: 0, song: note('E4', '1/4'), range: 7, interval: 4 };
+A9.creatures.d1 = { x: 12, y: 0, z: 2, song: note('D4', '1/4'), range: 7, interval: 4 };
+A9.creatures.cHalf = { x: 12, y: 0, z: 6, song: note('C4', '1/2'), range: 7, interval: 4 };
 const WARMUP_SONG = [
   { pitch: 'F4', length: '1/4' },
   { pitch: 'F4', length: '1/4' },
 ];
-A10.gates.entry = {
-  x: 7,
+A9.gates.entry = {
+  x: 13,
   y: 0,
-  z: 13,
-  song: ['B4'],
-  link: { puzzleId: 'poc-climb', gateId: 'exit' },
+  z: 12,
+  song: [
+    { pitch: 'D4', length: '1/4' },
+    { pitch: 'A4', length: '1/4' },
+    { pitch: 'D4', length: '1/4' },
+    { pitch: 'A4', length: '1/4' },
+  ],
+  link: { puzzleId: 'poc-clap', gateId: 'exit' },
 };
 // The warm-up door: an in-level ONE-WAY pair through the divider. The
 // vestibule face wants [F4,F4]; the hall face is alwaysOpen (escape hatch).
-A10.gates['warmup-in'] = {
+A9.gates['warmup-in'] = {
   x: 7,
   y: 0,
   z: 10,
   song: WARMUP_SONG,
   link: { puzzleId: 'poc-return', gateId: 'warmup-out' },
 };
-A10.gates['warmup-out'] = {
+A9.gates['warmup-out'] = {
   x: 7,
   y: 0,
   z: 8,
@@ -510,15 +596,16 @@ A10.gates['warmup-out'] = {
   link: { puzzleId: 'poc-return', gateId: 'warmup-in' },
   alwaysOpen: true,
 };
-A10.gates.exit = {
+A9.gates.exit = {
   x: 7,
   y: 0,
-  z: 4,
+  z: 5,
   song: TWINKLE,
   link: { puzzleId: 'poc-threshold', gateId: 'finale' },
 };
 
-const AREAS = [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10];
+const AREAS = [A1, A2, A3, A4, A5, A6, A7, A8, A9];
+const areaById = Object.fromEntries(AREAS.map((a) => [a.id, a]));
 
 // =========================================================================
 // Walkability model + BFS (mirrors ElevationGrid: slabs walkable on top AND
@@ -624,6 +711,90 @@ const minApproach = (area, seen, creature) => {
 };
 
 // =========================================================================
+// SOUND ROUTE MODEL (mirrors ListeningManager + PortalManager, v5):
+// - same area: direct 3D distance; a same-area PAIR face also hears from
+//   its partner face (one door, two ears — min of the two).
+// - across ONE seam (the engine routes a single door hop): through each
+//   door joining the two areas, dist(source, near face) + dist(far face,
+//   listener) — and when the LISTENER IS the far face, that second leg and
+//   the leak cost NOTHING (the pair-face leg is free).
+// Assertions compare routes against range + LEAK as a safety margin.
+// =========================================================================
+const DOORS = [];
+{
+  const seen = new Set();
+  AREAS.forEach((area) => {
+    Object.entries(area.gates).forEach(([gid, gate]) => {
+      if (!gate.link) return;
+      const target = areaById[gate.link.puzzleId];
+      const partner = target && target.gates[gate.link.gateId];
+      if (!partner) return;
+      const k = [`${area.id}:${gid}`, `${gate.link.puzzleId}:${gate.link.gateId}`].sort().join('|');
+      if (seen.has(k)) return;
+      seen.add(k);
+      DOORS.push({
+        aArea: area,
+        aGid: gid,
+        aGate: gate,
+        bArea: target,
+        bGid: gate.link.gateId,
+        bGate: partner,
+      });
+    });
+  });
+}
+/** Faces of the door containing gate (area,gid), or null. */
+const doorOf = (area, gid) =>
+  DOORS.find((d) => (d.aArea === area && d.aGid === gid) || (d.bArea === area && d.bGid === gid)) ||
+  null;
+const partnerOf = (area, gid) => {
+  const d = doorOf(area, gid);
+  if (!d) return null;
+  return d.aArea === area && d.aGid === gid
+    ? { area: d.bArea, gid: d.bGid, gate: d.bGate }
+    : { area: d.aArea, gid: d.aGid, gate: d.aGate };
+};
+/**
+ * Minimum effective distance from a creature (in its own area) to a
+ * listener gate, over every route the engine offers. Infinity when no
+ * route connects.
+ */
+function minHearingDistance(cArea, c, lArea, lGid) {
+  const listener = lArea.gates[lGid];
+  let best = Infinity;
+  if (cArea === lArea) {
+    best = dist3D(c, listener);
+    // Same-area pair: the listener also hears through its partner face
+    const p = partnerOf(lArea, lGid);
+    if (p && p.area === lArea) best = Math.min(best, dist3D(c, p.gate));
+  }
+  for (const d of DOORS) {
+    let near;
+    let far;
+    let farGid;
+    let farArea;
+    if (d.aArea === cArea && d.bArea === lArea) {
+      near = d.aGate;
+      far = d.bGate;
+      farGid = d.bGid;
+      farArea = d.bArea;
+    } else if (d.bArea === cArea && d.aArea === lArea) {
+      near = d.bGate;
+      far = d.aGate;
+      farGid = d.aGid;
+      farArea = d.aArea;
+    } else {
+      continue; // eslint-disable-line no-continue
+    }
+    if (cArea === lArea) continue; // eslint-disable-line no-continue -- direct already covers
+    const ownDoor = farArea === lArea && farGid === lGid;
+    const route = dist3D(c, near) + (ownDoor ? 0 : dist3D(far, listener));
+    if (route < best) best = route;
+  }
+  return best;
+}
+
+// =========================================================================
 // CHECKS
 // =========================================================================
 
@@ -657,7 +828,6 @@ AREAS.forEach((area) => {
 });
 
 // --- link graph: bidirectional, song-unified, ids resolve ---
-const areaById = Object.fromEntries(AREAS.map((a) => [a.id, a]));
 AREAS.forEach((area) => {
   Object.entries(area.gates).forEach(([gid, gate]) => {
     if (!gate.link) return;
@@ -682,83 +852,75 @@ AREAS.forEach((area) => {
   });
 });
 
-// --- self-solve / corruption separation ---
-// A creature within audibleRange(+leak) of a gate pollutes it. Exceptions:
-// the clap pair (they ARE the performers), the caged jammer beside area V's
-// jammed door (the lesson), and the free jammer beside area VI's exit (the
-// puzzle). An alwaysOpen face never matches anything, but keeping it inside
-// the separation rule costs nothing and keeps the soundscape honest.
+// --- self-solve / corruption separation (door-level, one door two ears) ---
+// A creature within hearing-route range(+LEAK margin) of a gate pollutes
+// it. INTENDED pollution is declared per DOOR: the jammer owns the jammed
+// door, the dance pair owns the dance exit, the pull jammer owns the pull
+// exit, the clap pair owns (and performs) the clap exit — in every case
+// BOTH faces of that door, per the both-ears rule.
 const INTENDED = new Set([
+  'poc-jam/jammer/exit-jammed',
+  'poc-dance/tension/exit',
+  'poc-dance/release/exit',
+  'poc-pull/jammer/exit',
   'poc-clap/first/exit',
   'poc-clap/second/exit',
-  'poc-jam/jammer/exit-jammed',
-  'poc-pull/jammer/exit',
 ]);
+const isIntended = (cAreaId, cName, lArea, lGid) => {
+  if (INTENDED.has(`${cAreaId}/${cName}/${lGid}`) && areaById[cAreaId] === lArea) return true;
+  // The partner face of an intended door is intended too (one door)
+  const p = partnerOf(lArea, lGid);
+  return !!p && INTENDED.has(`${cAreaId}/${cName}/${p.gid}`) && areaById[cAreaId] === p.area;
+};
 AREAS.forEach((area) => {
   Object.entries(area.creatures).forEach(([cn, c]) => {
-    Object.entries(area.gates).forEach(([gn, g]) => {
-      if (INTENDED.has(`${area.id}/${cn}/${gn}`)) return;
+    // Same-area gates
+    Object.entries(area.gates).forEach(([gn]) => {
+      if (isIntended(area.id, cn, area, gn)) return;
+      const d = minHearingDistance(area, c, area, gn);
       assert(
-        `${area.id}: ${cn} (${c.pitch}) cannot pollute gate ${gn} from its start`,
-        dist3D(c, g) > c.range + LEAK,
-        `${dist3D(c, g).toFixed(1)} > ${c.range + LEAK}`
+        `${area.id}: ${cn} cannot pollute gate ${gn} (route ${d.toFixed(1)})`,
+        d > c.range + LEAK,
+        `${d.toFixed(1)} > ${c.range + LEAK}`
       );
     });
+    // Gates of every OTHER area sharing a door with this one (cross-seam,
+    // including the free pair-face leg)
+    AREAS.forEach((other) => {
+      if (other === area) return;
+      const connected = DOORS.some(
+        (dd) =>
+          (dd.aArea === area && dd.bArea === other) || (dd.bArea === area && dd.aArea === other)
+      );
+      if (!connected) return;
+      Object.entries(other.gates).forEach(([gn]) => {
+        if (isIntended(area.id, cn, other, gn)) return;
+        const d = minHearingDistance(area, c, other, gn);
+        assert(
+          `${area.id}: ${cn} never reaches ${other.id}/${gn} through any seam (route ${d.toFixed(
+            1
+          )})`,
+          d > c.range + LEAK,
+          `${d.toFixed(1)} > ${c.range + LEAK}`
+        );
+      });
+    });
   });
-  // Creature pairs must not hear each other, EXCEPT the intended ensembles:
-  // the clap pair and the dance troupe, which must be force-safe by pitch.
+  // Creature pairs must not hear each other, EXCEPT the intended ensembles
+  // (the dance duet — force-safe by design and asserted below).
   const names = Object.keys(area.creatures);
   for (let i = 0; i < names.length; i += 1)
     for (let j = i + 1; j < names.length; j += 1) {
       const a = area.creatures[names[i]];
       const b = area.creatures[names[j]];
       const pairKey = [names[i], names[j]].sort().join('+');
-      if (area.id === 'poc-clap' && pairKey === 'first+second') {
-        assert(
-          'poc-clap: pair interval is PERFECT (no mutual force even in chorus)',
-          classify(interval(a.pitch, b.pitch)) === 'perfect',
-          `${a.pitch}-${b.pitch}`
-        );
-      } else if (area.id === 'poc-dance' && !pairKey.includes('voice')) {
-        // dancer-anchor: dissonant ON PURPOSE; anchor-anchor: unison
-        const cls = classify(interval(a.pitch, b.pitch));
-        assert(
-          `poc-dance: ${pairKey} interval is ${
-            a.pitch === b.pitch ? 'unison' : 'dissonant'
-          } by design`,
-          a.pitch === b.pitch ? cls === 'perfect' : cls === 'dissonant',
-          `${a.pitch}-${b.pitch} = ${cls}`
-        );
-      } else {
-        assert(
-          `${area.id}: ${names[i]} and ${names[j]} never hear each other`,
-          dist3D(a, b) > Math.max(a.range, b.range),
-          `${dist3D(a, b).toFixed(1)} > ${Math.max(a.range, b.range)}`
-        );
-      }
+      if (area.id === 'poc-dance' && pairKey === 'release+tension') continue; // eslint-disable-line no-continue
+      assert(
+        `${area.id}: ${names[i]} and ${names[j]} never hear each other`,
+        dist3D(a, b) > Math.max(a.range, b.range),
+        `${dist3D(a, b).toFixed(1)} > ${Math.max(a.range, b.range)}`
+      );
     }
-});
-
-// --- cross-seam pollution ---
-AREAS.forEach((area) => {
-  Object.entries(area.creatures).forEach(([cn, c]) => {
-    Object.entries(area.gates).forEach(([gn, g]) => {
-      if (!g.link) return;
-      const target = areaById[g.link.puzzleId];
-      const partner = target.gates[g.link.gateId];
-      if (!partner) return;
-      Object.entries(target.gates).forEach(([on, other]) => {
-        if (other === partner) return; // the pair itself is ONE door
-        if (area === target && area.gates[gn] === other) return; // self
-        const effective = dist3D(c, g) + dist3D(partner, other);
-        assert(
-          `${area.id}: ${cn} never reaches ${target.id}/${on} through the ${gn} seam`,
-          effective > c.range + LEAK,
-          `${effective.toFixed(1)} > ${c.range + LEAK}`
-        );
-      });
-    });
-  });
 });
 
 // --- element economy (STRICT: matching is pitch- AND duration-exact) ---
@@ -768,26 +930,18 @@ const recordableElementsByArea = AREAS.map((area) => {
   const seen = reachable(area, area.spawn);
   return Object.values(area.creatures)
     .filter((c) => minApproach(area, seen, c) <= c.range / 2)
-    .map((c) => creatureElement(c));
+    .flatMap((c) => creatureElements(c));
 });
-// Every exit door's elements must be first recordable in the door's own
-// area (poc-clap's D4 is creature-solved: the penned pair performs the
-// door). "exit*" ids are the forward doors; threshold's finale gate is
-// area X's exit, checked there.
+// Every exit door must be performable with elements from ITS area or
+// earlier, and never fully performable from earlier areas alone (no
+// skip-ahead). "exit*" ids are the forward doors; threshold's finale gate
+// is area IX's exit, checked there.
 AREAS.forEach((area, i) => {
   const before = new Set(recordableElementsByArea.slice(0, i).flat());
   const here = new Set([...before, ...recordableElementsByArea[i]]);
   Object.entries(area.gates).forEach(([gid, gate]) => {
     if (!gid.startsWith('exit')) return;
     const elements = songElements(gate.song);
-    if (area.id === 'poc-clap') {
-      assert(
-        'poc-clap: exit song is not fully performable from prior areas (clap is the intended solve)',
-        elements.some((e) => !before.has(e)),
-        `[${elements}] vs carried {${[...before]}}`
-      );
-      return;
-    }
     assert(
       `${area.id}: exit song [${elements}] is performable with elements from THIS area or earlier`,
       elements.every((e) => here.has(e)),
@@ -800,27 +954,57 @@ AREAS.forEach((area, i) => {
     );
   });
 });
+// The named finale lock: the QUARTER F4 exists only in area IX (F4 as a
+// whole note is area V's tool, F4|1/2 is the dance duet's — durations are
+// matched exactly, so neither can fake the finale's F).
 recordableElementsByArea.forEach((elements, i) => {
   if (AREAS[i].id === 'poc-return') return;
   assert(
-    `${AREAS[i].id}: finale pitch F4 is not recordable here (in ANY duration — the world stays locked)`,
-    !elements.some((e) => e.startsWith('F4|')),
+    `${AREAS[i].id}: the finale element F4|1/4 is not recordable here (the world stays locked)`,
+    !elements.includes('F4|1/4'),
     `{${elements}}`
   );
 });
+// The unsatisfiability fact behind the v5 guard relaxations, checked so it
+// can never silently stop being true (if it does, restore the old absolute
+// guards): after area V the carried pitch classes admit NO pitch class
+// that is dissonant-with-nothing-carried, and none consonant-with-nothing.
+{
+  const carriedClasses = new Set(
+    recordableElementsByArea
+      .slice(0, 5)
+      .flat()
+      .map((e) => pitchToMidi(e.split('|')[0]) % 12)
+  );
+  let dissonantFree = 0;
+  let consonantFree = 0;
+  for (let x = 0; x < 12; x += 1) {
+    const rel = [...carriedClasses].map((p) => (((x - p) % 12) + 12) % 12);
+    if (!rel.some((r) => classify(r) === 'dissonant')) dissonantFree += 1;
+    if (!rel.some((r) => classify(r) === 'consonant')) consonantFree += 1;
+  }
+  assert(
+    'v5 guard relaxation is still forced: every pitch class is dissonant with something carried after area V',
+    dissonantFree === 0,
+    `${dissonantFree} dissonant-free classes`
+  );
+  assert(
+    'v5 guard relaxation is still forced: every pitch class is consonant with something carried after area V',
+    consonantFree === 0,
+    `${consonantFree} consonant-free classes`
+  );
+}
 
 // --- non-stuck under DELETE: every reachable pocket is escapable ---
 // Pockets are the regions gates carve an area into (every gate cell
 // blocked, no same-area teleports). A player who deleted their whole tape
 // inside a pocket must still be able to leave: some boundary gate is an
 // alwaysOpen face, or its full song is recordable from INSIDE the pocket.
-// poc-clap is the sanctioned exception: its door is performed by the penned
-// pair (claps re-solve it from an empty tape, forever).
+// (v5: poc-clap no longer needs an exception — its plinth pair is
+// recordable from the floor AND re-performs the door forever.)
 AREAS.forEach((area) => {
-  if (area.id === 'poc-clap') return;
   const gateCells = Object.values(area.gates).map((g) => key(g.x, g.z));
   const fullReach = reachable(area, area.spawn);
-  // Enumerate pocket components over every walkable node
   const assigned = new Set();
   const pockets = [];
   for (let x = 0; x < area.grid; x += 1)
@@ -847,7 +1031,7 @@ AREAS.forEach((area) => {
       if (g.alwaysOpen) return true;
       return songElements(g.song).every((e) =>
         Object.values(area.creatures).some(
-          (c) => creatureElement(c) === e && minApproach(area, pocket, c) <= c.range / 2
+          (c) => creatureElements(c).includes(e) && minApproach(area, pocket, c) <= c.range / 2
         )
       );
     });
@@ -859,11 +1043,32 @@ AREAS.forEach((area) => {
   });
 });
 
+// --- area I: the threshold voice stays clear of both doors ---
+{
+  const { voice } = A1.creatures;
+  assert(
+    'poc-threshold: the finale gate wants the corrected Twinkle couplet',
+    songKey(A1.gates.finale.song) === JSON.stringify(TWINKLE) && A1.gates.finale.ending === true,
+    `${normalizeSong(A1.gates.finale.song).length} notes, ending`
+  );
+  assert(
+    'poc-threshold: Twinkle is 16 beats — quarters with phrase-ending halves',
+    songBeats(TWINKLE) === 16 &&
+      normalizeSong(TWINKLE).filter((n) => n.length === '1/2').length === 2,
+    `${songBeats(TWINKLE)} beats`
+  );
+  assert(
+    'poc-threshold: the voice is recordable',
+    minApproach(A1, reachable(A1, A1.spawn), voice) <= voice.range / 2,
+    minApproach(A1, reachable(A1, A1.spawn), voice).toFixed(2)
+  );
+}
+
 // --- area II: slots forced, and room 2 can never strand you ---
 assert(
   "poc-two-keys: the room-2 echo sings the inner door's note (E4 survives any deletion)",
-  A2.creatures.echo.pitch === songPitches(A2.gates.inner.song)[0],
-  `${A2.creatures.echo.pitch} vs ${songPitches(A2.gates.inner.song)}`
+  creaturePitches(A2.creatures.echo)[0] === songPitches(A2.gates.inner.song)[0],
+  `${creaturePitches(A2.creatures.echo)} vs ${songPitches(A2.gates.inner.song)}`
 );
 assert(
   'poc-two-keys: the two door notes differ (two slots genuinely needed)',
@@ -874,7 +1079,7 @@ assert(
   'poc-two-keys: the keyholders live in room 1, the echo in room 2',
   A2.creatures.east.z > 6 &&
     A2.creatures.west.z > 6 &&
-    A2.creatures.echo.z > 1 &&
+    A2.creatures.echo.z > 0 &&
     A2.creatures.echo.z < 6,
   'rooms'
 );
@@ -882,8 +1087,8 @@ assert(
 // second slot BEFORE entering (the echo must not hand it over late).
 assert(
   "poc-two-keys: the echo is not the EXIT's note (the two-slot lesson stands)",
-  A2.creatures.echo.pitch !== songPitches(A2.gates.exit.song)[0],
-  A2.creatures.echo.pitch
+  creaturePitches(A2.creatures.echo)[0] !== songPitches(A2.gates.exit.song)[0],
+  creaturePitches(A2.creatures.echo)[0]
 );
 
 // --- area III: the duet door needs both notes in order ---
@@ -902,180 +1107,186 @@ assert(
   );
 }
 
-// --- area IV: the dance is a working perpetual demo ---
+// --- area IV: the jam — a VISIBLE plinth singer kills door J forever ---
 {
-  const { anchorWest, anchorEast, dancer, voice } = A4.creatures;
-  assert(
-    'poc-dance: anchors share one pitch (unison: never move each other)',
-    anchorWest.pitch === anchorEast.pitch,
-    `${anchorWest.pitch}/${anchorEast.pitch}`
-  );
-  assert(
-    'poc-dance: dancer is DISSONANT with the anchors (their songs shove it)',
-    classify(interval(dancer.pitch, anchorWest.pitch)) === 'dissonant',
-    `${dancer.pitch} vs ${anchorWest.pitch}`
-  );
-  assert(
-    "poc-dance: the anchors don't react to the player's C5 (perfect fifth)",
-    classify(interval(voice.pitch, anchorWest.pitch)) === 'perfect',
-    `${voice.pitch} vs ${anchorWest.pitch}`
-  );
-  assert(
-    "poc-dance: the player's C5 tugs the dancer (non-perfect — invited participation)",
-    classify(interval(voice.pitch, dancer.pitch)) !== 'perfect',
-    `${voice.pitch} vs ${dancer.pitch}`
-  );
-  // Forces gate on the LISTENER's audible range: the dancer must hear both
-  // anchors from its whole wander zone, and anchors sit AT the lane ends so
-  // the dancer's dissonant song can only ever pin them harder against their
-  // own cliff edge (they never wander — but pinning slides them up to half a
-  // cell OUTWARD, which the dancer's range must absorb, or the dance
-  // strangles itself out of earshot; observed live 2026-07-10).
-  const lane = A4.floors[0];
-  assert(
-    'poc-dance: anchors sit at the lane ends (repulsion only pins them)',
-    anchorWest.x === lane.x1 && anchorEast.x === lane.x2,
-    `${anchorWest.x}/${anchorEast.x} vs lane ${lane.x1}-${lane.x2}`
-  );
-  const PIN_DRIFT = WORLD_SCALE / 2; // an anchor can slide to its cell face
-  const laneLen = (lane.x2 - lane.x1) * WORLD_SCALE;
-  assert(
-    'poc-dance: dancer hears a pinned anchor even from mid-lane',
-    dancer.range > laneLen / 2 + PIN_DRIFT,
-    `${dancer.range} > ${(laneLen / 2 + PIN_DRIFT).toFixed(1)}`
-  );
-  assert(
-    'poc-dance: the two hearing zones overlap (pong never stalls)',
-    2 * dancer.range > laneLen + 2 * PIN_DRIFT,
-    `${2 * dancer.range} > ${(laneLen + 2 * PIN_DRIFT).toFixed(1)}`
-  );
-  // The dance-area voice never disturbs the dancer on its own (the player
-  // must CARRY the note close for the nudge).
-  assert(
-    "poc-dance: the ground voice's own singing is out of the dancer's earshot",
-    dist3D(voice, dancer) > dancer.range,
-    `${dist3D(voice, dancer).toFixed(1)} > ${dancer.range}`
-  );
-  // Alternation: forces apply while the dancer SINGS and exactly one anchor
-  // sounds. Simulate the schedule and require repeated one-sided push
-  // windows in BOTH directions. Whole notes are 4 beats; all start on beat 0.
-  const SONG = 4;
-  const singsAt = (t, creature) => t % creature.interval < SONG;
-  let eastPushes = 0;
-  let westPushes = 0;
-  for (let t = 0; t < 340; t += 0.25) {
-    const dancerSinging = singsAt(t, dancer);
-    const w = singsAt(t, anchorWest);
-    const e = singsAt(t, anchorEast);
-    if (dancerSinging && w && !e) eastPushes += 0.25; // west anchor shoves east
-    if (dancerSinging && e && !w) westPushes += 0.25;
-  }
-  assert(
-    'poc-dance: the schedule shoves the dancer BOTH ways, repeatedly (perpetual dance)',
-    eastPushes >= 4 && westPushes >= 4,
-    `east ${eastPushes.toFixed(1)} beats, west ${westPushes.toFixed(1)} beats per 340`
-  );
-  // The stage is scenery: unreachable (no ramp), solid plinth (no
-  // walk-under), and the dancer's pitch is not recordable from the ground.
-  assert('poc-dance: no ramp touches the stage', A4.ramps.length === 0, 'scenery');
-  const f = A4.floors[0];
-  let plinthComplete = true;
-  for (let x = f.x1; x <= f.x2; x += 1)
-    for (let z = f.z1; z <= f.z2; z += 1) if (!A4.walls.has(key(x, z))) plinthComplete = false;
-  assert(
-    'poc-dance: the plinth under the stage is solid (no walk-under)',
-    plinthComplete,
-    'plinth'
-  );
-  const seen = reachable(A4, A4.spawn);
-  let onStage = false;
-  seen.forEach((node) => {
-    if (node.endsWith(',1')) onStage = true;
-  });
-  assert('poc-dance: the stage itself is unreachable', !onStage, 'cliff-penned');
-  // The stage pitches ARE recordable from beside the stage (their listener
-  // ranges must be big, so their recording ranges are too). Strict economy:
-  // the dancer's A5 opens NO door anywhere; the anchors' G5 appears ONLY in
-  // the duet-exit/dance-entry pair — a door already BEHIND the player by
-  // the time the stage is in recording reach.
-  assert(
-    "poc-dance: the dancer's pitch is in no door song",
-    AREAS.every((ar) =>
-      Object.values(ar.gates).every((g) => !songPitches(g.song).includes(dancer.pitch))
-    ),
-    dancer.pitch
-  );
-  assert(
-    "poc-dance: the anchors' pitch appears only in the duet-exit/dance-entry pair",
-    AREAS.every((ar) =>
-      Object.entries(ar.gates).every(
-        ([gid, g]) =>
-          !songPitches(g.song).includes(anchorWest.pitch) ||
-          (ar.id === 'poc-duet' && gid === 'exit') ||
-          (ar.id === 'poc-dance' && gid === 'entry')
-      )
-    ),
-    anchorWest.pitch
-  );
-}
-
-// --- area V: the jam — a caged continuous singer kills door J forever ---
-{
-  const { voice, jammer } = A5.creatures;
-  const J = A5.gates['exit-jammed'];
-  const K = A5.gates['exit-clean'];
+  const { voice, jammer } = A4.creatures;
+  const J = A4.gates['exit-jammed'];
+  const K = A4.gates['exit-clean'];
   assert(
     "poc-jam: both doors want the voice's note (identical, so only the jam differs)",
     songKey(J.song) === songKey(K.song) &&
       normalizeSong(J.song).length === 1 &&
-      songPitches(J.song)[0] === voice.pitch,
-    `${songKey(J.song)} vs ${songKey(K.song)} vs voice ${voice.pitch}`
+      songPitches(J.song)[0] === creaturePitches(voice)[0],
+    `${songKey(J.song)} vs ${songKey(K.song)} vs voice ${creaturePitches(voice)}`
   );
   assert(
-    'poc-jam: the two doors land on two DISTINCT gates of poc-pull',
-    J.link.puzzleId === 'poc-pull' &&
-      K.link.puzzleId === 'poc-pull' &&
+    'poc-jam: the two doors land on two DISTINCT gates of poc-dance',
+    J.link.puzzleId === 'poc-dance' &&
+      K.link.puzzleId === 'poc-dance' &&
       J.link.gateId !== K.link.gateId,
     `${J.link.gateId} / ${K.link.gateId}`
   );
   assert(
     'poc-jam: jammer is CONTINUOUS (interval == song length: no silence window, ever)',
-    jammer.interval === 4,
+    jammer.interval === songBeats(jammer.song),
     `interval ${jammer.interval}`
   );
   assert(
-    'poc-jam: jammer reaches door J even from the far pen corner (J can never open)',
-    dist3D(jammer, J) + PEN_DRIFT <= jammer.range,
-    `${(dist3D(jammer, J) + PEN_DRIFT).toFixed(1)} <= ${jammer.range}`
+    'poc-jam: jammer reaches door J even from the far plinth corner (J can never open)',
+    dist3D(jammer, J) + PLINTH_DRIFT <= jammer.range,
+    `${(dist3D(jammer, J) + PLINTH_DRIFT).toFixed(1)} <= ${jammer.range}`
+  );
+  assert(
+    'poc-jam: the jam crosses the seam — the both-ears rule keeps the far face (poc-dance/entry-a) jammed too',
+    minHearingDistance(A4, jammer, A5, 'entry-a') + PLINTH_DRIFT <= jammer.range,
+    `${(minHearingDistance(A4, jammer, A5, 'entry-a') + PLINTH_DRIFT).toFixed(1)} <= ${
+      jammer.range
+    }`
   );
   assert(
     'poc-jam: door K never hears the jammer (the clean control door)',
     dist3D(jammer, K) > jammer.range + LEAK,
     `${dist3D(jammer, K).toFixed(1)} > ${jammer.range + LEAK}`
   );
-  const ringComplete = [
-    [-1, -1],
-    [0, -1],
-    [1, -1],
-    [-1, 0],
-    [1, 0],
-    [-1, 1],
-    [0, 1],
-    [1, 1],
-  ].every(([dx, dz]) => A5.walls.has(key(jammer.x + dx, jammer.z + dz)));
-  assert('poc-jam: jammer pen ring is complete', ringComplete, `(${jammer.x},${jammer.z})`);
+  // The plinth pen: 1 cell at elevation 2, cliff-edged (no adjacent cell
+  // carries level 2, no ramps), VISIBLE, walkable underneath, and out of
+  // recording reach even from directly below.
+  const f = A4.floors[0];
   assert(
-    "poc-jam: pen standoff beats recording range (the jammer's B5 is unrecordable)",
-    jammer.range / 2 < PEN_STANDOFF,
-    `${jammer.range / 2} < ${PEN_STANDOFF}`
+    'poc-jam: the jammer stands on a 1-cell elevation-2 plinth',
+    f.elevation === 2 && f.x1 === f.x2 && f.z1 === f.z2 && jammer.x === f.x1 && jammer.z === f.z1,
+    JSON.stringify(f)
+  );
+  assert('poc-jam: no ramp reaches the plinth (cliff-penned)', A4.ramps.length === 0, 'scenery');
+  assert(
+    'poc-jam: the plinth cell is NOT walled (the jammer is visible, and the door approach passes beneath)',
+    !A4.walls.has(key(jammer.x, jammer.z)),
+    key(jammer.x, jammer.z)
+  );
+  const seen = reachable(A4, A4.spawn);
+  assert(
+    'poc-jam: the player can walk UNDER the plinth to the jammed door',
+    canReach(seen, jammer.x, jammer.z, 0),
+    'walk-under'
+  );
+  assert(
+    'poc-jam: the plinth top is unreachable (no level-2 cell in the walk graph)',
+    ![...seen].some((n) => n.endsWith(',2')),
+    'cliff-penned'
+  );
+  assert(
+    "poc-jam: the jammer's B5 is unrecordable from anywhere reachable (even directly beneath)",
+    minApproach(A4, seen, jammer) > jammer.range / 2,
+    `${minApproach(A4, seen, jammer).toFixed(2)} > ${jammer.range / 2}`
   );
   assert(
     "poc-jam: the jammer's pitch is in no door song anywhere",
     AREAS.every((ar) =>
-      Object.values(ar.gates).every((g) => !songPitches(g.song).includes(jammer.pitch))
+      Object.values(ar.gates).every(
+        (g) => !songPitches(g.song).includes(creaturePitches(jammer)[0])
+      )
     ),
-    jammer.pitch
+    creaturePitches(jammer)[0]
   );
+}
+
+// --- area V: the dance — tension and release, and the F4 broom ---
+{
+  const { tension, release, voice } = A5.creatures;
+  const { exit } = A5.gates;
+  const toolPitch = creaturePitches(voice)[0];
+  assert(
+    "poc-dance: the tool and the exit song are both a plain F4 whole note (the voice's element)",
+    toolPitch === 'F4' &&
+      songKey(exit.song) === JSON.stringify([{ pitch: 'F4', length: '1/1' }]) &&
+      creatureElements(voice)[0] === 'F4|1/1',
+    `${creatureElements(voice)} vs ${songKey(exit.song)}`
+  );
+  assert(
+    'poc-dance: the duet songs are the test-003 pair — B3→C4 and F4→E4 in halves',
+    songKey(tension.song) === JSON.stringify(DANCE_SONG_A) &&
+      songKey(release.song) === JSON.stringify(DANCE_SONG_B),
+    `${songKey(tension.song)} / ${songKey(release.song)}`
+  );
+  assert(
+    'poc-dance: the duet is SYNCED (same interval, both continuous — same phase from the start gate)',
+    tension.interval === release.interval &&
+      tension.interval === songBeats(tension.song) &&
+      release.interval === songBeats(release.song),
+    `interval ${tension.interval}`
+  );
+  // The tension-release contract: simultaneous intervals are dissonant then
+  // consonant (V7 → I: the tritone resolves to the major third).
+  const beat0 = classify(interval(tension.song[0].pitch, release.song[0].pitch));
+  const beat2 = classify(interval(tension.song[1].pitch, release.song[1].pitch));
+  assert(
+    'poc-dance: the duet is TENSION (dissonant) then RELEASE (consonant)',
+    beat0 === 'dissonant' && beat2 === 'consonant',
+    `${beat0} then ${beat2}`
+  );
+  // The F4 broom: net repulsion, and NO note of the duet is ever attracted
+  // by it (the designer's interval math, asserted).
+  const f4Reactions = [...tension.song, ...release.song].map((n) =>
+    classify(interval('F4', n.pitch))
+  );
+  assert(
+    'poc-dance: F4 never ATTRACTS a duet note (nothing consonant with the tool)',
+    !f4Reactions.includes('consonant'),
+    f4Reactions.join(',')
+  );
+  assert(
+    'poc-dance: F4 REPELS at least one note of EACH dancer (net repulsion on both)',
+    tension.song.some((n) => classify(interval('F4', n.pitch)) === 'dissonant') &&
+      release.song.some((n) => classify(interval('F4', n.pitch)) === 'dissonant'),
+    f4Reactions.join(',')
+  );
+  // Both dancers park in front of the exit and corrupt it from the start.
+  [tension, release].forEach((c, idx) => {
+    assert(
+      `poc-dance: dancer ${idx + 1} jams the exit from its park spot`,
+      dist3D(c, exit) <= c.range - 0.5,
+      `${dist3D(c, exit).toFixed(1)} <= ${c.range - 0.5}`
+    );
+  });
+  // The breathing oscillation stays inside mutual earshot: starting
+  // separation plus one full repel phase per dancer (kinematic drift model
+  // above), with margin.
+  const startSep = dist3D(tension, release);
+  const phaseSeconds = 2 * (60 / TEMPO); // each duet note is a half = 2 beats
+  const oscillation = DRIFT_PER_S * phaseSeconds; // per dancer per phase
+  assert(
+    'poc-dance: the pair always hears itself (range covers the oscillation span, with margin)',
+    Math.min(tension.range, release.range) > startSep + 2 * oscillation + 2,
+    `${Math.min(tension.range, release.range)} > ${(startSep + 2 * oscillation + 2).toFixed(1)}`
+  );
+  assert(
+    'poc-dance: the pair starts apart enough to converge, above the contact floor',
+    startSep > CREATURE_CONTACT,
+    `${startSep.toFixed(1)} > ${CREATURE_CONTACT}`
+  );
+  // The room is deep enough to shove the pair fully out of the exit's
+  // earshot (the un-jam needs parking space beyond range).
+  const seen = reachable(A5, A5.spawn);
+  let parkCells = 0;
+  seen.forEach((nodeStr) => {
+    const [x, z, l] = nodeStr.split(',').map(Number);
+    if (l === 0 && dist3D({ x, z, y: 0 }, exit) > Math.max(tension.range, release.range) + 1)
+      parkCells += 1;
+  });
+  assert(
+    'poc-dance: plenty of reachable floor lies beyond the exit’s earshot (somewhere to shove the pair)',
+    parkCells >= 8,
+    `${parkCells} park cells`
+  );
+  // The voice must not disturb the duet on its own (its F4 would shove
+  // them), and the duet must not reach the voice either.
+  [tension, release].forEach((c, idx) => {
+    assert(
+      `poc-dance: the F4 voice sings outside dancer ${idx + 1}'s earshot (with oscillation margin)`,
+      dist3D(voice, c) > c.range + oscillation,
+      `${dist3D(voice, c).toFixed(1)} > ${(c.range + oscillation).toFixed(1)}`
+    );
+  });
 }
 
 // --- area VI: the pull — the movable jammer IS the puzzle ---
@@ -1084,12 +1295,12 @@ assert(
   const { exit } = A6.gates;
   assert(
     'poc-pull: voice is CONSONANT with the jammer (playback ATTRACTS it)',
-    classify(interval(voice.pitch, jammer.pitch)) === 'consonant',
-    `${voice.pitch} vs ${jammer.pitch}`
+    classify(interval(creaturePitches(voice)[0], creaturePitches(jammer)[0])) === 'consonant',
+    `${creaturePitches(voice)} vs ${creaturePitches(jammer)}`
   );
   assert(
-    'poc-pull: jammer is CONTINUOUS (area V’s jam, now free-standing)',
-    jammer.interval === 4,
+    'poc-pull: jammer is CONTINUOUS (area IV’s jam, now free-standing)',
+    jammer.interval === songBeats(jammer.song),
     `interval ${jammer.interval}`
   );
   assert(
@@ -1100,14 +1311,13 @@ assert(
   assert(
     "poc-pull: the exit wants the VOICE's note, never the jammer's",
     normalizeSong(exit.song).length === 1 &&
-      songPitches(exit.song)[0] === voice.pitch &&
-      !songPitches(exit.song).includes(jammer.pitch),
+      songPitches(exit.song)[0] === creaturePitches(voice)[0],
     songKey(exit.song)
   );
   assert(
-    'poc-pull: jammer starts far from both entry doors',
-    ['entry-a', 'entry-b'].every((g) => dist3D(jammer, A6.gates[g]) > jammer.range + LEAK),
-    ['entry-a', 'entry-b'].map((g) => dist3D(jammer, A6.gates[g]).toFixed(1)).join(' / ')
+    'poc-pull: jammer starts far from the entry door',
+    dist3D(jammer, A6.gates.entry) > jammer.range + LEAK,
+    dist3D(jammer, A6.gates.entry).toFixed(1)
   );
   const seen = reachable(A6, A6.spawn);
   assert(
@@ -1116,8 +1326,8 @@ assert(
     'open'
   );
   let parkCells = 0;
-  seen.forEach((node) => {
-    const [x, z, l] = node.split(',').map(Number);
+  seen.forEach((nodeStr) => {
+    const [x, z, l] = nodeStr.split(',').map(Number);
     if (l === 0 && dist3D({ x, z, y: 0 }, exit) > jammer.range + 1) parkCells += 1;
   });
   assert(
@@ -1125,21 +1335,20 @@ assert(
     parkCells >= 8,
     `${parkCells} park cells`
   );
-  // Nothing recordable by now may PUSH the jammer (dissonant would let the
-  // player wedge it INTO places the pull can't recover cleanly).
-  const available = new Set(
-    recordableElementsByArea
-      .slice(0, 6)
-      .flat()
-      .map((e) => e.split('|')[0])
-  );
-  available.forEach((p) => {
-    assert(
-      `poc-pull: ${p} cannot PUSH the jammer (nothing dissonant with ${jammer.pitch})`,
-      classify(interval(p, jammer.pitch)) !== 'dissonant',
-      classify(interval(p, jammer.pitch))
-    );
+  // v5 RELAXED GUARD (the old "nothing carried may PUSH the jammer" is
+  // unsatisfiable — see the header): recovery is guaranteed structurally
+  // instead. The room is an OPEN rectangle (no interior walls beyond the
+  // two door rows), so a shoved jammer can always be approached and pulled
+  // back by A4 — there is nowhere to wedge it out of the pull's reach.
+  const interiorWalls = [...A6.walls].filter((k2) => {
+    const [, z] = k2.split(',').map(Number);
+    return z !== 0 && z !== A6.grid - 1;
   });
+  assert(
+    'poc-pull: the room is an open rectangle (a pushed jammer is always recoverable by the pull)',
+    interiorWalls.length === 0,
+    `${interiorWalls.length} interior walls`
+  );
   // Non-stuck even if the player parks the jammer NEXT TO the voice (mutual
   // consonance cuddles them at creature-contact): a clean A4 take must
   // survive — stand on the voice's far side, inside the voice's recording
@@ -1156,26 +1365,34 @@ assert(
   const { voice, pusher } = A7.creatures;
   assert(
     'poc-push: voice is DISSONANT with the pusher (repels)',
-    classify(interval(voice.pitch, pusher.pitch)) === 'dissonant',
-    `${voice.pitch} vs ${pusher.pitch}`
+    classify(interval(creaturePitches(voice)[0], creaturePitches(pusher)[0])) === 'dissonant',
+    `${creaturePitches(voice)} vs ${creaturePitches(pusher)}`
   );
-  const available = new Set(
+  // v5 RELAXED GUARD (the old "nothing carried may PULL the pusher" is
+  // unsatisfiable — see the header): the pusher's pitch is chosen so the
+  // ONLY carried consonant class is G — the oldest carried note (areas
+  // II/III), the least likely to still be on the tape. Asserted so a
+  // future pitch shuffle can't silently widen the pull-back surface.
+  const carried = new Set(
     recordableElementsByArea
       .slice(0, 7)
       .flat()
       .map((e) => e.split('|')[0])
   );
-  available.forEach((p) => {
-    assert(
-      `poc-push: ${p} cannot PULL the pusher back (nothing consonant with ${pusher.pitch})`,
-      classify(interval(p, pusher.pitch)) !== 'consonant',
-      classify(interval(p, pusher.pitch))
-    );
-  });
+  const consonantCarried = new Set(
+    [...carried]
+      .filter((p) => classify(interval(p, creaturePitches(pusher)[0])) === 'consonant')
+      .map((p) => p.replace(/\d+$/, ''))
+  );
+  assert(
+    "poc-push: the only carried pitch class consonant with the pusher is G (minimal pull-back surface — designer's flag)",
+    consonantCarried.size === 1 && consonantCarried.has('G'),
+    `{${[...consonantCarried]}}`
+  );
   assert(
     "poc-push: the exit door wants the PUSHER's own note (creatures activate gates)",
     normalizeSong(A7.gates.exit.song).length === 1 &&
-      songPitches(A7.gates.exit.song)[0] === pusher.pitch,
+      songPitches(A7.gates.exit.song)[0] === creaturePitches(pusher)[0],
     songKey(A7.gates.exit.song)
   );
   assert(
@@ -1196,70 +1413,99 @@ assert(
     'open'
   );
   const flanked = A7.walls.has(key(5, 5)) && A7.walls.has(key(7, 5));
-  assert(
-    'poc-push: pusher sits in a 1-wide corridor',
-    flanked,
-    `(${A7.creatures.pusher.x},${A7.creatures.pusher.z})`
-  );
+  assert('poc-push: pusher sits in a 1-wide corridor', flanked, `(${pusher.x},${pusher.z})`);
   let herdable = false;
-  open.forEach((node) => {
-    const [x, z, l] = node.split(',').map(Number);
+  open.forEach((nodeStr) => {
+    const [x, z, l] = nodeStr.split(',').map(Number);
     if (l === 0 && dist3D({ x, z, y: 0 }, A7.gates.exit) <= pusher.range) herdable = true;
   });
   assert('poc-push: a reachable strip cell puts the pusher in door range', herdable, 'strip');
 }
 
-// --- area VIII: clap math ---
+// --- area VIII: clap math (v5: visible plinth pair, quarter-note chord) ---
 {
   const { first, second } = A8.creatures;
   const door = A8.gates.exit;
   const doorPitches = songPitches(door.song);
   assert(
-    'poc-clap: door melody is [first, second]',
-    doorPitches[0] === first.pitch && doorPitches[1] === second.pitch,
+    'poc-clap: door melody is a whole measure of the pair alternating [D4,A4,D4,A4]',
+    JSON.stringify(doorPitches) === JSON.stringify(['D4', 'A4', 'D4', 'A4']) &&
+      normalizeSong(door.song).every((n) => n.length === '1/4'),
     doorPitches.join(',')
   );
-  [first, second].forEach((c, i) => {
-    assert(
-      `poc-clap: creature ${i + 1} reaches the door with margin`,
-      dist3D(c, door) <= c.range - 0.5,
-      `${dist3D(c, door).toFixed(1)} <= ${c.range - 0.5}`
-    );
-  });
   assert(
-    'poc-clap: intervals match and leave >=1 beat of silence',
-    first.interval === second.interval && first.interval - 8 >= 1,
-    `interval ${first.interval}`
+    'poc-clap: the pair sings the door’s two notes as single quarters',
+    creatureElements(first)[0] === 'D4|1/4' && creatureElements(second)[0] === 'A4|1/4',
+    `${creatureElements(first)} / ${creatureElements(second)}`
   );
   assert(
-    'poc-clap: displacement (1 beat) reaches the 4-beat offset and wraps the cycle',
+    'poc-clap: one-beat songs on a two-beat interval, in phase (a chord until clapped)',
+    first.interval === 2 && second.interval === 2 && songBeats(first.song) === 1,
+    `interval ${first.interval}/${second.interval}`
+  );
+  assert(
+    'poc-clap: one clap (1/4 displacement = one beat) turns the chord into the alternating melody',
     A8.clapDisplacement === '1/4',
     A8.clapDisplacement
   );
-  // Clap reach is 3D and the player's ear sits at eye height, so the
-  // EFFECTIVE horizontal clap radius is sqrt(CLAP² − EYE²) — the pens must
-  // sit farther apart than twice that for a double-clap spot to be
-  // impossible.
-  const clapReachH = Math.sqrt(CLAP_RANGE * CLAP_RANGE - EYE * EYE);
+  assert(
+    'poc-clap: pair interval is PERFECT (no mutual force, no force from the player’s D/A takes)',
+    classify(interval(creaturePitches(first)[0], creaturePitches(second)[0])) === 'perfect',
+    `${creaturePitches(first)}-${creaturePitches(second)}`
+  );
+  [first, second].forEach((c, i) => {
+    assert(
+      `poc-clap: creature ${i + 1} reaches the door with margin (even with plinth drift)`,
+      dist3D(c, door) + PLINTH_DRIFT <= c.range - 0.5,
+      `${(dist3D(c, door) + PLINTH_DRIFT).toFixed(1)} <= ${c.range - 0.5}`
+    );
+  });
+  // The pair stands on VISIBLE 1-cell elevation-1 plinths (cliff-penned:
+  // claps and forces can never reposition them out of door range, which
+  // preserves the empty-tape escape guarantee), recordable from the floor.
+  const seen = reachable(A8, A8.spawn);
+  [first, second].forEach((c, i) => {
+    const plinth = A8.floors.find((f2) => f2.x1 === c.x && f2.z1 === c.z);
+    assert(
+      `poc-clap: creature ${i + 1} stands on a 1-cell elevation-1 plinth`,
+      plinth && plinth.elevation === 1 && plinth.x1 === plinth.x2 && plinth.z1 === plinth.z2,
+      JSON.stringify(plinth || null)
+    );
+    assert(
+      `poc-clap: creature ${
+        i + 1
+      } is recordable from the floor (its quarter enters the carried set by design)`,
+      minApproach(A8, seen, c) <= c.range / 2,
+      minApproach(A8, seen, c).toFixed(2)
+    );
+  });
+  assert('poc-clap: no ramp reaches the plinths (cliff-penned)', A8.ramps.length === 0, 'pen');
+  assert(
+    'poc-clap: the plinth tops are unreachable',
+    ![...seen].some((n) => n.endsWith(',1')),
+    'cliff-penned'
+  );
+  // Clap reach is 3D from the player's eye; the plinths sit one level up,
+  // so the effective horizontal clap radius shrinks accordingly. The pair
+  // must sit farther apart than twice that (no spot claps both at once)…
+  const clapReachH = Math.sqrt(CLAP_RANGE * CLAP_RANGE - (ELEV - EYE) * (ELEV - EYE));
   assert(
     'poc-clap: pair separation exceeds twice the effective clap reach (no double-clap spot)',
     dist3D(first, second) > 2 * clapReachH,
     `${dist3D(first, second).toFixed(1)} > ${(2 * clapReachH).toFixed(1)}`
   );
-  // Hint lens: somewhere REACHABLE (scanned at half-cell resolution — the
-  // player moves continuously) hears both creatures within clap range of one.
-  const seen = reachable(A8, A8.spawn);
+  // …while SOME reachable spot hears both mid-clash within clap range of
+  // one (the C-hint lens, scanned at half-cell resolution).
   const cells = new Set();
-  seen.forEach((node) => {
-    const [x, z, l] = node.split(',').map(Number);
+  seen.forEach((nodeStr) => {
+    const [x, z, l] = nodeStr.split(',').map(Number);
     if (l === 0) cells.add(key(x, z));
   });
   let hintSpot = false;
-  cells.forEach((k) => {
-    const [cx, cz] = k.split(',').map(Number);
+  cells.forEach((k2) => {
+    const [cx, cz] = k2.split(',').map(Number);
     for (let dx = -0.5; dx <= 0.5; dx += 0.5)
       for (let dz = -0.5; dz <= 0.5; dz += 0.5) {
-        // Only positions whose containing cell is open
         const px = cx + dx;
         const pz = cz + dz;
         const dFirst = playerDist({ x: px, z: pz }, 0, first);
@@ -1273,89 +1519,24 @@ assert(
       }
   });
   assert(
-    'poc-clap: a reachable spot hears both creatures within clap range of one',
+    'poc-clap: a reachable spot hears both creatures within clap range of one (the C-hint moment)',
     hintSpot,
     'lens'
   );
-  [first, second].forEach((c, i) => {
-    const ringComplete = [
-      [-1, -1],
-      [0, -1],
-      [1, -1],
-      [-1, 0],
-      [1, 0],
-      [-1, 1],
-      [0, 1],
-      [1, 1],
-    ].every(([dx, dz]) => A8.walls.has(key(c.x + dx, c.z + dz)) || c.x + dx < 0 || c.z + dz < 0);
-    assert(`poc-clap: creature ${i + 1} pen ring is complete`, ringComplete, `(${c.x},${c.z})`);
-  });
 }
 
-// --- area IX: the climb is forced by pillars, the ramp works ---
+// --- area IX: the warm-up teaches the finale's skills, the hall delivers ---
 {
-  const { perch } = A9.creatures;
-  const rec = perch.range / 2;
-  const seen = reachable(A9, A9.spawn);
-  let groundMin = Infinity;
-  let slabMin = Infinity;
-  seen.forEach((node) => {
-    const [x, z, l] = node.split(',').map(Number);
-    const d = playerDist({ x, z }, l, perch);
-    if (l === 0) groundMin = Math.min(groundMin, d);
-    else slabMin = Math.min(slabMin, d);
-  });
-  assert(
-    'poc-climb: perch is OUT of recording range from every ground cell (pillars force the climb)',
-    groundMin > rec,
-    `${groundMin.toFixed(2)} > ${rec}`
-  );
-  assert(
-    'poc-climb: perch IS recordable from the slab',
-    slabMin <= rec - 0.3,
-    `${slabMin.toFixed(2)} <= ${rec - 0.3}`
-  );
-  assert('poc-climb: the slab is reachable (ramp connects)', slabMin < Infinity, 'ramp');
-  assert(
-    'poc-climb: a pillar sits directly beneath the perch',
-    A9.walls.has(key(perch.x, perch.z)),
-    key(perch.x, perch.z)
-  );
-}
-
-// --- area IX: the walk-under is forced ---
-{
-  const underSlab = [];
-  const f = A9.floors[0];
-  for (let x = f.x1; x <= f.x2; x += 1)
-    for (let z = f.z1; z <= f.z2; z += 1) if (!A9.walls.has(key(x, z))) underSlab.push(key(x, z));
-  const sealed = reachable(A9, A9.spawn, underSlab);
-  const rampLow = { x: 9, z: 2 };
-  assert(
-    'poc-climb: without passing UNDER the slab, the ramp cannot be reached',
-    !canReach(sealed, rampLow.x, rampLow.z, 0),
-    'sealed'
-  );
-  const open = reachable(A9, A9.spawn);
-  assert(
-    'poc-climb: the under-slab route reaches the ramp',
-    canReach(open, rampLow.x, rampLow.z, 0),
-    'open'
-  );
-}
-
-// --- area X: the warm-up teaches the finale's skills, the hall delivers ---
-{
-  const V = A10.gates['warmup-in'];
-  const H = A10.gates['warmup-out'];
-  const { exit } = A10.gates;
-  const { fVoice } = A10.creatures;
+  const V = A9.gates['warmup-in'];
+  const H = A9.gates['warmup-out'];
+  const { exit, entry } = A9.gates;
+  const { fVoice } = A9.creatures;
   assert(
     'poc-return: the warm-up door wants the SAME quarter note twice (repetition, one voice)',
     songKey(V.song) ===
       JSON.stringify([
-        { pitch: fVoice.pitch, length: '1/4' },
-        { pitch: fVoice.pitch, length: '1/4' },
+        { pitch: creaturePitches(fVoice)[0], length: '1/4' },
+        { pitch: creaturePitches(fVoice)[0], length: '1/4' },
       ]),
     songKey(V.song)
   );
@@ -1376,22 +1557,57 @@ assert(
   );
   // The vestibule must teach BEFORE the hall: its voice is the only
   // F4 quarter, recordable south of the divider.
-  const vestibule = reachable(A10, A10.spawn, [key(V.x, V.z), key(H.x, H.z)], 'none');
+  const vestibule = reachable(A9, A9.spawn, [key(V.x, V.z), key(H.x, H.z)], 'none');
   assert(
     "poc-return: the warm-up song is recordable INSIDE the vestibule (the lesson can't be skipped)",
-    minApproach(A10, vestibule, fVoice) <= fVoice.range / 2,
-    minApproach(A10, vestibule, fVoice).toFixed(2)
+    minApproach(A9, vestibule, fVoice) <= fVoice.range / 2,
+    minApproach(A9, vestibule, fVoice).toFixed(2)
   );
-  // The finale: the full couplet, all quarters, all six elements local.
+  // The ENTRY forces the turn-around moment: it sits in a SIDE wall
+  // relative to the player's northward travel, so its north and south
+  // neighbors are blocked and the way out is a turn to the west.
+  const entryNorth = A9.walls.has(key(entry.x, entry.z - 1));
+  const entrySouth = A9.walls.has(key(entry.x, entry.z + 1));
+  const entryWestOpen = !A9.walls.has(key(entry.x - 1, entry.z));
   assert(
-    'poc-return: the finale song IS the Twinkle couplet',
+    'poc-return: the entry door is in a SIDE wall — arriving forces a turn inside the frame (the look-back moment)',
+    entryNorth && entrySouth && entryWestOpen,
+    `N wall ${entryNorth}, S wall ${entrySouth}, W open ${entryWestOpen}`
+  );
+  // The finale: the corrected couplet, one voice per ELEMENT.
+  assert(
+    'poc-return: the finale song IS the corrected Twinkle couplet',
     songKey(exit.song) === JSON.stringify(TWINKLE),
     `${normalizeSong(exit.song).length} notes`
   );
+  const finaleElements = [...new Set(songElements(exit.song))];
+  const voiceElements = Object.values(A9.creatures).map((c) => creatureElements(c)[0]);
   assert(
-    'poc-return: the finale is all QUARTER notes (carried whole notes can never fake it)',
-    normalizeSong(exit.song).every((n) => n.length === '1/4'),
-    'quarters'
+    'poc-return: EIGHT voices — one per distinct finale element, no creature reused',
+    finaleElements.length === 8 &&
+      Object.keys(A9.creatures).length === 8 &&
+      new Set(voiceElements).size === 8 &&
+      finaleElements.every((e) => voiceElements.includes(e)),
+    `elements {${finaleElements}} vs voices {${voiceElements}}`
+  );
+  assert(
+    'poc-return: every voice sings a SINGLE note (elements only — no chunks of the answer)',
+    Object.values(A9.creatures).every((c) => c.song.length === 1),
+    'single notes'
+  );
+  // Song-order placement: walking the hall wall counterclockwise from the
+  // hall door, the voices appear in the order their elements FIRST occur
+  // in the couplet (the vestibule's F4 is the F element, already in hand).
+  const hallOrder = ['c1', 'g1', 'a1', 'gHalf', 'e1', 'd1', 'cHalf'];
+  const firstOccurrence = [];
+  songElements(exit.song).forEach((e) => {
+    if (e !== 'F4|1/4' && !firstOccurrence.includes(e)) firstOccurrence.push(e);
+  });
+  assert(
+    'poc-return: hall voices stand in SONG ORDER along the path',
+    JSON.stringify(hallOrder.map((n) => creatureElements(A9.creatures[n])[0])) ===
+      JSON.stringify(firstOccurrence),
+    `${hallOrder.map((n) => creatureElements(A9.creatures[n])[0])}`
   );
   assert(
     'poc-return: the finale portal pairs with the threshold finale gate, which rolls the credits',
@@ -1400,24 +1616,31 @@ assert(
       A1.gates.finale.ending === true,
     'ending'
   );
-  const elementsHere = new Set(Object.values(A10.creatures).map((c) => creatureElement(c)));
+}
+
+// --- teaches: the hint verbs are assigned along the chain ---
+{
+  const assigned = AREAS.flatMap((a) => a.teaches);
   assert(
-    "poc-return: every finale element is one of the hall/vestibule voices' notes",
-    songElements(exit.song).every((e) => elementsHere.has(e)),
-    `{${[...elementsHere]}}`
+    'teaches: area I teaches move/record/playback',
+    JSON.stringify(A1.teaches) === JSON.stringify(['move', 'record', 'playback']),
+    A1.teaches.join(',')
+  );
+  assert('teaches: slots arrive at area II', A2.teaches.includes('slots'), A2.teaches.join(','));
+  assert(
+    'teaches: delete arrives at the dance',
+    A5.teaches.includes('delete'),
+    A5.teaches.join(',')
   );
   assert(
-    'poc-return: elements only — every voice sings a SINGLE quarter note (no chunks of the answer)',
-    Object.values(A10.creatures).every((c) => c.len === '1/4'),
-    'single quarters'
+    'teaches: clap arrives at the clap area',
+    A8.teaches.includes('clap'),
+    A8.teaches.join(',')
   );
   assert(
-    'poc-return: six voices, six distinct pitches (as few creatures as the couplet allows)',
-    new Set(Object.values(A10.creatures).map((c) => c.pitch)).size === 6 &&
-      Object.keys(A10.creatures).length === 6,
-    Object.values(A10.creatures)
-      .map((c) => c.pitch)
-      .join(',')
+    'teaches: every hint verb is taught somewhere',
+    ['move', 'record', 'playback', 'slots', 'delete', 'clap'].every((v) => assigned.includes(v)),
+    assigned.join(',')
   );
 }
 
@@ -1439,7 +1662,7 @@ AREAS.forEach((area) => {
       type: 'creature',
       position: { x: c.x, y: c.y || 0, z: c.z },
       data: {
-        song: [{ pitch: c.pitch, length: c.len || '1/1' }],
+        song: c.song,
         interval: c.interval,
         audibleRange: c.range,
       },
@@ -1472,6 +1695,7 @@ AREAS.forEach((area) => {
     tempo: TEMPO,
     keySignature: KEY,
     timeSignature: TIME_SIG,
+    teaches: area.teaches,
     ...(area.clapDisplacement ? { clapDisplacement: area.clapDisplacement } : {}),
     playerStart: area.spawn,
     ...(area.floors.length ? { floors: area.floors } : {}),

@@ -59,6 +59,7 @@ import portalB from '../fixtures/puzzles/portal-b.json';
 import portalLiveA from '../fixtures/puzzles/portal-live-a.json';
 import portalLiveB from '../fixtures/puzzles/portal-live-b.json';
 import portalSelf from '../fixtures/puzzles/portal-self.json';
+import portalOneway from '../fixtures/puzzles/portal-oneway.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -101,6 +102,7 @@ const TEST_PUZZLES = {
   'portal-live-a': portalLiveA,
   'portal-live-b': portalLiveB,
   'portal-self': portalSelf,
+  'portal-oneway': portalOneway,
 };
 
 /**

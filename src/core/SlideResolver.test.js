@@ -128,7 +128,7 @@ describe('resolveSlide — cliff gate (real elevation logic)', () => {
 });
 
 describe('canMoveTo', () => {
-  it('passes the candidate position, mover radius and ignore id to the wall gate', () => {
+  it('passes the candidate position, mover radius, ignore id and FROM position to the wall gate', () => {
     CollisionDetector.checkCollision.mockImplementation(() => false);
     const ok = canMoveTo(0, 0, 9, 9, 0.9, 'self-id', 0, null, 1.8);
     expect(ok).toBe(true);
@@ -136,7 +136,8 @@ describe('canMoveTo', () => {
       { x: 9, y: 1.8, z: 9 },
       0.9,
       'self-id',
-      null
+      null,
+      { x: 0, y: 1.8, z: 0 }
     );
   });
 

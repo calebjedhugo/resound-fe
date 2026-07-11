@@ -13,6 +13,13 @@ This document defines the structure for Resound puzzle files.
   "tempo": number,                   // BPM (typically 120)
   "clapDisplacement": "string",      // OPTIONAL: Default beat displacement for claps (e.g., "1/8", "1/4")
                                      // If omitted, uses system default (1/16)
+  "teaches": ["string"],             // OPTIONAL: key-hint verbs this puzzle teaches — any of
+                                     // "move", "record", "playback", "slots", "delete", "clap".
+                                     // Hints for these verbs are ACTIVE in this puzzle regardless
+                                     // of player history; each retires for the CURRENT VISIT when
+                                     // performed and re-arms on re-entry (world entry or a doorway
+                                     // crossing back in). [] = no hints here. Omitted = every hint
+                                     // eligible (dev/legacy levels).
   "playerStart": {                   // Player starting position (grid coordinates)
     "x": number,                     // Grid X
     "y": number,                     // Elevation level (integer, 0 = ground)
@@ -157,6 +164,11 @@ link to **itself** (validation error).
 - **`alwaysOpen` faces are exempt from mirroring**: a pair with a
   permanently-open face is a ONE-WAY door — each face keeps its own
   openness. Crossing requires the face you enter to be open.
+- **A pair shares its EARS (ruled 2026-07-11)**: a sound within
+  source-range of EITHER face corrupts (and can complete) the door's
+  matching, with no leak penalty between the two faces of the same door. A
+  continuous singer beside one face therefore jams the door from BOTH
+  sides.
 
 ## Note Format
 

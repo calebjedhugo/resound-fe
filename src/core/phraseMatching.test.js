@@ -154,6 +154,37 @@ describe('evaluatePhrases — exact anchored matching', () => {
     expect(evaluatePhrases(listener)).toBe('in-progress');
   });
 
+  it('stays in-progress ACROSS an onset boundary while the due note may still land (no fade flicker)', () => {
+    // Between one note's end and the next onset, the next note arrives a few
+    // frames "late" (scheduling jitter within the matcher's own tolerance).
+    // Judging those frames as not-in-progress snapped the gate shell opaque
+    // mid-performance — read as negative feedback during a CORRECT take.
+    const listener = makeListener({
+      notes: [[0, 'B4']],
+      nowBeats: 1.05, // the second onset (beat 1) is due but within tolerance
+    });
+    expect(evaluatePhrases(listener)).toBe('in-progress');
+  });
+
+  it('drops in-progress once a due onset is conclusively missed (past tolerance)', () => {
+    const listener = makeListener({
+      notes: [[0, 'B4']],
+      nowBeats: 1.2, // past beat 1 + tolerance: the performance died
+    });
+    expect(evaluatePhrases(listener)).toBe(false);
+  });
+
+  it('a WRONG note at the due onset fails immediately — the grace is only for silence', () => {
+    const listener = makeListener({
+      notes: [
+        [0, 'B4'],
+        [1, 'F4'],
+      ],
+      nowBeats: 1.05,
+    });
+    expect(evaluatePhrases(listener)).not.toBe('in-progress');
+  });
+
   it('rejects a rotated take', () => {
     const listener = makeListener({
       notes: [

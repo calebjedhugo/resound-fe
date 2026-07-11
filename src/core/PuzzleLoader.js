@@ -32,6 +32,12 @@ class PuzzleLoader {
     if (!puzzleData.gridSize) throw new Error('Puzzle missing gridSize');
     if (!puzzleData.playerStart) throw new Error('Puzzle missing playerStart');
     if (!Array.isArray(puzzleData.entities)) throw new Error('Puzzle entities must be an array');
+    if (
+      puzzleData.teaches !== undefined &&
+      (!Array.isArray(puzzleData.teaches) || puzzleData.teaches.some((t) => typeof t !== 'string'))
+    ) {
+      throw new Error('Puzzle teaches must be an array of hint ids');
+    }
 
     return puzzleData;
   }

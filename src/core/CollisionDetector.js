@@ -41,9 +41,12 @@ class CollisionDetector {
    * @param {?Area} area - the mover's area: collision is strictly area-local
    *   (a neighbor's entities can never block a mover here). Defaults to the
    *   player's/active area.
+   * @param {?Object} fromPosition - the mover's CURRENT (pre-move) position.
+   *   When given, a closed gate whose box the mover already overlaps does
+   *   not block them (open from within — see the gate branch below).
    * @returns {boolean} True if collision detected
    */
-  static checkCollision(position, radius, ignoreId = null, area = null) {
+  static checkCollision(position, radius, ignoreId = null, area = null, fromPosition = null) {
     const positionElevation = this.getElevationForPosition(position, area);
     const entities = area ? area.entities : gameState.entities;
 
@@ -85,11 +88,19 @@ class CollisionDetector {
           return true;
         }
       } else if (entity.type === 'gate') {
-        // Only collide with closed gates. An open gate LATCHES open until
-        // the player walks through (close-on-exit, ruled 2026-07-10), so a
-        // door can never close around an occupant — no special occupant
-        // handling needed.
-        const solid = !entity.isOpen;
+        // Only collide with closed gates — except around the PLAYER while
+        // their body already overlaps the box: a one-way crossing (through
+        // an alwaysOpen face) legally teleports the player INTO its CLOSED
+        // partner face, and a box solid to its own occupant wedges them
+        // forever (DESIGN.md: a door is solid from outside, open from
+        // within). The exception ends the moment they step fully clear, and
+        // never lets anyone IN: approached from outside, the occupant check
+        // is false before any overlapping move could be attempted.
+        const occupantEscaping =
+          ignoreId === null &&
+          fromPosition !== null &&
+          this.checkCircleBoxCollision(fromPosition, radius, entity.position, 1.5);
+        const solid = !entity.isOpen && !occupantEscaping;
         if (solid) {
           if (this.checkCircleBoxCollision(position, radius, entity.position, 1.5)) {
             return true;

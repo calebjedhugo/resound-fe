@@ -9,9 +9,11 @@ import { onSlotFlash } from 'ui/slotFlash';
 /**
  * KeyHints - wordless contextual key hints.
  *
- * Each hint is a bare keycap glyph (no sentences) that appears the first time
- * the situation calls for its action and retires permanently (HintMemory)
- * once the player performs it:
+ * Each hint is a bare keycap glyph (no sentences) that appears when the
+ * situation calls for its action. WHICH hints are live comes from the
+ * puzzle's `teaches` list (HintMemory, armed per visit — re-entering a
+ * puzzle re-arms them); performing the action retires the hint for the
+ * current visit:
  *
  *   move     - W A S D cluster, bottom-center HUD; retires on first movement
  *   record   - "R" sprite floating over a creature in recording range;
@@ -343,11 +345,13 @@ class KeyHints {
       this.clapSprite.visible = false;
       return;
     }
-    // Same level only: a clash on an unreachable stage (e.g. the dance
-    // diorama) is scenery, not a clap invitation.
+    // 3D clap reach — the clap pair may sit on plinths (visible pens); a
+    // creature within true clap range is a clap invitation regardless of
+    // level. (Puzzles that DON'T teach clap never show this hint at all —
+    // hints are gated by the puzzle's `teaches` list.)
     const inClapRange = singing
       .map((c) => ({ c, d: getDistance(position, c.position) }))
-      .filter(({ c, d }) => d <= CLAP_RANGE && Math.abs(c.position.y - (position.y - 1.8)) < 1.5)
+      .filter(({ d }) => d <= CLAP_RANGE)
       .sort((a, b) => a.d - b.d);
     if (inClapRange.length === 0) {
       this.clapSprite.visible = false;

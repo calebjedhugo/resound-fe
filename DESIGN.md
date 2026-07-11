@@ -76,6 +76,14 @@ automated playtesters can observe them.)
   mechanics. Polyphonic targets (chords, multi-voice) keep their true
   rhythm. A failed utterance flashes the target red (wordless feedback)
   and is logged in the F3 panel.
+  - **Onset-boundary grace (2026-07-11, round 4):** between one note's end
+    and the next onset of a correct take, the due note arrives a few frames
+    "late" (scheduling jitter inside the matcher's own tolerance). A due
+    onset with NO note yet is judged *pending* (still in-progress) until
+    `now` is conclusively past it — so the gate's fade never snaps opaque
+    between the notes of a correct performance. A WRONG note at the onset
+    still fails instantly; Gate's fade also RESUMES from its current level
+    rather than restarting at opaque after any momentary judgment gap.
 - **Gates open on the COMPLETED song, LATCH, and close when you walk
   through** (ruled 2026-07-10, superseding the 2026-07-05 play-to-pass grace
   and its multi-note caveat). The full rule:
@@ -107,8 +115,12 @@ automated playtesters can observe them.)
     stands there (its in-progress + just-completed windows chain into a
     continuous hold; verified live: a door with the poc-push pusher parked
     beside it stays open 100% of the time).
-  - The notation **stays displayed forever**; `isOpen` drives collision +
-    green tint; there is still no permanent `isActivated` on gates.
+  - **An open gate has NO shell at all — no green tint** (ruled 2026-07-11,
+    round 4): transparency is the game's vocabulary for "open", for linked
+    doors and plain gates alike, so `isOpen` drives collision + full
+    transparency. The red mismatch flash still lands on the CLOSED look.
+  - The notation **stays displayed forever**; there is still no permanent
+    `isActivated` on gates.
     Fountains are unchanged (latch on the exact full match). Re-crossing a
     consumed door costs a fresh performance, so "songs as keys you carry"
     is intact.
@@ -217,6 +229,16 @@ rulings, in the designer's words where it matters:
   song opens both sides, open state is mirrored across the pair, and each
   face hears both areas — a creature on one side and a player on the other
   can complete the song together.
+- **…and the pair SHARES ITS EARS (ruled 2026-07-11, round 4 — "That's a
+  bug, I should not have been able to solve that gate"):** a sound within
+  source-range of EITHER face corrupts (and can complete) the door's
+  matching, with NO leak penalty between the two faces of the same door.
+  The jam therefore holds from the far side (round 4's jammed door was
+  openable from the next area because the corruption paid the leak), and
+  the clap pair's song re-opens their door from the far side (a player who
+  exited the "wrong" way is never trapped). Implemented as listener-aware
+  seam routing (`PortalManager._routeThroughDoor`) plus a partner-ear
+  minimum in `Gate.onNoteCaptured` for same-area pairs.
 - **Tempo gradient (ruled 2026-07-07):** the single world clock runs at the
   ACTIVE area's tempo but blends toward a mismatched neighbor's tempo as the
   player nears its door (reaching the midpoint AT the doorway, symmetric on
@@ -255,14 +277,28 @@ rulings, in the designer's words where it matters:
   cell-edge jitter never flickers the world. The doorway view is drawn on
   the FAR plane of the cell (the inside of the opposite panel, facing back
   at the viewer), so an entering camera commits ~2.7 units before it could
-  ever touch the view surface — the threshold has no dead frame.
-- **A door never closes on its occupant — body included.** If the open
-  grace lapses while the player stands in the doorway, the gate holds in
-  OCCUPIED OVERTIME: solid and closed-looking from the outside (creatures
-  can't enter), open from within — until the player steps out, when it
-  closes for real. "Steps out" means their collision radius fully clears
-  the box (closing on a body still overlapping the face would wedge them
-  against it). Exits from overtime are plain walks like any other.
+  ever touch the view surface — the threshold has no dead frame. The view
+  pass clips ONE CELL behind the window plane (round-4 fix): the partner's
+  own doorway cell — floor, frame walls, and its NOTATION (front-facing
+  planes only) — paints into the view, so the floor flows continuously
+  through an open door and the arrival staff is visible BEFORE stepping in
+  (nothing pops in on entry). Deeper near-side content still clips (double
+  world / sliced-creature hazard). During a pass the partner's BOX and
+  every portal surface of BOTH ends hide (a same-area pair painting its own
+  stale textures was round 4's hall-of-mirrors "display got weird").
+  Portal render targets are HALF-resolution — a doorway panel covers a
+  fraction of the screen, and full-res targets made open doors cost several
+  fullscreen renders per frame (the round-4 fan spin).
+- **A door never closes on its occupant — body included, and a closed box
+  is OPEN FROM WITHIN (round-4 fix, 2026-07-11).** Gates latch, so a door
+  can no longer close around a body — but a ONE-WAY crossing (through an
+  alwaysOpen face) legally lands the player INSIDE the CLOSED partner
+  face, and a box solid to its own occupant wedged them forever (Caleb got
+  stuck in the warm-up door). A closed gate therefore never blocks the
+  player while their body already overlaps its box (CollisionDetector's
+  occupant-escape, keyed on the mover's pre-move position): solid from
+  outside, open from within. The exception never lets anyone IN, and
+  creatures are still always blocked.
 - **A linked pair shares ONE song** (ruled 2026-07-07; "for now, I might
   change my mind later"). The pair mirrors its open state at runtime, so
   differing songs are ill-defined. Linking unifies: the INITIATING gate's
@@ -320,74 +356,96 @@ rulings, in the designer's words where it matters:
 
 - **No words, no controls overlay.** The full-screen help screen is gone
   (`ControlsOverlay` deleted). Teaching happens through wordless contextual
-  key hints (`ui/KeyHints.js`): bare keycap glyphs that appear the first time
-  a situation calls for an action and retire **permanently** once the player
-  performs it (`core/HintMemory.js`, localStorage `resound-hints`). Hints:
-  WASD cluster (idle at spawn), floating "R" over a creature in recording
-  range, floating spacebar over a target in playback reach, slot arrows when
-  recording would overwrite the active slot, and a floating "C" over the
-  nearest clap-range creature while two or more audible creatures sing AT
-  ONCE (the clash a clap untangles; added 2026-07-10 for the POC clap area —
-  it retires on a C pressed during such a clash).
+  key hints (`ui/KeyHints.js`): bare keycap glyphs that appear when a
+  situation calls for an action. **Hints are PUZZLE-DRIVEN (ruled
+  2026-07-11, round 4, superseding the permanent localStorage
+  retirement):** each puzzle declares what it teaches (`teaches:
+  ["move", ...]` in its JSON — see puzzles/schema.md) and those hints are
+  live there regardless of player history; performing the action retires
+  the hint for the CURRENT VISIT only, and re-entering the puzzle (world
+  entry or a doorway crossing back in) re-arms it (`core/HintMemory.js`,
+  in-memory only — no browser storage). A puzzle with no `teaches` keeps
+  every hint eligible (dev/legacy levels); `teaches: []` shows none.
+  Hints: WASD cluster (idle at spawn), floating "R" over a creature in
+  recording range, floating spacebar over a target in playback reach, slot
+  arrows when recording would overwrite the active slot, "⌫" after a
+  judged miss with two or more takes, and a floating "C" over the nearest
+  clap-range creature (3D reach — the clap pair sits on plinths) while two
+  or more audible creatures sing AT ONCE.
 - **Boot straight into the world, not the menu.** The first manifest entry
   is the intro level and the game's front door; the menu is reachable via
   Esc → Main Menu. The `?puzzle=<id>` editor deep link wins over the default.
   As of 2026-07-10 the front door is `poc-threshold`, area I of the POC
   world (below); `awakening` and `the-lure` remain in the manifest.
-- **The POC world (added 2026-07-10; restructured same day after the
-  designer's first playtest; redesigned 2026-07-11 twice — round 2: STRICT
-  economy + the jam mechanic; round 3: the TAPE model, the Twinkle finale,
-  and the closing card)** is a chain of TEN small portal-linked areas
-  teaching every element except fountains, wordlessly and non-stuck:
+- **The POC world (added 2026-07-10; v5 restructure after the designer's
+  round-4 playtest, 2026-07-11)** is a chain of NINE small portal-linked
+  areas teaching every element except fountains, wordlessly and non-stuck.
+  `poc-climb` was CUT ("if the puzzle doesn't NEED a ramp, there should be
+  no ramp"); elevation survives as VISIBLE plinth pens (no creature is ever
+  sealed inside opaque walls — designer's rule). The chain:
   I `poc-threshold` (move/record/play/first door — and a locked FINALE
-  PORTAL standing mid-room, wanting a real song in quarter notes nothing
-  before area X can perform; every player red-flashes it in minute one and
-  finally emerges FROM it at the end), II `poc-two-keys` (slots: two
-  single-note doors in series — pure inventory, no timing; room 2 holds an
-  E4 ECHO of the inner door's note, so even a fully deleted tape can
-  always leave), III `poc-duet` (ordering: a two-note door [E5,G5] —
-  record them in tape order and Space performs both; the fifth above area
-  II's notes, since matching is octave-exact), IV `poc-dance` (SPECTACLE:
-  an unreachable elevated stage where two alternating unison anchors
-  bounce a dissonant dancer forever — creatures moving creatures,
-  witnessed before the player ever needs harmony forces; the ground voice
-  is C5, the exit note — perfect against the anchors, consonant against
-  the dancer, so carrying it up to the stage still tugs the dancer), V
-  `poc-jam` (a CONTINUOUS singer — whole note, interval == song length, so
-  no silence window EVER — beside a door corrupts its matching forever;
-  two identical [A3] doors, one with a caged B5 jammer beside it, one
-  clean; the same tape opens only the clean one; the jammed door is never
-  required, and both doors land in area VI as separate entries), VI
-  `poc-pull` (the jam weaponized AND solved: a free-standing continuous C5
-  jammer stands beside the only exit; the local voice A4 is consonant with
-  it, so playback PULLS it — a leash, working only within the jammer's own
-  listening radius; drag it out of the door's earshot, then perform in the
-  quiet), VII `poc-push` (dissonance repels; the pushed creature's own
-  song opens the exit), VIII `poc-clap` (penned pair chords the door's two
-  notes; claps shift one until the chord becomes the melody), IX
-  `poc-climb` (walk-under + ramp; pillars force the climb), X `poc-return`
-  — **"The Star"**, the finale: a warm-up vestibule teaches quarter notes
-  and repetition (one F4 voice singing a single quarter; the door wants
-  [F4,F4] — record the same voice twice; its hall face is the built
-  one-way alwaysOpen escape hatch, finally used), then a concert hall of
-  five more single-quarter voices (C4 D4 E4 G4 A4) around the walls — the
-  ELEMENTS of Twinkle Twinkle Little Star, never chunks of it — and a
-  central portal wanting the full couplet (14 quarters), linked to area
-  I's mid-room finale gate. Assemble the tape, perform it, walk through,
-  and the demo's ONE sanctioned use of words appears: a dismissible
-  "Thanks for playing → calebhugo.com" overlay (`ui/EndingOverlay.js`,
-  triggered by the arrival gate's `ending: true` flag; credits after the
-  game is over don't violate the wordless-teaching rule). **Strict ELEMENT
-  economy (matching is pitch- AND duration-exact, so the economy tracks
-  (pitch, length) elements): every door's elements are first recordable in
-  the door's own area, asserted with NO exemptions** (poc-clap's D4 is
-  creature-solved; the dance stage's G5/A5 open nothing ahead — G5 exists
-  only in the duet-exit/dance-entry pair, already behind the player). The
-  finale is all quarter notes — elements that exist ONLY in area X, so
-  carried whole notes can never open it early — and F4 in any duration
-  exists only in area X. All geometry is generated + self-checked (480+
-  asserts, including the dance schedule simulation, jam audibility margins
-  with in-pen drift, the pull's far-side re-record escape, and the
+  PORTAL standing mid-room, wanting the corrected Twinkle couplet whose
+  elements nothing before area IX can perform; every player red-flashes it
+  in minute one and finally emerges FROM it at the end), II `poc-two-keys`
+  (slots: two single-note doors in series; room 2 holds an E4 ECHO of the
+  inner door's note, so even a fully deleted tape can always leave), III
+  `poc-duet` (ordering: a two-note door [E5,G5] — record them in tape
+  order and Space performs both), IV `poc-jam` (a CONTINUOUS B5 singer —
+  interval == song length, no silence window EVER — jams a door forever:
+  two identical [A3] doors, the jammer on a 1-cell ELEVATION-2 PLINTH
+  directly over the west door's approach — visible, cliff-penned,
+  unrecordable even from directly beneath (4.2 > range/2 = 4) — and the
+  player literally walks under the singing jammer to red-flash the door
+  that can never open; both doors land in area V as separate entries, and
+  the both-ears rule keeps the jammed door's FAR face jammed too), V
+  `poc-dance` (the movable jam — the DESIGNER'S OWN tension-and-release
+  design: two creatures parked before the exit sing the test-003 duet,
+  B3→C4 and F4→E4 in halves, synced and continuous — tritone REPELS them
+  apart, major third PULLS them back, a breathing oscillation around a
+  fixed centroid that CORRUPTS the door forever; the tool and the door are
+  both a plain F4 whole: tritone-then-perfect against one dancer,
+  unison-then-minor-second against the other — NET REPULSION, nothing
+  attracts — so performing F4 between the pair and the door a few times
+  shoves the duet out of earshot and then opens it), VI `poc-pull` (the
+  jam weaponized and solved: a free continuous C5 jammer beside the only
+  exit; the local A4 is consonant — playback PULLS it out of earshot,
+  then the door hears you), VII `poc-push` (dissonance repels: the E5
+  tool pushes the Bb5 pusher up its corridor until its own song opens the
+  exit — creatures activate gates; unused flanks walled off), VIII
+  `poc-clap` (the D4/A4 pair on VISIBLE elevation-1 plinths flanking the
+  exit, singing single QUARTERS on a 2-beat interval IN PHASE — a chord,
+  corruption; one clap (displacement 1/4 = one beat) shifts one creature
+  and the chord becomes the alternating melody [D4,A4,D4,A4] the door
+  wants — it self-opens, forever; plinth-penning keeps the pair in door
+  range so the empty-tape escape guarantee needs no exception), IX
+  `poc-return` — **"The Star"**, the finale: the ENTRY sits in a SIDE
+  wall, forcing a turn inside the doorframe (the look-back moment the
+  designer liked in the cut climb, preserved by orientation); a warm-up
+  vestibule teaches quarter notes and repetition (one F4 voice singing a
+  single quarter; the door wants [F4,F4] — record the same voice twice;
+  its hall face is the one-way alwaysOpen escape hatch), then a concert
+  hall of SEVEN more single-note voices — with the vestibule's F, the
+  EIGHT ELEMENTS of the corrected Twinkle (quarter C D E F G A, HALF G,
+  HALF C: each phrase ends on a half note), one voice per element, placed
+  in SONG ORDER along the hall walls — and a central portal wanting the
+  full couplet, linked to area I's mid-room finale gate (`ending: true` →
+  the thanks-for-playing overlay, the demo's one sanctioned use of words).
+  **Strict ELEMENT economy (matching is pitch- AND duration-exact)**:
+  every exit door is performable with elements from its own area or
+  earlier and NEVER from earlier areas alone; the finale's six FRESH
+  elements exist only in area IX (D4|1/4 and A4|1/4 carried from the clap
+  are fine — six others gate it), and F4|1/4 exists ONLY in area IX (the
+  named lock; F4|1/1 is area V's tool, F4|1/2 the dance duet's).
+  **Relaxed guards (v5, forced):** with the dance pair recordable, the
+  carried pitch classes {C,E,F,G,A,B} leave NO pitch class dissonant-free
+  or consonant-free (checked exhaustively by the generator), so the old
+  absolute pull/push guards are unsatisfiable. The pull room is instead an
+  OPEN RECTANGLE (a pushed jammer is always recoverable by the A4 pull),
+  and the pusher is Bb5 — the unique pitch whose only carried consonant
+  class is G (the oldest note, smallest pull-back surface). Both
+  relaxations await the designer's ruling. All geometry is generated +
+  self-checked (480+ asserts, including the tension-release contract, jam
+  audibility margins with plinth drift, the both-ears seam model, and the
   empty-tape pocket-escape rule that keeps DELETE from ever stranding a
   player) by `puzzles/gen-poc.js`; edit the generator and rerun, never
   the JSONs.

@@ -97,6 +97,15 @@ export default function evaluatePhrases(listener) {
         const want = anchorBeat + onset.beat;
         if (!windowClosed && want > nowBeat + TOL_BEATS) break; // rest is future
         const group = groups.find((g) => !used.has(g) && Math.abs(g.beat - want) <= TOL_BEATS);
+        if (!group && !windowClosed && nowBeat <= want + TOL_BEATS) {
+          // Onset-boundary grace: the due note hasn't arrived yet but is
+          // still within tolerance (scheduling jitter between one note's end
+          // and the next onset). Treat it like a future onset — the
+          // performance is still in progress, so the gate's fade never
+          // snaps opaque between the notes of a correct take. A WRONG note
+          // at the onset (group found, mismatched) still fails at once.
+          break;
+        }
         if (!group || !groupMatchesOnset(group, onset)) {
           aligned = false;
           break;

@@ -17,9 +17,11 @@ import gameState from 'core/GameState';
 class ListeningManager {
   static listeners = []; // Entities that are listening
 
-  // (noteEvent, sourceArea, listenerArea) => transformed event | null.
-  // Installed by PortalManager; null result = the areas share no doorway
-  // (or the sound can't make the trip), so the listener hears nothing.
+  // (noteEvent, sourceArea, listenerArea, listener) => transformed event |
+  // null. Installed by PortalManager; null result = the areas share no
+  // doorway (or the sound can't make the trip), so the listener hears
+  // nothing. The listener rides along so a door face can hear through its
+  // OWN pair with no leak (one door, two ears).
   static seamRouter = null;
 
   /**
@@ -56,7 +58,10 @@ class ListeningManager {
         return;
       }
 
-      const throughDoor = this.seamRouter(noteEvent, sourceArea, listenerArea);
+      // Listener-aware routing: a linked pair is ONE door with two ears, so
+      // the router waives the leak (and the local leg) when the listener is
+      // itself a face of the door the sound crosses.
+      const throughDoor = this.seamRouter(noteEvent, sourceArea, listenerArea, listener);
       if (throughDoor) {
         listener.onNoteCaptured(throughDoor);
       }

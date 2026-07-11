@@ -1,0 +1,33 @@
+{
+  "id": "portal-oneway",
+  "name": "Portal One-Way",
+  "difficulty": 1,
+  "gridSize": 12,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 9 },
+  "entities": [
+    {
+      "type": "gate",
+      "id": "vestibule",
+      "facing": "north",
+      "link": { "puzzleId": "portal-oneway", "gateId": "hall" },
+      "position": { "x": 5, "y": 0, "z": 7 },
+      "song": [
+        { "pitch": "F4", "length": "1/4" },
+        { "pitch": "F4", "length": "1/4" }
+      ]
+    },
+    {
+      "type": "gate",
+      "id": "hall",
+      "facing": "south",
+      "alwaysOpen": true,
+      "link": { "puzzleId": "portal-oneway", "gateId": "vestibule" },
+      "position": { "x": 5, "y": 0, "z": 5 },
+      "song": [
+        { "pitch": "F4", "length": "1/4" },
+        { "pitch": "F4", "length": "1/4" }
+      ]
+    }
+  ]
+}

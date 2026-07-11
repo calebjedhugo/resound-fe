@@ -123,12 +123,33 @@ class Gate extends Entity {
     // arrives via the doorway: sourcePosition is the door on OUR side and
     // extraDistance is the source->partner-gate leg (+ closed-door leak) —
     // this is how a song can be completed by singing on both sides of a door.
-    const distance =
+    let distance =
       (noteEvent.extraDistance || 0) + getDistance(this.position, noteEvent.sourcePosition);
+    // One door, two ears (ruled 2026-07-11): a SAME-AREA pair shares its
+    // heard-note state — the note also counts from the partner face, with no
+    // leak between the faces. (Cross-area pairs get the same treatment in
+    // PortalManager's seam router.)
+    const partner = this._sameAreaPartner();
+    if (partner) {
+      distance = Math.min(
+        distance,
+        (noteEvent.extraDistance || 0) + getDistance(partner.position, noteEvent.sourcePosition)
+      );
+    }
     if (distance > (noteEvent.sourceRange ?? this.audibleRange)) return; // Too far, ignore
 
     // Capture the note
     this.capturedNotes.push(noteEvent);
+  }
+
+  /** The other face of an in-level (same-puzzle) door pair, or null. */
+  _sameAreaPartner() {
+    if (!this.link || !this.area || this.link.puzzleId !== this.area.id) return null;
+    return (
+      this.area.entityManager
+        .getByType('gate')
+        .find((g) => g !== this && g.gateId === this.link.gateId) || null
+    );
   }
 
   /**
@@ -229,9 +250,13 @@ class Gate extends Entity {
     if (!this.mesh || !this.mesh.material) return;
     const m = this.mesh.material;
     if (!this.isOpen && this._inProgress) {
-      if (!this._inProgressSinceMs) this._inProgressSinceMs = Date.now();
       const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
       const songMs = this._songBeats * (60000 / tempo);
+      // Resume from the CURRENT fade level rather than restarting at opaque:
+      // if judgment ever drops in-progress for a frame mid-take (onset
+      // boundaries, scheduling jitter), the shell must not snap solid and
+      // re-fade — that reads as negative feedback during a correct take.
+      if (!this._inProgressSinceMs) this._inProgressSinceMs = Date.now() - this._fade * songMs;
       const progress =
         songMs > 0 ? Math.min(1, (Date.now() - this._inProgressSinceMs) / songMs) : 1;
       if (progress !== this._fade) {
@@ -322,26 +347,16 @@ class Gate extends Entity {
     this._applyLook();
   }
 
-  /**
-   * Linked-door look: while open, the gate box vanishes entirely — only the
-   * doorway views (and the notation) show, so a working door never shows a
-   * green shell from any angle. PortalManager enables this once the door's
-   * see-through views are viable; unlinked gates and dangling links keep
-   * the ordinary open-gate green.
-   */
-  setDoorLook(enabled) {
-    if (this._doorLook === Boolean(enabled)) return;
-    this._doorLook = Boolean(enabled);
-    this._applyLook();
-  }
-
   /** Paint the gate for its current open/closed state (color + transparency). */
   _applyLook() {
     const m = this.mesh.material;
     if (this.isOpen) {
-      m.color.setHex(0x00ff00); // green + semi-transparent when open
+      // An open gate has NO shell at all — no green tint (ruled 2026-07-11):
+      // transparency is the game's vocabulary for "open", for linked doors
+      // and plain gates alike. The notation stays; the red mismatch flash
+      // still lands on the CLOSED look.
       m.transparent = true;
-      m.opacity = this._doorLook ? 0 : 0.3; // a working door has no shell
+      m.opacity = 0;
     } else {
       m.color.setHex(0xffaa00);
       m.transparent = false;

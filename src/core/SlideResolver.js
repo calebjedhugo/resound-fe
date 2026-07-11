@@ -30,11 +30,19 @@ function canMoveTo(fromX, fromZ, toX, toZ, radius, ignoreId, priorLevel, grid, y
     }
     candidateY = getFloorY(toX, toZ, grid, priorLevel);
   }
+  // The FROM position rides along so a closed gate box the mover already
+  // overlaps (a one-way crossing lands the player INSIDE the closed partner
+  // face) is open from within instead of wedging them.
   return !CollisionDetector.checkCollision(
     { x: toX, y: candidateY, z: toZ },
     radius,
     ignoreId,
-    area
+    area,
+    {
+      x: fromX,
+      y: candidateY,
+      z: fromZ,
+    }
   );
 }
 

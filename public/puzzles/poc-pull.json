@@ -6,6 +6,7 @@
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
+  "teaches": [],
   "playerStart": {
     "x": 6,
     "y": 0,
@@ -35,7 +36,7 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 3
+        "z": 2
       },
       "data": {
         "song": [
@@ -75,6 +76,14 @@
     {
       "type": "wall",
       "position": {
+        "x": 3,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
         "x": 4,
         "y": 0,
         "z": 11
@@ -91,14 +100,6 @@
     {
       "type": "wall",
       "position": {
-        "x": 6,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
         "x": 7,
         "y": 0,
         "z": 11
@@ -108,6 +109,14 @@
       "type": "wall",
       "position": {
         "x": 8,
+        "y": 0,
+        "z": 11
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
         "y": 0,
         "z": 11
       }
@@ -133,7 +142,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -141,7 +150,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -149,7 +158,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -157,7 +166,7 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -165,7 +174,7 @@
       "position": {
         "x": 4,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -173,7 +182,7 @@
       "position": {
         "x": 5,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -181,7 +190,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -189,7 +198,7 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -197,7 +206,7 @@
       "position": {
         "x": 9,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -205,7 +214,7 @@
       "position": {
         "x": 10,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -213,47 +222,7 @@
       "position": {
         "x": 11,
         "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "gate",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 11
-      },
-      "song": [
-        {
-          "pitch": "A3",
-          "length": "1/1"
-        }
-      ],
-      "id": "entry-a",
-      "facing": "north",
-      "link": {
-        "puzzleId": "poc-jam",
-        "gateId": "exit-jammed"
-      }
-    },
-    {
-      "type": "gate",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 11
-      },
-      "song": [
-        {
-          "pitch": "A3",
-          "length": "1/1"
-        }
-      ],
-      "id": "entry-b",
-      "facing": "north",
-      "link": {
-        "puzzleId": "poc-jam",
-        "gateId": "exit-clean"
+        "z": 0
       }
     },
     {
@@ -261,7 +230,27 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 1
+        "z": 11
+      },
+      "song": [
+        {
+          "pitch": "F4",
+          "length": "1/1"
+        }
+      ],
+      "id": "entry",
+      "facing": "north",
+      "link": {
+        "puzzleId": "poc-dance",
+        "gateId": "exit"
+      }
+    },
+    {
+      "type": "gate",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 0
       },
       "song": [
         {

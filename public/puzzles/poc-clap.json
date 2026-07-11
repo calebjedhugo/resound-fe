@@ -6,47 +6,64 @@
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
+  "teaches": ["clap"],
   "clapDisplacement": "1/4",
   "playerStart": {
     "x": 6,
     "y": 0,
     "z": 11
   },
+  "floors": [
+    {
+      "elevation": 1,
+      "x1": 3,
+      "z1": 1,
+      "x2": 3,
+      "z2": 1
+    },
+    {
+      "elevation": 1,
+      "x1": 9,
+      "z1": 1,
+      "x2": 9,
+      "z2": 1
+    }
+  ],
   "entities": [
     {
       "type": "creature",
       "position": {
         "x": 3,
-        "y": 0,
-        "z": 2
+        "y": 1,
+        "z": 1
       },
       "data": {
         "song": [
           {
             "pitch": "D4",
-            "length": "1/1"
+            "length": "1/4"
           }
         ],
-        "interval": 12,
-        "audibleRange": 10
+        "interval": 2,
+        "audibleRange": 15
       }
     },
     {
       "type": "creature",
       "position": {
-        "x": 8,
-        "y": 0,
-        "z": 2
+        "x": 9,
+        "y": 1,
+        "z": 1
       },
       "data": {
         "song": [
           {
             "pitch": "A4",
-            "length": "1/1"
+            "length": "1/4"
           }
         ],
-        "interval": 12,
-        "audibleRange": 10
+        "interval": 2,
+        "audibleRange": 15
       }
     },
     {
@@ -150,7 +167,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -158,7 +175,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -166,7 +183,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -174,7 +191,7 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -182,7 +199,7 @@
       "position": {
         "x": 4,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -190,7 +207,7 @@
       "position": {
         "x": 5,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -198,7 +215,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -206,7 +223,7 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -214,7 +231,7 @@
       "position": {
         "x": 9,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -222,7 +239,7 @@
       "position": {
         "x": 10,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -230,7 +247,7 @@
       "position": {
         "x": 11,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -238,87 +255,7 @@
       "position": {
         "x": 12,
         "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 3
+        "z": 0
       }
     },
     {
@@ -330,7 +267,7 @@
       },
       "song": [
         {
-          "pitch": "D5",
+          "pitch": "Bb5",
           "length": "1/1"
         }
       ],
@@ -346,22 +283,30 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 1
+        "z": 0
       },
       "song": [
         {
           "pitch": "D4",
-          "length": "1/1"
+          "length": "1/4"
         },
         {
           "pitch": "A4",
-          "length": "1/1"
+          "length": "1/4"
+        },
+        {
+          "pitch": "D4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "A4",
+          "length": "1/4"
         }
       ],
       "id": "exit",
       "facing": "north",
       "link": {
-        "puzzleId": "poc-climb",
+        "puzzleId": "poc-return",
         "gateId": "entry"
       }
     }

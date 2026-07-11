@@ -136,9 +136,12 @@ instead of "fixing" it.
   looks identical to a normal gate.
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
-  A linked pair is ONE door: same song, mirrored open state. Tempo blends
-  near mismatched doors; ONE world clock persists across crossings — a
-  crossing swaps areas, never rebuilds. See DESIGN.md "Gate links".
+  A linked pair is ONE door: same song, mirrored open state, and SHARED EARS
+  (ruled 2026-07-11) — a sound within source-range of EITHER face corrupts
+  or completes the door, with NO leak between the pair's own faces (a jam
+  beside one face jams both sides). Tempo blends near mismatched doors; ONE
+  world clock persists across crossings — a crossing swaps areas, never
+  rebuilds. See DESIGN.md "Gate links".
 - **Walk-under**: elevated floors are platforms with walkable space beneath.
   `ElevationGrid.levels[z][x]` lists a cell's walkable levels; movers pass a
   `priorLevel` to `getFloorY`/`getEffectiveElevation`/`canTraverse` to stay on
@@ -153,14 +156,19 @@ instead of "fixing" it.
   built-in constraint checker: `node puzzles/gen-awakening.js
   public/puzzles/awakening.json`). Edit the generator + rerun; don't hand-edit
   `public/puzzles/awakening.json`.
-- **The POC world (`poc-*`, 10 portal-linked areas, the boot entry) is
-  generated** by `puzzles/gen-poc.js` (480+-assert checker; writes all ten
+- **The POC world (`poc-*`, NINE portal-linked areas, the boot entry) is
+  generated** by `puzzles/gen-poc.js` (480+-assert checker; writes all nine
   JSONs + their bidirectional door links): `node puzzles/gen-poc.js`.
-  Don't hand-edit the `poc-*.json` files. STRICT element economy: every
-  door's (pitch, length) elements are first recordable in the door's own
-  area (no skip-guard exemptions); the Twinkle finale is quarter notes,
-  which exist only in area X. Ends with the `ending: true` finale portal
-  into area I (thanks-for-playing overlay). See DESIGN.md "Onboarding".
+  Don't hand-edit the `poc-*.json` files. v5 chain (round-4 restructure):
+  threshold → two-keys → duet → jam → dance → pull → push → clap → return
+  ("The Star"); `poc-climb` was cut. STRICT element economy: every exit's
+  (pitch, length) elements are recordable in its own area or earlier, never
+  from earlier alone; the finale's fresh elements (incl. the two HALF notes
+  ending each Twinkle phrase) exist only in area IX; F4|1/4 is IX-only.
+  Creatures are always VISIBLE — penning is a cliff-edged plinth (jam at
+  E2, clap pair at E1), never opaque walls. Ends with the `ending: true`
+  finale portal into area I (thanks-for-playing overlay). See DESIGN.md
+  "Onboarding" (incl. the v5 relaxed pull/push guards awaiting a ruling).
 - **Gates open on the COMPLETED song, LATCH open (no timer), and close when
   the player walks through** — a correct in-progress performance only FADES
   the shell toward (bounded) transparency, never opens it; a parked
@@ -170,7 +178,9 @@ instead of "fixing" it.
 
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +
-  `core/HintMemory.js`, retire-once, localStorage `resound-hints`)
+  `core/HintMemory.js`). Hints are PUZZLE-DRIVEN: puzzle JSON declares
+  `teaches: ["move", ...]`; retirement is per-VISIT (re-entry re-arms), no
+  browser storage. No `teaches` = all hints eligible (dev levels)
 - Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
 - `ui/StartGate.js` freezes the world per level start until a key/click
@@ -200,4 +210,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-07-11 — Tape model (Space plays all slots, hold-to-delete), windowed matching, Twinkle finale + ending overlay*
+*Last Updated: 2026-07-11 — v5 round-4 restructure: 9-area chain (climb cut), both-ears doors, puzzle-driven hints (`teaches`), tension-release dance, plinth pens*

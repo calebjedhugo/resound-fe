@@ -23,6 +23,7 @@ import Tape from 'core/Tape';
 import PlaybackManager from 'core/PlaybackManager';
 import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
+import HintMemory from 'core/HintMemory';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
@@ -58,8 +59,11 @@ ClapManager.setVisualCallback((position, range) => {
 // The world orchestrator: owns the active area + live neighbor areas; the
 // active area's content group is parented into this render scene.
 // Arriving through an `ending: true` gate (the finale portal back into
-// area I) rolls the demo's closing card.
+// area I) rolls the demo's closing card. Every crossing is a fresh VISIT:
+// the destination puzzle's `teaches` list re-arms its key hints.
 PortalManager.initialize(scene, (puzzle, arrivalGate) => {
+  HintMemory.arm(puzzle && puzzle.teaches);
+  keyHints.hideAll();
   if (arrivalGate && arrivalGate.ending) endingOverlay.show();
 });
 
@@ -73,6 +77,7 @@ async function startPuzzle(puzzleId) {
     const puzzleData = await PuzzleLoader.load(puzzleId);
     PortalManager.enterWorld(puzzleData);
     stateMachine.setState('PLAYING');
+    HintMemory.arm(puzzleData.teaches);
     keyHints.hideAll();
     startGate.show();
   } catch (error) {

@@ -4,8 +4,12 @@ import Entity from 'entities/Entity';
 
 class Floor extends Entity {
   constructor(gridSize, floors = []) {
-    // Calculate center position based on grid size
-    const center = (gridSize / 2) * WORLD_SCALE;
+    // Center of the grid's true footprint: cell CENTERS run
+    // 0..(gridSize-1)*WORLD_SCALE, so the footprint spans -1.5 to
+    // gridSize*3 - 1.5. (Centering on gridSize/2 left a half-cell bare
+    // strip along the north/west edges — a black wedge at every edge-row
+    // doorway, and a sliver of void along north/west walls.)
+    const center = ((gridSize - 1) / 2) * WORLD_SCALE;
     super('floor', { x: center, y: 0, z: center });
     this.gridSize = gridSize;
     this.floors = floors;

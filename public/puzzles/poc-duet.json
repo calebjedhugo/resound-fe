@@ -2,22 +2,23 @@
   "id": "poc-duet",
   "name": "III. The Duet",
   "difficulty": 1,
-  "gridSize": 12,
+  "gridSize": 10,
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
+  "teaches": ["slots"],
   "playerStart": {
-    "x": 6,
+    "x": 5,
     "y": 0,
-    "z": 10
+    "z": 8
   },
   "entities": [
     {
       "type": "creature",
       "position": {
-        "x": 2,
+        "x": 1,
         "y": 0,
-        "z": 7
+        "z": 5
       },
       "data": {
         "song": [
@@ -33,9 +34,9 @@
     {
       "type": "creature",
       "position": {
-        "x": 10,
+        "x": 8,
         "y": 0,
-        "z": 7
+        "z": 5
       },
       "data": {
         "song": [
@@ -53,7 +54,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -61,7 +62,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -69,7 +70,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -77,7 +78,7 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -85,15 +86,15 @@
       "position": {
         "x": 4,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 5,
+        "x": 6,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -101,7 +102,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -109,7 +110,7 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -117,23 +118,7 @@
       "position": {
         "x": 9,
         "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 0,
-        "z": 11
+        "z": 9
       }
     },
     {
@@ -141,7 +126,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -149,7 +134,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -157,7 +142,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -165,7 +150,7 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -173,15 +158,15 @@
       "position": {
         "x": 4,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 5,
+        "x": 6,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -189,7 +174,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -197,7 +182,7 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -205,31 +190,15 @@
       "position": {
         "x": 9,
         "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
       "type": "gate",
       "position": {
-        "x": 6,
+        "x": 5,
         "y": 0,
-        "z": 11
+        "z": 9
       },
       "song": [
         {
@@ -247,9 +216,9 @@
     {
       "type": "gate",
       "position": {
-        "x": 6,
+        "x": 5,
         "y": 0,
-        "z": 1
+        "z": 0
       },
       "song": [
         {
@@ -264,7 +233,7 @@
       "id": "exit",
       "facing": "north",
       "link": {
-        "puzzleId": "poc-dance",
+        "puzzleId": "poc-jam",
         "gateId": "entry"
       }
     }

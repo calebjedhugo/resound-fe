@@ -80,6 +80,25 @@ class NotationDisplay {
   }
 
   /**
+   * Total beats of the song's first voice (rests included) — drives the
+   * render width so long songs get room for MULTI-MEASURE systems. The
+   * renderer's viewBox width equals the requested width, so width must
+   * track content: too narrow stacks one cramped measure per system (the
+   * Twinkle staff bug), too wide shrinks a short song's staff.
+   */
+  _songBeats() {
+    const notes =
+      this.song && !Array.isArray(this.song) && Array.isArray(this.song.voices)
+        ? this.song.voices[0].notes || []
+        : this.song || [];
+    const BEATS = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25 };
+    return notes.reduce((sum, entry) => {
+      const note = Array.isArray(entry) ? entry[0] : entry;
+      return sum + (BEATS[note && note.length] || 4);
+    }, 0);
+  }
+
+  /**
    * Render the song to SVG, convert to canvas texture, and apply to meshes.
    * This is async but we don't block construction on it.
    */
@@ -94,10 +113,19 @@ class NotationDisplay {
       // content (single staff vs grand staff, however many ledger lines), so
       // the game never has to inspect notation structure. We then mirror that
       // intrinsic aspect ratio onto the texture canvas so nothing is squashed.
+      // Width scales with the song so a system holds AT LEAST two measures:
+      // 400 up to two 4/4 measures; beyond that, ~500px per pair of measures
+      // (two quarter-note 4/4 measures lay out naturally at just under
+      // 1000px — measured against the published renderer), so the breaker
+      // packs multi-measure systems instead of stacking one per line.
+      const beatsPerMeasure =
+        ((this.timeSignature || [4, 4])[0] * 4) / (this.timeSignature || [4, 4])[1];
+      const measures = Math.max(1, Math.ceil(this._songBeats() / beatsPerMeasure));
+      const width = measures <= 2 ? 400 : 500 * Math.ceil(measures / 2);
       const container = document.createElement('div');
       const renderer = new NotationRenderer({
         container,
-        width: 400,
+        width,
       });
 
       const svg = renderer.render(this._renderInput());
@@ -106,7 +134,8 @@ class NotationDisplay {
       const [, , vbWidth, vbHeight] = (svg.getAttribute('viewBox') || '0 0 400 150')
         .split(/\s+/)
         .map(Number);
-      const canvasHeight = Math.max(64, Math.round(512 * (vbHeight / vbWidth)));
+      const canvasWidth = vbWidth > 500 ? 1024 : 512;
+      const canvasHeight = Math.max(64, Math.round(canvasWidth * (vbHeight / vbWidth)));
 
       // Serialize SVG to a data URL and draw on canvas
       const svgString = new XMLSerializer().serializeToString(svg);
@@ -116,7 +145,7 @@ class NotationDisplay {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
+        canvas.width = canvasWidth;
         canvas.height = canvasHeight;
         const ctx = canvas.getContext('2d');
 
@@ -132,7 +161,21 @@ class NotationDisplay {
         const texture = new THREE.CanvasTexture(canvas);
         texture.needsUpdate = true;
 
+        // Fit each plane to the staff's TRUE aspect (inside its layout box,
+        // capped by the entity face) instead of stretching onto the fixed
+        // quad — a tall multi-system staff was vertically squished.
+        const aspect = canvasHeight / canvasWidth;
         for (const mesh of this.meshes) {
+          const baseW = mesh.geometry.parameters ? mesh.geometry.parameters.width : 2.8;
+          const baseH = mesh.geometry.parameters ? mesh.geometry.parameters.height : 1.5;
+          let w = baseW;
+          let h = baseW * aspect;
+          const maxH = NotationDisplay.MAX_PLANE_HEIGHT;
+          if (h > maxH) {
+            h = maxH;
+            w = maxH / aspect;
+          }
+          mesh.scale.set(w / baseW, h / baseH, 1);
           mesh.material.map = texture;
           mesh.material.opacity = 1;
           mesh.material.needsUpdate = true;
@@ -187,8 +230,15 @@ class NotationDisplay {
 }
 
 /**
+ * Tallest a notation plane may grow when adopting its texture's aspect —
+ * just inside the 3-unit gate face (planes are centered on the box).
+ */
+NotationDisplay.MAX_PLANE_HEIGHT = 2.7;
+
+/**
  * Gate: 4 faces of a 3x3x3 box, offset 0.02 outside each face.
- * PlaneGeometry dimensions: 2.8 x 1.5
+ * PlaneGeometry dimensions: 2.8 x 1.5 (the LAYOUT box — the mesh rescales
+ * to the rendered staff's true aspect once the texture arrives).
  */
 NotationDisplay.GATE_LAYOUT = [
   { x: 0, y: 0, z: 1.52, width: 2.8, height: 1.5, rotationY: 0 }, // +Z face

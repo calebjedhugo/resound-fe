@@ -104,17 +104,24 @@ class PortalView {
     this._mappedBottomRight = new THREE.Vector3(br.x, br.y, br.z);
     this._mappedTopLeft = new THREE.Vector3(tl.x, tl.y, tl.z);
 
-    // Clip at the WINDOW plane (this panel's own far plane): only content
-    // truly beyond the doorway paints into the view. Content on the eye
-    // side of the window — the shared doorway room and everything flanking
-    // the door — belongs to the VIEWER's world (it already renders as the
-    // real geometry around the gate box); painting the destination's
-    // version of it would double the world, and a clip through the middle
-    // of the room once sliced a creature standing near the door in half.
+    // Clip ONE CELL behind the window plane, so the partner's OWN doorway
+    // cell paints into the view: its floor, the walls framing it, and its
+    // notation. Clipping exactly at the window left the whole arrival cell
+    // unpainted — a black wedge on the floor at every threshold and bare
+    // walls at grazing angles (the round-4 "giveaway glitch"), and the
+    // arrival staff popped in only on entry. Content deeper on the eye side
+    // still clips: the room flanking the viewer's own door must not paint
+    // into the panel (double world; a clip through the middle of the room
+    // once sliced a creature standing near the door in half).
     const mappedCenter = this._map(this._corners.center);
+    const clipPoint = new THREE.Vector3(
+      mappedCenter.x - mapping.outward.x * (WORLD_SCALE + 0.1),
+      mappedCenter.y,
+      mappedCenter.z - mapping.outward.z * (WORLD_SCALE + 0.1)
+    );
     this._clipPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
       new THREE.Vector3(mapping.outward.x, mapping.outward.y, mapping.outward.z),
-      new THREE.Vector3(mappedCenter.x, mappedCenter.y, mappedCenter.z)
+      clipPoint
     );
 
     // The neighbor's LIVE scene. The partner gate is this same door seen
@@ -163,9 +170,16 @@ class PortalView {
     // The eye must be on the outward side of this face
     if (eyeDistance < MIN_EYE_DISTANCE) return;
 
+    // Half-resolution target: every visible face of an open door re-renders
+    // the whole neighbor scene each frame, and full-res targets made open
+    // doors cost several fullscreen renders per frame (GPU fan spin,
+    // round-4 playtest). At half size the doorway panel — a fraction of the
+    // screen — still oversamples in practice.
     renderer.getDrawingBufferSize(scratchSize);
-    if (this._target.width !== scratchSize.x || this._target.height !== scratchSize.y) {
-      this._target.setSize(scratchSize.x, scratchSize.y);
+    const targetW = Math.max(1, Math.floor(scratchSize.x / 2));
+    const targetH = Math.max(1, Math.floor(scratchSize.y / 2));
+    if (this._target.width !== targetW || this._target.height !== targetH) {
+      this._target.setSize(targetW, targetH);
     }
 
     const mappedEye = this._map({ x: eye.x, y: eye.y, z: eye.z });
@@ -177,16 +191,38 @@ class PortalView {
       this._mappedTopLeft
     );
 
-    // Hide the partner gate (this same door from the other side) for just
-    // this pass — everything else in the neighbor renders live as-is.
-    // Our own doorway surface hides too: for a same-puzzle door it lives in
-    // the rendered scene, and sampling the texture being rendered to is a
-    // GL feedback loop.
+    // Hide the partner gate's BOX for just this pass (this same door seen
+    // from the other side — it would fill the whole view) while its
+    // NOTATION stays: the arrival staff is visible through the doorway
+    // before the player ever steps in (designer's round-4 request), so
+    // nothing pops in on entry. Only front-facing staff planes paint
+    // (DoubleSide would show the far plane's mirrored back through the
+    // doorway). EVERY portal surface of BOTH ends hides too: for a
+    // same-puzzle door they live in the rendered scene, and painting one
+    // view's (stale) texture into another is a hall-of-mirrors (sampling
+    // our own target would even be a GL feedback loop).
     const partnerMesh = this._partnerGate.mesh;
-    const partnerWasVisible = partnerMesh ? partnerMesh.visible : true;
-    if (partnerMesh) partnerMesh.visible = false;
-    const surfaceWasVisible = this.surface.visible;
-    this.surface.visible = false;
+    const partnerMaterialWasVisible = partnerMesh ? partnerMesh.material.visible : true;
+    if (partnerMesh) partnerMesh.material.visible = false;
+    const frontOnlyNotation = [];
+    if (partnerMesh) {
+      for (const child of partnerMesh.children) {
+        if (child._isNotationMesh && child.material && child.material.side === THREE.DoubleSide) {
+          child.material.side = THREE.FrontSide;
+          frontOnlyNotation.push(child);
+        }
+      }
+    }
+    const hiddenSurfaces = [];
+    for (const mesh of [this.gate.mesh, partnerMesh]) {
+      if (!mesh) continue; // eslint-disable-line no-continue
+      for (const child of mesh.children) {
+        if (child._isPortalSurface && child.visible) {
+          child.visible = false;
+          hiddenSurfaces.push(child);
+        }
+      }
+    }
 
     const previousPlanes = renderer.clippingPlanes;
     renderer.clippingPlanes = [this._clipPlane];
@@ -195,8 +231,9 @@ class PortalView {
     renderer.setRenderTarget(null);
     renderer.clippingPlanes = previousPlanes;
 
-    this.surface.visible = surfaceWasVisible;
-    if (partnerMesh) partnerMesh.visible = partnerWasVisible;
+    for (const child of hiddenSurfaces) child.visible = true;
+    for (const child of frontOnlyNotation) child.material.side = THREE.DoubleSide;
+    if (partnerMesh) partnerMesh.material.visible = partnerMaterialWasVisible;
   }
 
   dispose() {

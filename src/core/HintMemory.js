@@ -1,48 +1,44 @@
 /**
- * HintMemory - remembers which contextual key hints the player has retired.
+ * HintMemory - which contextual key hints are ACTIVE, and which the player
+ * has performed THIS VISIT.
  *
- * A hint retires the first time the player performs its action; retirement is
- * permanent across sessions (the world taught you once). Resetting progress
- * should also reset hints so a fresh player gets the full onboarding.
+ * Hints are driven by the PUZZLE (ruled 2026-07-11, superseding the
+ * permanent localStorage retirement): a puzzle declares what it teaches
+ * (`teaches: ["move", "record", ...]` in its JSON — see puzzles/schema.md)
+ * and those hints are live in that puzzle regardless of what the player has
+ * ever done before. A hint retires when the player performs its action, but
+ * only for the CURRENT VISIT: re-entering the puzzle (world entry or a
+ * doorway crossing back in) re-arms its hints. A puzzle with no `teaches`
+ * field keeps EVERY hint eligible (dev/legacy levels teach on every visit).
  */
 class HintMemory {
-  static KEY = 'resound-hints';
+  static _teaches = null; // null = every hint eligible
 
-  static load() {
-    try {
-      const data = localStorage.getItem(this.KEY);
-      if (!data) {
-        return { retired: [] };
-      }
-      return JSON.parse(data);
-    } catch (error) {
-      console.error('Error loading hint memory:', error);
-      return { retired: [] };
-    }
-  }
+  static _performed = new Set();
 
-  static save(memory) {
-    try {
-      localStorage.setItem(this.KEY, JSON.stringify(memory));
-    } catch (error) {
-      console.error('Error saving hint memory:', error);
-    }
+  /**
+   * A puzzle visit begins: activate ITS hints, forget this-visit history.
+   * Called on world entry and on every doorway crossing.
+   * @param {?string[]} teaches - the puzzle's `teaches` list (undefined/null
+   *   = all hints eligible)
+   */
+  static arm(teaches) {
+    this._teaches = Array.isArray(teaches) ? teaches.slice() : null;
+    this._performed = new Set();
   }
 
   static isRetired(hintId) {
-    return this.load().retired.includes(hintId);
+    if (this._teaches && !this._teaches.includes(hintId)) return true;
+    return this._performed.has(hintId);
   }
 
   static retire(hintId) {
-    const memory = this.load();
-    if (!memory.retired.includes(hintId)) {
-      memory.retired.push(hintId);
-      this.save(memory);
-    }
+    this._performed.add(hintId);
   }
 
   static reset() {
-    localStorage.removeItem(this.KEY);
+    this._teaches = null;
+    this._performed = new Set();
   }
 }
 

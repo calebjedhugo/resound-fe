@@ -1,13 +1,14 @@
 {
   "id": "poc-return",
-  "name": "X. The Star",
+  "name": "IX. The Star",
   "difficulty": 1,
   "gridSize": 14,
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
+  "teaches": ["slots", "delete"],
   "playerStart": {
-    "x": 7,
+    "x": 10,
     "y": 0,
     "z": 12
   },
@@ -33,9 +34,9 @@
     {
       "type": "creature",
       "position": {
-        "x": 1,
+        "x": 2,
         "y": 0,
-        "z": 1
+        "z": 8
       },
       "data": {
         "song": [
@@ -51,14 +52,14 @@
     {
       "type": "creature",
       "position": {
-        "x": 12,
+        "x": 1,
         "y": 0,
-        "z": 1
+        "z": 4
       },
       "data": {
         "song": [
           {
-            "pitch": "D4",
+            "pitch": "G4",
             "length": "1/4"
           }
         ],
@@ -69,9 +70,45 @@
     {
       "type": "creature",
       "position": {
-        "x": 1,
+        "x": 2,
         "y": 0,
-        "z": 7
+        "z": 0
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "A4",
+            "length": "1/4"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 0
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "G4",
+            "length": "1/2"
+          }
+        ],
+        "interval": 4,
+        "audibleRange": 7
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 0
       },
       "data": {
         "song": [
@@ -89,12 +126,12 @@
       "position": {
         "x": 12,
         "y": 0,
-        "z": 7
+        "z": 2
       },
       "data": {
         "song": [
           {
-            "pitch": "G4",
+            "pitch": "D4",
             "length": "1/4"
           }
         ],
@@ -105,15 +142,15 @@
     {
       "type": "creature",
       "position": {
-        "x": 4,
+        "x": 12,
         "y": 0,
-        "z": 0
+        "z": 6
       },
       "data": {
         "song": [
           {
-            "pitch": "A4",
-            "length": "1/4"
+            "pitch": "C4",
+            "length": "1/2"
           }
         ],
         "interval": 4,
@@ -123,97 +160,97 @@
     {
       "type": "wall",
       "position": {
-        "x": 0,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 0
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 1,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 1
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 2,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 2
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 3,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 3
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 4,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 4
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 5,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 5
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 6,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 6
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 8,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 7
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 9,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 8
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 10,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 9
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 11,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 10
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 12,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 11
       }
     },
     {
@@ -316,14 +353,6 @@
       "type": "wall",
       "position": {
         "x": 12,
-        "y": 0,
-        "z": 10
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 13,
         "y": 0,
         "z": 10
       }
@@ -331,20 +360,32 @@
     {
       "type": "gate",
       "position": {
-        "x": 7,
+        "x": 13,
         "y": 0,
-        "z": 13
+        "z": 12
       },
       "song": [
         {
-          "pitch": "B4",
-          "length": "1/1"
+          "pitch": "D4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "A4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "D4",
+          "length": "1/4"
+        },
+        {
+          "pitch": "A4",
+          "length": "1/4"
         }
       ],
       "id": "entry",
       "facing": "north",
       "link": {
-        "puzzleId": "poc-climb",
+        "puzzleId": "poc-clap",
         "gateId": "exit"
       }
     },
@@ -402,7 +443,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 4
+        "z": 5
       },
       "song": [
         {
@@ -431,7 +472,7 @@
         },
         {
           "pitch": "G4",
-          "length": "1/4"
+          "length": "1/2"
         },
         {
           "pitch": "F4",
@@ -459,7 +500,7 @@
         },
         {
           "pitch": "C4",
-          "length": "1/4"
+          "length": "1/2"
         }
       ],
       "id": "exit",

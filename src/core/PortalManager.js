@@ -78,8 +78,8 @@ class PortalManager {
     // Registered as the world's cross-area services (avoids import cycles:
     // Creature/ListeningManager reach us through these hooks, not imports)
     gameState.world = this;
-    ListeningManager.seamRouter = (noteEvent, sourceArea, listenerArea) =>
-      this._routeThroughDoor(noteEvent, sourceArea, listenerArea);
+    ListeningManager.seamRouter = (noteEvent, sourceArea, listenerArea, listener) =>
+      this._routeThroughDoor(noteEvent, sourceArea, listenerArea, listener);
   }
 
   /**
@@ -244,17 +244,15 @@ class PortalManager {
       }
       if (this._insideDoor && this._insideDoor.gate === gate) {
         // The doorway's occupant is simply IN the destination: the world on
-        // every side of them (behind included) is the real thing — no views,
-        // and still no green shell around them
+        // every side of them (behind included) is the real thing — no views
+        // (an open gate already has no shell of any kind)
         this._hideGateViews(gate);
-        gate.setDoorLook(true);
         continue; // eslint-disable-line no-continue
       }
       const broken = this._renderExteriorViews(gate, renderer, camera);
       if (broken) {
         this._hideGateViews(gate);
         this._views.set(gate, null); // the gate stays an ordinary gate
-        gate.setDoorLook(false);
       }
     }
   }
@@ -299,10 +297,6 @@ class PortalManager {
         view.setVisible(onThisSide);
         if (onThisSide) view.render(renderer, camera);
       }
-    }
-    if (faces.size > 0) {
-      // The door is working: the open box vanishes — only the views show
-      gate.setDoorLook(true);
     }
     return false;
   }
@@ -409,16 +403,25 @@ class PortalManager {
    * `sourceArea` so a listener in `listenerArea` hears it through the best
    * connecting door — sourcePosition becomes the door on the LISTENER's
    * side, extraDistance the source->partner-gate leg (+ closed-door leak).
+   *
+   * One door, two ears (ruled 2026-07-11): when the LISTENER is itself a
+   * face of the door the sound crosses, the pair-face leg costs NOTHING —
+   * no leak, and the local leg is zero (sourcePosition becomes the listener
+   * itself). A sound within source-range of either face therefore corrupts
+   * (and can complete) the door's matching from both sides; a jam beside
+   * one face jams the DOOR, not just the face.
    * @returns {?object} null when the areas share no door
    */
-  _routeThroughDoor(noteEvent, sourceArea, listenerArea) {
+  _routeThroughDoor(noteEvent, sourceArea, listenerArea, listener = null) {
     if (!noteEvent.sourcePosition) return null;
     let best = null;
     for (const door of this._doors) {
       const side = this._doorSides(door, listenerArea, sourceArea);
       if (!side) continue;
+      const ownDoor = listener !== null && (door.gateA === listener || door.gateB === listener);
       const extra =
-        getDistance(noteEvent.sourcePosition, side.remoteGate.position) + this._doorLeak(door);
+        getDistance(noteEvent.sourcePosition, side.remoteGate.position) +
+        (ownDoor ? 0 : this._doorLeak(door));
       if (!best || extra < best.extra) {
         best = { localGate: side.localGate, extra };
       }

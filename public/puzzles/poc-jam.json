@@ -1,23 +1,33 @@
 {
   "id": "poc-jam",
-  "name": "V. The Jam",
+  "name": "IV. The Jam",
   "difficulty": 1,
   "gridSize": 13,
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
+  "teaches": [],
   "playerStart": {
     "x": 6,
     "y": 0,
     "z": 11
   },
+  "floors": [
+    {
+      "elevation": 2,
+      "x1": 3,
+      "z1": 1,
+      "x2": 3,
+      "z2": 1
+    }
+  ],
   "entities": [
     {
       "type": "creature",
       "position": {
-        "x": 5,
-        "y": 0,
-        "z": 2
+        "x": 3,
+        "y": 2,
+        "z": 1
       },
       "data": {
         "song": [
@@ -35,7 +45,7 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 7
+        "z": 6
       },
       "data": {
         "song": [
@@ -149,7 +159,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -157,7 +167,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -165,7 +175,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -173,7 +183,7 @@
       "position": {
         "x": 4,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -181,7 +191,7 @@
       "position": {
         "x": 5,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -189,7 +199,7 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -197,7 +207,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -205,7 +215,7 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -213,7 +223,7 @@
       "position": {
         "x": 9,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -221,7 +231,7 @@
       "position": {
         "x": 11,
         "y": 0,
-        "z": 1
+        "z": 0
       }
     },
     {
@@ -229,47 +239,7 @@
       "position": {
         "x": 12,
         "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 3
+        "z": 0
       }
     },
     {
@@ -281,14 +251,18 @@
       },
       "song": [
         {
-          "pitch": "C5",
+          "pitch": "E5",
+          "length": "1/1"
+        },
+        {
+          "pitch": "G5",
           "length": "1/1"
         }
       ],
       "id": "entry",
       "facing": "north",
       "link": {
-        "puzzleId": "poc-dance",
+        "puzzleId": "poc-duet",
         "gateId": "exit"
       }
     },
@@ -297,7 +271,7 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 1
+        "z": 0
       },
       "song": [
         {
@@ -308,7 +282,7 @@
       "id": "exit-jammed",
       "facing": "north",
       "link": {
-        "puzzleId": "poc-pull",
+        "puzzleId": "poc-dance",
         "gateId": "entry-a"
       }
     },
@@ -317,7 +291,7 @@
       "position": {
         "x": 10,
         "y": 0,
-        "z": 1
+        "z": 0
       },
       "song": [
         {
@@ -328,7 +302,7 @@
       "id": "exit-clean",
       "facing": "north",
       "link": {
-        "puzzleId": "poc-pull",
+        "puzzleId": "poc-dance",
         "gateId": "entry-b"
       }
     }

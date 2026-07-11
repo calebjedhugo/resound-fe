@@ -22,10 +22,10 @@ Elements taught so far:
   ever needed, always re-recordable. See DESIGN.md.
 
 - ✅ **The POC world (2026-07-10; restructured same day on designer feedback;
-  redesigned 2026-07-11 on round-2 feedback)** — the playable proof of
-  concept and the new boot entry: TEN small portal-linked areas
-  (`poc-threshold` → `poc-two-keys` → `poc-duet` → `poc-dance` → `poc-jam`
-  → `poc-pull` → `poc-push` → `poc-clap` → `poc-climb` → `poc-return`), ONE
+  redesigned 2026-07-11 across rounds 2–4)** — the playable proof of
+  concept and the boot entry: NINE small portal-linked areas as of v5
+  (`poc-threshold` → `poc-two-keys` → `poc-duet` → `poc-jam` → `poc-dance`
+  → `poc-pull` → `poc-push` → `poc-clap` → `poc-return`), ONE
   concept each — core loop, slots, sequencing, a creatures-move-creatures
   spectacle (the dance), the jam (a continuous singer beside a door blocks
   it forever — taught with a caged jammer and two identical doors), the
@@ -53,15 +53,30 @@ Elements taught so far:
   mid-room finale gate in area I and rolls a dismissible
   thanks-for-playing → calebhugo.com card. The checker grew to 480+
   asserts, including an empty-tape pocket-escape rule (delete can never
-  strand a player). See DESIGN.md "Onboarding".
+  strand a player). Round 4 (v5, 2026-07-11) restructured to NINE areas:
+  `poc-climb` CUT (no ramp without necessity), jam moved before the dance,
+  the dance REDESIGNED to the designer's tension-and-release pair (B3→C4 /
+  F4→E4 synced halves parked at the exit — the movable jam, swept by a
+  net-repelling F4), the clap REDESIGNED (visible plinth pair, in-phase
+  quarters; one clap resolves the chord into the door's melody), The Star
+  grew to EIGHT element voices for the corrected Twinkle rhythm
+  (phrase-ending halves), the entry door moved to a side wall (turn-around
+  moment), and pens became visible plinths. Shipped with it: ONE DOOR TWO
+  EARS (a pair shares heard-note state — the far-side jam bypass is dead),
+  the one-way-arrival occupant escape (Caleb's stuck-in-the-warm-up-gate),
+  onset-boundary fade grace, no-green open gates, puzzle-driven key hints
+  (`teaches`), doorway views that paint the arrival cell + staff,
+  half-res portal targets, and multi-measure gate staves. Two guard
+  relaxations flagged for a ruling (see DESIGN.md "Onboarding").
 
 Planned onboarding pieces (one element each):
 - ✅ **Creatures activating gates/fountains** — foregrounded by `poc-push`
   (the pushed creature's own song opens the exit door); first tasted in
   `the-lure`'s hardened finish.
-- ✅ **Creatures moving each other** — `poc-dance`: an unreachable stage
-  where two alternating unison anchors bounce a dissonant dancer, forever.
-- ✅ **Clap timing** — `poc-clap`. ✅ **Elevation** — `poc-climb`.
+- ✅ **Creatures moving each other** — `poc-dance` (v5): the
+  tension-and-release duet parked at the exit — witnessed AND solved.
+- ✅ **Clap timing** — `poc-clap`. **Elevation** — demoted to scenery
+  (plinth pens) when `poc-climb` was cut in v5.
 
 Bigger architectural ideas (exploratory, likely the backbone of the game):
 - ✅ **Gates link to matching gates (portals)** — a gate opens a portal to
