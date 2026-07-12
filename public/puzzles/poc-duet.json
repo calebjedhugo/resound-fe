@@ -24,7 +24,7 @@
         "song": [
           {
             "pitch": "E5",
-            "length": "1/1"
+            "length": "1/2"
           }
         ],
         "interval": 8,
@@ -42,7 +42,7 @@
         "song": [
           {
             "pitch": "G5",
-            "length": "1/1"
+            "length": "1/2"
           }
         ],
         "interval": 8,
@@ -223,11 +223,11 @@
       "song": [
         {
           "pitch": "E5",
-          "length": "1/1"
+          "length": "1/2"
         },
         {
           "pitch": "G5",
-          "length": "1/1"
+          "length": "1/2"
         }
       ],
       "id": "exit",

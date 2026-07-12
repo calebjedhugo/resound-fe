@@ -300,14 +300,22 @@ A2.gates.exit = { x: 6, y: 0, z: 0, song: ['G4'], link: { puzzleId: 'poc-duet', 
 // door; matching is octave-exact, so the fifth above is a genuinely fresh
 // pair. E5-G5 is consonant, so the pair stays out of mutual earshot.)
 // Shrunk to grid 10 in v5 (rooms only as big as their acoustics demand).
+// The pair sings HALF notes (designer's call, 2026-07-11): two halves fill
+// ONE 4/4 measure, so the door's staff reads as a single system instead of
+// wrapping two whole-note measures. Matching is duration-exact, so the
+// creatures sing halves too, and the linked poc-jam/entry face shares them.
 // =========================================================================
+const DUET_SONG = [
+  { pitch: 'E5', length: '1/2' },
+  { pitch: 'G5', length: '1/2' },
+];
 const A3 = makeArea('poc-duet', 'III. The Duet', 10);
 A3.spawn = { x: 5, y: 0, z: 8 };
 A3.teaches = ['slots'];
 wallRow(A3, 9, [5]);
 wallRow(A3, 0, [5]);
-A3.creatures.east = { x: 1, y: 0, z: 5, song: note('E5'), range: 7, interval: 8 };
-A3.creatures.west = { x: 8, y: 0, z: 5, song: note('G5'), range: 7, interval: 8 };
+A3.creatures.east = { x: 1, y: 0, z: 5, song: note('E5', '1/2'), range: 7, interval: 8 };
+A3.creatures.west = { x: 8, y: 0, z: 5, song: note('G5', '1/2'), range: 7, interval: 8 };
 A3.gates.entry = {
   x: 5,
   y: 0,
@@ -319,7 +327,7 @@ A3.gates.exit = {
   x: 5,
   y: 0,
   z: 0,
-  song: ['E5', 'G5'],
+  song: DUET_SONG,
   link: { puzzleId: 'poc-jam', gateId: 'entry' },
 };
 
@@ -348,7 +356,7 @@ A4.gates.entry = {
   x: 6,
   y: 0,
   z: 12,
-  song: ['E5', 'G5'],
+  song: DUET_SONG, // linked to poc-duet/exit — one door, one song (half notes)
   link: { puzzleId: 'poc-duet', gateId: 'exit' },
 };
 A4.gates['exit-jammed'] = {
