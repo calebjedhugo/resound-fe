@@ -329,6 +329,23 @@ describe('PortalManager see-through rendering', () => {
     expect(plane.constant).toBeCloseTo(-(7 * WORLD_SCALE + 1.49 - (WORLD_SCALE + 0.1)));
   });
 
+  it('every panel of a door shares ONE clip plane (side windows never pop at a jamb)', () => {
+    // Each panel used to clip along its OWN facing axis: the approach panel
+    // sliced the neighbour at the doorway (walls at true height) while the
+    // side panels sliced perpendicular, showing a full-height cross-slice.
+    // Crossing a jamb popped a side panel in/out and the neighbour geometry
+    // visibly jumped. All panels must now clip with the SAME plane.
+    gate.open();
+
+    PortalManager.renderPortals(renderer, camera);
+
+    expect(renderer.renderCalls.length).toBeGreaterThan(1); // approach + sides
+    const planes = renderer.renderCalls.map((c) => c.clipping[0]);
+    for (const plane of planes) {
+      expect(plane).toBe(planes[0]); // one shared instance across all panels
+    }
+  });
+
   it('closing the gate hides the doorway and stops paying for the pass', () => {
     gate.open();
     PortalManager.renderPortals(renderer, camera);

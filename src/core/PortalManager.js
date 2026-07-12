@@ -274,29 +274,46 @@ class PortalManager {
       faces = new Map(); // facing -> PortalView
       this._views.set(gate, faces);
     }
-    for (const facing of Object.keys(FACING_VECTORS)) {
-      const out = FACING_VECTORS[facing];
-      // Eligibility is measured against the PANEL's plane (the cell's far
-      // face for this approach), not the gate center: oblique sightlines
-      // through the cell legitimately hit the SIDE panels, and a view must
-      // never pop in/out as the eye crosses the cell's center axes.
-      const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
-      const onThisSide =
-        out.x * (camera.position.x - gate.position.x) +
-          out.z * (camera.position.z - gate.position.z) +
-          panelPlane >
-        0.05;
-      let view = faces.get(facing);
-      if (onThisSide && !view) {
-        view = this._createView(gate, facing);
+    // Signed distance of the eye past each panel's plane (the cell's far face
+    // for that approach). Oblique sightlines through the cell legitimately
+    // hit the SIDE panels, so more than one can be eligible at once.
+    const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
+    const facings = Object.keys(FACING_VECTORS);
+    const past = (facing) =>
+      FACING_VECTORS[facing].x * (camera.position.x - gate.position.x) +
+      FACING_VECTORS[facing].z * (camera.position.z - gate.position.z) +
+      panelPlane;
+    const eligible = facings.filter((f) => past(f) > 0.05);
+    // Hide any panel the eye has moved behind.
+    for (const f of facings) {
+      if (!eligible.includes(f)) {
+        const v = faces.get(f);
+        if (v) v.setVisible(false);
+      }
+    }
+    if (eligible.length === 0) return false;
+    // Materialize every eligible panel's view (retrying / disabling on the
+    // neighbor's load state, exactly as before).
+    for (const f of eligible) {
+      if (!faces.get(f)) {
+        const view = this._createView(gate, f);
         if (view === undefined) return false; // neighbor not loaded yet: retry next frame
         if (view === null) return true; // dangling link
-        faces.set(facing, view);
+        faces.set(f, view);
       }
-      if (view) {
-        view.setVisible(onThisSide);
-        if (onThisSide) view.render(renderer, camera);
-      }
+    }
+    // The PRIMARY approach panel — the face the eye is most directly in front
+    // of — owns the true doorway clip plane. EVERY visible panel clips with
+    // it, so the side windows slice the neighbor along the same doorway axis
+    // as the approach instead of perpendicular to it. Without this, a side
+    // panel shows a full-height cross-slice that pops the neighbor's apparent
+    // geometry as the eye crosses a jamb (a one-step "wall height" jump).
+    const primary = eligible.reduce((a, b) => (past(b) > past(a) ? b : a));
+    const sharedClip = faces.get(primary).clipPlane;
+    for (const f of eligible) {
+      const view = faces.get(f);
+      view.setVisible(true);
+      view.render(renderer, camera, sharedClip);
     }
     return false;
   }

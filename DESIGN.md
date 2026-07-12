@@ -288,7 +288,14 @@ rulings, in the designer's words where it matters:
   stale textures was round 4's hall-of-mirrors "display got weird").
   Portal render targets are HALF-resolution — a doorway panel covers a
   fraction of the screen, and full-res targets made open doors cost several
-  fullscreen renders per frame (the round-4 fan spin).
+  fullscreen renders per frame (the round-4 fan spin). A door's panels
+  (approach + oblique side windows) all share ONE clip plane — the PRIMARY
+  approach panel's, chosen per frame from the eye. Each panel clipping
+  along its own facing axis made a side window show a full-height
+  cross-slice of the neighbour that popped its apparent geometry (e.g. a
+  wall's height) as the eye crossed a jamb; one shared doorway plane keeps
+  every window consistent, so side panels appear/vanish seamlessly (they
+  are edge-on at the threshold).
 - **A door never closes on its occupant — body included, and a closed box
   is OPEN FROM WITHIN (round-4 fix, 2026-07-11).** Gates latch, so a door
   can no longer close around a body — but a ONE-WAY crossing (through an

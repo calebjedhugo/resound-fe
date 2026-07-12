@@ -158,12 +158,28 @@ class PortalView {
   }
 
   /**
+   * This panel's own doorway clip plane (neighbor-world space). PortalManager
+   * shares the PRIMARY approach panel's plane across every panel of a door so
+   * the side windows clip along the SAME axis as the approach — otherwise a
+   * side panel clips perpendicular to the doorway and shows a mismatched
+   * full-height slice, which pops as the eye crosses a jamb.
+   */
+  get clipPlane() {
+    return this._clipPlane;
+  }
+
+  /**
    * Draw the neighbor view for this frame's eye position into the doorway
    * texture. Call only while the gate is open.
    * @param {THREE.WebGLRenderer} renderer - the game's renderer
    * @param {THREE.Camera} camera - the player camera (world position)
+   * @param {THREE.Plane} [clipOverride] - the door's SHARED clip plane (the
+   *   primary approach panel's). When given, every panel clips along the
+   *   same doorway axis, so side windows show a consistent slice instead of
+   *   a perpendicular full-height one that pops at a jamb. Falls back to
+   *   this panel's own plane (single-panel / test paths).
    */
-  render(renderer, camera) {
+  render(renderer, camera, clipOverride = null) {
     const eye = camera.position;
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
@@ -225,7 +241,7 @@ class PortalView {
     }
 
     const previousPlanes = renderer.clippingPlanes;
-    renderer.clippingPlanes = [this._clipPlane];
+    renderer.clippingPlanes = [clipOverride || this._clipPlane];
     renderer.setRenderTarget(this._target);
     renderer.render(this._scene, this._camera);
     renderer.setRenderTarget(null);
