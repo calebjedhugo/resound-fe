@@ -1,0 +1,21 @@
+{
+  "id": "portal-walls-b",
+  "name": "Portal Walls B",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 1, "y": 0, "z": 1 },
+  "entities": [
+    {
+      "type": "gate",
+      "id": "south-door",
+      "facing": "south",
+      "link": { "puzzleId": "portal-walls-a", "gateId": "north-door" },
+      "position": { "x": 5, "y": 0, "z": 7 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 9 } }
+  ]
+}

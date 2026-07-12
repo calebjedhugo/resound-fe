@@ -285,7 +285,20 @@ rulings, in the designer's words where it matters:
   (nothing pops in on entry). Deeper near-side content still clips (double
   world / sliced-creature hazard). During a pass the partner's BOX and
   every portal surface of BOTH ends hide (a same-area pair painting its own
-  stale textures was round 4's hall-of-mirrors "display got weird").
+  stale textures was round 4's hall-of-mirrors "display got weird"), AND the
+  neighbor's OUTER-SHELL wall one cell BEHIND the arrival cell hides too
+  (2026-07-12). The clip reaches a hair past the arrival floor's far edge to
+  paint it seamlessly, which also grazes the near face of that perimeter wall
+  — it leaked in as a thin dark strip beside the opening at oblique angles
+  ("the rectangle that shouldn't be there"). It is never part of what you see
+  THROUGH the door, so hide it for the pass (restored after — it reappears
+  normally on crossing). The frame walls the door SITS IN stay put: those read
+  as the room's enclosure and are wanted (Caleb's ruling: keep the walls, drop
+  the strip). Hiding the mesh — rather than trimming the clip short of the wall
+  — avoids a matching gap in the floor/frame at the far corner (the floor's far
+  edge and the wall's near face coincide, so any clip back-off gaps the floor).
+  A reverted earlier attempt hid the FRAME walls instead, which are the ones to
+  keep.
   Portal render targets are HALF-resolution — a doorway panel covers a
   fraction of the screen, and full-res targets made open doors cost several
   fullscreen renders per frame (the round-4 fan spin). A door's panels

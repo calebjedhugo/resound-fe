@@ -16,6 +16,7 @@ import { WORLD_SCALE, CLOSED_DOOR_LEAK_DISTANCE } from 'core/constants';
 import { getDistance } from 'core/utils';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
 import portalLiveB from '../__tests__/fixtures/puzzles/portal-live-b.json';
+import portalWallsB from '../__tests__/fixtures/puzzles/portal-walls-b.json';
 
 /** Serve /puzzles/<id>.json from the fixtures the tests link to. */
 function installFetchMock(puzzles) {
@@ -321,7 +322,10 @@ describe('PortalManager see-through rendering', () => {
     // (+0.1 for the notation planes) so the partner's OWN doorway cell —
     // floor, frame walls, staff — paints into the view (clipping exactly at
     // the window left a black wedge at every threshold). Content deeper on
-    // the eye side still clips (double world / sliced-creature hazard).
+    // the eye side still clips (double world / sliced-creature hazard). The
+    // perimeter wall one cell BEHIND the arrival cell (whose near face this
+    // clip also reaches) is hidden per-pass instead — see the doorway-strip
+    // test below.
     const [plane] = renderer.renderCalls[0].clipping;
     expect(plane.normal.x).toBeCloseTo(0);
     expect(plane.normal.z).toBeCloseTo(1); // partner outward: south
@@ -424,6 +428,81 @@ describe('PortalManager see-through rendering', () => {
 
     expect(doorwaySurface().visible).toBe(true);
     expect(renderer.renderCalls).toHaveLength(3); // approach + two side panels
+  });
+});
+
+describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2026-07-12)', () => {
+  // The clip reaches a hair past the arrival floor's far edge to paint it
+  // seamlessly, which also grazes the near FACE of the perimeter wall sitting
+  // flush one cell behind the arrival cell — it leaked in as a thin dark strip
+  // beside the opening at oblique angles ("the rectangle that shouldn't be
+  // there"). That outer-shell wall is hidden for the render pass; the frame
+  // walls the door SITS IN and every interior wall stay put.
+  let gate;
+  let neighbor;
+
+  const wallAt = (worldX, worldZ) =>
+    neighbor.entities.find(
+      (e) =>
+        e.type === 'wall' &&
+        Math.abs(e.position.x - worldX) < 0.01 &&
+        Math.abs(e.position.z - worldZ) < 0.01
+    );
+
+  beforeEach(async () => {
+    installFetchMock({ 'portal-walls-b': portalWallsB });
+    ctx.loadPuzzle('portal-walls-a');
+    await jest.runAllTimersAsync();
+    [gate] = ctx.getGates();
+    neighbor = PortalManager.getArea('portal-walls-b');
+  });
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it('hides ONLY the wall behind the arrival cell during the pass; frame + interior walls stay', () => {
+    // south-door at grid (5,7) -> world (15,21), interior toward +z. Behind
+    // (outer shell): (15,18). Frame (coplanar with the door): (12,21).
+    // Interior (deeper into the room): (15,27).
+    const behind = wallAt(15, 18);
+    const frame = wallAt(12, 21);
+    const interior = wallAt(15, 27);
+    expect(behind).toBeDefined();
+    expect(frame).toBeDefined();
+    expect(interior).toBeDefined();
+
+    const seen = [];
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {
+        seen.push({
+          behind: behind.mesh.visible,
+          frame: frame.mesh.visible,
+          interior: interior.mesh.visible,
+        });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    gate.open();
+    // Eye north of the door and off to the side: the oblique sightline that
+    // showed the strip.
+    const camera = { position: { x: 3 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    expect(seen.length).toBeGreaterThan(0);
+    for (const frameSeen of seen) {
+      expect(frameSeen.behind).toBe(false); // outer-shell wall hidden every pass
+      expect(frameSeen.frame).toBe(true); // the wall the door sits in stays
+      expect(frameSeen.interior).toBe(true); // deeper room walls stay
+    }
+    // Restored the instant the passes finish (reappears normally on crossing).
+    expect(behind.mesh.visible).toBe(true);
+    expect(frame.mesh.visible).toBe(true);
+    expect(interior.mesh.visible).toBe(true);
   });
 });
 

@@ -113,6 +113,12 @@ class PortalView {
     // still clips: the room flanking the viewer's own door must not paint
     // into the panel (double world; a clip through the middle of the room
     // once sliced a creature standing near the door in half).
+    // (The clip must reach a full cell + a hair PAST the arrival floor's far
+    // edge to paint it seamlessly; that necessarily also reaches the near
+    // face of the perimeter wall sitting flush one cell behind — which is
+    // hidden per-pass instead, see _wallBehind below. Trimming the clip short
+    // of that wall would leave a matching gap in the floor/frame at the far
+    // corner.)
     const mappedCenter = this._map(this._corners.center);
     const clipPoint = new THREE.Vector3(
       mappedCenter.x - mapping.outward.x * (WORLD_SCALE + 0.1),
@@ -129,6 +135,31 @@ class PortalView {
     // is hidden just for this view's render pass.
     this._scene = sceneOverride || neighborArea.scene;
     this._partnerGate = partnerGate;
+
+    // The perimeter wall(s) sitting flush ONE cell BEHIND the arrival cell —
+    // the neighbor's OUTER shell, on the exterior side of the partner gate.
+    // The clip reaches a hair past the arrival floor's far edge to paint it
+    // seamlessly, so that wall's near face leaks in as a thin dark strip
+    // beside the opening at oblique angles ("the rectangle that shouldn't be
+    // there", ruled 2026-07-12). It is never part of what you see THROUGH the
+    // door, so hide it for the pass (restored after — it reappears normally
+    // once you cross). The frame walls the door SITS IN (proj ~ 0) stay put:
+    // those read as the room's enclosure and are wanted (keep the walls, drop
+    // the strip). Trimming the clip instead would gap the floor at the far
+    // corner, since the floor's far edge and this wall's near face coincide.
+    this._wallsBehind = [];
+    // The partner's authored facing points OUT of its wall, into the room —
+    // the interior direction. Use it (not this panel's per-view outward) so
+    // every panel of the door agrees on which wall is "behind".
+    const interiorNormal = FACING_VECTORS[partnerGate.facing] || FACING_VECTORS.north;
+    const neighborEntities = (neighborArea && neighborArea.entities) || [];
+    for (const entity of neighborEntities) {
+      if (entity.type !== 'wall' || !entity.mesh) continue; // eslint-disable-line no-continue
+      const proj =
+        (entity.position.x - partnerGate.position.x) * interiorNormal.x +
+        (entity.position.z - partnerGate.position.z) * interiorNormal.z;
+      if (proj < -WORLD_SCALE / 2) this._wallsBehind.push(entity.mesh);
+    }
 
     // frameCorners overwrites the projection every pass; only near/far apply.
     this._camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
@@ -239,6 +270,15 @@ class PortalView {
         }
       }
     }
+    // Hide the neighbor's outer-shell wall behind the arrival cell (see
+    // constructor) so its near face doesn't leak in as a dark strip.
+    const hiddenWalls = [];
+    for (const mesh of this._wallsBehind) {
+      if (mesh.visible) {
+        mesh.visible = false;
+        hiddenWalls.push(mesh);
+      }
+    }
 
     const previousPlanes = renderer.clippingPlanes;
     renderer.clippingPlanes = [clipOverride || this._clipPlane];
@@ -248,6 +288,7 @@ class PortalView {
     renderer.clippingPlanes = previousPlanes;
 
     for (const child of hiddenSurfaces) child.visible = true;
+    for (const mesh of hiddenWalls) mesh.visible = true;
     for (const child of frontOnlyNotation) child.material.side = THREE.DoubleSide;
     if (partnerMesh) partnerMesh.material.visible = partnerMaterialWasVisible;
   }
