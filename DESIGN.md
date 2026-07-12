@@ -285,20 +285,7 @@ rulings, in the designer's words where it matters:
   (nothing pops in on entry). Deeper near-side content still clips (double
   world / sliced-creature hazard). During a pass the partner's BOX and
   every portal surface of BOTH ends hide (a same-area pair painting its own
-  stale textures was round 4's hall-of-mirrors "display got weird"), AND the
-  wall line the PARTNER gate is set into — the flanking cells coplanar with
-  the doorway plane — hide too (2026-07-11 oblique fix). At a grazing angle
-  the off-axis frustum widens PAST the window quad and catches those flanking
-  wall faces; they point away from the light, so ambient-only lighting paints
-  a flat dark-grey slab beside the opening ("a dark grey rectangle that
-  shouldn't be there on the left of the gate"). It is the near side of the
-  wall you look THROUGH — never visible through a real doorway — so hiding it
-  is correct; the band is ONE cell thick along the partner's facing axis, so
-  interior walls at any other depth stay put (nothing pops in on crossing —
-  the hidden line sits BEHIND you once you step through). The clip pull-back
-  alone can't remove it (the slab shares the arrival cell's depth plane). An
-  earlier reverted attempt hid a whole HALF-SPACE of walls and suppressed
-  genuine interior walls, which then popped in on entry.
+  stale textures was round 4's hall-of-mirrors "display got weird").
   Portal render targets are HALF-resolution — a doorway panel covers a
   fraction of the screen, and full-res targets made open doors cost several
   fullscreen renders per frame (the round-4 fan spin). A door's panels
