@@ -61,7 +61,11 @@ class NotationDisplay {
         transparent: true,
         opacity: 0,
         depthWrite: false,
-        side: THREE.DoubleSide,
+        // Single-sided, facing OUTWARD: each plane's front normal points away
+        // from the entity center, so the readable staff shows from outside but
+        // the mirror-reversed back is culled when you stand inside an open gate
+        // (DoubleSide used to leak the backwards notation).
+        side: THREE.FrontSide,
       });
 
       const mesh = new THREE.Mesh(geometry, material);

@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 
+import * as THREE from 'three';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 
@@ -107,6 +108,36 @@ describe('NotationDisplay on Gates and Fountains', () => {
       expect(positions).toContainEqual(expect.objectContaining({ x: 0, z: -offset }));
       expect(positions).toContainEqual(expect.objectContaining({ x: offset, z: 0 }));
       expect(positions).toContainEqual(expect.objectContaining({ x: -offset, z: 0 }));
+    });
+  });
+
+  describe('one-sided rendering (no backwards notation from inside the gate)', () => {
+    // Standing inside an open gate, you must never see the notation from
+    // behind — it renders mirror-reversed. Each face's plane is rendered
+    // SINGLE-sided (FrontSide) with its front facing outward, so the inside
+    // view is culled. Rendering DoubleSide is what showed the backwards
+    // staff. (That FrontSide is the *outward* side — not BackSide, which
+    // would cull the readable outside view instead — is a geometric fact of
+    // real three.js quaternion math that the three mock can't exercise; it's
+    // covered by the in-browser verification, not this unit test.)
+    it('gate notation meshes are single-sided FrontSide, never DoubleSide', () => {
+      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: singleNoteSong });
+      const notationChildren = gate.mesh.children.filter((c) => c._isNotationMesh);
+      expect(notationChildren.length).toBeGreaterThan(0);
+      for (const child of notationChildren) {
+        expect(child.material.side).toBe(THREE.FrontSide);
+        expect(child.material.side).not.toBe(THREE.DoubleSide);
+      }
+    });
+
+    it('fountain notation meshes are single-sided FrontSide, never DoubleSide', () => {
+      const fountain = new Fountain({ x: 0, y: 0, z: 0 }, { song: singleNoteSong });
+      const notationChildren = fountain.mesh.children.filter((c) => c._isNotationMesh);
+      expect(notationChildren.length).toBeGreaterThan(0);
+      for (const child of notationChildren) {
+        expect(child.material.side).toBe(THREE.FrontSide);
+        expect(child.material.side).not.toBe(THREE.DoubleSide);
+      }
     });
   });
 

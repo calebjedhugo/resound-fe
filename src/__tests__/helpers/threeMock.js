@@ -2,6 +2,11 @@
  * Mock THREE.js module for testing
  */
 
+// three's side constants (three/src/constants.js): FrontSide=0, BackSide=1, DoubleSide=2
+const FrontSide = 0;
+const BackSide = 1;
+const DoubleSide = 2;
+
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) {
     this.x = x;
@@ -171,6 +176,9 @@ class Material {
     this.opacity = opts.opacity !== undefined ? opts.opacity : 1;
     this.transparent = opts.transparent || false;
     this.depthWrite = opts.depthWrite !== undefined ? opts.depthWrite : true;
+    // three's default render side is FrontSide (0). Preserve an explicit
+    // side so tests can assert single- vs double-sided rendering.
+    this.side = opts.side !== undefined ? opts.side : FrontSide;
     this.color = opts.color !== undefined ? new Color(opts.color) : new Color();
     this.emissive = new Color(0x000000);
     this.emissiveIntensity = 0;
@@ -342,8 +350,6 @@ class Raycaster {
   }
 }
 
-const DoubleSide = 2;
-
 const MathUtils = {
   RAD2DEG: 180 / Math.PI,
   DEG2RAD: Math.PI / 180,
@@ -372,6 +378,8 @@ module.exports = {
   MeshStandardMaterial: Material,
   MeshBasicMaterial: Material,
   CanvasTexture,
+  FrontSide,
+  BackSide,
   DoubleSide,
   Vector2,
   Raycaster,
