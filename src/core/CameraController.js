@@ -5,6 +5,7 @@ const CENTER_RANGE_PERC_X = 0.4;
 const CENTER_RANGE_PERC_Y = 1;
 const CENTER_MOTION_START_OFFSET = 150;
 const KEYBOARD_LOOK_SPEED = 0.025; // Radians per frame (~86°/sec at 60fps)
+const KEYBOARD_LOOK_STEP = Math.PI / 24; // Guaranteed tap rotation (7.5°), tap-impulse only
 const MAX_PITCH = Math.PI / 2;
 
 class CameraController {
@@ -71,16 +72,30 @@ class CameraController {
   }
 
   static applyKeyboardLook(gameState) {
-    const { lookLeft, lookRight, lookUp, lookDown } = gameState.input.keys;
+    const { keys, impulses } = gameState.input;
+    const { lookLeft, lookRight, lookUp, lookDown } = keys;
 
-    // Look is driven purely by held keys: the view turns continuously while a
-    // key is down and stops exactly where it is on release.
+    // Look is driven purely by held keys — the view turns continuously while a
+    // key is down and stops exactly where it is on release. Queued taps
+    // (dev-only tap-impulse affordance) add a guaranteed step; all drain in
+    // one frame so bursts and throttled tabs stay responsive, and while a key
+    // is held its queue is left intact (clearing it destroyed taps whose
+    // successor's key-down straddled a frame — rapid taps landed at half rate).
+    const consume = (name) => {
+      if (!impulses || keys[name]) return 0;
+      const count = impulses[name];
+      impulses[name] = 0;
+      return count;
+    };
+
     let dx = 0;
     let dy = 0;
     if (lookLeft) dx += KEYBOARD_LOOK_SPEED;
     if (lookRight) dx -= KEYBOARD_LOOK_SPEED;
     if (lookUp) dy += KEYBOARD_LOOK_SPEED;
     if (lookDown) dy -= KEYBOARD_LOOK_SPEED;
+    dx += KEYBOARD_LOOK_STEP * (consume('lookLeft') - consume('lookRight'));
+    dy += KEYBOARD_LOOK_STEP * (consume('lookUp') - consume('lookDown'));
     if (dx === 0 && dy === 0) return;
 
     const [x, y] = gameState.camera.viewCenter;

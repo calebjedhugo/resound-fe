@@ -50,6 +50,28 @@ class GameState {
         lookDown: false,
       },
       mouseLookEnabled: true,
+      // OFF for humans: movement/look are held-key only, so releasing a key
+      // stops the camera exactly where it is (no post-release lurch). When
+      // enabled, a quick key tap queues a guaranteed minimum step in
+      // `impulses` below — an accessibility/automation affordance for input
+      // that can't hold keys across frames (e.g. scripted single-frame taps).
+      // No key or UI toggles this; only the dev console command
+      // `window.__resoundDebug.setTapImpulse(true)` does, so a real player
+      // never experiences it. See createEventListeners / motion / CameraController.
+      tapImpulseEnabled: false,
+      // Per-direction queue of guaranteed steps, filled on key RELEASE only
+      // while `tapImpulseEnabled`; drained by the frame loop; always 0 while
+      // the tap-impulse affordance is off.
+      impulses: {
+        forward: 0,
+        backward: 0,
+        latLeft: 0,
+        latRight: 0,
+        lookLeft: 0,
+        lookRight: 0,
+        lookUp: 0,
+        lookDown: 0,
+      },
       mouse: {
         // Starts at screen center (zero look offset) — [0,0] would aim the
         // camera at the sky until the first real mousemove arrives.

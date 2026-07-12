@@ -244,6 +244,15 @@ if (import.meta.env.DEV) {
     PortalManager,
     camera,
     syncCameraToPlayer,
+    // Re-enable the tap-impulse affordance (OFF by default): a quick key tap
+    // then yields one guaranteed movement/look step, so scripted single-frame
+    // taps register. Console-only, so a human player never triggers the
+    // post-release lurch this causes. Returns the resulting state.
+    // Usage: window.__resoundDebug.setTapImpulse(true)
+    setTapImpulse(enabled = true) {
+      gameState.input.tapImpulseEnabled = !!enabled;
+      return gameState.input.tapImpulseEnabled;
+    },
   };
 }
 

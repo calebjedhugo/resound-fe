@@ -62,9 +62,10 @@ function canMoveTo(fromX, fromZ, toX, toZ, radius, ignoreId, priorLevel, grid, y
  *   4. (old.x, old.z)                — corner / head-on: fully stuck
  *
  * Discrete point tests (no sweeping) are safe here: the largest per-frame axis
- * step is ~0.13 world units (running player) or ~0.13 (creature at max speed),
- * both far smaller than the 3-unit wall/cell size, so tunnelling cannot occur.
- * Do not "upgrade" this to continuous collision without a reason.
+ * step is ~0.35 world units (dev-only tap impulse) or ~0.13 (creature at max
+ * speed / running player), both far smaller than the 3-unit wall/cell size, so
+ * tunnelling cannot occur. Do not "upgrade" this to continuous collision
+ * without a reason.
  *
  * @param {{x:number,z:number}} old   current position
  * @param {{x:number,z:number}} next  desired position

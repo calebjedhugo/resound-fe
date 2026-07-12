@@ -109,14 +109,15 @@ unlocks/activates it. Activating fountains completes the puzzle.
 | H | Controls/objective overlay |
 | Esc | Pause |
 
-- **Movement/look are HELD-KEY ONLY** (2026-07-12): the camera moves/turns
-  every frame a key is DOWN and stops exactly on release — there is no
-  tap-impulse affordance anymore. An instantaneous down+up (a single
-  `press_key`) that resolves within one animation frame produces ZERO
-  movement. Automation MUST hold keys across several frames: dispatch a
-  keydown, wait/act for a beat, then keyup (e.g. real key-hold, or a
-  keydown → short wait → keyup pair). This is a deliberate human-feel change;
-  "a tap didn't move me" is an agent-environment artifact, not a game bug.
+- **Movement/look are HELD-KEY for players** (2026-07-12): the camera
+  moves/turns every frame a key is DOWN and stops exactly on release — no
+  post-release lurch. You are a code-blind, human-like tester, so drive input
+  the way a human does: HOLD keys across several frames (keydown, wait/act for
+  a beat, then keyup), not instantaneous taps. An instantaneous down+up that
+  resolves within one animation frame produces ZERO movement — "a tap didn't
+  move me" is an agent-environment artifact, not a game bug. (A dev tap-impulse
+  affordance exists but is off-limits to you — it lives behind
+  `window.__resoundDebug`, which you must not touch.)
 - Recommended agent camera technique: press M once (kills mouse-look), then
   steer by HOLDING I/J/K/L (keydown, brief wait, keyup) between screenshots —
   not instantaneous taps.

@@ -15,6 +15,11 @@ const randomInstrument = new Random();
 let recordStartedAt = 0;
 const RECORD_HOLD_THRESHOLD_MS = 400;
 
+// Per-key press timestamps for tap detection — only consulted while the
+// (dev-only) tap-impulse affordance is enabled.
+const keyPressedAt = {};
+const TAP_THRESHOLD_MS = 250;
+
 const dispatchKeyboardActions = ({ code, type, repeat }) => {
   let value;
   if (type === 'keydown') value = true;
@@ -25,9 +30,19 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
   }
 
   // Movement and look are driven purely by the held key flag: motion happens
-  // every frame the key is down and stops exactly where it is on release.
+  // every frame the key is down and stops exactly where it is on release —
+  // a human never gets a post-release lurch. ONLY when the dev-only
+  // tap-impulse affordance is on (`window.__resoundDebug.setTapImpulse(true)`)
+  // does a quick tap queue one guaranteed step on release, so scripted
+  // single-frame taps still register.
   const press = (name) => {
     gameState.input.keys[name] = value;
+    if (!gameState.input.tapImpulseEnabled) return;
+    if (value) {
+      if (!repeat) keyPressedAt[name] = Date.now();
+    } else if (Date.now() - (keyPressedAt[name] || 0) < TAP_THRESHOLD_MS) {
+      gameState.input.impulses[name] += 1;
+    }
   };
 
   switch (code) {
