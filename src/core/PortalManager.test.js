@@ -16,6 +16,7 @@ import { WORLD_SCALE, CLOSED_DOOR_LEAK_DISTANCE } from 'core/constants';
 import { getDistance } from 'core/utils';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
 import portalLiveB from '../__tests__/fixtures/puzzles/portal-live-b.json';
+import portalWallsB from '../__tests__/fixtures/puzzles/portal-walls-b.json';
 
 /** Serve /puzzles/<id>.json from the fixtures the tests link to. */
 function installFetchMock(puzzles) {
@@ -424,6 +425,80 @@ describe('PortalManager see-through rendering', () => {
 
     expect(doorwaySurface().visible).toBe(true);
     expect(renderer.renderCalls).toHaveLength(3); // approach + two side panels
+  });
+});
+
+describe('PortalManager doorway-wall slab (oblique dark-rectangle fix, 2026-07-11)', () => {
+  // Looking through an open door at an oblique angle, the off-axis frustum
+  // widens PAST the window quad and catches the flanking wall cells the
+  // PARTNER gate is set into. Their near faces point away from the light, so
+  // ambient-only lighting paints a flat dark-grey slab beside the opening
+  // ("a dark grey rectangle that shouldn't be there on the left of the gate").
+  // The fix hides ONLY that one coplanar wall line for the render pass —
+  // interior walls at any other depth stay put (no pop on crossing).
+  let gate;
+  let neighbor;
+
+  /** Grab a neighbor wall by its world (x, z) so the test can name it. */
+  const wallAt = (worldX, worldZ) =>
+    neighbor.entities.find(
+      (e) =>
+        e.type === 'wall' &&
+        Math.abs(e.position.x - worldX) < 0.01 &&
+        Math.abs(e.position.z - worldZ) < 0.01
+    );
+
+  beforeEach(async () => {
+    installFetchMock({ 'portal-walls-b': portalWallsB });
+    ctx.loadPuzzle('portal-walls-a');
+    await jest.runAllTimersAsync(); // let the neighbor load with its walls
+    [gate] = ctx.getGates();
+    neighbor = PortalManager.getArea('portal-walls-b');
+  });
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it("hides the partner gate's own doorway-wall line during the pass, restores after", () => {
+    // Partner south-door at grid (5,7) -> world (15,21), facing south: its
+    // doorway wall runs along X at z=21. Flanking cells (12,21) and (18,21)
+    // are coplanar; the interior wall at (15,12) is NOT.
+    const flankers = [wallAt(12, 21), wallAt(18, 21)];
+    const interior = wallAt(15, 12);
+    expect(flankers.every(Boolean)).toBe(true);
+    expect(interior).toBeDefined();
+
+    const seen = [];
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {
+        seen.push({
+          flankers: flankers.map((w) => w.mesh.visible),
+          interior: interior.mesh.visible,
+        });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    gate.open();
+    // Oblique: eye off to the side and in front of the door
+    const camera = { position: { x: 3 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    expect(seen.length).toBeGreaterThan(0);
+    // The doorway-wall line is invisible in EVERY pass; the interior wall is
+    // never touched.
+    for (const frame of seen) {
+      expect(frame.flankers).toEqual([false, false]);
+      expect(frame.interior).toBe(true);
+    }
+    // Restored the instant the passes finish — the walls show to the player
+    // (and appear normally once they cross).
+    for (const w of flankers) expect(w.mesh.visible).toBe(true);
+    expect(interior.mesh.visible).toBe(true);
   });
 });
 

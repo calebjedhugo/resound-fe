@@ -130,6 +130,29 @@ class PortalView {
     this._scene = sceneOverride || neighborArea.scene;
     this._partnerGate = partnerGate;
 
+    // The walls the PARTNER gate is SET INTO — its own doorway-wall line,
+    // coplanar with the doorway plane (the flanking cells beside the opening).
+    // At an oblique angle the off-axis frustum widens PAST the window quad and
+    // catches these flanking wall faces; they point away from the light, so
+    // ambient-only lighting paints them a flat dark grey — the "dark grey
+    // rectangle that shouldn't be there on the left side of the gate"
+    // (2026-07-11). They are the NEAR side of the very wall you look THROUGH,
+    // never visible through a real doorway, so hide them for the pass. The
+    // band is ONE cell thick along the partner's facing axis — interior walls
+    // at any other depth (the walls you genuinely see through the door) stay
+    // put, so nothing "pops in" on crossing (unlike the reverted half-space
+    // hide, which suppressed real interior walls too).
+    this._doorwayWalls = [];
+    const facingAxis = FACING_VECTORS[partnerGate.facing] || FACING_VECTORS.north;
+    const neighborEntities = (neighborArea && neighborArea.entities) || [];
+    for (const entity of neighborEntities) {
+      if (entity.type !== 'wall' || !entity.mesh) continue; // eslint-disable-line no-continue
+      const proj =
+        (entity.position.x - partnerGate.position.x) * facingAxis.x +
+        (entity.position.z - partnerGate.position.z) * facingAxis.z;
+      if (Math.abs(proj) < WORLD_SCALE / 2) this._doorwayWalls.push(entity.mesh);
+    }
+
     // frameCorners overwrites the projection every pass; only near/far apply.
     this._camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
     this._target = new THREE.WebGLRenderTarget(1, 1);
@@ -239,6 +262,15 @@ class PortalView {
         }
       }
     }
+    // Hide the partner's own doorway-wall cells (see constructor) so their
+    // shadowed near faces don't paint the dark-grey slab beside the opening.
+    const hiddenWalls = [];
+    for (const mesh of this._doorwayWalls) {
+      if (mesh.visible) {
+        mesh.visible = false;
+        hiddenWalls.push(mesh);
+      }
+    }
 
     const previousPlanes = renderer.clippingPlanes;
     renderer.clippingPlanes = [clipOverride || this._clipPlane];
@@ -248,6 +280,7 @@ class PortalView {
     renderer.clippingPlanes = previousPlanes;
 
     for (const child of hiddenSurfaces) child.visible = true;
+    for (const mesh of hiddenWalls) mesh.visible = true;
     for (const child of frontOnlyNotation) child.material.side = THREE.DoubleSide;
     if (partnerMesh) partnerMesh.material.visible = partnerMaterialWasVisible;
   }
