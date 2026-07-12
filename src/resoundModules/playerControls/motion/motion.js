@@ -22,10 +22,6 @@ const getSpeed = () => {
   return running ? baseSpeed * runMultiplier : baseSpeed;
 };
 
-// Guaranteed distance for a discrete key tap (a tap shorter than one frame
-// would otherwise move ~0). Held keys move continuously and clear impulses.
-const IMPULSE_STEP = 0.35;
-
 // Scratch objects reused every frame — each helper fully overwrites the ones
 // it uses, so nothing carries over between frames.
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -35,24 +31,8 @@ const scratchSide = new THREE.Vector3();
 const scratchYaw = new THREE.Quaternion();
 const scratchPitch = new THREE.Quaternion();
 
-// Consume ALL queued impulses for a direction, returning how many steps to
-// apply this frame. Draining fully (not one per frame) keeps burst taps and
-// background-throttled tabs responsive. While the key is held, leave the
-// queue intact — clearing it destroyed taps whose successor's key-down
-// straddled a frame (rapid taps landed at half rate).
-const consumeImpulse = (name) => {
-  const { keys, impulses } = gameState.input;
-  if (!impulses || keys[name]) return 0;
-  const count = impulses[name];
-  impulses[name] = 0;
-  return count;
-};
-
 const updateBackForthPosition = (cameraDirection) => {
   const { backward, forward } = gameState.input.keys;
-
-  camera.position.addScaledVector(cameraDirection, IMPULSE_STEP * consumeImpulse('forward'));
-  camera.position.addScaledVector(cameraDirection, -IMPULSE_STEP * consumeImpulse('backward'));
 
   if (backward && forward) return; // do nothing if moving in both directions.
 
@@ -70,9 +50,6 @@ const updateLateralPosition = (cameraDirection) => {
   const { latLeft, latRight } = gameState.input.keys;
 
   const cameraSide = scratchSide.crossVectors(camera.up, cameraDirection).normalize();
-
-  camera.position.addScaledVector(cameraSide, IMPULSE_STEP * consumeImpulse('latLeft'));
-  camera.position.addScaledVector(cameraSide, -IMPULSE_STEP * consumeImpulse('latRight'));
 
   if (latLeft && latRight) return; // do nothing if moving in both directions.
 

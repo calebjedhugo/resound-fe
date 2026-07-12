@@ -109,11 +109,17 @@ unlocks/activates it. Activating fountains completes the puzzle.
 | H | Controls/objective overlay |
 | Esc | Pause |
 
-- **Discrete key taps work**: each tap guarantees ~0.35 world-units of
-  movement or 7.5° of camera rotation, so automation that can't hold keys can
-  still navigate. Held keys move/turn continuously.
+- **Movement/look are HELD-KEY ONLY** (2026-07-12): the camera moves/turns
+  every frame a key is DOWN and stops exactly on release — there is no
+  tap-impulse affordance anymore. An instantaneous down+up (a single
+  `press_key`) that resolves within one animation frame produces ZERO
+  movement. Automation MUST hold keys across several frames: dispatch a
+  keydown, wait/act for a beat, then keyup (e.g. real key-hold, or a
+  keydown → short wait → keyup pair). This is a deliberate human-feel change;
+  "a tap didn't move me" is an agent-environment artifact, not a game bug.
 - Recommended agent camera technique: press M once (kills mouse-look), then
-  steer with I/J/K/L taps between screenshots.
+  steer by HOLDING I/J/K/L (keydown, brief wait, keyup) between screenshots —
+  not instantaneous taps.
 
 ## Editor facts
 

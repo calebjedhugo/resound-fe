@@ -15,10 +15,6 @@ const randomInstrument = new Random();
 let recordStartedAt = 0;
 const RECORD_HOLD_THRESHOLD_MS = 400;
 
-// Per-key press timestamps for tap detection (movement/look impulses)
-const keyPressedAt = {};
-const TAP_THRESHOLD_MS = 250;
-
 const dispatchKeyboardActions = ({ code, type, repeat }) => {
   let value;
   if (type === 'keydown') value = true;
@@ -28,16 +24,10 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
     return;
   }
 
-  // Quick taps queue an impulse ON RELEASE, so every tap yields exactly one
-  // guaranteed step regardless of frame timing. Holds move continuously via
-  // the key flag and queue nothing.
+  // Movement and look are driven purely by the held key flag: motion happens
+  // every frame the key is down and stops exactly where it is on release.
   const press = (name) => {
     gameState.input.keys[name] = value;
-    if (value) {
-      if (!repeat) keyPressedAt[name] = Date.now();
-    } else if (Date.now() - (keyPressedAt[name] || 0) < TAP_THRESHOLD_MS) {
-      gameState.input.impulses[name] += 1;
-    }
   };
 
   switch (code) {

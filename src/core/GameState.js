@@ -50,19 +50,6 @@ class GameState {
         lookDown: false,
       },
       mouseLookEnabled: true,
-      // Discrete key taps queue guaranteed minimum steps here (accessibility:
-      // input that can't hold keys still moves/turns). Consumed by the frame
-      // loop; ignored while the matching key is actually held.
-      impulses: {
-        forward: 0,
-        backward: 0,
-        latLeft: 0,
-        latRight: 0,
-        lookLeft: 0,
-        lookRight: 0,
-        lookUp: 0,
-        lookDown: 0,
-      },
       mouse: {
         // Starts at screen center (zero look offset) — [0,0] would aim the
         // camera at the sky until the first real mousemove arrives.
