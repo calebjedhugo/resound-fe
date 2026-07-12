@@ -1662,6 +1662,20 @@ if (failed.length) {
   process.exit(1);
 }
 
+// A gate's doorway plane (schema `facing`) is the wall the door sits in:
+// perpendicular to the wall RUN. Derived from wall adjacency so a door in a
+// VERTICAL wall (e.g. The Star's east-wall entry) gets an x-axis facing —
+// the portal view shares its clip along the true doorway axis, not the
+// wrong one. A free-standing or ambiguous gate defaults to 'north' (its
+// panels stay per-axis, which is right for an open portal box).
+const gateFacing = (area, g) => {
+  const inWall = (x, z) => area.walls.has(key(x, z));
+  const ew = inWall(g.x - 1, g.z) && inWall(g.x + 1, g.z);
+  const ns = inWall(g.x, g.z - 1) && inWall(g.x, g.z + 1);
+  if (ns && !ew) return 'west'; // wall runs N-S -> doorway opens E-W (x-axis)
+  return 'north'; // wall runs E-W, or free-standing -> doorway opens N-S (z-axis)
+};
+
 const outDir = path.join(__dirname, '..', 'public', 'puzzles');
 AREAS.forEach((area) => {
   const entities = [];
@@ -1689,7 +1703,7 @@ AREAS.forEach((area) => {
       position: { x: g.x, y: g.y || 0, z: g.z },
       song: normalizeSong(g.song),
       id: gid,
-      facing: 'north',
+      facing: gateFacing(area, g),
       ...(g.link ? { link: g.link } : {}),
       ...(g.alwaysOpen ? { alwaysOpen: true } : {}),
       ...(g.ending ? { ending: true } : {}),

@@ -346,6 +346,27 @@ describe('PortalManager see-through rendering', () => {
     }
   });
 
+  it('the shared clip follows the DOORWAY axis even when the eye is off to the side', () => {
+    // Standing well to the side of a door (and looking back) makes a SIDE
+    // panel the one the eye is most in front of. The shared clip must still
+    // follow the gate's FACING axis (the wall the door sits in), NOT the
+    // side panel's perpendicular axis — otherwise the neighbour is sliced
+    // sideways through the wall and its geometry pops on a lateral step.
+    // north-door (facing north => z-axis doorway) at grid (5,2) -> world
+    // (15,6); eye far to the west and a little south of it.
+    gate.open();
+    const sideCamera = { position: { x: 11.5, y: 1.8, z: 9 * WORLD_SCALE } };
+
+    PortalManager.renderPortals(renderer, sideCamera);
+
+    expect(renderer.renderCalls.length).toBeGreaterThan(1); // a side panel is active
+    const [plane] = renderer.renderCalls[0].clipping;
+    // Doorway axis is Z (the north wall), so the clip normal runs along Z —
+    // never along X (which a side-panel clip would use).
+    expect(Math.abs(plane.normal.x)).toBeCloseTo(0);
+    expect(Math.abs(plane.normal.z)).toBeCloseTo(1);
+  });
+
   it('closing the gate hides the doorway and stops paying for the pass', () => {
     gate.open();
     PortalManager.renderPortals(renderer, camera);

@@ -302,14 +302,25 @@ class PortalManager {
         faces.set(f, view);
       }
     }
-    // The PRIMARY approach panel — the face the eye is most directly in front
-    // of — owns the true doorway clip plane. EVERY visible panel clips with
-    // it, so the side windows slice the neighbor along the same doorway axis
-    // as the approach instead of perpendicular to it. Without this, a side
-    // panel shows a full-height cross-slice that pops the neighbor's apparent
-    // geometry as the eye crosses a jamb (a one-step "wall height" jump).
-    const primary = eligible.reduce((a, b) => (past(b) > past(a) ? b : a));
-    const sharedClip = faces.get(primary).clipPlane;
+    // The APPROACH panel owns the true doorway clip plane, and EVERY visible
+    // panel clips with it, so the oblique side windows slice the neighbor
+    // along the doorway axis instead of perpendicular to it (a perpendicular
+    // slice shows a full-height cross-section that pops the neighbor's
+    // apparent geometry as the eye moves — the "wall height jumps on one
+    // step" bug). The approach is the gate's FACING axis (schema: facing is
+    // the doorway plane — the wall the door sits in), NOT the panel the eye
+    // is most in front of: standing off to the SIDE of a door and looking
+    // back must still clip along the doorway, not sideways through the wall.
+    const axis = FACING_VECTORS[gate.facing] || FACING_VECTORS.north;
+    const eyeSide =
+      axis.x * (camera.position.x - gate.position.x) +
+      axis.z * (camera.position.z - gate.position.z);
+    const approach = eyeSide > 0 ? gate.facing : OPPOSITE_FACING[gate.facing];
+    // The approach face is always eligible (the eye is in front of it), so it
+    // was materialized above; fall back to per-panel clips if it somehow was
+    // not (defensive).
+    const approachView = faces.get(approach);
+    const sharedClip = approachView ? approachView.clipPlane : null;
     for (const f of eligible) {
       const view = faces.get(f);
       view.setVisible(true);

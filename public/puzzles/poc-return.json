@@ -383,7 +383,7 @@
         }
       ],
       "id": "entry",
-      "facing": "north",
+      "facing": "west",
       "link": {
         "puzzleId": "poc-clap",
         "gateId": "exit"

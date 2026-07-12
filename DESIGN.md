@@ -289,13 +289,19 @@ rulings, in the designer's words where it matters:
   Portal render targets are HALF-resolution — a doorway panel covers a
   fraction of the screen, and full-res targets made open doors cost several
   fullscreen renders per frame (the round-4 fan spin). A door's panels
-  (approach + oblique side windows) all share ONE clip plane — the PRIMARY
-  approach panel's, chosen per frame from the eye. Each panel clipping
-  along its own facing axis made a side window show a full-height
-  cross-slice of the neighbour that popped its apparent geometry (e.g. a
-  wall's height) as the eye crossed a jamb; one shared doorway plane keeps
-  every window consistent, so side panels appear/vanish seamlessly (they
-  are edge-on at the threshold).
+  (approach + oblique side windows) all share ONE clip plane — the plane of
+  the APPROACH panel along the gate's FACING axis (the wall the door sits
+  in; the eye only picks which side). Each panel clipping along its own
+  facing axis made a side window show a full-height cross-slice of the
+  neighbour that popped its apparent geometry (e.g. a wall's height) as the
+  eye moved; one shared doorway plane keeps every window consistent, so side
+  panels appear/vanish seamlessly (edge-on at the threshold). The axis MUST
+  come from `facing`, not the panel the eye is most in front of — standing
+  off to the SIDE of a door and looking back would otherwise clip sideways
+  through the wall. `facing` is therefore load-bearing now: `gen-poc.js`
+  emits it per gate from wall adjacency (a vertical-wall door like The
+  Star's east entry gets an x-axis facing; free-standing gates default to
+  north).
 - **A door never closes on its occupant — body included, and a closed box
   is OPEN FROM WITHIN (round-4 fix, 2026-07-11).** Gates latch, so a door
   can no longer close around a body — but a ONE-WAY crossing (through an
