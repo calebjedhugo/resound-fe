@@ -13,11 +13,20 @@ export default class EditorScene {
     this._mouse = new THREE.Vector2();
     this._groundPlane = null;
     this._gridHelper = null;
+    // A cell is ALWAYS selected (keyboard cursor). The mouse and the arrow keys
+    // both drive this one cell; the highlight mesh renders here every frame.
+    this._cursorCell = this._centerCell();
+    this._mouseMoved = false;
 
     this._createGrid();
     this._createAxes();
     this._createHoverMesh();
     this._setupMouseTracking();
+  }
+
+  _centerCell() {
+    const c = Math.floor(this._gridSize / 2);
+    return { x: c, z: c };
   }
 
   get activeElevation() {
@@ -61,6 +70,11 @@ export default class EditorScene {
     const next = this._model.getMetadata().gridSize;
     if (next === this._gridSize && this._gridHelper && this._groundPlane) return false;
     this._gridSize = next;
+    // Keep the cursor inside the (possibly smaller) grid.
+    this._cursorCell = {
+      x: Math.min(this._cursorCell.x, next - 1),
+      z: Math.min(this._cursorCell.z, next - 1),
+    };
 
     if (this._gridHelper) {
       this._scene.remove(this._gridHelper);
@@ -89,63 +103,104 @@ export default class EditorScene {
     });
     this._hoverMesh = new THREE.Mesh(geo, mat);
     this._hoverMesh.rotation.x = -Math.PI / 2;
-    this._hoverMesh.visible = false;
+    // The cursor is always shown — a cell is always selected.
+    this._hoverMesh.visible = true;
     this._scene.add(this._hoverMesh);
   }
 
   _setupMouseTracking() {
     const container = document.getElementById('editor-viewport');
+    // Moving the mouse retargets the cursor (resolved in updateHover, which has
+    // the camera). Arrow keys move the cursor directly; because a stationary
+    // mouse sets no _mouseMoved flag, the per-frame update never fights them.
     container.addEventListener('mousemove', (e) => {
       const rect = container.getBoundingClientRect();
       this._mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this._mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    });
-    container.addEventListener('mouseleave', () => {
-      this._hoverMesh.visible = false;
+      this._mouseMoved = true;
     });
   }
 
   updateHover(camera) {
-    this._raycaster.setFromCamera(this._mouse, camera);
-    const hits = this._raycaster.intersectObject(this._groundPlane);
-    if (hits.length > 0) {
-      const { point } = hits[0];
-      const grid = snapToGrid(point.x, point.z, this._gridSize);
-      if (grid) {
-        const world = gridToWorld(grid.x, grid.z);
-        const elevY = this._activeElevation * ELEVATION_HEIGHT;
-        this._hoverMesh.position.set(world.x, elevY + 0.05, world.z);
-        this._hoverMesh.visible = true;
-      } else {
-        this._hoverMesh.visible = false;
+    if (this._mouseMoved) {
+      this._raycaster.setFromCamera(this._mouse, camera);
+      const hits = this._raycaster.intersectObject(this._groundPlane);
+      if (hits.length > 0) {
+        const grid = snapToGrid(hits[0].point.x, hits[0].point.z, this._gridSize);
+        if (grid) this._cursorCell = grid;
       }
-    } else {
-      this._hoverMesh.visible = false;
+      this._mouseMoved = false;
     }
+    this._positionCursorMesh();
+  }
+
+  _positionCursorMesh() {
+    const world = gridToWorld(this._cursorCell.x, this._cursorCell.z);
+    const elevY = this._activeElevation * ELEVATION_HEIGHT;
+    this._hoverMesh.position.set(world.x, elevY + 0.05, world.z);
   }
 
   update() {
     // Called each frame — placeholder for future per-frame updates
   }
 
+  /** The currently selected cell — always a valid { x, z } (never null). */
   getHoveredGrid() {
-    // Returns the current hovered grid cell or null
-    if (!this._hoverMesh.visible) return null;
-    return snapToGrid(this._hoverMesh.position.x, this._hoverMesh.position.z, this._gridSize);
+    return { ...this._cursorCell };
+  }
+
+  /** Move the cursor by a grid delta, clamped to the grid bounds. */
+  moveCursor(dx, dz) {
+    const max = this._gridSize - 1;
+    this._cursorCell = {
+      x: Math.max(0, Math.min(max, this._cursorCell.x + dx)),
+      z: Math.max(0, Math.min(max, this._cursorCell.z + dz)),
+    };
+    this._positionCursorMesh();
+  }
+
+  /** Reset the cursor to the middle of the grid (e.g. on loading a puzzle). */
+  recenterCursor() {
+    this._cursorCell = this._centerCell();
+    this._positionCursorMesh();
   }
 
   /**
-   * Resolve the grid cell under a specific mouse event, refreshing the hover
-   * state first. Clicks must use this rather than trusting the last mousemove:
-   * synthetic/automated clicks (and click-after-scroll) can land on a cell the
-   * pointer never "moved" over, which used to place entities at a stale cell.
+   * Project a grid cell (at the active elevation) to pixel coordinates within
+   * the viewport container — used to anchor the keyboard-opened context menu.
+   */
+  cellToContainerXY(cell, camera) {
+    const world = gridToWorld(cell.x, cell.z);
+    const y = this._activeElevation * ELEVATION_HEIGHT;
+    const ndc = new THREE.Vector3(world.x, y, world.z).project(camera);
+    const container = document.getElementById('editor-viewport');
+    const rect = container.getBoundingClientRect();
+    return {
+      x: (ndc.x * 0.5 + 0.5) * rect.width,
+      y: (-ndc.y * 0.5 + 0.5) * rect.height,
+    };
+  }
+
+  /**
+   * Resolve the grid cell under a specific mouse event, and move the cursor to
+   * it. Clicks use this rather than trusting the last mousemove: synthetic
+   * clicks (and click-after-scroll) can land on a cell the pointer never
+   * "moved" over. Returns null for a click outside the grid (so callers can
+   * refuse the action) without disturbing the persistent cursor.
    */
   gridFromEvent(event, camera) {
     const container = document.getElementById('editor-viewport');
     const rect = container.getBoundingClientRect();
     this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    this.updateHover(camera);
-    return this.getHoveredGrid();
+    this._raycaster.setFromCamera(this._mouse, camera);
+    const hits = this._raycaster.intersectObject(this._groundPlane);
+    if (hits.length === 0) return null;
+    const grid = snapToGrid(hits[0].point.x, hits[0].point.z, this._gridSize);
+    if (grid) {
+      this._cursorCell = grid;
+      this._positionCursorMesh();
+    }
+    return grid;
   }
 }

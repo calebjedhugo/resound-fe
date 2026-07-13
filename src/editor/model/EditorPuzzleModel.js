@@ -41,6 +41,10 @@ export default class EditorPuzzleModel {
     this._playerSpawn = { x, y, z };
   }
 
+  clearPlayerSpawn() {
+    this._playerSpawn = null;
+  }
+
   getPlayerSpawn() {
     return this._playerSpawn ? { ...this._playerSpawn } : null;
   }

@@ -166,6 +166,17 @@ export default class EntityPlacer {
     }
   }
 
+  /** Clear the player spawn (model + marker mesh). */
+  clearPlayerSpawn() {
+    this._undoManager.clearPlayerSpawn();
+    if (this._playerSpawnMesh) {
+      this._scene.remove(this._playerSpawnMesh);
+      this._playerSpawnMesh.geometry.dispose();
+      this._playerSpawnMesh.material.dispose();
+      this._playerSpawnMesh = null;
+    }
+  }
+
   removeEntityById(id) {
     this._undoManager.removeEntity(id);
     const mesh = this._entityMeshes.get(id);

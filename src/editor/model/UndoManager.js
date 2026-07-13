@@ -12,6 +12,7 @@
 const MUTATION_METHODS = [
   'setMetadata',
   'setPlayerSpawn',
+  'clearPlayerSpawn',
   'addFloor',
   'removeFloor',
   'addEntity',

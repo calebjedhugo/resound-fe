@@ -153,6 +153,75 @@ describe('ContextMenu', () => {
     });
   });
 
+  // -- keyboard navigation --------------------------------------------------
+
+  describe('keyboard navigation', () => {
+    const press = (key) =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    const activeLabel = () => {
+      const el = container.querySelector('.context-menu-item.active');
+      return el ? el.textContent : null;
+    };
+
+    it('reports isOpen while a menu is shown', () => {
+      expect(menu.isOpen).toBe(false);
+      menu.show(10, 10, [{ label: 'A', action: () => {} }]);
+      expect(menu.isOpen).toBe(true);
+      menu.hide();
+      expect(menu.isOpen).toBe(false);
+    });
+
+    it('highlights the first enabled item on show', () => {
+      menu.show(10, 10, [
+        { label: 'A', action: () => {} },
+        { label: 'B', action: () => {} },
+      ]);
+      expect(activeLabel()).toBe('A');
+    });
+
+    it('moves the highlight with arrow keys, wrapping around', () => {
+      menu.show(10, 10, [
+        { label: 'A', action: () => {} },
+        { label: 'B', action: () => {} },
+        { label: 'C', action: () => {} },
+      ]);
+      press('ArrowDown');
+      expect(activeLabel()).toBe('B');
+      press('ArrowDown');
+      expect(activeLabel()).toBe('C');
+      press('ArrowDown'); // wrap to first
+      expect(activeLabel()).toBe('A');
+      press('ArrowUp'); // wrap to last
+      expect(activeLabel()).toBe('C');
+    });
+
+    it('activates the highlighted item on Enter and hides', () => {
+      const a = jest.fn();
+      const b = jest.fn();
+      menu.show(10, 10, [
+        { label: 'A', action: a },
+        { label: 'B', action: b },
+      ]);
+      press('ArrowDown'); // highlight B
+      press('Enter');
+      expect(b).toHaveBeenCalledTimes(1);
+      expect(a).not.toHaveBeenCalled();
+      expect(menu.isOpen).toBe(false);
+    });
+
+    it('skips disabled items when navigating', () => {
+      menu.show(10, 10, [
+        { label: 'Header', action: () => {}, disabled: true },
+        { label: 'A', action: () => {} },
+        { label: 'B', action: () => {} },
+      ]);
+      // First *enabled* item is highlighted, not the disabled header
+      expect(activeLabel()).toBe('A');
+      press('ArrowDown');
+      expect(activeLabel()).toBe('B');
+    });
+  });
+
   // -- dispose --------------------------------------------------------------
 
   describe('dispose', () => {

@@ -67,11 +67,14 @@ jest.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
 
 jest.mock('editor/viewport/EditorScene', () =>
   jest.fn(() => ({
-    getHoveredGrid: jest.fn(),
+    getHoveredGrid: jest.fn(() => ({ x: 7, z: 7 })),
     gridFromEvent: jest.fn(),
     updateHover: jest.fn(),
     update: jest.fn(),
     syncGridSize: jest.fn(),
+    moveCursor: jest.fn(),
+    recenterCursor: jest.fn(),
+    cellToContainerXY: jest.fn(() => ({ x: 0, y: 0 })),
     activeElevation: 0,
     _groundPlane: null,
   }))
@@ -85,6 +88,7 @@ jest.mock('editor/viewport/EntityPlacer', () =>
     rebuildFromModel: jest.fn(),
     placeEntity: jest.fn(),
     removeEntityById: jest.fn(),
+    clearPlayerSpawn: jest.fn(),
     refreshLinkBadge: jest.fn(),
   }))
 );
@@ -608,6 +612,89 @@ describe('EditorApp wiring', () => {
       );
 
       expect(undoSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('keyboard grid navigation', () => {
+    // The mocked EditorScene reports a cursor at (7, 7) and records moveCursor.
+    const press = (key) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      );
+
+    it('moves the cursor with the arrow keys', () => {
+      const move = app.editorScene.moveCursor;
+      press('ArrowRight');
+      expect(move).toHaveBeenLastCalledWith(1, 0);
+      press('ArrowLeft');
+      expect(move).toHaveBeenLastCalledWith(-1, 0);
+      press('ArrowUp');
+      expect(move).toHaveBeenLastCalledWith(0, -1);
+      press('ArrowDown');
+      expect(move).toHaveBeenLastCalledWith(0, 1);
+    });
+
+    it('places an entity at the cursor cell on its letter key', () => {
+      press('c');
+      // placeEntity(type, gridX, gridZ, elevation) — cursor (7,7) at elevation 0
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('creature', 7, 7, 0);
+    });
+
+    it('maps each placement key to the right entity type', () => {
+      const cases = { p: 'player', g: 'gate', w: 'wall', r: 'ramp', l: 'cleanser' };
+      Object.entries(cases).forEach(([key, type]) => {
+        app.entityPlacer.placeEntity.mockClear();
+        press(key);
+        expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith(type, 7, 7, 0);
+      });
+    });
+
+    it('refuses placement on an occupied cell', () => {
+      app.undoManager.addEntity('wall', 7, 0, 7, {}); // occupy the cursor cell
+      app.entityPlacer.placeEntity.mockClear();
+      press('c');
+      expect(app.entityPlacer.placeEntity).not.toHaveBeenCalled();
+    });
+
+    it('does not navigate or place while typing in a field', () => {
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+      expect(app.editorScene.moveCursor).not.toHaveBeenCalled();
+      expect(app.entityPlacer.placeEntity).not.toHaveBeenCalled();
+      input.remove();
+    });
+
+    it('opens the context menu for the entity under the cursor on Enter', () => {
+      app.undoManager.addEntity('creature', 7, 0, 7, { song: [] });
+      press('Enter');
+      expect(document.querySelector('.context-menu')).not.toBeNull();
+    });
+
+    it('routes keys to the menu, not the grid, while the menu is open', () => {
+      app.undoManager.addEntity('creature', 7, 0, 7, { song: [] });
+      press('Enter'); // opens the menu
+      app.editorScene.moveCursor.mockClear();
+      press('ArrowDown'); // the menu owns this now
+      expect(app.editorScene.moveCursor).not.toHaveBeenCalled();
+    });
+
+    it('deletes the entity under the cursor on Delete', async () => {
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
+      press('Delete');
+      // _deleteSelectedEntity awaits a link-release (a no-op microtask for a
+      // wall); flush the microtask queue so the removal lands. (Global fake
+      // timers rule out setTimeout-based flushing here.)
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(app.entityPlacer.removeEntityById).toHaveBeenCalledWith(id);
+    });
+
+    it('clears the player spawn when Delete lands on the spawn cell', () => {
+      app.undoManager.setPlayerSpawn(7, 0, 7);
+      press('Delete');
+      expect(app.entityPlacer.clearPlayerSpawn).toHaveBeenCalled();
     });
   });
 });

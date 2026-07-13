@@ -29,6 +29,18 @@ import {
 } from 'editor/io/portalLinks';
 import { importPuzzle } from 'editor/io/importPuzzle';
 
+// Entity types that carry a song (Edit Song menu item, dbl-click to edit).
+const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
+// Single-key placement at the cursor cell (fountain is parked — no key).
+const PLACE_KEYS = {
+  p: 'player',
+  c: 'creature',
+  g: 'gate',
+  w: 'wall',
+  r: 'ramp',
+  l: 'cleanser',
+};
+
 export default class EditorApp {
   constructor() {
     this.model = new EditorPuzzleModel();
@@ -412,6 +424,7 @@ export default class EditorApp {
   _applyRestoredModel(importedModel) {
     this.undoManager.replaceModel(importedModel);
     this._syncGridToScene();
+    this.editorScene.recenterCursor();
     this.entityPlacer.rebuildFromModel();
     this.floorRegionPanel.refresh();
     this.elevationSelector.refresh();
@@ -529,7 +542,6 @@ export default class EditorApp {
 
   _setupViewportClick() {
     const container = document.getElementById('editor-viewport');
-    const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
 
     container.addEventListener('click', (e) => {
       // Teleport pick mode: the next click chooses the link's target gate
@@ -591,67 +603,133 @@ export default class EditorApp {
       e.preventDefault();
 
       const entityId = this._entityIdAtEvent(e);
-      if (entityId !== null) {
-        this.selectionManager.select(entityId);
-        const entity = this.undoManager.getEntity(entityId);
-        const items = [];
-
-        if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
-          items.push({
-            label: 'Edit Song',
-            action: () => this.songEditorModal.open(entityId),
-          });
-        }
-
-        // Gate linking (portals / in-level teleport doors)
-        if (entity && entity.type === 'gate') {
-          const { link } = entity.data;
-          if (link) {
-            items.push({ label: `Linked → ${link.puzzleId}/${link.gateId}`, disabled: true });
-          }
-          items.push({
-            label: 'Teleport: click another gate…',
-            action: () => this._startLinkPick(entityId),
-          });
-          items.push({
-            label: 'Link by id…',
-            action: () => this._linkById(entityId),
-          });
-          if (link) {
-            items.push({
-              label: 'Clear Link',
-              action: () => {
-                clearLink(this.undoManager, entityId)
-                  .then(() => {
-                    this._refreshGateLinkBadges();
-                    this.propertyPanel.show(entityId);
-                    this._showToast('Link cleared (both sides)', 'success');
-                  })
-                  .catch((err) => this._showToast(err.message));
-              },
-            });
-          }
-        }
-
-        if (items.length > 0) {
-          const rect = container.getBoundingClientRect();
-          this.controls.enabled = false;
-          this.contextMenu.show(e.clientX - rect.left, e.clientY - rect.top, items);
-          // Re-enable controls after menu hides
-          const checkHidden = () => {
-            if (!container.querySelector('.context-menu')) {
-              this.controls.enabled = true;
-            } else {
-              requestAnimationFrame(checkHidden);
-            }
-          };
-          requestAnimationFrame(checkHidden);
-        }
+      if (entityId === null) {
+        this.contextMenu.hide();
         return;
       }
-
-      this.contextMenu.hide();
+      const rect = container.getBoundingClientRect();
+      this._openEntityContextMenu(entityId, e.clientX - rect.left, e.clientY - rect.top);
     });
+  }
+
+  /** Build the context-menu items for an entity (song editing + gate links). */
+  _buildEntityContextItems(entityId, entity) {
+    const items = [];
+    if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
+      items.push({
+        label: 'Edit Song',
+        action: () => this.songEditorModal.open(entityId),
+      });
+    }
+
+    // Gate linking (portals / in-level teleport doors)
+    if (entity && entity.type === 'gate') {
+      const { link } = entity.data;
+      if (link) {
+        items.push({ label: `Linked → ${link.puzzleId}/${link.gateId}`, disabled: true });
+      }
+      items.push({
+        label: 'Teleport: click another gate…',
+        action: () => this._startLinkPick(entityId),
+      });
+      items.push({
+        label: 'Link by id…',
+        action: () => this._linkById(entityId),
+      });
+      if (link) {
+        items.push({
+          label: 'Clear Link',
+          action: () => {
+            clearLink(this.undoManager, entityId)
+              .then(() => {
+                this._refreshGateLinkBadges();
+                this.propertyPanel.show(entityId);
+                this._showToast('Link cleared (both sides)', 'success');
+              })
+              .catch((err) => this._showToast(err.message));
+          },
+        });
+      }
+    }
+    return items;
+  }
+
+  /**
+   * Select the entity and open its context menu at the given container-pixel
+   * position. Shared by right-click and the keyboard (Enter) path. Orbit
+   * controls are disabled while the menu is up so arrow keys don't pan.
+   */
+  _openEntityContextMenu(entityId, px, py) {
+    this.selectionManager.select(entityId);
+    const entity = this.undoManager.getEntity(entityId);
+    const items = this._buildEntityContextItems(entityId, entity);
+    if (items.length === 0) return;
+
+    this.controls.enabled = false;
+    this.contextMenu.show(px, py, items);
+    const checkHidden = () => {
+      if (!this.contextMenu.isOpen) {
+        this.controls.enabled = true;
+      } else {
+        requestAnimationFrame(checkHidden);
+      }
+    };
+    requestAnimationFrame(checkHidden);
+  }
+
+  /** The id of the first entity on a cell at the active elevation, or null. */
+  _entityIdAtCell(cell) {
+    const elevation = this.editorScene.activeElevation;
+    const ents = this.undoManager.getEntitiesAt(cell.x, elevation, cell.z);
+    return ents.length > 0 ? ents[0].id : null;
+  }
+
+  /** Enter: open the context menu for whatever entity is under the cursor. */
+  _openContextMenuAtCursor() {
+    const cell = this.editorScene.getHoveredGrid();
+    const entityId = this._entityIdAtCell(cell);
+    if (entityId === null) return;
+    const { x, y } = this.editorScene.cellToContainerXY(cell, this.camera);
+    this._openEntityContextMenu(entityId, x, y);
+  }
+
+  /** Letter key: place an entity of `type` at the cursor cell (refuse if full). */
+  _placeAtCursor(type) {
+    const cell = this.editorScene.getHoveredGrid();
+    const elevation = this.editorScene.activeElevation;
+    if (this._isCellOccupied(cell.x, elevation, cell.z)) {
+      this._showToast('That cell is already occupied');
+      return;
+    }
+    const id = this.entityPlacer.placeEntity(type, cell.x, cell.z, elevation);
+    if (id !== null) this.selectionManager.select(id); // player spawn returns null
+    this._showToast(`${type} placed at (${cell.x}, ${cell.z})`, 'success');
+  }
+
+  /** Delete/Backspace: remove whatever occupies the cursor cell. */
+  _deleteAtCursor() {
+    const cell = this.editorScene.getHoveredGrid();
+    const elevation = this.editorScene.activeElevation;
+    const entityId = this._entityIdAtCell(cell);
+    if (entityId !== null) {
+      this.selectionManager.select(entityId);
+      this._deleteSelectedEntity();
+      return;
+    }
+    const spawn = this.undoManager.getPlayerSpawn();
+    if (spawn && spawn.x === cell.x && spawn.y === elevation && spawn.z === cell.z) {
+      this.entityPlacer.clearPlayerSpawn();
+      this._showToast('Player spawn removed', 'success');
+    }
+  }
+
+  /** True when the key event targets a text field — never hijack typing. */
+  // eslint-disable-next-line class-methods-use-this
+  _isEditableTarget(e) {
+    const t = e.target;
+    if (!t) return false;
+    const tag = t.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable;
   }
 
   _setupDrag() {
@@ -701,33 +779,70 @@ export default class EditorApp {
 
   _setupKeyboard() {
     document.addEventListener('keydown', (e) => {
-      // Skip editor keyboard handling while a modal is open
+      // Modals take precedence — they own the keyboard while open (each closes
+      // itself on Escape). An open context menu owns arrows/Enter/Escape too.
       if (this.songEditorModal && this.songEditorModal.isOpen) return;
       if (this.worldOverview && this.worldOverview.isOpen) return;
+      if (this.contextMenu && this.contextMenu.isOpen) return;
 
-      // Cmd+Z / Ctrl+Z = undo
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+      const { key } = e;
+
+      // Undo / redo work regardless of focus (before the text-field guard).
+      if ((e.metaKey || e.ctrlKey) && key.toLowerCase() === 'z') {
         e.preventDefault();
-        this._undo();
+        if (e.shiftKey) this._redo();
+        else this._undo();
+        return;
       }
-      // Cmd+Shift+Z / Ctrl+Shift+Z = redo
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
-        e.preventDefault();
-        this._redo();
-      }
-      // Escape cancels floor placement, teleport-pick, and selection
-      if (e.key === 'Escape') {
+
+      // Escape cancels the active mode (works even from a focused field).
+      if (key === 'Escape') {
         this.floorRegionPanel.cancelPlacing();
         this.entityToolbar.deselect();
         this._cancelLinkPick('Teleport cancelled');
         this.selectionManager.deselect();
+        return;
       }
-      // Delete or Backspace deletes selected entity
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (this.selectionManager.selectedId !== null) {
+
+      // Everything below is grid navigation — never hijack typing, and let
+      // other modifier combos (browser/OS shortcuts) pass through.
+      if (this._isEditableTarget(e)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      switch (key) {
+        case 'ArrowUp':
           e.preventDefault();
-          this._deleteSelectedEntity();
-        }
+          this.editorScene.moveCursor(0, -1);
+          return;
+        case 'ArrowDown':
+          e.preventDefault();
+          this.editorScene.moveCursor(0, 1);
+          return;
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.editorScene.moveCursor(-1, 0);
+          return;
+        case 'ArrowRight':
+          e.preventDefault();
+          this.editorScene.moveCursor(1, 0);
+          return;
+        case 'Enter':
+          e.preventDefault();
+          this._openContextMenuAtCursor();
+          return;
+        case 'Delete':
+        case 'Backspace':
+          e.preventDefault();
+          this._deleteAtCursor();
+          return;
+        default:
+          break;
+      }
+
+      const placeType = PLACE_KEYS[key.toLowerCase()];
+      if (placeType) {
+        e.preventDefault();
+        this._placeAtCursor(placeType);
       }
     });
   }

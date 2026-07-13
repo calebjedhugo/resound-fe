@@ -18,6 +18,10 @@ export default class ContextMenu {
   constructor(viewportContainer) {
     this._container = viewportContainer;
     this._menuEl = null;
+    // Enabled items (buttons + actions) for keyboard navigation, and the index
+    // of the currently highlighted one.
+    this._navItems = [];
+    this._activeIndex = -1;
 
     // Bound handlers so we can add/remove them cleanly
     this._onDocumentMouseDown = this._handleDocumentMouseDown.bind(this);
@@ -25,6 +29,11 @@ export default class ContextMenu {
 
     document.addEventListener('mousedown', this._onDocumentMouseDown);
     document.addEventListener('keydown', this._onDocumentKeyDown);
+  }
+
+  /** True while a menu is on screen. */
+  get isOpen() {
+    return this._menuEl !== null;
   }
 
   /**
@@ -42,6 +51,7 @@ export default class ContextMenu {
     const menuEl = document.createElement('div');
     menuEl.className = 'context-menu';
 
+    this._navItems = [];
     for (const item of items) {
       const btn = document.createElement('button');
       btn.className = 'context-menu-item';
@@ -50,14 +60,19 @@ export default class ContextMenu {
       if (item.disabled) {
         btn.disabled = true;
       } else {
-        btn.addEventListener('click', (e) => {
+        const activate = (e) => {
           // Menu clicks must not bubble into the viewport's click handler —
           // an action that arms a click mode (e.g. teleport-pick) would be
           // instantly cancelled by its own menu click
-          e.stopPropagation();
+          if (e) e.stopPropagation();
           item.action();
           this.hide();
-        });
+        };
+        btn.addEventListener('click', activate);
+        const navIndex = this._navItems.length;
+        // Hovering also sets the keyboard highlight, so mouse and keyboard agree.
+        btn.addEventListener('mouseenter', () => this._setActive(navIndex));
+        this._navItems.push({ btn, activate });
       }
 
       menuEl.appendChild(btn);
@@ -69,6 +84,10 @@ export default class ContextMenu {
 
     this._container.appendChild(menuEl);
     this._menuEl = menuEl;
+
+    // Highlight the first enabled item so Enter has a target immediately.
+    this._activeIndex = -1;
+    if (this._navItems.length > 0) this._setActive(0);
 
     // Clamp to viewport bounds now that the element is in the DOM
     this._clampPosition(x, y);
@@ -119,6 +138,26 @@ export default class ContextMenu {
       this._menuEl.parentNode.removeChild(this._menuEl);
     }
     this._menuEl = null;
+    this._navItems = [];
+    this._activeIndex = -1;
+  }
+
+  /** Highlight the enabled item at navIndex (arrow-key / hover selection). */
+  _setActive(navIndex) {
+    if (navIndex < 0 || navIndex >= this._navItems.length) return;
+    if (this._activeIndex >= 0 && this._navItems[this._activeIndex]) {
+      this._navItems[this._activeIndex].btn.classList.remove('active');
+    }
+    this._activeIndex = navIndex;
+    this._navItems[navIndex].btn.classList.add('active');
+  }
+
+  /** Move the highlight by delta, wrapping around the enabled items. */
+  _moveActive(delta) {
+    if (this._navItems.length === 0) return;
+    const n = this._navItems.length;
+    const next = (this._activeIndex + delta + n) % n;
+    this._setActive(next);
   }
 
   /**
@@ -132,12 +171,33 @@ export default class ContextMenu {
   }
 
   /**
-   * Handle keydown on the document -- dismiss the menu on Escape.
+   * Handle keydown on the document while the menu is open: arrow keys move the
+   * highlight, Enter activates it, Escape dismisses. The menu owns these keys so
+   * they don't leak into the viewport's grid navigation.
    */
   _handleDocumentKeyDown(event) {
     if (!this._menuEl) return;
-    if (event.key === 'Escape') {
-      this.hide();
+    switch (event.key) {
+      case 'Escape':
+        event.preventDefault();
+        this.hide();
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        this._moveActive(1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        this._moveActive(-1);
+        break;
+      case 'Enter':
+        event.preventDefault();
+        if (this._activeIndex >= 0 && this._navItems[this._activeIndex]) {
+          this._navItems[this._activeIndex].activate();
+        }
+        break;
+      default:
+        break;
     }
   }
 }
