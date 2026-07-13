@@ -26,7 +26,10 @@ export default class EntityToolbar {
       { type: 'player', label: 'Player', color: '#ff4444' },
       { type: 'creature', label: 'Creature', color: '#ffaa00' },
       { type: 'gate', label: 'Gate', color: '#4488ff' },
-      { type: 'fountain', label: 'Fountain', color: '#44ddff' },
+      // Fountain PARKED: the entity no longer does anything in-game, so the
+      // placement tool is hidden for now. Kept for possible revival (the
+      // fountain entity/serialization is untouched).
+      // { type: 'fountain', label: 'Fountain', color: '#44ddff' },
       { type: 'wall', label: 'Wall', color: '#808080' },
       { type: 'ramp', label: 'Ramp', color: '#88ff88' },
       { type: 'cleanser', label: 'Cleanser', color: '#66ddff' },
