@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { snapToGrid, gridToWorld } from 'editor/viewport/gridUtils';
 
+// Lift the cursor highlight above the floor slab (0.2 thick, centred on the
+// storey height, so its top is +0.1) so it is never hidden under a platform.
+const CURSOR_LIFT = 0.15;
+
 export default class EditorScene {
   constructor(scene, model) {
     this._scene = scene;
@@ -33,6 +37,9 @@ export default class EditorScene {
   }
   set activeElevation(val) {
     this._activeElevation = val;
+    // The grid, raycast plane, and cursor all live on the active storey.
+    this._positionGrid();
+    this._positionCursorMesh();
   }
 
   _createGrid() {
@@ -50,6 +57,8 @@ export default class EditorScene {
     this._groundPlane.rotation.x = -Math.PI / 2;
     this._groundPlane.position.set(size / 2, 0, size / 2);
     this._scene.add(this._groundPlane);
+
+    this._positionGrid();
   }
 
   _createAxes() {
@@ -108,9 +117,17 @@ export default class EditorScene {
   }
 
   _positionCursorMesh() {
+    if (!this._hoverMesh) return;
     const world = gridToWorld(this._cursorCell.x, this._cursorCell.z);
     const elevY = this._activeElevation * ELEVATION_HEIGHT;
-    this._hoverMesh.position.set(world.x, elevY + 0.05, world.z);
+    this._hoverMesh.position.set(world.x, elevY + CURSOR_LIFT, world.z);
+  }
+
+  /** Pin the grid + raycast plane to the active storey's height. */
+  _positionGrid() {
+    const y = this._activeElevation * ELEVATION_HEIGHT;
+    if (this._gridHelper) this._gridHelper.position.y = y;
+    if (this._groundPlane) this._groundPlane.position.y = y;
   }
 
   update() {
