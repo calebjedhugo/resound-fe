@@ -13,15 +13,14 @@ export default class EditorScene {
     this._mouse = new THREE.Vector2();
     this._groundPlane = null;
     this._gridHelper = null;
-    // A cell is ALWAYS selected (keyboard cursor). The mouse and the arrow keys
-    // both drive this one cell; the highlight mesh renders here every frame.
+    // A cell is ALWAYS selected (the cursor). It is driven ONLY by the arrow
+    // keys and by clicking a tile — never by mouse hover. The highlight mesh
+    // renders at the cursor every frame.
     this._cursorCell = this._centerCell();
-    this._mouseMoved = false;
 
     this._createGrid();
     this._createAxes();
     this._createHoverMesh();
-    this._setupMouseTracking();
   }
 
   _centerCell() {
@@ -108,32 +107,6 @@ export default class EditorScene {
     this._scene.add(this._hoverMesh);
   }
 
-  _setupMouseTracking() {
-    const container = document.getElementById('editor-viewport');
-    // Moving the mouse retargets the cursor (resolved in updateHover, which has
-    // the camera). Arrow keys move the cursor directly; because a stationary
-    // mouse sets no _mouseMoved flag, the per-frame update never fights them.
-    container.addEventListener('mousemove', (e) => {
-      const rect = container.getBoundingClientRect();
-      this._mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      this._mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      this._mouseMoved = true;
-    });
-  }
-
-  updateHover(camera) {
-    if (this._mouseMoved) {
-      this._raycaster.setFromCamera(this._mouse, camera);
-      const hits = this._raycaster.intersectObject(this._groundPlane);
-      if (hits.length > 0) {
-        const grid = snapToGrid(hits[0].point.x, hits[0].point.z, this._gridSize);
-        if (grid) this._cursorCell = grid;
-      }
-      this._mouseMoved = false;
-    }
-    this._positionCursorMesh();
-  }
-
   _positionCursorMesh() {
     const world = gridToWorld(this._cursorCell.x, this._cursorCell.z);
     const elevY = this._activeElevation * ELEVATION_HEIGHT;
@@ -141,7 +114,8 @@ export default class EditorScene {
   }
 
   update() {
-    // Called each frame — placeholder for future per-frame updates
+    // Keep the cursor highlight pinned to the selected cell every frame.
+    this._positionCursorMesh();
   }
 
   /** The currently selected cell — always a valid { x, z } (never null). */

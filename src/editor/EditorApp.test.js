@@ -42,6 +42,10 @@ jest.mock('three', () => {
       lookAt: jest.fn(),
       aspect: 1,
       updateProjectionMatrix: jest.fn(),
+      updateMatrixWorld: jest.fn(),
+      // Identity orientation: camera right = +X, forward (into screen) = -Z, so
+      // Right→+x, Left→-x, Up→-z, Down→+z (see _cursorDeltaForArrow).
+      matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] },
     })),
     AmbientLight: jest.fn(() => ({})),
     DirectionalLight: jest.fn(() => ({ position: { set: jest.fn() } })),
@@ -622,7 +626,7 @@ describe('EditorApp wiring', () => {
         new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
       );
 
-    it('moves the cursor with the arrow keys', () => {
+    it('moves the cursor with the arrow keys (identity camera)', () => {
       const move = app.editorScene.moveCursor;
       press('ArrowRight');
       expect(move).toHaveBeenLastCalledWith(1, 0);
@@ -632,6 +636,17 @@ describe('EditorApp wiring', () => {
       expect(move).toHaveBeenLastCalledWith(0, -1);
       press('ArrowDown');
       expect(move).toHaveBeenLastCalledWith(0, 1);
+    });
+
+    it('remaps the arrow keys to the grid orientation as the camera orbits', () => {
+      // Rotate the camera 90° about Y: screen-right → +Z, into-screen → +X.
+      app.camera.matrixWorld.elements = [0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1];
+      const move = app.editorScene.moveCursor;
+      move.mockClear();
+      press('ArrowRight');
+      expect(move).toHaveBeenLastCalledWith(0, 1); // now +z
+      press('ArrowUp');
+      expect(move).toHaveBeenLastCalledWith(1, 0); // now +x
     });
 
     it('places an entity at the cursor cell on its letter key', () => {

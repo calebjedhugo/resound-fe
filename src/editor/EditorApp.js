@@ -550,40 +550,21 @@ export default class EditorApp {
         return;
       }
 
-      // Resolve the cell from the click itself (not the last mousemove)
+      // Move the cursor to the clicked tile (mouse hover never moves it).
       const grid = this.editorScene.gridFromEvent(e, this.camera);
-      if (!grid) {
-        // A click that would have done something deserves a reason when it can't
-        if (this.entityToolbar.activeTool || this.floorRegionPanel.isPlacing) {
-          this._showToast('Aim at a tile inside the grid');
-        }
-        return;
-      }
+      if (!grid) return;
 
-      // Let floor region panel handle it first
+      // Floor-region placement is an explicit mode that still consumes clicks.
       if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) {
         return;
       }
 
-      // If entity toolbar has active tool, place entity at hovered grid cell
-      const { activeTool } = this.entityToolbar;
-      if (activeTool) {
-        const elevation = this.editorScene.activeElevation;
-        // One thing per tile: don't stack entities (or drop one on the player).
-        if (this._isCellOccupied(grid.x, elevation, grid.z)) {
-          this._showToast('That cell is already occupied');
-          return;
-        }
-        this.entityPlacer.placeEntity(activeTool, grid.x, grid.z, elevation);
-        this._showToast(`${activeTool} placed at (${grid.x}, ${grid.z})`, 'success');
-        return;
-      }
-
-      // Otherwise, try selection via SelectionManager
-      const rect = container.getBoundingClientRect();
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      this.selectionManager.handleClick(mouseX, mouseY);
+      // A plain click only SELECTS the tile: the cursor is now on it. Select
+      // any entity there so the property panel reflects it. Entity PLACEMENT is
+      // keyboard-only now (letter keys) — a click never creates anything.
+      const entityId = this._entityIdAtCell(grid);
+      if (entityId !== null) this.selectionManager.select(entityId);
+      else this.selectionManager.deselect();
     });
 
     // Double-click a creature/gate/fountain to open its song directly
@@ -691,6 +672,46 @@ export default class EditorApp {
     if (entityId === null) return;
     const { x, y } = this.editorScene.cellToContainerXY(cell, this.camera);
     this._openEntityContextMenu(entityId, x, y);
+  }
+
+  /**
+   * Grid-relative cursor step for an arrow key. The mapping follows the camera:
+   * Up/Down move along whichever world axis reads as "into/out of the screen"
+   * and Left/Right along the other, so the arrows always match how the grid
+   * looks after orbiting. Right and forward are assigned COMPLEMENTARY axes so
+   * that at a 45° view (where each is equally close to both axes) the cursor can
+   * still reach every cell.
+   */
+  _cursorDeltaForArrow(key) {
+    this.camera.updateMatrixWorld();
+    const e = this.camera.matrixWorld.elements;
+    const rightX = e[0]; // camera +X (screen right), projected to the ground
+    const rightZ = e[2];
+    const fwdX = -e[8]; // camera forward (into screen), projected to the ground
+    const fwdZ = -e[10];
+
+    let right;
+    let forward;
+    if (Math.abs(rightX) >= Math.abs(rightZ)) {
+      right = { dx: Math.sign(rightX), dz: 0 };
+      forward = { dx: 0, dz: Math.sign(fwdZ) };
+    } else {
+      right = { dx: 0, dz: Math.sign(rightZ) };
+      forward = { dx: Math.sign(fwdX), dz: 0 };
+    }
+
+    switch (key) {
+      case 'ArrowRight':
+        return right;
+      case 'ArrowLeft':
+        return { dx: -right.dx || 0, dz: -right.dz || 0 };
+      case 'ArrowUp':
+        return forward;
+      case 'ArrowDown':
+        return { dx: -forward.dx || 0, dz: -forward.dz || 0 };
+      default:
+        return null;
+    }
   }
 
   /** Letter key: place an entity of `type` at the cursor cell (refuse if full). */
@@ -811,21 +832,14 @@ export default class EditorApp {
 
       switch (key) {
         case 'ArrowUp':
-          e.preventDefault();
-          this.editorScene.moveCursor(0, -1);
-          return;
         case 'ArrowDown':
-          e.preventDefault();
-          this.editorScene.moveCursor(0, 1);
-          return;
         case 'ArrowLeft':
+        case 'ArrowRight': {
           e.preventDefault();
-          this.editorScene.moveCursor(-1, 0);
+          const delta = this._cursorDeltaForArrow(key);
+          if (delta) this.editorScene.moveCursor(delta.dx, delta.dz);
           return;
-        case 'ArrowRight':
-          e.preventDefault();
-          this.editorScene.moveCursor(1, 0);
-          return;
+        }
         case 'Enter':
           e.preventDefault();
           this._openContextMenuAtCursor();
@@ -850,7 +864,6 @@ export default class EditorApp {
   _animate() {
     this._animationId = requestAnimationFrame(() => this._animate());
     this.controls.update();
-    this.editorScene.updateHover(this.camera);
     this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this.editorScene.update();
     this._updateHud();
