@@ -61,11 +61,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .import-success { color: #44ff88; }
 .import-warning { color: #ffaa44; }
 .import-error { color: #ff4444; }
-.export-status { margin-top: 8px; font-size: 12px; }
-.export-errors { color: #ff4444; }
-.export-warnings { color: #ffaa44; }
-.export-actions { display: flex; gap: 4px; margin-top: 8px; }
-.manifest-entry pre { background: #0a1628; padding: 8px; border-radius: 4px; font-size: 11px; margin-top: 4px; overflow-x: auto; }
 .toolbar-panel { margin-bottom: 12px; }
 .toolbar-row { display: flex; align-items: center; gap: 4px; }
 .toolbar-spacer { flex: 1; }

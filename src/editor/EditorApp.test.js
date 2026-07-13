@@ -71,6 +71,7 @@ jest.mock('editor/viewport/EditorScene', () =>
     gridFromEvent: jest.fn(),
     updateHover: jest.fn(),
     update: jest.fn(),
+    syncGridSize: jest.fn(),
     activeElevation: 0,
     _groundPlane: null,
   }))
@@ -134,7 +135,6 @@ function setupEditorDOM() {
       <div id="property-panel"></div>
       <div id="metadata-panel"></div>
       <div id="validation-panel"></div>
-      <div id="export-panel"></div>
     </div>
   `;
 }

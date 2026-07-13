@@ -12,8 +12,10 @@ export default class EditorScene {
     this._raycaster = new THREE.Raycaster();
     this._mouse = new THREE.Vector2();
     this._groundPlane = null;
+    this._gridHelper = null;
 
     this._createGrid();
+    this._createAxes();
     this._createHoverMesh();
     this._setupMouseTracking();
   }
@@ -29,9 +31,9 @@ export default class EditorScene {
     const size = this._gridSize * WORLD_SCALE;
 
     // Grid helper
-    const gridHelper = new THREE.GridHelper(size, this._gridSize, 0x4f8bc7, 0x285c88);
-    gridHelper.position.set(size / 2, 0, size / 2);
-    this._scene.add(gridHelper);
+    this._gridHelper = new THREE.GridHelper(size, this._gridSize, 0x4f8bc7, 0x285c88);
+    this._gridHelper.position.set(size / 2, 0, size / 2);
+    this._scene.add(this._gridHelper);
 
     // Base floor plane (for raycasting)
     const planeGeo = new THREE.PlaneGeometry(size, size);
@@ -40,10 +42,41 @@ export default class EditorScene {
     this._groundPlane.rotation.x = -Math.PI / 2;
     this._groundPlane.position.set(size / 2, 0, size / 2);
     this._scene.add(this._groundPlane);
+  }
 
+  _createAxes() {
     // Axis indicator (small colored lines at origin)
     const axisHelper = new THREE.AxesHelper(WORLD_SCALE * 2);
     this._scene.add(axisHelper);
+  }
+
+  /**
+   * Re-read the model's gridSize and redraw the grid + raycast plane. The grid
+   * is built once at construction from whatever model was current then; loading
+   * a different puzzle or editing the Grid Size field swaps the model without
+   * touching the scene, so callers must invoke this to keep the drawn grid in
+   * sync (otherwise entities render at cells beyond the stale grid).
+   */
+  syncGridSize() {
+    const next = this._model.getMetadata().gridSize;
+    if (next === this._gridSize && this._gridHelper && this._groundPlane) return false;
+    this._gridSize = next;
+
+    if (this._gridHelper) {
+      this._scene.remove(this._gridHelper);
+      this._gridHelper.geometry.dispose();
+      this._gridHelper.material.dispose();
+      this._gridHelper = null;
+    }
+    if (this._groundPlane) {
+      this._scene.remove(this._groundPlane);
+      this._groundPlane.geometry.dispose();
+      this._groundPlane.material.dispose();
+      this._groundPlane = null;
+    }
+
+    this._createGrid();
+    return true;
   }
 
   _createHoverMesh() {

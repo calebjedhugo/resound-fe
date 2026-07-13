@@ -17,7 +17,6 @@ import ValidationPanel from 'editor/ui/ValidationPanel';
 import PuzzlePicker from 'editor/ui/PuzzlePicker';
 import WorldOverview from 'editor/ui/WorldOverview';
 import EditorToolbar from 'editor/ui/EditorToolbar';
-import ExportPanel from 'editor/ui/ExportPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
@@ -133,7 +132,6 @@ export default class EditorApp {
       onOpenPuzzle: (id) => this.puzzlePicker.open(id),
       getCurrentPuzzleId: () => this.undoManager.getMetadata().id,
     });
-    this.exportPanel = new ExportPanel(document.getElementById('export-panel'), this.undoManager);
     this.entityDragger = new EntityDragger(
       this.scene,
       this.camera,
@@ -148,6 +146,7 @@ export default class EditorApp {
     // a level replaces the model directly and bypasses this, so it does
     // not immediately write back.
     this.undoManager.setOnChange(() => {
+      this._syncGridToScene();
       this._scheduleValidation();
       this._scheduleAutoSave();
       this.toolbar.refresh();
@@ -396,8 +395,23 @@ export default class EditorApp {
     this._applyRestoredModel(restored);
   }
 
+  /**
+   * Redraw the viewport grid to match the model's current gridSize. Fires on
+   * model load (replaceModel bypasses the mutation hook) and on any mutation
+   * (covers a live Grid Size edit). The rebuild replaces the raycast plane, so
+   * the dragger's cached reference must be re-pointed when it happens.
+   */
+  _syncGridToScene() {
+    if (!this.editorScene) return;
+    const rebuilt = this.editorScene.syncGridSize();
+    if (rebuilt && this.entityDragger) {
+      this.entityDragger.groundPlane = this.editorScene._groundPlane;
+    }
+  }
+
   _applyRestoredModel(importedModel) {
     this.undoManager.replaceModel(importedModel);
+    this._syncGridToScene();
     this.entityPlacer.rebuildFromModel();
     this.floorRegionPanel.refresh();
     this.elevationSelector.refresh();
