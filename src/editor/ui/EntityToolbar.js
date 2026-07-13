@@ -22,24 +22,26 @@ export default class EntityToolbar {
     const grid = document.createElement('div');
     grid.className = 'toolbar-grid';
 
+    // `key` is the keyboard shortcut that places this entity at the cursor cell
+    // (see PLACE_KEYS in EditorApp) — shown on the button as a legend.
     const tools = [
-      { type: 'player', label: 'Player', color: '#ff4444' },
-      { type: 'creature', label: 'Creature', color: '#ffaa00' },
-      { type: 'gate', label: 'Gate', color: '#4488ff' },
+      { type: 'player', label: 'Player', key: 'p', color: '#ff4444' },
+      { type: 'creature', label: 'Creature', key: 'c', color: '#ffaa00' },
+      { type: 'gate', label: 'Gate', key: 'g', color: '#4488ff' },
       // Fountain PARKED: the entity no longer does anything in-game, so the
       // placement tool is hidden for now. Kept for possible revival (the
       // fountain entity/serialization is untouched).
       // { type: 'fountain', label: 'Fountain', color: '#44ddff' },
-      { type: 'wall', label: 'Wall', color: '#808080' },
-      { type: 'ramp', label: 'Ramp', color: '#88ff88' },
-      { type: 'cleanser', label: 'Cleanser', color: '#66ddff' },
+      { type: 'wall', label: 'Wall', key: 'w', color: '#808080' },
+      { type: 'ramp', label: 'Ramp', key: 'r', color: '#88ff88' },
+      { type: 'cleanser', label: 'Cleanser', key: 'l', color: '#66ddff' },
     ];
 
     this._buttons = {};
-    tools.forEach(({ type, label: lbl, color }) => {
+    tools.forEach(({ type, label: lbl, key, color }) => {
       const btn = document.createElement('button');
       btn.className = 'tool-btn';
-      btn.textContent = lbl;
+      btn.textContent = `${lbl} (${key})`;
       btn.style.borderColor = color;
       btn.onclick = () => this._selectTool(type);
       grid.appendChild(btn);
