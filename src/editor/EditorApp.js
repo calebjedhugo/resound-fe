@@ -28,6 +28,7 @@ import {
   releaseLinkBeforeDelete,
 } from 'editor/io/portalLinks';
 import { importPuzzle } from 'editor/io/importPuzzle';
+import { availableElevations } from 'editor/util/elevations';
 
 // Entity types that carry a song (Edit Song menu item, dbl-click to edit).
 const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
@@ -775,6 +776,44 @@ export default class EditorApp {
     }
   }
 
+  /**
+   * Shift+Option+Up/Down: move the entity (or player spawn) on the cursor cell
+   * to the next storey up/down, and follow it there (the active elevation
+   * switches so it stays under the cursor). Refused if there is no storey that
+   * way or the target cell is occupied.
+   */
+  _moveEntityLayer(dir) {
+    const cell = this.editorScene.getHoveredGrid();
+    const current = this.editorScene.activeElevation;
+    const available = availableElevations(this.undoManager.getFloors());
+    const targetIdx = available.indexOf(current) + dir;
+    if (targetIdx < 0 || targetIdx >= available.length) return; // no storey that way
+    const targetElev = available[targetIdx];
+
+    const entityId = this._entityIdAtCell(cell); // at the current elevation
+    if (entityId !== null) {
+      if (this._isCellOccupied(cell.x, targetElev, cell.z)) {
+        this._showToast('That cell is already occupied');
+        return;
+      }
+      this.entityPlacer.setEntityPosition(entityId, cell.x, cell.z, targetElev);
+      this.elevationSelector.step(dir); // follow the entity to its new storey
+      this.selectionManager.select(entityId);
+      this.propertyPanel.show(entityId);
+      return;
+    }
+
+    const spawn = this.undoManager.getPlayerSpawn();
+    if (spawn && spawn.x === cell.x && spawn.y === current && spawn.z === cell.z) {
+      if (this._isCellOccupied(cell.x, targetElev, cell.z)) {
+        this._showToast('That cell is already occupied');
+        return;
+      }
+      this.entityPlacer.placeEntity('player', cell.x, cell.z, targetElev);
+      this.elevationSelector.step(dir);
+    }
+  }
+
   /** Letter key: place an entity of `type` at the cursor cell (refuse if full). */
   _placeAtCursor(type) {
     const cell = this.editorScene.getHoveredGrid();
@@ -886,9 +925,21 @@ export default class EditorApp {
         return;
       }
 
-      // Everything below is grid navigation — never hijack typing, and let
-      // other modifier combos (browser/OS shortcuts) pass through.
+      // Everything below is grid navigation — never hijack typing.
       if (this._isEditableTarget(e)) return;
+
+      // Option/Alt + Up/Down changes the active layer; add Shift to carry the
+      // entity on the cursor cell up/down a layer with it.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && (key === 'ArrowUp' || key === 'ArrowDown')) {
+        e.preventDefault();
+        const dir = key === 'ArrowUp' ? 1 : -1;
+        if (e.shiftKey) this._moveEntityLayer(dir);
+        else this.elevationSelector.step(dir);
+        return;
+      }
+
+      // Let other modifier combos (browser/OS shortcuts) pass through — but
+      // plain Shift stays live for Shift+Arrow entity moves below.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       switch (key) {

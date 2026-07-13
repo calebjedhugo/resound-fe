@@ -741,6 +741,55 @@ describe('EditorApp wiring', () => {
     });
   });
 
+  describe('layer navigation (Option+Arrow)', () => {
+    const optionPress = (key, shift = false) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key,
+          altKey: true,
+          shiftKey: shift,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+    // Give the puzzle a second storey (elevation 1) so there's a layer to reach.
+    function addUpperStorey() {
+      app.undoManager.addFloor(1, 0, 0, 20, 20);
+      app.elevationSelector.refresh();
+    }
+
+    it('Option+Up/Down moves between existing storeys', () => {
+      addUpperStorey();
+      expect(app.editorScene.activeElevation).toBe(0);
+      optionPress('ArrowUp');
+      expect(app.editorScene.activeElevation).toBe(1);
+      optionPress('ArrowDown');
+      expect(app.editorScene.activeElevation).toBe(0);
+    });
+
+    it('does nothing when there is only the ground storey', () => {
+      optionPress('ArrowUp');
+      expect(app.editorScene.activeElevation).toBe(0);
+    });
+
+    it('Shift+Option+Up moves the entity up a layer and follows it', () => {
+      addUpperStorey();
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {}); // cursor (7,7), elev 0
+      optionPress('ArrowUp', true);
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 7, 7, 1);
+      expect(app.editorScene.activeElevation).toBe(1); // active layer follows
+    });
+
+    it('refuses a layer move onto an occupied cell', () => {
+      addUpperStorey();
+      app.undoManager.addEntity('wall', 7, 0, 7, {}); // the mover
+      app.undoManager.addEntity('wall', 7, 1, 7, {}); // blocks the target layer
+      optionPress('ArrowUp', true);
+      expect(app.entityPlacer.setEntityPosition).not.toHaveBeenCalled();
+    });
+  });
+
   describe('viewport click vs drag', () => {
     const container = () => document.getElementById('editor-viewport');
     const down = (x, y) =>

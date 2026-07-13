@@ -25,6 +25,21 @@ export default class ElevationSelector {
     return this._value;
   }
 
+  /**
+   * Step the active storey by `delta` among the storeys that exist, clamped.
+   * Used by the keyboard layer-navigation shortcut (Option+Up/Down). Returns
+   * true if the active storey actually changed.
+   */
+  step(delta) {
+    const available = availableElevations(this._undoManager.getFloors());
+    const index = available.indexOf(this._value);
+    const next = index + delta;
+    if (next < 0 || next >= available.length) return false;
+    this._value = available[next];
+    this.refresh();
+    return true;
+  }
+
   /** Recompute available storeys, clamp the active one, and re-render. */
   refresh() {
     const available = availableElevations(this._undoManager.getFloors());
