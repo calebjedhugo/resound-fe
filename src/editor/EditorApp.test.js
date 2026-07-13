@@ -116,6 +116,13 @@ jest.mock('editor/viewport/GhostPreview', () =>
   }))
 );
 
+jest.mock('editor/viewport/RangeIndicator', () =>
+  jest.fn(() => ({
+    show: jest.fn(),
+    hide: jest.fn(),
+  }))
+);
+
 jest.mock('editor/io/sessionPersistence', () => ({
   saveSession: jest.fn(),
   loadSession: jest.fn().mockReturnValue(null),
@@ -787,6 +794,22 @@ describe('EditorApp wiring', () => {
       app.undoManager.addEntity('wall', 7, 1, 7, {}); // blocks the target layer
       optionPress('ArrowUp', true);
       expect(app.entityPlacer.setEntityPosition).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('range indicator', () => {
+    it('shows range spheres for a selected creature and hides them otherwise', () => {
+      const cId = app.undoManager.addEntity('creature', 5, 0, 5, { audibleRange: 12 });
+      const wId = app.undoManager.addEntity('wall', 6, 0, 6, {});
+      const ri = app.rangeIndicator;
+      ri.show.mockClear();
+      ri.hide.mockClear();
+
+      app.selectionManager.select(cId);
+      expect(ri.show).toHaveBeenCalled();
+
+      app.selectionManager.select(wId);
+      expect(ri.hide).toHaveBeenCalled();
     });
   });
 

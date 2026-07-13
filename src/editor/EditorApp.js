@@ -8,6 +8,7 @@ import EntityPlacer from 'editor/viewport/EntityPlacer';
 import SelectionManager from 'editor/viewport/SelectionManager';
 import EntityDragger from 'editor/viewport/EntityDragger';
 import GhostPreview from 'editor/viewport/GhostPreview';
+import RangeIndicator from 'editor/viewport/RangeIndicator';
 import ElevationSelector from 'editor/ui/ElevationSelector';
 import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
 import EntityToolbar from 'editor/ui/EntityToolbar';
@@ -163,6 +164,7 @@ export default class EditorApp {
     // not immediately write back.
     this.undoManager.setOnChange(() => {
       this._syncGridToScene();
+      this._refreshRangeIndicator();
       this._scheduleValidation();
       this._scheduleAutoSave();
       this.toolbar.refresh();
@@ -171,6 +173,7 @@ export default class EditorApp {
     });
 
     // Wire selection changes to property panel
+    this.rangeIndicator = new RangeIndicator(this.scene);
     this.selectionManager.onSelectionChange = (entityId) => {
       if (entityId !== null) {
         this.propertyPanel.show(entityId);
@@ -183,6 +186,7 @@ export default class EditorApp {
       } else {
         this.propertyPanel.hide();
       }
+      this._refreshRangeIndicator();
     };
 
     // Restore saved session (auto-restore on load)
@@ -426,6 +430,23 @@ export default class EditorApp {
     const rebuilt = this.editorScene.syncGridSize();
     if (rebuilt && this.entityDragger) {
       this.entityDragger.groundPlane = this.editorScene._groundPlane;
+    }
+  }
+
+  /**
+   * Show the audible/recordable range spheres for the selected creature (and
+   * nothing otherwise). Called on selection changes and on every mutation, so
+   * the spheres track the creature as it moves or its Audible Range is edited.
+   */
+  _refreshRangeIndicator() {
+    if (!this.rangeIndicator) return;
+    const id = this.selectionManager.selectedId;
+    const entity = id !== null ? this.undoManager.getEntity(id) : null;
+    const mesh = id !== null ? this.entityPlacer.getMeshById(id) : null;
+    if (entity && entity.type === 'creature' && mesh) {
+      this.rangeIndicator.show(entity, mesh.position);
+    } else {
+      this.rangeIndicator.hide();
     }
   }
 
