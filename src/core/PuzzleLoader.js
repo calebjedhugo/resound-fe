@@ -4,6 +4,7 @@ import Fountain from 'entities/Fountain';
 import Wall from 'entities/Wall';
 import Ramp from 'entities/Ramp';
 import Floor from 'entities/Floor';
+import CleansingTile from 'entities/CleansingTile';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Area from 'core/Area';
 import ElevationGrid from 'core/ElevationGrid';
@@ -130,6 +131,9 @@ class PuzzleLoader {
             break;
           case 'wall':
             entity = new Wall(scaledPosition);
+            break;
+          case 'cleanser':
+            entity = new CleansingTile(scaledPosition, entityData.data || {});
             break;
           case 'ramp':
             entity = new Ramp(scaledPosition, {

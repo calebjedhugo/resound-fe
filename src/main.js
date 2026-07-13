@@ -19,7 +19,6 @@ import EndingOverlay from 'ui/EndingOverlay';
 import DebugUI from 'ui/DebugUI';
 import ClapVisual from 'ui/ClapVisual';
 import ClapManager from 'core/ClapManager';
-import Tape from 'core/Tape';
 import PlaybackManager from 'core/PlaybackManager';
 import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
@@ -110,7 +109,6 @@ function exitToMenu() {
   clapVisual.clear();
   ClapManager.reset();
   PlaybackManager.reset();
-  Tape.reset();
   startGate.hide();
   endingOverlay.hide();
   keyHints.hideAll();
@@ -155,7 +153,6 @@ function update(deltaTime) {
     // Crossing an open linked gate hands the world to the neighbor puzzle
     PortalManager.update();
     clapVisual.update();
-    Tape.update();
     recordingUI.update();
     keyHints.update(deltaTime);
     debugUI.update();

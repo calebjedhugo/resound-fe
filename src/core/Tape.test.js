@@ -1,15 +1,14 @@
 /**
- * Tape tests — the dynamic slot strip (ruled 2026-07-11).
+ * Tape tests — the dynamic slot strip (ruled 2026-07-11; delete verb retired
+ * 2026-07-12 in favor of the CleansingTile).
  *
  * Behaviors under test: the tape boots with one slot and grows only via
- * ArrowRight on a FILLED last slot (progressive disclosure, capped);
- * hold-to-delete removes the cursor slot after TAPE_DELETE_HOLD_MS,
- * releasing early cancels, the key must be released between deletes, and
- * the tape never shrinks to nothing.
+ * ArrowRight on a FILLED last slot (progressive disclosure, capped); and
+ * clear() empties it back to a single blank slot.
  */
 import gameState from 'core/GameState';
 import Tape from 'core/Tape';
-import { TAPE_SLOT_CAP, TAPE_DELETE_HOLD_MS } from 'core/constants';
+import { TAPE_SLOT_CAP } from 'core/constants';
 
 const take = (pitch) => ({
   id: `take_${pitch}_${Math.random()}`,
@@ -19,13 +18,7 @@ const take = (pitch) => ({
 });
 
 beforeEach(() => {
-  jest.useFakeTimers();
   gameState.reset();
-  Tape.reset();
-});
-
-afterEach(() => {
-  jest.useRealTimers();
 });
 
 describe('cursor movement and growth', () => {
@@ -72,79 +65,20 @@ describe('cursor movement and growth', () => {
   });
 });
 
-describe('hold-to-delete', () => {
-  it('completes after the hold duration: slot removed, others close ranks', () => {
+describe('clear (CleansingTile)', () => {
+  it('empties a multi-take tape back to one blank slot with the cursor at the start', () => {
     gameState.player.inventory = [take('C4'), take('E4'), take('G4')];
-    gameState.player.activeSlot = 1;
+    gameState.player.activeSlot = 2;
 
-    Tape.deleteDown();
-    expect(gameState.player.tapeDelete).toEqual({ index: 1, startedAt: expect.any(Number) });
+    Tape.clear();
 
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS + 50);
-    Tape.update();
-
-    expect(gameState.player.inventory.map((s) => s && s.data[0].pitch)).toEqual(['C4', 'G4']);
-    expect(gameState.player.tapeDelete).toBeNull();
-  });
-
-  it('releasing before the fade completes cancels the delete', () => {
-    gameState.player.inventory = [take('C4')];
-    Tape.deleteDown();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS / 2);
-    Tape.update();
-    Tape.deleteUp();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS);
-    Tape.update();
-    expect(gameState.player.inventory[0].data[0].pitch).toBe('C4');
-  });
-
-  it('requires a key release between deletes (latch)', () => {
-    gameState.player.inventory = [take('C4'), take('E4')];
-    gameState.player.activeSlot = 0;
-
-    Tape.deleteDown();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS + 50);
-    Tape.update();
-    expect(gameState.player.inventory).toHaveLength(1);
-
-    // Key is still held — a second delete must not arm
-    Tape.deleteDown();
-    expect(gameState.player.tapeDelete).toBeNull();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS + 50);
-    Tape.update();
-    expect(gameState.player.inventory).toHaveLength(1);
-
-    // After releasing, deleting works again
-    Tape.deleteUp();
-    Tape.deleteDown();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS + 50);
-    Tape.update();
-    expect(gameState.player.inventory).toEqual([null]); // never shrinks to nothing
-  });
-
-  it('deleting the sole slot leaves one empty slot', () => {
-    gameState.player.inventory = [take('C4')];
-    Tape.deleteDown();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS + 50);
-    Tape.update();
     expect(gameState.player.inventory).toEqual([null]);
     expect(gameState.player.activeSlot).toBe(0);
   });
 
-  it('clamps the cursor when the last slot is deleted', () => {
-    gameState.player.inventory = [take('C4'), take('E4')];
-    gameState.player.activeSlot = 1;
-    Tape.deleteDown();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS + 50);
-    Tape.update();
+  it('is a harmless no-op on an already-empty tape', () => {
+    Tape.clear();
+    expect(gameState.player.inventory).toEqual([null]);
     expect(gameState.player.activeSlot).toBe(0);
-  });
-
-  it('reports fade progress for the UI', () => {
-    gameState.player.inventory = [take('C4')];
-    expect(Tape.deleteProgress()).toBe(0);
-    Tape.deleteDown();
-    jest.advanceTimersByTime(TAPE_DELETE_HOLD_MS / 2);
-    expect(Tape.deleteProgress()).toBeCloseTo(0.5, 1);
   });
 });

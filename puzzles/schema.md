@@ -36,7 +36,8 @@ This document defines the structure for Resound puzzle files.
   ],
   "entities": [                      // Array of game entities
     {
-      "type": "string",              // Entity type: "creature", "gate", "fountain", "wall", "ramp"
+      "type": "string",              // Entity type: "creature", "gate", "fountain",
+                                     // "wall", "ramp", "cleanser"
       "id": "string",                // Gates only: stable id, unique within the puzzle
                                      // (e.g., "east-door"). Auto-assigned by the editor.
       "facing": "string",            // Gates only: doorway plane — "north", "south",
@@ -80,6 +81,16 @@ This document defines the structure for Resound puzzle files.
   ]
 }
 ```
+
+### Cleanser (`type: "cleanser"`)
+
+A walkable floor tile that empties the player's tape when they step onto it
+(the replacement for the retired hold-to-delete verb — see `DESIGN.md` "the
+slot TAPE"). Only needs a `position`; it takes no `song` or `data`. It gently
+pulses as a wordless "this does something" affordance, and clearing is
+edge-triggered on entry (standing on it doesn't repeatedly wipe; leaving and
+re-entering does). Place one where you want a safe, deliberate reset — e.g. in
+a 1-wide corridor so crossing it is unavoidable (`poc-two-keys` entry).
 
 ## Elevation System
 

@@ -7,6 +7,7 @@ const ENTITY_COLORS = {
   fountain: 0x44ddff,
   wall: 0x808080,
   ramp: 0x88ff88,
+  cleanser: 0x66ddff,
 };
 
 export default ENTITY_COLORS;

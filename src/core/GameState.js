@@ -33,8 +33,7 @@ class GameState {
       // The TAPE: a growable strip of takes (see core/Tape.js). Boots with
       // ONE slot; ArrowRight past a filled last slot appends the next.
       inventory: [null],
-      activeSlot: 0, // The cursor: R records here, delete removes here
-      tapeDelete: null, // {index, startedAt} while a delete hold is fading
+      activeSlot: 0, // The cursor: R records into this slot in place
     };
 
     this.input = {
@@ -124,7 +123,6 @@ class GameState {
     this.player.elevation = 0;
     this.player.inventory = [null];
     this.player.activeSlot = 0;
-    this.player.tapeDelete = null;
     this.recording = {
       isRecording: false,
       creaturesInRange: [],

@@ -2,23 +2,23 @@
   "id": "poc-duet",
   "name": "III. The Duet",
   "difficulty": 1,
-  "gridSize": 10,
+  "gridSize": 9,
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
   "teaches": ["slots"],
   "playerStart": {
-    "x": 5,
+    "x": 4,
     "y": 0,
-    "z": 8
+    "z": 7
   },
   "entities": [
     {
       "type": "creature",
       "position": {
-        "x": 1,
+        "x": 2,
         "y": 0,
-        "z": 5
+        "z": 4
       },
       "data": {
         "song": [
@@ -34,9 +34,9 @@
     {
       "type": "creature",
       "position": {
-        "x": 8,
+        "x": 6,
         "y": 0,
-        "z": 5
+        "z": 4
       },
       "data": {
         "song": [
@@ -54,7 +54,7 @@
       "position": {
         "x": 0,
         "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
@@ -62,7 +62,7 @@
       "position": {
         "x": 1,
         "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
@@ -70,7 +70,7 @@
       "position": {
         "x": 2,
         "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
@@ -78,15 +78,15 @@
       "position": {
         "x": 3,
         "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
       "type": "wall",
       "position": {
-        "x": 4,
+        "x": 5,
         "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
@@ -94,7 +94,7 @@
       "position": {
         "x": 6,
         "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
@@ -102,7 +102,7 @@
       "position": {
         "x": 7,
         "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
@@ -110,15 +110,7 @@
       "position": {
         "x": 8,
         "y": 0,
-        "z": 9
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 9
+        "z": 8
       }
     },
     {
@@ -156,7 +148,7 @@
     {
       "type": "wall",
       "position": {
-        "x": 4,
+        "x": 5,
         "y": 0,
         "z": 0
       }
@@ -188,17 +180,121 @@
     {
       "type": "wall",
       "position": {
-        "x": 9,
+        "x": 1,
         "y": 0,
-        "z": 0
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 2
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 2
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 3
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 4
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 4
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 5
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 5
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 6
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 6
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 7
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 7
       }
     },
     {
       "type": "gate",
       "position": {
-        "x": 5,
+        "x": 4,
         "y": 0,
-        "z": 9
+        "z": 8
       },
       "song": [
         {
@@ -216,7 +312,7 @@
     {
       "type": "gate",
       "position": {
-        "x": 5,
+        "x": 4,
         "y": 0,
         "z": 0
       },

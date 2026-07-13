@@ -119,16 +119,6 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
         Tape.right();
       }
       break;
-    case 'Backspace':
-    case 'Delete':
-      // Hold to delete the cursor slot (2s fade; release cancels; must
-      // release before deleting another)
-      if (value) {
-        if (!repeat) Tape.deleteDown();
-      } else {
-        Tape.deleteUp();
-      }
-      break;
     case 'KeyC':
       // Clap (quantized to 16th notes)
       if (value) {

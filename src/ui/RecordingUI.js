@@ -1,7 +1,7 @@
 import gameState from 'core/GameState';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
-import Tape from 'core/Tape';
+import HintMemory from 'core/HintMemory';
 import { onSlotFlash } from 'ui/slotFlash';
 
 /**
@@ -98,6 +98,42 @@ class RecordingUI {
 
     this.container.appendChild(this.inventoryContainer);
     this.syncSlotCount();
+
+    // The "grow the tape" hint (formerly a detached ► keycap): a GHOST SLOT
+    // that blooms at the next tape position with the ► (ArrowRight) glyph
+    // pulsing inside it, so the hint reads as "a new slot goes HERE." It lives
+    // in the tape strip itself; display toggles so it takes no space when idle.
+    this.growHintSlot = document.createElement('div');
+    this.growHintSlot.style.cssText = `
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 2px dashed rgba(255, 255, 255, 0.6);
+      border-radius: 4px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    `;
+    const growArrow = document.createElement('div');
+    growArrow.textContent = '►';
+    growArrow.style.cssText = `
+      font-size: 26px;
+      color: rgba(255, 255, 255, 0.95);
+      animation: grow-hint-pulse 1.1s ease-in-out infinite;
+    `;
+    this.growHintSlot.appendChild(growArrow);
+    this.inventoryContainer.appendChild(this.growHintSlot);
+    this._prevActiveSlot = gameState.player.activeSlot;
+
+    const growStyle = document.createElement('style');
+    growStyle.textContent = `
+      @keyframes grow-hint-pulse {
+        0%, 100% { transform: scale(1); opacity: 0.55; }
+        50% { transform: scale(1.35); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(growStyle);
   }
 
   /** Build one slot element. */
@@ -133,7 +169,7 @@ class RecordingUI {
 
   /**
    * Mirror the tape's length in the DOM: append elements as the tape grows,
-   * drop them (the remaining slots close ranks) as deletes complete.
+   * and collapse back down when a CleansingTile empties the tape to one slot.
    */
   syncSlotCount() {
     const want = gameState.player.inventory.length;
@@ -150,8 +186,8 @@ class RecordingUI {
         slot.remove();
         this._micSlot = null;
       }
-      // A delete shifted the takes left — resync ids WITHOUT firing the
-      // "new recording landed" pop on every surviving slot
+      // The tape shrank (a cleanse emptied it) — resync ids WITHOUT firing
+      // the "new recording landed" pop on every surviving slot
       this._slotIds = gameState.player.inventory.map((s) => (s ? s.id : null));
     }
   }
@@ -246,17 +282,38 @@ class RecordingUI {
     this.updateInventory();
     this.updateRecording();
     this.watchJudgments();
+    this.updateGrowHint();
+  }
+
+  /**
+   * The "grow the tape" hint. Teachable moment: the cursor sits on the FILLED
+   * last slot with a creature in recording range, so recording now would
+   * overwrite the take — ArrowRight grows the tape instead. Show the ghost
+   * slot (kept as the strip's last child) with its ► pulsing; retire the hint
+   * for this visit the moment the cursor moves.
+   */
+  updateGrowHint() {
+    const { activeSlot, inventory } = gameState.player;
+    if (activeSlot !== this._prevActiveSlot) {
+      this._prevActiveSlot = activeSlot;
+      HintMemory.retire('slots');
+    }
+    const onFilledLast = activeSlot === inventory.length - 1 && !!inventory[activeSlot];
+    const show =
+      !HintMemory.isRetired('slots') &&
+      onFilledLast &&
+      gameState.recording.creaturesInRange.length > 0;
+    if (show && this.inventoryContainer.lastElementChild !== this.growHintSlot) {
+      this.inventoryContainer.appendChild(this.growHintSlot); // keep it last
+    }
+    this.growHintSlot.style.display = show ? 'flex' : 'none';
   }
 
   updateInventory() {
-    const { inventory, activeSlot, tapeDelete } = gameState.player;
+    const { inventory, activeSlot } = gameState.player;
 
     this.inventorySlots.forEach((slot, index) => {
-      // A held delete fades its slot toward gone (completion splices it out
-      // — see core/Tape.js); releasing early restores full opacity
-      const fading = tapeDelete && tapeDelete.index === index;
-      const opacity = fading ? String(1 - Tape.deleteProgress()) : '1';
-      if (slot.style.opacity !== opacity) slot.style.opacity = opacity;
+      if (slot.style.opacity !== '1') slot.style.opacity = '1';
       const isActive = index === activeSlot;
       const isOccupied = inventory[index] !== null;
       const isCapturing = isActive && RecordingManager.isRecording();

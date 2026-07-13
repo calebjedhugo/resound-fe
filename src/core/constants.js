@@ -13,12 +13,10 @@ export const RECORDING_RANGE_PERCENTAGE = 0.5;
 export const PLAYBACK_LATE_GRACE_BEATS = 0.1;
 
 // The slot TAPE (ruled 2026-07-11): slots appear one at a time (ArrowRight
-// past a filled last slot appends a new empty one, up to the cap), Space
-// performs the whole tape concatenated, and holding the delete key removes
-// the cursor slot after a 2s fade (release before completion cancels; the
-// key must be released before another delete can start).
+// past a filled last slot appends a new empty one, up to the cap), and Space
+// performs the whole tape concatenated. There is no per-slot delete — the
+// whole tape is emptied by walking over a CleansingTile (2026-07-12).
 export const TAPE_SLOT_CAP = 16;
-export const TAPE_DELETE_HOLD_MS = 2000;
 
 // Creature movement constants
 // Default max speed matches player running speed (8 units/sec)

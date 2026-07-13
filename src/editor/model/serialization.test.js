@@ -270,6 +270,22 @@ describe('Puzzle Serialization', () => {
       expect(wall.direction).toBeUndefined();
     });
 
+    it('serializes cleanser with position only, no extra fields', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'cleanser-test' });
+      model.setPlayerSpawn(0, 0, 0);
+      model.addEntity('cleanser', 6, 0, 12, {});
+
+      const json = serializePuzzle(model);
+      const cleanser = json.entities[0];
+
+      expect(cleanser.type).toBe('cleanser');
+      expect(cleanser.position).toEqual({ x: 6, y: 0, z: 12 });
+      expect(cleanser.data).toBeUndefined();
+      expect(cleanser.song).toBeUndefined();
+      expect(cleanser.direction).toBeUndefined();
+    });
+
     it('omits clapDisplacement from JSON when null', () => {
       const model = new EditorPuzzleModel();
       model.setMetadata({
@@ -431,6 +447,35 @@ describe('Puzzle Serialization', () => {
       expect(gate.y).toBe(0);
       expect(gate.z).toBe(3);
       expect(gate.data.song).toEqual([{ pitch: 'E4', length: '1/4' }]);
+    });
+
+    it('deserializes a cleanser (position-only, walkable tile) and round-trips it', () => {
+      const json = {
+        id: 'cleanser-import',
+        name: 'Cleanser Import',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [{ type: 'cleanser', position: { x: 6, y: 0, z: 12 } }],
+      };
+
+      const model = deserializePuzzle(json);
+      const entities = model.getEntities();
+      expect(entities.length).toBe(1);
+
+      const cleanser = entities[0];
+      expect(cleanser.type).toBe('cleanser');
+      expect(cleanser.x).toBe(6);
+      expect(cleanser.y).toBe(0);
+      expect(cleanser.z).toBe(12);
+      expect(cleanser.data).toEqual({});
+
+      // Re-serializing preserves the cleanser untouched.
+      const reserialized = serializePuzzle(model);
+      expect(reserialized.entities).toEqual([
+        { type: 'cleanser', position: { x: 6, y: 0, z: 12 } },
+      ]);
     });
 
     it('provides defaults for missing optional fields', () => {

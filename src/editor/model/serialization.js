@@ -131,6 +131,10 @@ function serializeEntity(entity) {
     case 'wall':
       return { type: 'wall', position };
 
+    case 'cleanser':
+      // Walkable cleansing tile — position only, no song/data (mirrors wall).
+      return { type: 'cleanser', position };
+
     default:
       return { type: entity.type, position };
   }
@@ -278,6 +282,10 @@ function deserializeEntity(model, entity) {
 
     case 'wall':
       model.addEntity('wall', x, y, z, {});
+      break;
+
+    case 'cleanser':
+      model.addEntity('cleanser', x, y, z, {});
       break;
 
     default:

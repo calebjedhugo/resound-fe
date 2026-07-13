@@ -196,10 +196,13 @@ instead of "fixing" it.
 - Can only record within creature's `audibleRange × 0.5`
 - The inventory is a growable TAPE (`core/Tape.js`, cap `TAPE_SLOT_CAP`):
   ←/→ move the cursor (→ on a filled last slot appends), R records into
-  the cursor slot IN PLACE, holding Backspace/Delete removes the cursor
-  slot after a 2s fade (release cancels; must release between deletes).
-  Digit keys are gone. Delete can strand a player in a creature-free
-  pocket — gen-poc.js asserts every pocket is escapable from an empty tape
+  the cursor slot IN PLACE. Digit keys are gone. There is NO per-slot
+  delete (retired 2026-07-12) — clearing the whole tape is a `cleanser`
+  entity (`entities/CleansingTile.js`): a pulsing walkable tile that
+  empties the tape when you step onto it (edge-triggered, active-area
+  only). A cleanse can leave an empty tape, so gen-poc.js still asserts
+  every pocket is escapable from an empty tape. First one ships in
+  `poc-two-keys` (entry corridor); V/IX cleanser placement is an open call
 
 ---
 

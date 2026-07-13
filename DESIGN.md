@@ -147,15 +147,20 @@ automated playtesters can observe them.)
     playback is ignored (one performance at a time). Combined with the
     matching ruling above, a door opens whenever its song occurs cleanly
     anywhere in the tape — the tape is a key ring that plays itself.
-  - **Holding Backspace/Delete deletes the cursor slot**: it fades over 2s
-    (`TAPE_DELETE_HOLD_MS`) and is permanently gone at zero opacity; the
-    survivors close ranks. Releasing early cancels; the key must be
-    released before another delete can start. Delete is never REQUIRED by
-    a puzzle — it exists for tape hygiene (long tapes take long to
-    perform and spray notes near force puzzles). **Delete creates a new
-    soft-lock class** (destroying your key inside a locked room), so the
-    POC generator asserts every reachable pocket is escapable from an
-    EMPTY tape (see gen-poc.js).
+  - **Clearing the tape is a CleansingTile, not a key** (ruled 2026-07-12,
+    replacing the hold-to-delete verb). There is NO per-slot delete: a
+    playtester who knew nothing about the game refused to use delete for
+    fear of stranding himself, so "reset my recordings" became a place in
+    the world instead. A `cleanser` entity (`entities/CleansingTile.js`) is
+    a gently pulsing walkable floor tile; stepping onto it empties the whole
+    tape to one blank slot (edge-triggered on entry, active-area only). It
+    reads as safe because you walk to it on purpose. Clearing is never
+    REQUIRED by a puzzle — it's tape hygiene (long tapes take long to
+    perform and spray notes near force puzzles) — but because a cleanser can
+    leave you with an empty tape, the POC generator still asserts every
+    reachable pocket is escapable from an EMPTY tape (see gen-poc.js). The
+    first cleanser ships in `poc-two-keys`, mid-corridor at the entry so
+    the player walks through it on the way in (trial placement — 2026-07-12).
   Solo starts keep the beat grid with the late grace expressed in BEATS
   (`PLAYBACK_LATE_GRACE_BEATS`, kept under the matcher tolerance so a
   grace-path onset still matches). See `PlaybackManager`, `core/Tape.js`.
@@ -558,9 +563,18 @@ rulings, in the designer's words where it matters:
 
 ## Open design calls — ask the designer before changing
 
-- (none currently — gameplay word-toasts were RESOLVED 2026-07-10: replaced
-  by the slot-flash language, see above. Mouse-look toggle, metronome, and
-  puzzle-load-error toasts remain as settings/dev feedback.)
+- **Cleanser placement beyond area II (2026-07-12).** The hold-to-delete
+  verb is gone; the only tape-clear is the CleansingTile, and only ONE
+  ships so far (poc-two-keys entry corridor, a trial). Areas V (the dance)
+  and IX (the finale) previously leaned on delete for tape hygiene (force
+  spray / "serious tape surgery") and now have no in-area clear — a player
+  with a cluttered tape there can only re-record slots in place, not shrink
+  the tape. Decide whether V/IX (or the finale approach) need their own
+  cleansers, and whether re-crossing area II's tile mid-puzzle (wiping fresh
+  room-1 takes) is an acceptable foot-gun or wants guarding.
+- (gameplay word-toasts were RESOLVED 2026-07-10: replaced by the slot-flash
+  language. Mouse-look toggle, metronome, and puzzle-load-error toasts
+  remain as settings/dev feedback.)
 
 ## Related docs
 

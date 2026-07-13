@@ -29,6 +29,7 @@ export default class EntityToolbar {
       { type: 'fountain', label: 'Fountain', color: '#44ddff' },
       { type: 'wall', label: 'Wall', color: '#808080' },
       { type: 'ramp', label: 'Ramp', color: '#88ff88' },
+      { type: 'cleanser', label: 'Cleanser', color: '#66ddff' },
     ];
 
     this._buttons = {};

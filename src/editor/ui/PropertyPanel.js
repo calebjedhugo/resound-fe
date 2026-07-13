@@ -88,7 +88,7 @@ export default class PropertyPanel {
         this._renderRampFields(wrapper, entity);
         break;
       default:
-        break; // wall and player: position only
+        break; // wall, cleanser, and player: position only
     }
 
     // Delete button

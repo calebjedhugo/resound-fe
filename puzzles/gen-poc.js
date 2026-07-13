@@ -218,6 +218,7 @@ function makeArea(id, name, grid) {
     walls: new Set(),
     creatures: {}, // key -> {x,z,y?,song,range,interval}
     gates: {}, // gateId -> {x,z,y?,song,link?,alwaysOpen?,ending?}
+    cleansers: [], // [{x,z,y?}] — walkable tiles that empty the tape on entry
     ramps: [],
     floors: [],
     spawn: null,
@@ -232,9 +233,6 @@ const addWall = (area, x, z) => {
 };
 const wallRow = (area, z, gaps = []) => {
   for (let x = 0; x < area.grid; x += 1) if (!gaps.includes(x)) addWall(area, x, z);
-};
-const wallCol = (area, x, gaps = []) => {
-  for (let z = 0; z < area.grid; z += 1) if (!gaps.includes(z)) addWall(area, x, z);
 };
 
 // =========================================================================
@@ -272,27 +270,48 @@ A1.gates.finale = {
 // =========================================================================
 // AREA II — poc-two-keys: slots (hold two notes at once), no timing at all
 // =========================================================================
-const A2 = makeArea('poc-two-keys', 'II. Two Keys', 12);
-A2.spawn = { x: 6, y: 0, z: 10 };
-A2.teaches = ['slots'];
-wallRow(A2, 11, [6]); // south wall (grid edge) holding the entry door
-wallRow(A2, 6, [6]); // inner wall holding the E4 door (room 1 / room 2)
-wallRow(A2, 0, [6]); // north wall (grid edge) holding the G4 exit door
-A2.creatures.east = { x: 2, y: 0, z: 8, song: note('E4'), range: 7, interval: 8 };
-A2.creatures.west = { x: 10, y: 0, z: 8, song: note('G4'), range: 7, interval: 8 };
-// Room 2's echo sings the inner door's own note: with the tape's DELETE
-// verb a player can destroy their E4 inside room 2 — the echo keeps the
-// pocket escapable from an empty tape (non-stuck under deletion).
-A2.creatures.echo = { x: 1, y: 0, z: 3, song: note('E4'), range: 7, interval: 8 };
+// 2026-07-12 RE-KEY pass (Caleb): the two doors in series are now solved with
+// ONE slot by RE-RECORDING, not two. Room 1 holds ONLY E4 (record it, open the
+// inner door); room 2 holds ONLY G4 (RE-RECORD over the same slot, open the
+// exit). So the player never needs a second slot here and never plays two
+// notes at a one-note door — the grow-a-slot lesson moves to area III (the
+// duet), the first place a second slot is genuinely required. Area II teaches
+// nothing new via hints (rerecord is taught by necessity). A 1-wide arrival
+// CORRIDOR holds a mandatory CLEANSING TILE (crossed on the way in; wipes the
+// spent C4). The play space is a narrow x=3..7 band; the self-solve clearances
+// (every creature >13u off every gate) stack the DEPTH — each creature sits 4
+// rows off its own door AND the door beyond it.
+const A2 = makeArea('poc-two-keys', 'II. Two Keys', 17);
+A2.spawn = { x: 5, y: 0, z: 15 };
+A2.teaches = []; // rerecord is taught by necessity; no new hint verb here
+wallRow(A2, 16, [5]); // south wall (grid edge) holding the entry door
+wallRow(A2, 15, [5]); // corridor wall (spawn row)
+wallRow(A2, 14, [5]); // corridor wall — the TILE row, terminal: room 1 is z<=13
+wallRow(A2, 8, [5]); // inner wall holding the E4 door (room 1 / room 2)
+wallRow(A2, 0, [5]); // north wall (grid edge) holding the G4 exit door
+// Wall the flanks so the play space is a narrow x=3..7 band. Rows z=8 (inner),
+// 14/15 (corridor), 16 (entry), 0 (exit) are already walled by the rows above.
+[1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13].forEach((z) => {
+  addWall(A2, 2, z); // west wall of the band
+  addWall(A2, 8, z); // east wall of the band
+});
+// The cleansing tile is the TERMINAL corridor cell — crossing it enters room 1.
+A2.cleansers.push({ x: 5, y: 0, z: 14 });
+// Room 1: E4 only — record it (one slot), open the inner door. Held >13u off
+// the entry and the inner door.
+A2.creatures.key1 = { x: 3, y: 0, z: 12, song: note('E4'), range: 7, interval: 8 };
+// Room 2: G4 only — RE-RECORD over the E4 slot, open the exit. Held >13u off
+// the inner door and the exit.
+A2.creatures.key2 = { x: 7, y: 0, z: 4, song: note('G4'), range: 7, interval: 8 };
 A2.gates.entry = {
-  x: 6,
+  x: 5,
   y: 0,
-  z: 11,
+  z: 16,
   song: ['C4'],
   link: { puzzleId: 'poc-threshold', gateId: 'exit' },
 };
-A2.gates.inner = { x: 6, y: 0, z: 6, song: ['E4'] }; // plain gate, not a door
-A2.gates.exit = { x: 6, y: 0, z: 0, song: ['G4'], link: { puzzleId: 'poc-duet', gateId: 'entry' } };
+A2.gates.inner = { x: 5, y: 0, z: 8, song: ['E4'] }; // plain gate, not a door
+A2.gates.exit = { x: 5, y: 0, z: 0, song: ['G4'], link: { puzzleId: 'poc-duet', gateId: 'entry' } };
 
 // =========================================================================
 // AREA III — poc-duet: ordering the tape into a two-note melody
@@ -309,22 +328,31 @@ const DUET_SONG = [
   { pitch: 'E5', length: '1/2' },
   { pitch: 'G5', length: '1/2' },
 ];
-const A3 = makeArea('poc-duet', 'III. The Duet', 10);
-A3.spawn = { x: 5, y: 0, z: 8 };
+// 2026-07-12: pulled in tight (was grid 10, sources 7 cells apart across a
+// wide room — "much too large"). Same lesson (record each note, order the two
+// slots), but a NARROW x=2..6 band with the pair a few steps off the entry
+// path. Width is walled to the minimum; the pair's self-solve clearance from
+// both gates (>13u) is all that sets the depth.
+const A3 = makeArea('poc-duet', 'III. The Duet', 9);
+A3.spawn = { x: 4, y: 0, z: 7 };
 A3.teaches = ['slots'];
-wallRow(A3, 9, [5]);
-wallRow(A3, 0, [5]);
-A3.creatures.east = { x: 1, y: 0, z: 5, song: note('E5', '1/2'), range: 7, interval: 8 };
-A3.creatures.west = { x: 8, y: 0, z: 5, song: note('G5', '1/2'), range: 7, interval: 8 };
+wallRow(A3, 8, [4]); // south wall (grid edge) holding the entry door
+wallRow(A3, 0, [4]); // north wall (grid edge) holding the exit door
+[1, 2, 3, 4, 5, 6, 7].forEach((z) => {
+  addWall(A3, 1, z); // west wall of the band
+  addWall(A3, 7, z); // east wall of the band
+});
+A3.creatures.east = { x: 2, y: 0, z: 4, song: note('E5', '1/2'), range: 7, interval: 8 };
+A3.creatures.west = { x: 6, y: 0, z: 4, song: note('G5', '1/2'), range: 7, interval: 8 };
 A3.gates.entry = {
-  x: 5,
+  x: 4,
   y: 0,
-  z: 9,
+  z: 8,
   song: ['G4'],
   link: { puzzleId: 'poc-two-keys', gateId: 'exit' },
 };
 A3.gates.exit = {
-  x: 5,
+  x: 4,
   y: 0,
   z: 0,
   song: DUET_SONG,
@@ -389,7 +417,7 @@ A4.gates['exit-clean'] = {
 // =========================================================================
 const A5 = makeArea('poc-dance', 'V. The Dance', 15);
 A5.spawn = { x: 7, y: 0, z: 13 };
-A5.teaches = ['delete']; // old takes spray forces here — tape hygiene pays
+A5.teaches = []; // no new hint verb (forces aren't hinted); suppress all hints
 wallRow(A5, 14, [3, 10]); // south wall (grid edge) holding BOTH entries
 wallRow(A5, 0, [7]); // north wall (grid edge) holding the exit door
 const DANCE_SONG_A = [
@@ -556,29 +584,50 @@ A8.gates.exit = {
 // mid-room finale gate. Assemble the tape, perform it in the quiet, walk
 // through, take the bow.
 // =========================================================================
-const A9 = makeArea('poc-return', 'IX. The Star', 14);
-A9.spawn = { x: 10, y: 0, z: 12 };
-A9.teaches = ['slots', 'delete']; // the finale is serious tape surgery
-wallCol(A9, 13, [12]); // east wall holding the entry door (the turn moment)
-wallRow(A9, 10, [7]); // vestibule/hall divider holding the warm-up door
-A9.creatures.fVoice = { x: 1, y: 0, z: 12, song: note('F4', '1/4'), range: 7, interval: 4 };
-// Hall voices in SONG ORDER along the walls, counterclockwise from the
-// hall door: C C G G A A G(half) | F F E E D D C(half).
-A9.creatures.c1 = { x: 2, y: 0, z: 8, song: note('C4', '1/4'), range: 7, interval: 4 };
-A9.creatures.g1 = { x: 1, y: 0, z: 4, song: note('G4', '1/4'), range: 7, interval: 4 };
-A9.creatures.a1 = { x: 2, y: 0, z: 0, song: note('A4', '1/4'), range: 7, interval: 4 };
-A9.creatures.gHalf = { x: 5, y: 0, z: 0, song: note('G4', '1/2'), range: 7, interval: 4 };
-A9.creatures.e1 = { x: 9, y: 0, z: 0, song: note('E4', '1/4'), range: 7, interval: 4 };
-A9.creatures.d1 = { x: 12, y: 0, z: 2, song: note('D4', '1/4'), range: 7, interval: 4 };
-A9.creatures.cHalf = { x: 12, y: 0, z: 6, song: note('C4', '1/2'), range: 7, interval: 4 };
+// GEOMETRY (grid 21): a straight north–south SPINE at x=5. The player enters
+// from the EAST wall into a 1-wide vestibule corridor (row z=19), crosses the
+// mandatory cleanser, records the warm-up voice, opens the warm-up door, and
+// walks the spine north — passing seven creatures, each parked at the end of
+// its own 2-deep dead-end passage (a WEST + EAST pair per "station") in SONG
+// ORDER — to the finale portal in the north wall.
+//
+//        (portal exit, x5 z0, north wall)
+//                     |  spine
+//     cHalf ── (4,4)──┤            D:  z4   cHalf(W)
+//                     |
+//        e1 ──(4,7)───┼───(6,7)── d1   C:  z7   e1(W)  d1(E)
+//                     |
+//        a1 ──(4,10)──┼──(6,10)── gHalf B:  z10  a1(W)  gHalf(E)
+//                     |
+//        c1 ──(4,13)──┼──(6,13)── g1   A:  z13  c1(W)  g1(E)
+//                     |
+//        (warm-up door pair, x5 z17/z18 — one-way into the hall)
+//                     |
+//   fVoice(1,20) ── vestibule corridor row 19 ── [cleanser x10] ── entry(20,19)
+//
+const A9 = makeArea('poc-return', 'IX. The Star', 21);
+A9.spawn = { x: 19, y: 0, z: 19 }; // just west of the entry, in the vestibule
+A9.teaches = ['slots']; // the finale is serious tape ordering (slots)
+// fVoice sings the warm-up F4 in the vestibule (south corridor). Every hall
+// voice sits at the dead end of its own passage, in SONG ORDER walking the
+// spine from the warm-up door (south) to the portal (north):
+// C C G G A A G(half) | F F E E D D C(half) — F is fVoice, already in hand.
+A9.creatures.fVoice = { x: 1, y: 0, z: 20, song: note('F4', '1/4'), range: 7, interval: 4 };
+A9.creatures.c1 = { x: 3, y: 0, z: 13, song: note('C4', '1/4'), range: 7, interval: 4 };
+A9.creatures.g1 = { x: 7, y: 0, z: 13, song: note('G4', '1/4'), range: 7, interval: 4 };
+A9.creatures.a1 = { x: 3, y: 0, z: 10, song: note('A4', '1/4'), range: 7, interval: 4 };
+A9.creatures.gHalf = { x: 7, y: 0, z: 10, song: note('G4', '1/2'), range: 7, interval: 4 };
+A9.creatures.e1 = { x: 3, y: 0, z: 7, song: note('E4', '1/4'), range: 7, interval: 4 };
+A9.creatures.d1 = { x: 7, y: 0, z: 7, song: note('D4', '1/4'), range: 7, interval: 4 };
+A9.creatures.cHalf = { x: 3, y: 0, z: 4, song: note('C4', '1/2'), range: 7, interval: 4 };
 const WARMUP_SONG = [
   { pitch: 'F4', length: '1/4' },
   { pitch: 'F4', length: '1/4' },
 ];
 A9.gates.entry = {
-  x: 13,
+  x: 20,
   y: 0,
-  z: 12,
+  z: 19,
   song: [
     { pitch: 'D4', length: '1/4' },
     { pitch: 'A4', length: '1/4' },
@@ -587,30 +636,57 @@ A9.gates.entry = {
   ],
   link: { puzzleId: 'poc-clap', gateId: 'exit' },
 };
-// The warm-up door: an in-level ONE-WAY pair through the divider. The
-// vestibule face wants [F4,F4]; the hall face is alwaysOpen (escape hatch).
+// The warm-up door: an in-level ONE-WAY pair across the vestibule/hall divider,
+// on the spine. The vestibule face wants [F4,F4]; the hall face is alwaysOpen
+// (escape hatch — an emptied tape can always walk back and re-record F4).
 A9.gates['warmup-in'] = {
-  x: 7,
+  x: 5,
   y: 0,
-  z: 10,
+  z: 18,
   song: WARMUP_SONG,
   link: { puzzleId: 'poc-return', gateId: 'warmup-out' },
 };
 A9.gates['warmup-out'] = {
-  x: 7,
+  x: 5,
   y: 0,
-  z: 8,
+  z: 17,
   song: WARMUP_SONG,
   link: { puzzleId: 'poc-return', gateId: 'warmup-in' },
   alwaysOpen: true,
 };
 A9.gates.exit = {
-  x: 7,
+  x: 5,
   y: 0,
-  z: 5,
+  z: 0,
   song: TWINKLE,
   link: { puzzleId: 'poc-threshold', gateId: 'finale' },
 };
+// The mandatory cleanser: the sole path from the entry to the warm-up door is
+// the 1-wide vestibule corridor, so this tile is unavoidable on the way in.
+A9.cleansers.push({ x: 10, y: 0, z: 19 });
+// Carve the walkable footprint; every other cell is wall.
+{
+  const openCells = new Set();
+  const open = (x, z) => openCells.add(key(x, z));
+  for (let x = 1; x <= 19; x += 1) open(x, 19); // vestibule corridor (1-wide)
+  for (let z = 1; z <= 16; z += 1) open(5, z); // the spine
+  // stations: [spineRow, hasEastCreature] — record cell then dead-end creature
+  [
+    [13, true],
+    [10, true],
+    [7, true],
+    [4, false],
+  ].forEach(([z, hasEast]) => {
+    open(4, z); // west record cell
+    if (hasEast) open(6, z); // east record cell
+  });
+  Object.values(A9.creatures).forEach((c) => open(c.x, c.z)); // creatures stand on open cells
+  open(A9.spawn.x, A9.spawn.z);
+  const gateCells = new Set(Object.values(A9.gates).map((g) => key(g.x, g.z)));
+  for (let x = 0; x < A9.grid; x += 1)
+    for (let z = 0; z < A9.grid; z += 1)
+      if (!openCells.has(key(x, z)) && !gateCells.has(key(x, z))) addWall(A9, x, z);
+}
 
 const AREAS = [A1, A2, A3, A4, A5, A6, A7, A8, A9];
 const areaById = Object.fromEntries(AREAS.map((a) => [a.id, a]));
@@ -1003,16 +1079,23 @@ recordableElementsByArea.forEach((elements, i) => {
   );
 }
 
-// --- non-stuck under DELETE: every reachable pocket is escapable ---
+// --- non-stuck with an EMPTY tape: every EMPTY-REACHABLE pocket is escapable ---
 // Pockets are the regions gates carve an area into (every gate cell
-// blocked, no same-area teleports). A player who deleted their whole tape
-// inside a pocket must still be able to leave: some boundary gate is an
-// alwaysOpen face, or its full song is recordable from INSIDE the pocket.
-// (v5: poc-clap no longer needs an exception — its plinth pair is
-// recordable from the floor AND re-performs the door forever.)
+// blocked, no same-area teleports). A player only ever HOLDS an empty tape at
+// two moments: at the spawn, or immediately after stepping on a CLEANSER
+// (2026-07-12, with the delete verb gone — you can no longer empty the tape
+// at will). So only a pocket that CONTAINS the spawn or a cleanser can ever
+// hold an empty-tape player; a pocket entered by opening a locked gate is
+// reached WITH the note that opened it, never empty. For those empty-reachable
+// pockets, some boundary gate must be an alwaysOpen face or have its full song
+// recordable from INSIDE the pocket — this is what makes the corridor cleanser
+// in poc-two-keys safe. (Forward progression out of the OTHER pockets is the
+// element-economy checks' job, not this one.)
 AREAS.forEach((area) => {
   const gateCells = Object.values(area.gates).map((g) => key(g.x, g.z));
   const fullReach = reachable(area, area.spawn);
+  const spawnNode = `${area.spawn.x},${area.spawn.z},${area.spawn.y || 0}`;
+  const cleanserNodes = area.cleansers.map((c) => `${c.x},${c.z},${c.y || 0}`);
   const assigned = new Set();
   const pockets = [];
   for (let x = 0; x < area.grid; x += 1)
@@ -1027,6 +1110,10 @@ AREAS.forEach((area) => {
   pockets.forEach((pocket, pi) => {
     const reachableDuringPlay = [...pocket].some((n) => fullReach.has(n));
     if (!reachableDuringPlay) return;
+    // Only pockets an empty-tape player can actually stand in need the escape
+    // guarantee (see header): the spawn's pocket and any cleanser's pocket.
+    const emptyReachable = pocket.has(spawnNode) || cleanserNodes.some((n) => pocket.has(n));
+    if (!emptyReachable) return;
     const boundaryGates = Object.entries(area.gates).filter(([, g]) =>
       [
         [1, 0],
@@ -1044,12 +1131,68 @@ AREAS.forEach((area) => {
       );
     });
     assert(
-      `${area.id}: pocket ${pi} is escapable with an EMPTY tape (delete can never strand)`,
+      `${area.id}: pocket ${pi} is escapable with an EMPTY tape (a cleanse can never strand)`,
       escapable,
       `${pocket.size} cells, ${boundaryGates.length} boundary gates`
     );
   });
 });
+
+// --- area II cleanser: the entry corridor's tile is unavoidable ---
+// Walking over it empties the tape, so it must sit ON the only path from the
+// entry door into the puzzle — blocking its cell must seal the arrival
+// corridor off from room 1 (where the first creature lives).
+{
+  assert(
+    'cleanse: area II has exactly one cleansing tile',
+    A2.cleansers.length === 1,
+    `${A2.cleansers.length} cleansers`
+  );
+  const tile = A2.cleansers[0];
+  const tileOnGate = Object.values(A2.gates).some((g) => g.x === tile.x && g.z === tile.z);
+  assert(
+    'cleanse: the tile cell is walkable (not a wall or gate)',
+    walkableLevels(A2, tile.x, tile.z).includes(0) && !tileOnGate,
+    key(tile.x, tile.z)
+  );
+  const blockedReach = reachable(A2, A2.spawn, [key(tile.x, tile.z)]);
+  assert(
+    'cleanse: the tile is unavoidable — blocking it seals the corridor from room 1',
+    !reachesAdjacent(blockedReach, A2.creatures.key1),
+    `room-1 creature still reachable with tile blocked: ${reachesAdjacent(
+      blockedReach,
+      A2.creatures.key1
+    )}`
+  );
+}
+
+// --- poc-return cleanser: the vestibule corridor's tile is unavoidable ---
+// The 1-wide vestibule corridor is the only path from the entry to the warm-up
+// voice + door, so this tile MUST be crossed on the way in — blocking it seals
+// the entry side off from fVoice (and thus the spine beyond the warm-up door).
+{
+  assert(
+    'cleanse: poc-return has exactly one cleansing tile',
+    A9.cleansers.length === 1,
+    `${A9.cleansers.length} cleansers`
+  );
+  const tile = A9.cleansers[0];
+  const tileOnGate = Object.values(A9.gates).some((g) => g.x === tile.x && g.z === tile.z);
+  assert(
+    'cleanse: the poc-return tile cell is walkable (not a wall or gate)',
+    walkableLevels(A9, tile.x, tile.z).includes(0) && !tileOnGate,
+    key(tile.x, tile.z)
+  );
+  const blockedReach = reachable(A9, A9.spawn, [key(tile.x, tile.z)]);
+  assert(
+    'cleanse: the poc-return tile is unavoidable — blocking it seals the entry from the warm-up voice',
+    !reachesAdjacent(blockedReach, A9.creatures.fVoice),
+    `fVoice still reachable with tile blocked: ${reachesAdjacent(
+      blockedReach,
+      A9.creatures.fVoice
+    )}`
+  );
+}
 
 // --- area I: the threshold voice stays clear of both doors ---
 {
@@ -1072,31 +1215,25 @@ AREAS.forEach((area) => {
   );
 }
 
-// --- area II: slots forced, and room 2 can never strand you ---
+// --- area II: RE-KEY — one slot, rerecord across two doors in series ---
 assert(
-  "poc-two-keys: the room-2 echo sings the inner door's note (E4 survives any deletion)",
-  creaturePitches(A2.creatures.echo)[0] === songPitches(A2.gates.inner.song)[0],
-  `${creaturePitches(A2.creatures.echo)} vs ${songPitches(A2.gates.inner.song)}`
-);
-assert(
-  'poc-two-keys: the two door notes differ (two slots genuinely needed)',
+  'poc-two-keys: the two doors want different notes (rerecord genuinely needed — one note cannot open both)',
   songPitches(A2.gates.inner.song)[0] !== songPitches(A2.gates.exit.song)[0],
   `${songPitches(A2.gates.inner.song)} vs ${songPitches(A2.gates.exit.song)}`
 );
+// One creature per room: E4 (key1) in room 1 south of the inner door (8<z<14),
+// G4 (key2) in room 2 north of it (0<z<8). So the player records E4 in room 1,
+// opens the inner door, then RE-RECORDS G4 in room 2 to open the exit — never
+// needing a second slot.
 assert(
-  'poc-two-keys: the keyholders live in room 1, the echo in room 2',
-  A2.creatures.east.z > 6 &&
-    A2.creatures.west.z > 6 &&
-    A2.creatures.echo.z > 0 &&
-    A2.creatures.echo.z < 6,
-  'rooms'
-);
-// The exit note must NOT be recordable in room 2: G4 is what forces the
-// second slot BEFORE entering (the echo must not hand it over late).
-assert(
-  "poc-two-keys: the echo is not the EXIT's note (the two-slot lesson stands)",
-  creaturePitches(A2.creatures.echo)[0] !== songPitches(A2.gates.exit.song)[0],
-  creaturePitches(A2.creatures.echo)[0]
+  'poc-two-keys: the inner-door note lives in room 1, the exit note in room 2 (rerecord flow)',
+  creaturePitches(A2.creatures.key1)[0] === songPitches(A2.gates.inner.song)[0] &&
+    A2.creatures.key1.z > 8 &&
+    A2.creatures.key1.z < 14 &&
+    creaturePitches(A2.creatures.key2)[0] === songPitches(A2.gates.exit.song)[0] &&
+    A2.creatures.key2.z > 0 &&
+    A2.creatures.key2.z < 8,
+  `key1(E4) z=${A2.creatures.key1.z}, key2(G4) z=${A2.creatures.key2.z}`
 );
 
 // --- area III: the duet door needs both notes in order ---
@@ -1634,12 +1771,15 @@ assert(
     JSON.stringify(A1.teaches) === JSON.stringify(['move', 'record', 'playback']),
     A1.teaches.join(',')
   );
-  assert('teaches: slots arrive at area II', A2.teaches.includes('slots'), A2.teaches.join(','));
+  // Area II teaches rerecord by necessity (no hint verb); the grow-a-slot
+  // hint debuts at area III (the duet), the first place a second slot is
+  // genuinely required — never in area II, which is one-slot rerecord.
   assert(
-    'teaches: delete arrives at the dance',
-    A5.teaches.includes('delete'),
-    A5.teaches.join(',')
+    'teaches: area II teaches no hint verb (rerecord is by necessity)',
+    A2.teaches.length === 0,
+    A2.teaches.join(',')
   );
+  assert('teaches: slots arrive at area III', A3.teaches.includes('slots'), A3.teaches.join(','));
   assert(
     'teaches: clap arrives at the clap area',
     A8.teaches.includes('clap'),
@@ -1647,7 +1787,7 @@ assert(
   );
   assert(
     'teaches: every hint verb is taught somewhere',
-    ['move', 'record', 'playback', 'slots', 'delete', 'clap'].every((v) => assigned.includes(v)),
+    ['move', 'record', 'playback', 'slots', 'clap'].every((v) => assigned.includes(v)),
     assigned.join(',')
   );
 }
@@ -1696,6 +1836,9 @@ AREAS.forEach((area) => {
   });
   area.ramps.forEach((r) => {
     entities.push({ type: 'ramp', position: { x: r.x, y: r.y, z: r.z }, direction: r.direction });
+  });
+  area.cleansers.forEach((c) => {
+    entities.push({ type: 'cleanser', position: { x: c.x, y: c.y || 0, z: c.z } });
   });
   Object.entries(area.gates).forEach(([gid, g]) => {
     entities.push({

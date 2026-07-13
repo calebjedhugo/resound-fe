@@ -4,7 +4,6 @@ import HintMemory from 'core/HintMemory';
 import RecordingManager from 'core/RecordingManager';
 import { getDistance } from 'core/utils';
 import { CLAP_RANGE } from 'core/constants';
-import { onSlotFlash } from 'ui/slotFlash';
 
 /**
  * KeyHints - wordless contextual key hints.
@@ -20,13 +19,10 @@ import { onSlotFlash } from 'ui/slotFlash';
  *              retires when a recording with notes lands in a slot
  *   playback - spacebar sprite over a gate/fountain in playback reach;
  *              retires on the first playback keypress
- *   slots    - a "►" keycap by the tape, shown when recording over the
- *              filled LAST slot is imminent (ArrowRight would grow the tape
- *              instead of overwriting); retires on first cursor move
- *   delete   - a "⌫" keycap by the tape, shown after a judged miss while
- *              the tape holds two or more takes (a wrong slot may be the
- *              culprit); retires on the first completed hold-delete
- *              (core/Tape.js retires it)
+ *   slots    - (rendered by RecordingUI, not here) a ghost tape slot that
+ *              blooms at the next position with a pulsing ► when recording
+ *              over the filled LAST slot is imminent; retires on first cursor
+ *              move. See RecordingUI.updateGrowHint.
  *   clap     - "C" sprite over the nearest clap-range creature while TWO OR
  *              MORE audible creatures sing at once (the chord a clap can fix);
  *              retires on the first C pressed at such a moment
@@ -139,42 +135,8 @@ class KeyHints {
     this.moveEl.appendChild(bottomRow);
     document.body.appendChild(this.moveEl);
 
-    // HUD: the grow-the-tape arrow, sitting just left of the inventory strip
-    this.slotsEl = document.createElement('div');
-    this.slotsEl.id = 'hint-slots';
-    this.slotsEl.style.cssText = `
-      position: fixed;
-      bottom: 32px;
-      right: 330px;
-      display: flex;
-      gap: 4px;
-      opacity: 0;
-      transition: opacity 0.4s;
-      pointer-events: none;
-      z-index: 1000;
-      animation: hint-breathe 1.6s ease-in-out infinite;
-    `;
-    this.slotsEl.appendChild(makeKeycapEl('►', 28));
-    document.body.appendChild(this.slotsEl);
-
-    // HUD: the hold-to-delete keycap, beside the arrow hint's spot
-    this.deleteEl = document.createElement('div');
-    this.deleteEl.id = 'hint-delete';
-    this.deleteEl.style.cssText = `
-      position: fixed;
-      bottom: 84px;
-      right: 330px;
-      display: flex;
-      gap: 4px;
-      opacity: 0;
-      transition: opacity 0.4s;
-      pointer-events: none;
-      z-index: 1000;
-      animation: hint-breathe 1.6s ease-in-out infinite;
-    `;
-    this.deleteEl.appendChild(makeKeycapEl('⌫', 28));
-    document.body.appendChild(this.deleteEl);
-    this._lastMissAt = 0;
+    // The "grow the tape" (slots) hint lives in the tape strip itself now —
+    // RecordingUI blooms a ghost slot with a pulsing ► at the next position.
 
     const style = document.createElement('style');
     style.textContent = `
@@ -196,7 +158,6 @@ class KeyHints {
     this._bobPhase = 0;
     this._stillTime = 0;
     this._startPosition = null;
-    this._prevActiveSlot = gameState.player.activeSlot;
 
     // Playback is a discrete keypress with no polled state, so observe the
     // key directly. Non-capture: the start gate's capture-phase dismissal
@@ -212,11 +173,6 @@ class KeyHints {
       }
     };
     window.addEventListener('keydown', this._keyHandler);
-
-    // The delete hint's teachable moment arrives via the judged-miss flash
-    this._offSlotFlash = onSlotFlash((kind) => {
-      if (kind === 'miss') this._lastMissAt = Date.now();
-    });
   }
 
   /** Per-frame evaluation. Call only while PLAYING and the world is awake. */
@@ -225,8 +181,6 @@ class KeyHints {
     this._updateMove(deltaTime);
     this._updateRecord();
     this._updatePlayback();
-    this._updateSlots();
-    this._updateDelete();
     this._updateClap();
   }
 
@@ -298,35 +252,6 @@ class KeyHints {
     this._floatOver(this.playbackSprite, target.position);
   }
 
-  _updateSlots() {
-    const { activeSlot, inventory } = gameState.player;
-    if (activeSlot !== this._prevActiveSlot) {
-      this._prevActiveSlot = activeSlot;
-      HintMemory.retire('slots');
-    }
-    if (HintMemory.isRetired('slots')) {
-      this.slotsEl.style.opacity = '0';
-      return;
-    }
-    // The teachable moment: recording now would overwrite the filled LAST
-    // slot — ArrowRight would grow the tape instead.
-    const onFilledLast = activeSlot === inventory.length - 1 && inventory[activeSlot];
-    const wouldOverwrite = gameState.recording.creaturesInRange.length > 0 && onFilledLast;
-    this.slotsEl.style.opacity = wouldOverwrite ? '1' : '0';
-  }
-
-  _updateDelete() {
-    if (HintMemory.isRetired('delete')) {
-      this.deleteEl.style.opacity = '0';
-      return;
-    }
-    // The teachable moment: a performance was just judged a miss and the
-    // tape holds more than one take — a wrong slot may be the culprit.
-    const filled = gameState.player.inventory.filter(Boolean).length;
-    const fresh = Date.now() - this._lastMissAt < 10000;
-    this.deleteEl.style.opacity = filled >= 2 && fresh ? '1' : '0';
-  }
-
   _updateClap() {
     if (HintMemory.isRetired('clap')) {
       this.clapSprite.visible = false;
@@ -373,8 +298,6 @@ class KeyHints {
   /** Hide everything (level change / exit to menu). Retirement is untouched. */
   hideAll() {
     this.moveEl.style.opacity = '0';
-    this.slotsEl.style.opacity = '0';
-    this.deleteEl.style.opacity = '0';
     this.recordSprite.visible = false;
     this.playbackSprite.visible = false;
     this.clapSprite.visible = false;
@@ -384,10 +307,7 @@ class KeyHints {
 
   dispose() {
     window.removeEventListener('keydown', this._keyHandler);
-    if (this._offSlotFlash) this._offSlotFlash();
     this.moveEl.remove();
-    this.slotsEl.remove();
-    this.deleteEl.remove();
     this.scene.remove(this.recordSprite);
     this.scene.remove(this.playbackSprite);
     this.scene.remove(this.clapSprite);

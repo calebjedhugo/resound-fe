@@ -62,9 +62,11 @@ unlocks/activates it. Activating fountains completes the puzzle.
 - **The inventory is a TAPE** (2026-07-11): boots with ONE slot; ←/→ move
   the cursor and → on a filled last slot appends a new empty one (up to
   16); R records into the cursor slot in place; Space performs the WHOLE
-  tape concatenated; holding Backspace/Delete deletes the cursor slot
-  after a 2s fade (release cancels, release required between deletes).
-  Digit keys no longer select slots.
+  tape concatenated. Digit keys no longer select slots. There is NO
+  per-slot delete (retired 2026-07-12): to clear the tape you walk over a
+  **cleansing tile** — a gently pulsing floor pad (first one is in the
+  entry corridor of area II, "Two Keys") that empties the whole tape when
+  you step onto it.
 - **Mismatch feedback is visual**: a completed wrong phrase flashes the
   gate/fountain RED for ~600ms. Animations are hard to catch in single
   screenshots — use the F3 debug panel, which mirrors the last judged phrase
@@ -102,7 +104,7 @@ unlocks/activates it. Activating fountains completes the puzzle.
 | R | Recording toggle (tap on/tap off); long-hold = hold-to-record; records into the cursor slot |
 | Space | Perform the whole tape (all filled slots, in order) |
 | ←/→ | Move the tape cursor (→ on a filled last slot adds a new one) |
-| Backspace/Delete (hold 2s) | Delete the cursor slot (fades out; release cancels) |
+| (clear the tape) | Walk over a pulsing **cleansing tile** — empties the whole tape (no delete key) |
 | C | Clap |
 | N | Metronome |
 | F3 | Debug info overlay (hidden by default) |

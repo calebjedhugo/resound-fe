@@ -6,7 +6,7 @@ import { createEntityGeometry, Y_OFFSETS } from 'editor/viewport/entityGeometry'
 import { isValidGateId, nextGateId, usedGateIds } from 'editor/util/gateIds';
 
 // Entity types _createMesh knows how to place (player spawn is separate).
-const PLACEABLE_TYPES = ['creature', 'gate', 'fountain', 'wall', 'ramp'];
+const PLACEABLE_TYPES = ['creature', 'gate', 'fountain', 'wall', 'ramp', 'cleanser'];
 
 // Sensible starting data for a freshly-placed entity, so a new creature is
 // immediately usable and the properties panel reflects what is actually stored
