@@ -40,6 +40,9 @@ const PLACE_KEYS = {
   r: 'ramp',
   l: 'cleanser',
 };
+// A click whose pointer moved more than this many pixels since mousedown is a
+// drag (camera rotate/pan), not a selection.
+const CLICK_DRAG_PX = 4;
 
 export default class EditorApp {
   constructor() {
@@ -186,7 +189,11 @@ export default class EditorApp {
 
     this._setupViewportHud();
     this._setupViewportClick();
-    this._setupDrag();
+    // Mouse entity-dragging is DISABLED: entity movement is keyboard-only now
+    // (Shift+Arrow), so a drag always drives the camera — rotate, or pan while
+    // Shift is held (OrbitControls' built-in modifier). The _setupDrag method
+    // is kept, dormant, for possible revival.
+    // this._setupDrag();
     this._setupKeyboard();
     this._animate();
     window.addEventListener('resize', () => this._onResize());
@@ -543,7 +550,23 @@ export default class EditorApp {
   _setupViewportClick() {
     const container = document.getElementById('editor-viewport');
 
+    // Track where the pointer went down so a drag-release (camera rotate/pan)
+    // can be told apart from a real click. A programmatic .click() has no
+    // preceding mousedown, so it always counts as a click.
+    let pointerDownXY = null;
+    container.addEventListener('mousedown', (e) => {
+      pointerDownXY = { x: e.clientX, y: e.clientY };
+    });
+
     container.addEventListener('click', (e) => {
+      const dragged =
+        pointerDownXY &&
+        Math.hypot(e.clientX - pointerDownXY.x, e.clientY - pointerDownXY.y) > CLICK_DRAG_PX;
+      pointerDownXY = null;
+      // A drag that ends over the viewport still fires a click — ignore it so
+      // rotating/panning never selects a tile.
+      if (dragged) return;
+
       // Teleport pick mode: the next click chooses the link's target gate
       if (this._linkPickSourceId !== null) {
         this._handleLinkPickClick(e);
@@ -714,6 +737,44 @@ export default class EditorApp {
     }
   }
 
+  /**
+   * Shift+Arrow: move the entity (or player spawn) on the cursor cell by one
+   * cell in the arrow direction. The cursor follows so you can keep nudging.
+   * Refused if the target is off-grid or already occupied.
+   */
+  _moveEntityAtCursor(delta) {
+    const cell = this.editorScene.getHoveredGrid();
+    const elevation = this.editorScene.activeElevation;
+    const tx = cell.x + delta.dx;
+    const tz = cell.z + delta.dz;
+    const { gridSize } = this.undoManager.getMetadata();
+    if (tx < 0 || tz < 0 || tx >= gridSize || tz >= gridSize) return;
+
+    const entityId = this._entityIdAtCell(cell);
+    if (entityId !== null) {
+      if (this._isCellOccupied(tx, elevation, tz)) {
+        this._showToast('That cell is already occupied');
+        return;
+      }
+      this.entityPlacer.setEntityPosition(entityId, tx, tz, elevation);
+      this.editorScene.moveCursor(delta.dx, delta.dz);
+      this.selectionManager.select(entityId);
+      this.propertyPanel.show(entityId);
+      return;
+    }
+
+    const spawn = this.undoManager.getPlayerSpawn();
+    if (spawn && spawn.x === cell.x && spawn.y === elevation && spawn.z === cell.z) {
+      if (this._isCellOccupied(tx, elevation, tz)) {
+        this._showToast('That cell is already occupied');
+        return;
+      }
+      // The spawn is a singleton; placing it again just relocates it.
+      this.entityPlacer.placeEntity('player', tx, tz, elevation);
+      this.editorScene.moveCursor(delta.dx, delta.dz);
+    }
+  }
+
   /** Letter key: place an entity of `type` at the cursor cell (refuse if full). */
   _placeAtCursor(type) {
     const cell = this.editorScene.getHoveredGrid();
@@ -837,7 +898,10 @@ export default class EditorApp {
         case 'ArrowRight': {
           e.preventDefault();
           const delta = this._cursorDeltaForArrow(key);
-          if (delta) this.editorScene.moveCursor(delta.dx, delta.dz);
+          if (!delta) return;
+          // Shift+Arrow moves the entity on the cursor cell; Arrow moves the cursor.
+          if (e.shiftKey) this._moveEntityAtCursor(delta);
+          else this.editorScene.moveCursor(delta.dx, delta.dz);
           return;
         }
         case 'Enter':

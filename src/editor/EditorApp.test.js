@@ -91,6 +91,7 @@ jest.mock('editor/viewport/EntityPlacer', () =>
     getEntityIdFromMesh: jest.fn().mockReturnValue(null),
     rebuildFromModel: jest.fn(),
     placeEntity: jest.fn(),
+    setEntityPosition: jest.fn(),
     removeEntityById: jest.fn(),
     clearPlayerSpawn: jest.fn(),
     refreshLinkBadge: jest.fn(),
@@ -710,6 +711,68 @@ describe('EditorApp wiring', () => {
       app.undoManager.setPlayerSpawn(7, 0, 7);
       press('Delete');
       expect(app.entityPlacer.clearPlayerSpawn).toHaveBeenCalled();
+    });
+
+    // Shift+Arrow moves the entity on the cursor cell (cursor mocked at 7,7;
+    // identity camera → ArrowRight is +x, so the target is (8, 7)).
+    const shiftPress = (key) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, shiftKey: true, bubbles: true, cancelable: true })
+      );
+
+    it('moves the entity on the cursor cell with Shift+Arrow', () => {
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
+      shiftPress('ArrowRight');
+      // setEntityPosition(id, gridX, gridZ, elevation)
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0);
+    });
+
+    it('refuses a Shift+Arrow move onto an occupied cell', () => {
+      app.undoManager.addEntity('wall', 7, 0, 7, {}); // the mover
+      app.undoManager.addEntity('wall', 8, 0, 7, {}); // blocks the target
+      shiftPress('ArrowRight');
+      expect(app.entityPlacer.setEntityPosition).not.toHaveBeenCalled();
+    });
+
+    it('relocates the player spawn with Shift+Arrow', () => {
+      app.undoManager.setPlayerSpawn(7, 0, 7);
+      shiftPress('ArrowRight');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('player', 8, 7, 0);
+    });
+  });
+
+  describe('viewport click vs drag', () => {
+    const container = () => document.getElementById('editor-viewport');
+    const down = (x, y) =>
+      container().dispatchEvent(
+        new MouseEvent('mousedown', { clientX: x, clientY: y, bubbles: true })
+      );
+    const click = (x, y) =>
+      container().dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true }));
+
+    it('ignores a click that ended a drag (camera rotate/pan)', () => {
+      const gridSpy = app.editorScene.gridFromEvent;
+      gridSpy.mockClear();
+      down(100, 100);
+      click(140, 100); // moved 40px → a drag, not a selection
+      expect(gridSpy).not.toHaveBeenCalled();
+    });
+
+    it('selects on a click that did not move (a full click)', () => {
+      const gridSpy = app.editorScene.gridFromEvent;
+      gridSpy.mockClear();
+      down(100, 100);
+      click(101, 100); // within threshold → a real click
+      expect(gridSpy).toHaveBeenCalled();
+    });
+
+    it('treats a programmatic .click() (no mousedown) as a selection', () => {
+      const gridSpy = app.editorScene.gridFromEvent;
+      gridSpy.mockClear();
+      container().dispatchEvent(
+        new MouseEvent('click', { clientX: 100, clientY: 100, bubbles: true })
+      );
+      expect(gridSpy).toHaveBeenCalled();
     });
   });
 });
