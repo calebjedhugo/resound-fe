@@ -21,10 +21,14 @@ export default class EditorScene {
     // keys and by clicking a tile — never by mouse hover. The highlight mesh
     // renders at the cursor every frame.
     this._cursorCell = this._centerCell();
+    // Draft-floor mode: { anchor: {x,z}, elevation } while sizing a new floor
+    // region with the keyboard; null otherwise.
+    this._floorDraft = null;
 
     this._createGrid();
     this._createAxes();
     this._createHoverMesh();
+    this._createFloorDraftMesh();
   }
 
   _centerCell() {
@@ -123,6 +127,52 @@ export default class EditorScene {
     this._hoverMesh.position.set(world.x, elevY + CURSOR_LIFT, world.z);
   }
 
+  _createFloorDraftMesh() {
+    // A unit plane scaled to the draft rectangle each frame. Gold = "pending
+    // floor, not yet committed" (distinct from the green cursor and tan floors).
+    const geo = new THREE.PlaneGeometry(1, 1);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffcc44,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this._floorDraftMesh = new THREE.Mesh(geo, mat);
+    this._floorDraftMesh.rotation.x = -Math.PI / 2;
+    this._floorDraftMesh.visible = false;
+    this._scene.add(this._floorDraftMesh);
+  }
+
+  /** Arm the draft-floor highlight: a rectangle from `anchor` to the cursor. */
+  setFloorDraft(anchor, elevation) {
+    this._floorDraft = { anchor: { x: anchor.x, z: anchor.z }, elevation };
+    this._positionFloorDraft();
+  }
+
+  clearFloorDraft() {
+    this._floorDraft = null;
+    if (this._floorDraftMesh) this._floorDraftMesh.visible = false;
+  }
+
+  _positionFloorDraft() {
+    if (!this._floorDraft || !this._floorDraftMesh) return;
+    const { anchor, elevation } = this._floorDraft;
+    const c = this._cursorCell;
+    const x1 = Math.min(anchor.x, c.x);
+    const x2 = Math.max(anchor.x, c.x);
+    const z1 = Math.min(anchor.z, c.z);
+    const z2 = Math.max(anchor.z, c.z);
+    const width = (x2 - x1 + 1) * WORLD_SCALE;
+    const depth = (z2 - z1 + 1) * WORLD_SCALE;
+    const cx = (x1 + (x2 - x1 + 1) / 2) * WORLD_SCALE;
+    const cz = (z1 + (z2 - z1 + 1) / 2) * WORLD_SCALE;
+    const y = elevation * ELEVATION_HEIGHT + CURSOR_LIFT;
+    this._floorDraftMesh.scale.set(width, depth, 1);
+    this._floorDraftMesh.position.set(cx, y, cz);
+    this._floorDraftMesh.visible = true;
+  }
+
   /** Pin the grid + raycast plane to the active storey's height. */
   _positionGrid() {
     const y = this._activeElevation * ELEVATION_HEIGHT;
@@ -131,8 +181,10 @@ export default class EditorScene {
   }
 
   update() {
-    // Keep the cursor highlight pinned to the selected cell every frame.
+    // Keep the cursor highlight (and any draft-floor rectangle) pinned to the
+    // cursor every frame.
     this._positionCursorMesh();
+    this._positionFloorDraft();
   }
 
   /** The currently selected cell — always a valid { x, z } (never null). */

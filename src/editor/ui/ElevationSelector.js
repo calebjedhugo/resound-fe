@@ -26,6 +26,16 @@ export default class ElevationSelector {
   }
 
   /**
+   * Set the active storey to an existing elevation and re-render. Used when
+   * keyboard layer navigation lands on (or creates) a real storey, to keep the
+   * sidebar control in sync with editorScene.activeElevation.
+   */
+  syncTo(elevation) {
+    this._value = elevation;
+    this.refresh();
+  }
+
+  /**
    * Step the active storey by `delta` among the storeys that exist, clamped.
    * Used by the keyboard layer-navigation shortcut (Option+Up/Down). Returns
    * true if the active storey actually changed.

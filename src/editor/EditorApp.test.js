@@ -54,7 +54,15 @@ jest.mock('three', () => {
       intersectObjects: mockIntersectObjects,
     })),
     Vector2: jest.fn((x, y) => ({ x, y })),
-    Color: jest.fn(),
+    Color: jest.fn(() => ({ setHSL: jest.fn().mockReturnThis() })),
+    // Used by FloorRegionPanel (real) when it rebuilds floor-region meshes.
+    BoxGeometry: jest.fn(() => ({ dispose: jest.fn() })),
+    MeshStandardMaterial: jest.fn(() => ({ dispose: jest.fn() })),
+    Mesh: jest.fn(() => ({
+      position: { set: jest.fn() },
+      geometry: { dispose: jest.fn() },
+      material: { dispose: jest.fn() },
+    })),
   };
 });
 
@@ -81,8 +89,11 @@ jest.mock('editor/viewport/EditorScene', () =>
     moveCursor: jest.fn(),
     recenterCursor: jest.fn(),
     cellToContainerXY: jest.fn(() => ({ x: 0, y: 0 })),
+    setFloorDraft: jest.fn(),
+    clearFloorDraft: jest.fn(),
     activeElevation: 0,
     _groundPlane: null,
+    _scene: { add: jest.fn(), remove: jest.fn() },
   }))
 );
 
@@ -777,9 +788,10 @@ describe('EditorApp wiring', () => {
       expect(app.editorScene.activeElevation).toBe(0);
     });
 
-    it('does nothing when there is only the ground storey', () => {
+    it('Option+Up from a single-storey puzzle arms draft-floor mode on the empty layer', () => {
       optionPress('ArrowUp');
-      expect(app.editorScene.activeElevation).toBe(0);
+      expect(app.editorScene.activeElevation).toBe(1);
+      expect(app._floorDraft).not.toBeNull();
     });
 
     it('Shift+Option+Up moves the entity up a layer and follows it', () => {
@@ -796,6 +808,67 @@ describe('EditorApp wiring', () => {
       app.undoManager.addEntity('wall', 7, 1, 7, {}); // blocks the target layer
       optionPress('ArrowUp', true);
       expect(app.entityPlacer.setEntityPosition).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('draft-floor creation (Option+Arrow into an empty layer)', () => {
+    const press = (key, opts = {}) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts })
+      );
+    const optionUp = () => press('ArrowUp', { altKey: true });
+    const optionDown = () => press('ArrowDown', { altKey: true });
+
+    it('arms draft-floor mode, anchored at the cursor, without creating anything', () => {
+      optionUp(); // E0 → empty E1
+      expect(app.editorScene.activeElevation).toBe(1);
+      expect(app._floorDraft).toEqual({ anchor: { x: 7, z: 7 }, elevation: 1 });
+      expect(app.editorScene.setFloorDraft).toHaveBeenCalled();
+      expect(app.undoManager.getFloors()).toHaveLength(0);
+    });
+
+    it('creates a floor from the anchor→cursor rectangle on Enter', () => {
+      optionUp();
+      press('Enter'); // cursor (7,7) == anchor → 1×1 floor at E1
+      expect(app.undoManager.getFloors()).toContainEqual({
+        elevation: 1,
+        x1: 7,
+        z1: 7,
+        x2: 7,
+        z2: 7,
+      });
+      expect(app._floorDraft).toBeNull();
+    });
+
+    it('climbs through empty layers, skipping them and retargeting the draft', () => {
+      optionUp(); // empty E1
+      optionUp(); // empty E2 — E1 skipped
+      expect(app.editorScene.activeElevation).toBe(2);
+      expect(app._floorDraft.elevation).toBe(2);
+      expect(app.undoManager.getFloors()).toHaveLength(0);
+    });
+
+    it('cancels the draft on Escape without creating a floor', () => {
+      optionUp();
+      press('Escape');
+      expect(app._floorDraft).toBeNull();
+      expect(app.editorScene.clearFloorDraft).toHaveBeenCalled();
+      expect(app.undoManager.getFloors()).toHaveLength(0);
+    });
+
+    it('navigates normally (no draft) onto a layer that already has a floor', () => {
+      app.undoManager.addFloor(1, 0, 0, 5, 5);
+      app.elevationSelector.refresh();
+      optionUp(); // E0 → E1 (has a floor)
+      expect(app.editorScene.activeElevation).toBe(1);
+      expect(app._floorDraft).toBeNull();
+    });
+
+    it('drops out of draft mode when descending to the ground', () => {
+      optionUp(); // empty E1, draft armed
+      optionDown(); // back to E0
+      expect(app.editorScene.activeElevation).toBe(0);
+      expect(app._floorDraft).toBeNull();
     });
   });
 

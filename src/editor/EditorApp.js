@@ -56,6 +56,7 @@ export default class EditorApp {
     this.controls = null;
     this._frameId = null; // pending on-demand render frame
     this._dirty = false;
+    this._floorDraft = null; // { anchor: {x,z}, elevation } while sizing a new floor
     this._validationTimer = null;
     this._autoSaveTimer = null;
     // True once the current puzzle exists on disk. While false (a brand-new
@@ -237,7 +238,10 @@ export default class EditorApp {
     const toolText = tool ? `Placing ${tool} — click a tile (Esc cancels)` : '';
     const pickText =
       this._linkPickSourceId !== null ? 'Teleport: click another gate to link (Esc cancels)' : '';
-    this._hudEl.textContent = [pickText, toolText, cellText].filter(Boolean).join(' · ');
+    const draftText = this._floorDraft
+      ? `Draft floor E${this._floorDraft.elevation} — arrows size it, Enter creates, Esc cancels`
+      : '';
+    this._hudEl.textContent = [pickText, draftText, toolText, cellText].filter(Boolean).join(' · ');
   }
 
   /** Briefly show a message in the viewport (e.g. why a placement was refused). */
@@ -840,6 +844,77 @@ export default class EditorApp {
     }
   }
 
+  // Highest storey the keyboard may climb to (guards a runaway Option+Up hold).
+  static get MAX_DRAFT_STOREY() {
+    return 9;
+  }
+
+  /**
+   * Option+Up/Down: move the active storey by one. Landing on a storey that
+   * already has a floor (or the ground, E0) navigates there normally. Landing
+   * on an EMPTY upper layer arms "draft-floor" mode — a highlighted rectangle
+   * you size with the arrows and commit with Enter. Climbing further through
+   * empty layers just retargets the draft, so you can skip layers.
+   */
+  _navigateLayer(dir) {
+    const target = this.editorScene.activeElevation + dir;
+    if (target < 0 || target > EditorApp.MAX_DRAFT_STOREY) return;
+
+    const floors = this.undoManager.getFloors();
+    const targetHasFloor = target === 0 || floors.some((f) => f.elevation === target);
+
+    this.editorScene.activeElevation = target; // repositions the grid + cursor
+    if (targetHasFloor) {
+      this._exitFloorDraft();
+      this.elevationSelector.syncTo(target);
+    } else {
+      this._enterOrAdvanceFloorDraft(target);
+    }
+    this._requestFrame();
+  }
+
+  /** Arm (or retarget) the draft-floor rectangle, anchored at the cursor. */
+  _enterOrAdvanceFloorDraft(elevation) {
+    if (!this._floorDraft) {
+      const cursor = this.editorScene.getHoveredGrid();
+      this._floorDraft = { anchor: { x: cursor.x, z: cursor.z }, elevation };
+    } else {
+      this._floorDraft.elevation = elevation;
+    }
+    this.editorScene.setFloorDraft(this._floorDraft.anchor, elevation);
+  }
+
+  /** Enter in draft mode: create the floor from the anchor→cursor rectangle. */
+  _commitFloorDraft() {
+    const { elevation, anchor } = this._floorDraft;
+    const cursor = this.editorScene.getHoveredGrid();
+    const x1 = Math.min(anchor.x, cursor.x);
+    const z1 = Math.min(anchor.z, cursor.z);
+    const x2 = Math.max(anchor.x, cursor.x);
+    const z2 = Math.max(anchor.z, cursor.z);
+    // Drafting only happens on empty layers, so overlap is not expected — guard
+    // anyway (a blocked action deserves a toast).
+    const overlap = this.undoManager
+      .getFloors()
+      .some(
+        (f) => f.elevation === elevation && x1 <= f.x2 && x2 >= f.x1 && z1 <= f.z2 && z2 >= f.z1
+      );
+    if (overlap) {
+      this._showToast('Overlaps an existing floor — floors can’t stack');
+      return;
+    }
+    this.undoManager.addFloor(elevation, x1, z1, x2, z2);
+    this.floorRegionPanel.refresh(); // rebuild floor meshes + sidebar list
+    this.elevationSelector.syncTo(elevation); // this storey now exists
+    this._exitFloorDraft();
+  }
+
+  _exitFloorDraft() {
+    if (!this._floorDraft) return;
+    this._floorDraft = null;
+    this.editorScene.clearFloorDraft();
+  }
+
   /** Letter key: place an entity of `type` at the cursor cell (refuse if full). */
   _placeAtCursor(type) {
     const cell = this.editorScene.getHoveredGrid();
@@ -947,6 +1022,7 @@ export default class EditorApp {
         this.entityToolbar.deselect();
         this._cancelLinkPick('Teleport cancelled');
         this.selectionManager.deselect();
+        this._exitFloorDraft();
         return;
       }
 
@@ -959,7 +1035,7 @@ export default class EditorApp {
         e.preventDefault();
         const dir = key === 'ArrowUp' ? 1 : -1;
         if (e.shiftKey) this._moveEntityLayer(dir);
-        else this.elevationSelector.step(dir);
+        else this._navigateLayer(dir);
         return;
       }
 
@@ -982,7 +1058,8 @@ export default class EditorApp {
         }
         case 'Enter':
           e.preventDefault();
-          this._openContextMenuAtCursor();
+          if (this._floorDraft) this._commitFloorDraft();
+          else this._openContextMenuAtCursor();
           return;
         case 'Delete':
         case 'Backspace':
