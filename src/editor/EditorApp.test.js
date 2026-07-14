@@ -66,6 +66,8 @@ jest.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
     enabled: true,
     update: jest.fn(),
     dispose: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
   })),
 }));
 

@@ -54,7 +54,8 @@ export default class EditorApp {
     this.renderer = null;
     this.camera = null;
     this.controls = null;
-    this._animationId = null;
+    this._frameId = null; // pending on-demand render frame
+    this._dirty = false;
     this._validationTimer = null;
     this._autoSaveTimer = null;
     // True once the current puzzle exists on disk. While false (a brand-new
@@ -165,6 +166,7 @@ export default class EditorApp {
     this.undoManager.setOnChange(() => {
       this._syncGridToScene();
       this._refreshRangeIndicator();
+      this._requestFrame();
       this._scheduleValidation();
       this._scheduleAutoSave();
       this.toolbar.refresh();
@@ -187,6 +189,7 @@ export default class EditorApp {
         this.propertyPanel.hide();
       }
       this._refreshRangeIndicator();
+      this._requestFrame();
     };
 
     // Restore saved session (auto-restore on load)
@@ -200,7 +203,8 @@ export default class EditorApp {
     // is kept, dormant, for possible revival.
     // this._setupDrag();
     this._setupKeyboard();
-    this._animate();
+    this._setupRenderInvalidation();
+    this._requestFrame(); // initial render
     window.addEventListener('resize', () => this._onResize());
   }
 
@@ -465,6 +469,7 @@ export default class EditorApp {
       this.puzzlePicker.setSelected(id || '', name);
     }
     this._scheduleValidation();
+    this._requestFrame(); // a fresh model rebuilt the scene — draw it
   }
 
   /** Create a brand-new, not-yet-saved puzzle after confirming any loss. */
@@ -996,13 +1001,41 @@ export default class EditorApp {
     });
   }
 
-  _animate() {
-    this._animationId = requestAnimationFrame(() => this._animate());
-    this.controls.update();
-    this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
+  /**
+   * On-demand rendering. The editor scene is static while idle, so instead of a
+   * 60fps loop we render only when something changes. Every invalidation
+   * schedules ONE frame; `controls.update()` re-invalidates while damping is
+   * still settling, so a camera fling animates and then stops. Idle → no
+   * frames, no CPU (was rendering the whole scene 60×/sec for nothing).
+   */
+  _requestFrame() {
+    this._dirty = true;
+    if (this._frameId == null) {
+      this._frameId = requestAnimationFrame(() => this._renderFrame());
+    }
+  }
+
+  _renderFrame() {
+    this._frameId = null;
+    if (!this._dirty) return;
+    this._dirty = false;
+    this.controls.update(); // may emit 'change' (damping) → schedules the next frame
     this.editorScene.update();
+    this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this._updateHud();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Re-render on camera moves, any user input, and window resizes. Model and
+   *  selection changes invalidate through their own hooks. */
+  _setupRenderInvalidation() {
+    const invalidate = () => this._requestFrame();
+    this._invalidateRender = invalidate;
+    this.controls.addEventListener('change', invalidate);
+    document.addEventListener('keydown', invalidate);
+    document.addEventListener('pointerdown', invalidate);
+    document.addEventListener('pointerup', invalidate);
+    document.addEventListener('wheel', invalidate, { passive: true });
   }
 
   _onResize() {
@@ -1012,10 +1045,18 @@ export default class EditorApp {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+    this._requestFrame();
   }
 
   dispose() {
-    if (this._animationId) cancelAnimationFrame(this._animationId);
+    if (this._frameId) cancelAnimationFrame(this._frameId);
+    if (this._invalidateRender) {
+      this.controls.removeEventListener?.('change', this._invalidateRender);
+      document.removeEventListener('keydown', this._invalidateRender);
+      document.removeEventListener('pointerdown', this._invalidateRender);
+      document.removeEventListener('pointerup', this._invalidateRender);
+      document.removeEventListener('wheel', this._invalidateRender);
+    }
     clearTimeout(this._validationTimer);
     clearTimeout(this._autoSaveTimer);
     clearTimeout(this._toastTimer);
