@@ -845,7 +845,7 @@ export default class EditorApp {
     }
     const id = this.entityPlacer.placeEntity(type, cell.x, cell.z, elevation);
     if (id !== null) this.selectionManager.select(id); // player spawn returns null
-    this._showToast(`${type} placed at (${cell.x}, ${cell.z})`, 'success');
+    // No toast: the placed entity is visible.
   }
 
   /** Delete/Backspace: remove whatever occupies the cursor cell. */
@@ -860,8 +860,7 @@ export default class EditorApp {
     }
     const spawn = this.undoManager.getPlayerSpawn();
     if (spawn && spawn.x === cell.x && spawn.y === elevation && spawn.z === cell.z) {
-      this.entityPlacer.clearPlayerSpawn();
-      this._showToast('Player spawn removed', 'success');
+      this.entityPlacer.clearPlayerSpawn(); // the marker disappears — no toast needed
     }
   }
 

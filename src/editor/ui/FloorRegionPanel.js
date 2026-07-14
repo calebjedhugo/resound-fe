@@ -144,7 +144,7 @@ export default class FloorRegionPanel {
     }
 
     this._undoManager.addFloor(elevation, x1, z1, x2, z2);
-    this._notify(`Floor added at E${elevation}: (${x1},${z1})–(${x2},${z2})`, 'success');
+    // No toast: the new floor region is visible (platform + sidebar list entry).
     this._isPlacing = false;
     this._firstCorner = null;
     this._addBtn.textContent = '+ Add Floor Region';
