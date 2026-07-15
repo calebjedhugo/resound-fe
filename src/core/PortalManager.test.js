@@ -1116,34 +1116,63 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(visible.some((c) => c.position.z < 0 && c.position.x === 0)).toBe(true);
   });
 
-  it('no portal surface of EITHER end paints into a same-area view pass (no hall of mirrors)', async () => {
+  it('doors seen through doors recurse: only the PARTNER end hides, and no pass samples the buffer it writes', async () => {
     // A same-area view renders the MAIN scene — which contains both ends of
-    // the door, each carrying its own textured view surfaces. Any of them
-    // left visible during a pass paints last frame's texture into this one
-    // (the "display got weird" hall-of-mirrors).
-    const surfaceStates = [];
+    // the door. The PARTNER's surfaces hide (they sit at the mapped eye and
+    // would smear stale full-view textures), but every other portal surface
+    // stays visible showing LAST frame's buffer: a gate seen through a gate
+    // shows its own view (recursive doorways, ruled 2026-07-14). Safe
+    // because targets are double-buffered — a pass must never render a
+    // scene containing a surface mapped to the very buffer it is writing
+    // (GL feedback loop).
+    const passes = [];
+    let feedback = 0;
+    let currentTarget = null;
     const renderer = {
       clippingPlanes: [],
-      setRenderTarget() {},
+      setRenderTarget(target) {
+        currentTarget = target;
+      },
       render() {
-        for (const g of [doorA, doorB]) {
+        const snap = { a: { hidden: 0, visible: 0 }, b: { hidden: 0, visible: 0 } };
+        for (const [key, g] of [
+          ['a', doorA],
+          ['b', doorB],
+        ]) {
           for (const child of g.mesh.children) {
-            if (child._isPortalSurface) surfaceStates.push(child.visible);
+            if (!child._isPortalSurface) continue; // eslint-disable-line no-continue
+            snap[key][child.visible ? 'visible' : 'hidden'] += 1;
+            if (child.visible && currentTarget && child.material.map === currentTarget.texture) {
+              feedback += 1;
+            }
           }
         }
+        passes.push(snap);
       },
       getDrawingBufferSize: (size) => size.set(800, 600),
     };
     doorA.open();
     await ctx.tick(16); // mirror door-b open
 
-    // Stand where BOTH doors' views are live at once (between them)
-    PortalManager.renderPortals(renderer, {
-      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 5 * WORLD_SCALE },
-    });
+    // Stand where BOTH doors' views are live at once (between them). The
+    // first frame builds both doors' views lazily; assert on the SECOND,
+    // steady-state frame.
+    const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 5 * WORLD_SCALE } };
+    PortalManager.renderPortals(renderer, camera);
+    passes.length = 0;
+    feedback = 0;
+    PortalManager.renderPortals(renderer, camera);
 
-    expect(surfaceStates.length).toBeGreaterThan(0);
-    expect(surfaceStates.every((v) => v === false)).toBe(true);
+    expect(passes.length).toBeGreaterThan(0);
+    for (const snap of passes) {
+      // Exactly one end is the partner: fully hidden. The other end keeps
+      // its live panels visible — that is the recursion.
+      const aAllHidden = snap.a.visible === 0 && snap.a.hidden > 0;
+      const bAllHidden = snap.b.visible === 0 && snap.b.hidden > 0;
+      expect(aAllHidden !== bAllHidden).toBe(true);
+      expect((aAllHidden ? snap.b : snap.a).visible).toBeGreaterThan(0);
+    }
+    expect(feedback).toBe(0);
     // Restored after the passes: the surfaces still show to the player
     const anyVisible = [...doorA.mesh.children, ...doorB.mesh.children].some(
       (c) => c._isPortalSurface && c.visible

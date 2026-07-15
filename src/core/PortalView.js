@@ -196,14 +196,22 @@ class PortalView {
 
     // frameCorners overwrites the projection every pass; only near/far apply.
     this._camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
-    this._target = new THREE.WebGLRenderTarget(1, 1);
+    // DOUBLE-buffered target: each pass WRITES one buffer while every
+    // visible surface (this one included) still SHOWS the other — last
+    // frame's completed view. That makes doors seen through doors render
+    // their own views (recursive doorways, ruled 2026-07-14), one frame
+    // staler per level, without ever sampling the texture being written
+    // (a GL feedback loop). The buffers swap at the end of the pass.
+    this._targets = [new THREE.WebGLRenderTarget(1, 1), new THREE.WebGLRenderTarget(1, 1)];
+    this._writeIndex = 0;
 
     this._buildDoorwaySurface();
   }
 
   _buildDoorwaySurface() {
     const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
-    const material = new THREE.MeshBasicMaterial({ map: this._target.texture });
+    // Shows the READ buffer (the one not being written this frame)
+    const material = new THREE.MeshBasicMaterial({ map: this._targets[1].texture });
     this.surface = new THREE.Mesh(geometry, material);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
     // OPPOSITE panel, facing back at the viewer
@@ -292,8 +300,9 @@ class PortalView {
     renderer.getDrawingBufferSize(scratchSize);
     const targetW = Math.max(1, Math.floor(scratchSize.x / 2));
     const targetH = Math.max(1, Math.floor(scratchSize.y / 2));
-    if (this._target.width !== targetW || this._target.height !== targetH) {
-      this._target.setSize(targetW, targetH);
+    const writeTarget = this._targets[this._writeIndex];
+    if (writeTarget.width !== targetW || writeTarget.height !== targetH) {
+      writeTarget.setSize(targetW, targetH);
     }
 
     const mappedEye = this._map({ x: eye.x, y: eye.y, z: eye.z });
@@ -311,10 +320,13 @@ class PortalView {
     // before the player ever steps in (designer's round-4 request), so
     // nothing pops in on entry. Only front-facing staff planes paint
     // (DoubleSide would show the far plane's mirrored back through the
-    // doorway). EVERY portal surface of BOTH ends hides too: for a
-    // same-puzzle door they live in the rendered scene, and painting one
-    // view's (stale) texture into another is a hall-of-mirrors (sampling
-    // our own target would even be a GL feedback loop).
+    // doorway). The PARTNER's portal surfaces hide too: they sit right at
+    // the mapped eye (this same door from the other side) and would smear
+    // stale full-view textures across the pass. Every OTHER portal surface
+    // — this gate's included — stays visible showing last frame's buffer:
+    // a door seen through a door shows its own live view (recursive
+    // doorways, ruled 2026-07-14; the double-buffered target makes that
+    // safe — see constructor).
     const partnerMesh = this._partnerGate.mesh;
     const partnerMaterialWasVisible = partnerMesh ? partnerMesh.material.visible : true;
     if (partnerMesh) partnerMesh.material.visible = false;
@@ -328,9 +340,8 @@ class PortalView {
       }
     }
     const hiddenSurfaces = [];
-    for (const mesh of [this.gate.mesh, partnerMesh]) {
-      if (!mesh) continue; // eslint-disable-line no-continue
-      for (const child of mesh.children) {
+    if (partnerMesh && partnerMesh !== this.gate.mesh) {
+      for (const child of partnerMesh.children) {
         if (child._isPortalSurface && child.visible) {
           child.visible = false;
           hiddenSurfaces.push(child);
@@ -358,7 +369,7 @@ class PortalView {
       clipOverride && clipOverride !== this._clipPlane
         ? [clipOverride, this._clipPlane]
         : [this._clipPlane];
-    renderer.setRenderTarget(this._target);
+    renderer.setRenderTarget(writeTarget);
     renderer.render(this._scene, this._camera);
     renderer.setRenderTarget(null);
     renderer.clippingPlanes = previousPlanes;
@@ -367,6 +378,11 @@ class PortalView {
     for (const mesh of hiddenWalls) mesh.visible = true;
     for (const child of frontOnlyNotation) child.material.side = THREE.DoubleSide;
     if (partnerMesh) partnerMesh.material.visible = partnerMaterialWasVisible;
+
+    // Swap: the freshly written buffer becomes what the surface shows; the
+    // other becomes next frame's write target.
+    this.surface.material.map = writeTarget.texture;
+    this._writeIndex = 1 - this._writeIndex;
   }
 
   dispose() {
@@ -378,7 +394,7 @@ class PortalView {
     }
     this.surface.geometry.dispose();
     this.surface.material.dispose();
-    this._target.dispose();
+    for (const target of this._targets) target.dispose();
     // The neighbor scene belongs to its Area — not ours to dispose
   }
 }
