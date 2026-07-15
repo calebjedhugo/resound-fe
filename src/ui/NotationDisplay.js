@@ -1,6 +1,19 @@
 import * as THREE from 'three';
 import { NotationRenderer } from 'resound-notation/NotationRenderer';
 
+// Grazing-angle fade for staff planes: below GRAZE_LO (cosine of the angle
+// between the plane normal and the eye direction) the staff is invisible,
+// above GRAZE_HI it is fully opaque, blending between. A staff plane floats
+// 0.02 off its entity face; on an OPEN gate there is no box behind it, so a
+// razor-grazing sightline used to catch the texture's dark rows as a thin
+// dashed line floating over the floor (nitpick, 2026-07-14). At these
+// angles the staff is unreadable anyway.
+const GRAZE_LO = 0.05;
+const GRAZE_HI = 0.15;
+const scratchNormal = new THREE.Vector3();
+const scratchPosition = new THREE.Vector3();
+const scratchToCamera = new THREE.Vector3();
+
 /**
  * Renders musical notation as in-world textures on entity surfaces.
  *
@@ -78,6 +91,22 @@ class NotationDisplay {
 
       // Tag for identification in tests and disposal
       mesh._isNotationMesh = true;
+
+      // Base opacity: 0 while the texture is loading, 1 once applied. The
+      // per-draw grazing fade below multiplies against this so it never
+      // reveals a plane whose texture has not arrived.
+      mesh._notationOpacity = 0;
+      // Fade out toward edge-on, per draw and per CAMERA — portal passes
+      // render these same meshes from their own mapped eyes and need the
+      // same treatment (see the GRAZE_* constants above).
+      mesh.onBeforeRender = (renderer, scene, camera) => {
+        scratchNormal.set(0, 0, 1).transformDirection(mesh.matrixWorld);
+        scratchPosition.setFromMatrixPosition(mesh.matrixWorld);
+        scratchToCamera.copy(camera.position).sub(scratchPosition).normalize();
+        const facing = scratchNormal.dot(scratchToCamera);
+        const graze = Math.min(1, Math.max(0, (facing - GRAZE_LO) / (GRAZE_HI - GRAZE_LO)));
+        material.opacity = mesh._notationOpacity * graze;
+      };
 
       this.meshes.push(mesh);
     }
@@ -182,6 +211,7 @@ class NotationDisplay {
           mesh.scale.set(w / baseW, h / baseH, 1);
           mesh.material.map = texture;
           mesh.material.opacity = 1;
+          mesh._notationOpacity = 1; // the grazing fade multiplies against this
           mesh.material.needsUpdate = true;
         }
 
