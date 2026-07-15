@@ -59,6 +59,7 @@ import portalB from '../fixtures/puzzles/portal-b.json';
 import portalLiveA from '../fixtures/puzzles/portal-live-a.json';
 import portalLiveB from '../fixtures/puzzles/portal-live-b.json';
 import portalSelf from '../fixtures/puzzles/portal-self.json';
+import portalSelfWalled from '../fixtures/puzzles/portal-self-walled.json';
 import portalOneway from '../fixtures/puzzles/portal-oneway.json';
 import portalWallsA from '../fixtures/puzzles/portal-walls-a.json';
 import portalWallsB from '../fixtures/puzzles/portal-walls-b.json';
@@ -104,6 +105,7 @@ const TEST_PUZZLES = {
   'portal-live-a': portalLiveA,
   'portal-live-b': portalLiveB,
   'portal-self': portalSelf,
+  'portal-self-walled': portalSelfWalled,
   'portal-oneway': portalOneway,
   'portal-walls-a': portalWallsA,
   'portal-walls-b': portalWallsB,

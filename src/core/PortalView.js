@@ -136,29 +136,62 @@ class PortalView {
     this._scene = sceneOverride || neighborArea.scene;
     this._partnerGate = partnerGate;
 
-    // The perimeter wall(s) sitting flush ONE cell BEHIND the arrival cell —
-    // the neighbor's OUTER shell, on the exterior side of the partner gate.
-    // The clip reaches a hair past the arrival floor's far edge to paint it
-    // seamlessly, so that wall's near face leaks in as a thin dark strip
-    // beside the opening at oblique angles ("the rectangle that shouldn't be
-    // there", ruled 2026-07-12). It is never part of what you see THROUGH the
-    // door, so hide it for the pass (restored after — it reappears normally
-    // once you cross). The frame walls the door SITS IN (proj ~ 0) stay put:
-    // those read as the room's enclosure and are wanted (keep the walls, drop
-    // the strip). Trimming the clip instead would gap the floor at the far
-    // corner, since the floor's far edge and this wall's near face coincide.
-    this._wallsBehind = [];
-    // The partner's authored facing points OUT of its wall, into the room —
-    // the interior direction. Use it (not this panel's per-view outward) so
-    // every panel of the door agrees on which wall is "behind".
-    const interiorNormal = FACING_VECTORS[partnerGate.facing] || FACING_VECTORS.north;
+    // Walls on the EYE side of the window plane: in a portal pass, the
+    // legitimate view is the world BEYOND the window — plus the arrival
+    // cell's own interior. The clip deliberately overreaches one cell to
+    // the eye side so that interior — its floor, ITS JAMB WALLS, its staff
+    // — paints (clipping exactly at the window left a black wedge and bare
+    // walls at grazing angles). Walking through must read as a plain
+    // doorway in a wall (designer's ruling, 2026-07-14), so the flush
+    // lateral walls flanking the arrival cell — the jambs whose inner
+    // faces line the doorway — must stay. But the same slab turns
+    // poisonous when the mapped eye stands laterally BEYOND such a wall:
+    // it then shows its OUTSIDE face, painting a whole false wall into the
+    // doorway (a freestanding teleport pair viewed from a corner — the
+    // mapped eye can sit right next to, or inside, the wall). And a wall a
+    // full cell or more behind the window shows only its near face — the
+    // thin dark strip beside the opening ("the rectangle that shouldn't be
+    // there", ruled 2026-07-12).
+    // So two sets, resolved per frame in wallsToHide():
+    //  - strictBehind: a full cell or more behind the window — always
+    //    hidden (never anything but the strip).
+    //  - flushLateral: flush with the window, off to the side — hidden
+    //    only when the eye is laterally beyond them (outer face showing);
+    //    kept otherwise (they are the doorway's jambs).
+    // Hidden per pass, restored after; each reappears normally once you
+    // cross. Walls straddling the window keep beyond-window faces and are
+    // never hidden. Trimming the clip instead would gap the floor at the
+    // far corner, since the floor's far edge and a flush wall's near face
+    // coincide.
+    //
+    // Each panel's sets follow its OWN outward (mapping.outward); the
+    // APPROACH panel's picks are ALSO hidden during every panel's pass
+    // (passed into render alongside the shared clip) so the shared plane's
+    // overreach never leaks either.
+    this._wallsStrictBehind = [];
+    this._wallsFlushLateral = []; // { mesh, lat }
+    const { outward } = mapping;
+    // Window basis in NEIGHBOR space, for per-frame lateral tests
+    this._mappedWindowCenter = { x: mappedCenter.x, z: mappedCenter.z };
+    this._right = { x: outward.z, z: -outward.x };
     const neighborEntities = (neighborArea && neighborArea.entities) || [];
     for (const entity of neighborEntities) {
       if (entity.type !== 'wall' || !entity.mesh) continue; // eslint-disable-line no-continue
+      // Signed distance of the wall CENTER past the window plane along the
+      // view direction (walls are cell-sized; the epsilon absorbs the panel
+      // inset).
       const proj =
-        (entity.position.x - partnerGate.position.x) * interiorNormal.x +
-        (entity.position.z - partnerGate.position.z) * interiorNormal.z;
-      if (proj < -WORLD_SCALE / 2) this._wallsBehind.push(entity.mesh);
+        (entity.position.x - mappedCenter.x) * outward.x +
+        (entity.position.z - mappedCenter.z) * outward.z;
+      if (proj >= -WORLD_SCALE / 2 + PANEL_EPSILON * 2) continue; // eslint-disable-line no-continue
+      if (proj < -WORLD_SCALE / 2 - PANEL_EPSILON * 2) {
+        this._wallsStrictBehind.push(entity.mesh);
+      } else {
+        const lat =
+          (entity.position.x - mappedCenter.x) * this._right.x +
+          (entity.position.z - mappedCenter.z) * this._right.z;
+        this._wallsFlushLateral.push({ mesh: entity.mesh, lat });
+      }
     }
 
     // frameCorners overwrites the projection every pass; only near/far apply.
@@ -200,6 +233,34 @@ class PortalView {
   }
 
   /**
+   * The eye-side walls to hide for a pass rendered for this eye position
+   * (see constructor): the strictly-behind walls always, plus any flush
+   * lateral wall the eye is laterally BEYOND (its outer face would paint a
+   * false wall); jambs the eye is inside of stay — the doorway keeps its
+   * frame. PortalManager passes the APPROACH panel's picks into every
+   * panel's render so the shared clip's overreach never leaks a wall face.
+   * @param {THREE.Camera} camera - the player camera (world position)
+   */
+  wallsToHide(camera) {
+    if (this._wallsFlushLateral.length === 0) return this._wallsStrictBehind;
+    const eye = this._map({ x: camera.position.x, y: camera.position.y, z: camera.position.z });
+    const latEye =
+      (eye.x - this._mappedWindowCenter.x) * this._right.x +
+      (eye.z - this._mappedWindowCenter.z) * this._right.z;
+    const hidden = this._wallsStrictBehind.slice();
+    for (const { mesh, lat } of this._wallsFlushLateral) {
+      // Laterally beyond the wall, on its side: the eye faces its OUTSIDE
+      if (
+        Math.sign(latEye) === Math.sign(lat) &&
+        Math.abs(latEye) > Math.abs(lat) - WORLD_SCALE / 2
+      ) {
+        hidden.push(mesh);
+      }
+    }
+    return hidden;
+  }
+
+  /**
    * Draw the neighbor view for this frame's eye position into the doorway
    * texture. Call only while the gate is open.
    * @param {THREE.WebGLRenderer} renderer - the game's renderer
@@ -207,10 +268,16 @@ class PortalView {
    * @param {THREE.Plane} [clipOverride] - the door's SHARED clip plane (the
    *   primary approach panel's). When given, every panel clips along the
    *   same doorway axis, so side windows show a consistent slice instead of
-   *   a perpendicular full-height one that pops at a jamb. Falls back to
-   *   this panel's own plane (single-panel / test paths).
+   *   a perpendicular full-height one that pops at a jamb. The panel's OWN
+   *   plane is ALWAYS applied too: it cuts content between the mapped eye
+   *   and the window along this panel's axis — junk the shared plane cannot
+   *   reach (a side panel of a freestanding door once painted a whole
+   *   perimeter wall standing beside its mapped eye into the doorway).
+   * @param {THREE.Mesh[]} [extraWallsBehind] - the APPROACH panel's
+   *   walls-behind row, hidden alongside this panel's own so the shared
+   *   clip's overreach never leaks a wall sliver into any panel.
    */
-  render(renderer, camera, clipOverride = null) {
+  render(renderer, camera, clipOverride = null, extraWallsBehind = null) {
     const eye = camera.position;
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
@@ -270,18 +337,27 @@ class PortalView {
         }
       }
     }
-    // Hide the neighbor's outer-shell wall behind the arrival cell (see
-    // constructor) so its near face doesn't leak in as a dark strip.
+    // Hide the eye-side walls (this panel's own set + the approach
+    // panel's — see constructor and wallsToHide) so their outside faces
+    // don't paint into the doorway view.
     const hiddenWalls = [];
-    for (const mesh of this._wallsBehind) {
+    const hideWall = (mesh) => {
       if (mesh.visible) {
         mesh.visible = false;
         hiddenWalls.push(mesh);
       }
-    }
+    };
+    for (const mesh of this.wallsToHide(camera)) hideWall(mesh);
+    if (extraWallsBehind) for (const mesh of extraWallsBehind) hideWall(mesh);
 
     const previousPlanes = renderer.clippingPlanes;
-    renderer.clippingPlanes = [clipOverride || this._clipPlane];
+    // Shared doorway-axis plane (seam consistency) AND this panel's own
+    // plane (eye-side junk cut). For the approach panel they are the same
+    // plane object; apply it once.
+    renderer.clippingPlanes =
+      clipOverride && clipOverride !== this._clipPlane
+        ? [clipOverride, this._clipPlane]
+        : [this._clipPlane];
     renderer.setRenderTarget(this._target);
     renderer.render(this._scene, this._camera);
     renderer.setRenderTarget(null);

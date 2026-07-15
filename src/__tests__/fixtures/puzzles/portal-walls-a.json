@@ -13,6 +13,8 @@
       "link": { "puzzleId": "portal-walls-b", "gateId": "south-door" },
       "position": { "x": 5, "y": 0, "z": 2 },
       "song": [{ "pitch": "C4", "length": "1/4" }]
-    }
+    },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 2 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": 2 } }
   ]
 }

@@ -462,30 +462,48 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     delete global.fetch;
   });
 
-  it('hides ONLY the wall behind the arrival cell during the pass; frame + interior walls stay', () => {
-    // south-door at grid (5,7) -> world (15,21), interior toward +z. Behind
-    // (outer shell): (15,18). Frame (coplanar with the door): (12,21).
-    // Interior (deeper into the room): (15,27).
-    const behind = wallAt(15, 18);
-    const frame = wallAt(12, 21);
-    const interior = wallAt(15, 27);
-    expect(behind).toBeDefined();
-    expect(frame).toBeDefined();
-    expect(interior).toBeDefined();
-
-    const seen = [];
-    const renderer = {
+  /** Renderer that snapshots the three witness walls' visibility per pass. */
+  function wallWatchingRenderer(walls, seen) {
+    return {
       clippingPlanes: [],
       setRenderTarget() {},
       render() {
         seen.push({
-          behind: behind.mesh.visible,
-          frame: frame.mesh.visible,
-          interior: interior.mesh.visible,
+          // The approach pass carries ONE clip plane (shared == own); side
+          // panels carry two. Side panels legitimately show almost nothing
+          // of walls near the doorway (back-culled or clipped to slivers),
+          // so per-wall visibility is asserted on the approach pass.
+          isApproach: this.clippingPlanes.length === 1,
+          behind: walls.behind.mesh.visible,
+          frame: walls.frame.mesh.visible,
+          interior: walls.interior.mesh.visible,
         });
       },
       getDrawingBufferSize: (size) => size.set(800, 600),
     };
+  }
+
+  /** The three witness walls around south-door (world (15,21), room at +z). */
+  function witnessWalls() {
+    // Behind (outer shell): (15,18). Frame (flush, the wall the door sits
+    // in): (12,21). Interior (deeper into the room, beyond the window):
+    // (15,27).
+    const walls = { behind: wallAt(15, 18), frame: wallAt(12, 21), interior: wallAt(15, 27) };
+    expect(walls.behind).toBeDefined();
+    expect(walls.frame).toBeDefined();
+    expect(walls.interior).toBeDefined();
+    return walls;
+  }
+
+  it('an eye standing OFF the doorway hides every eye-side wall; the room beyond stays', () => {
+    // From out there nothing on the eye side of the window reads as
+    // enclosure: the strip wall's near face ("the rectangle that shouldn't
+    // be there") and even the flush frame wall show only outside faces or
+    // boundary slivers into the view. Walls beyond the window — the real
+    // room — must always stay.
+    const walls = witnessWalls();
+    const seen = [];
+    const renderer = wallWatchingRenderer(walls, seen);
     gate.open();
     // Eye north of the door and off to the side: the oblique sightline that
     // showed the strip.
@@ -494,15 +512,214 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     PortalManager.renderPortals(renderer, camera);
 
     expect(seen.length).toBeGreaterThan(0);
-    for (const frameSeen of seen) {
-      expect(frameSeen.behind).toBe(false); // outer-shell wall hidden every pass
-      expect(frameSeen.frame).toBe(true); // the wall the door sits in stays
-      expect(frameSeen.interior).toBe(true); // deeper room walls stay
+    const approachPasses = seen.filter((s) => s.isApproach);
+    expect(approachPasses.length).toBeGreaterThan(0);
+    for (const pass of seen) {
+      expect(pass.behind).toBe(false); // outer-shell wall hidden every pass
+      expect(pass.frame).toBe(false); // flush wall: outside faces only from afar
+    }
+    for (const pass of approachPasses) {
+      expect(pass.interior).toBe(true); // the room beyond the window stays
     }
     // Restored the instant the passes finish (reappears normally on crossing).
-    expect(behind.mesh.visible).toBe(true);
-    expect(frame.mesh.visible).toBe(true);
-    expect(interior.mesh.visible).toBe(true);
+    expect(walls.behind.mesh.visible).toBe(true);
+    expect(walls.frame.mesh.visible).toBe(true);
+    expect(walls.interior.mesh.visible).toBe(true);
+  });
+
+  it('a dead-on approach keeps the arrival JAMBS at any distance — a door reads as a doorway in a wall', () => {
+    // "The experience should just be that of walking through a normal
+    // doorway" (ruled 2026-07-14): the flush walls flanking the arrival
+    // cell line the doorway you are about to walk through. They hide only
+    // for an eye standing laterally BEYOND them (outer face showing) —
+    // never for one looking down the corridor.
+    const walls = witnessWalls();
+    const seen = [];
+    const renderer = wallWatchingRenderer(walls, seen);
+    gate.open();
+    // Far back but dead on the door axis
+    const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: -1 * WORLD_SCALE } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    const approachPasses = seen.filter((s) => s.isApproach);
+    expect(approachPasses.length).toBeGreaterThan(0);
+    for (const pass of seen) {
+      expect(pass.behind).toBe(false); // the strip wall still hides
+    }
+    for (const pass of approachPasses) {
+      expect(pass.frame).toBe(true); // the jambs stay
+      expect(pass.interior).toBe(true);
+    }
+  });
+
+  it('an eye AT the threshold keeps the flush frame walls; only strictly-behind walls hide', () => {
+    // The clip overreaches one cell to the eye side precisely so the
+    // arrival cell paints when you are at the door: its floor, THE WALLS
+    // FRAMING IT, its staff (clipping at the window left a black wedge and
+    // bare walls at grazing angles — the round-4 giveaway glitch).
+    const walls = witnessWalls();
+    const seen = [];
+    const renderer = wallWatchingRenderer(walls, seen);
+    gate.open();
+    // Inside the source doorway cell, a step shy of the commit line
+    const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 6 - 0.5 } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    expect(seen.length).toBeGreaterThan(0);
+    const approachPasses = seen.filter((s) => s.isApproach);
+    expect(approachPasses.length).toBeGreaterThan(0);
+    for (const pass of seen) {
+      expect(pass.behind).toBe(false); // the strip wall still hides
+    }
+    for (const pass of approachPasses) {
+      expect(pass.frame).toBe(true); // the arrival cell keeps its frame
+      expect(pass.interior).toBe(true);
+    }
+    expect(walls.behind.mesh.visible).toBe(true);
+    expect(walls.frame.mesh.visible).toBe(true);
+  });
+});
+
+describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)', () => {
+  // A teleport pair standing in OPEN floor has no wall defining its doorway
+  // plane: the player really approaches from whichever side they are on,
+  // usually perpendicular to the authored facing. Clipping along the facing
+  // axis there sliced every sightline sideways — side panels went black
+  // (their whole view on the clipped side) and content on the VIEWER's side
+  // of the door painted into the view (the phantom creature). The shared
+  // clip must follow the open face the eye is furthest beyond instead. A
+  // door sitting in a wall still resolves to its facing axis (its lateral
+  // faces are walled), so the jamb/side-stand behavior is unchanged.
+  let doorA;
+
+  function createFakeRenderer() {
+    return {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render(scene, cam) {
+        this.renderCalls.push({ scene, cam, clipping: this.clippingPlanes });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+  }
+
+  beforeEach(() => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-self-walled');
+    [doorA] = ctx.getGates();
+  });
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it('the shared clip follows the side the player approaches from, not the authored facing', () => {
+    doorA.open();
+    const renderer = createFakeRenderer();
+    // Eye due WEST of door-a (grid (5,2) -> world (15,6), facing north):
+    // the real approach axis is X, perpendicular to the authored facing
+    const camera = { position: { x: 2 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    expect(renderer.renderCalls.length).toBeGreaterThan(1); // approach + sides
+    const planes = renderer.renderCalls.map((c) => c.clipping[0]);
+    for (const plane of planes) {
+      expect(plane).toBe(planes[0]); // still ONE shared plane across panels
+    }
+    // West approach -> the clip runs along X (the west panel's own plane:
+    // one cell past door-b's east exit), cutting viewer-side content out of
+    // the view instead of slicing every sightline sideways
+    const [plane] = planes;
+    expect(Math.abs(plane.normal.x)).toBeCloseTo(1);
+    expect(Math.abs(plane.normal.z)).toBeCloseTo(0);
+    // Plane passes through x = door-b.x + 1.49 - (WORLD_SCALE + 0.1)
+    expect(plane.constant).toBeCloseTo(-(5 * WORLD_SCALE + 1.49 - (WORLD_SCALE + 0.1)));
+  });
+
+  it('keeps the room walls: only the cell DIRECTLY behind the arrival hides, never the far perimeter', () => {
+    // Old behavior hid EVERY wall past the partner's doorway plane — for a
+    // freestanding door that was half the room's perimeter, and the views
+    // showed black sky where real walls stand.
+    const farWall = gameState.entities.find(
+      (e) =>
+        e.type === 'wall' && e.position.x === 5 * WORLD_SCALE && e.position.z === 9 * WORLD_SCALE
+    );
+    const diagWall = gameState.entities.find(
+      (e) =>
+        e.type === 'wall' && e.position.x === 6 * WORLD_SCALE && e.position.z === 7 * WORLD_SCALE
+    );
+    expect(farWall).toBeDefined(); // 3 cells behind door-b: out of the clip's reach
+    expect(diagWall).toBeDefined(); // one behind AND one aside: legitimately visible
+
+    const seen = [];
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {
+        seen.push({
+          isApproach: this.clippingPlanes.length === 1, // shared == own
+          far: farWall.mesh.visible,
+          diag: diagWall.mesh.visible,
+        });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorA.open();
+    // Due NORTH of door-a: through the approach window both witness walls
+    // lie BEYOND (south of door-b) — the black-sky bug hid them anyway.
+    const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 0 } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    expect(seen.length).toBeGreaterThan(0);
+    const approachPasses = seen.filter((s) => s.isApproach);
+    expect(approachPasses.length).toBeGreaterThan(0);
+    for (const pass of seen) {
+      expect(pass.far).toBe(true); // never the far perimeter (the black-sky bug)
+    }
+    // The diagonal wall is REAL content beyond the window in the approach
+    // view (one cell east+south of door-b); a side panel on whose eye side
+    // it falls may hide it for that pass only.
+    for (const pass of approachPasses) {
+      expect(pass.diag).toBe(true);
+    }
+  });
+
+  it('a corner view adds each side panel its OWN junk-cutting plane beside the shared one', () => {
+    // Standing SE of a freestanding door, its east panel's view looks WEST —
+    // and its mapped eye can sit right next to (or inside) walls beside the
+    // partner. The shared clip runs along the approach (Z) axis and cannot
+    // cut that eye-side content, so a perimeter wall once painted into the
+    // doorway as a giant false wall. Every side panel must ALSO clip along
+    // its own axis: [shared, own].
+    doorA.open();
+    const renderer = createFakeRenderer();
+    // SE of door-a (world (15,6)): south offset 4 dominates, east 3.1 —
+    // approach resolves south, east panel still visible
+    const camera = { position: { x: 18.1, y: 1.8, z: 10 } };
+
+    PortalManager.renderPortals(renderer, camera);
+
+    const approach = renderer.renderCalls.filter((c) => c.clipping.length === 1);
+    const sides = renderer.renderCalls.filter((c) => c.clipping.length === 2);
+    expect(approach.length).toBeGreaterThan(0);
+    expect(sides.length).toBeGreaterThan(0);
+    const [sharedPlane] = approach[0].clipping;
+    expect(Math.abs(sharedPlane.normal.z)).toBeCloseTo(1); // approach axis: Z
+    for (const side of sides) {
+      expect(side.clipping[0]).toBe(sharedPlane); // seam consistency kept
+      // The panel's own plane cuts along ITS axis — perpendicular to the
+      // shared plane for the east/west panels of this door
+      expect(side.clipping[1]).not.toBe(sharedPlane);
+    }
+    // The east panel's own plane runs along X (its exit axis)
+    const eastSide = sides.find((c) => Math.abs(c.clipping[1].normal.x) > 0.9);
+    expect(eastSide).toBeDefined();
   });
 });
 

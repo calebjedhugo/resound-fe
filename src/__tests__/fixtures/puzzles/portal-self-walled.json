@@ -1,0 +1,28 @@
+{
+  "id": "portal-self-walled",
+  "name": "Portal Self Walled",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 2, "y": 0, "z": 2 },
+  "entities": [
+    {
+      "type": "gate",
+      "id": "door-a",
+      "facing": "north",
+      "link": { "puzzleId": "portal-self-walled", "gateId": "door-b" },
+      "position": { "x": 5, "y": 0, "z": 2 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    {
+      "type": "gate",
+      "id": "door-b",
+      "facing": "north",
+      "link": { "puzzleId": "portal-self-walled", "gateId": "door-a" },
+      "position": { "x": 5, "y": 0, "z": 6 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 9 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": 7 } }
+  ]
+}

@@ -66,6 +66,9 @@ class PortalManager {
     // gate -> Map<facing, PortalView> (a view per player-visible face) or
     // null once the link proves dangling (the gate stays an ordinary gate)
     this._views = new Map();
+    // gate -> facings whose adjacent cell holds no wall (static per area,
+    // computed lazily; drives the shared-clip approach axis)
+    this._openFacingsByGate = new Map();
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -307,26 +310,83 @@ class PortalManager {
     // along the doorway axis instead of perpendicular to it (a perpendicular
     // slice shows a full-height cross-section that pops the neighbor's
     // apparent geometry as the eye moves — the "wall height jumps on one
-    // step" bug). The approach is the gate's FACING axis (schema: facing is
-    // the doorway plane — the wall the door sits in), NOT the panel the eye
-    // is most in front of: standing off to the SIDE of a door and looking
-    // back must still clip along the doorway, not sideways through the wall.
-    const axis = FACING_VECTORS[gate.facing] || FACING_VECTORS.north;
-    const eyeSide =
-      axis.x * (camera.position.x - gate.position.x) +
-      axis.z * (camera.position.z - gate.position.z);
-    const approach = eyeSide > 0 ? gate.facing : OPPOSITE_FACING[gate.facing];
+    // step" bug). The approach is the OPEN face the eye is furthest beyond
+    // (see _approachFacing): for a door sitting in a wall that is always the
+    // facing axis — standing off to the SIDE of such a door and looking back
+    // must still clip along the doorway, not sideways through the wall — but
+    // a FREESTANDING door (a teleport pair in open floor) is really
+    // approached from whichever side the player is on, and clipping along
+    // its authored facing there sliced every sightline sideways: black side
+    // panels, and viewer-side content painting into the view.
+    const approach = this._approachFacing(gate, camera);
     // The approach face is always eligible (the eye is in front of it), so it
     // was materialized above; fall back to per-panel clips if it somehow was
     // not (defensive).
     const approachView = faces.get(approach);
     const sharedClip = approachView ? approachView.clipPlane : null;
+    // The approach panel's eye-side walls ride along with its clip plane:
+    // the shared plane's overreach can graze their faces in EVERY panel's
+    // pass, not just the approach panel's own.
+    const sharedWalls = approachView ? approachView.wallsToHide(camera) : null;
     for (const f of eligible) {
       const view = faces.get(f);
       view.setVisible(true);
-      view.render(renderer, camera, sharedClip);
+      view.render(renderer, camera, sharedClip, sharedWalls);
     }
     return false;
+  }
+
+  /**
+   * The face whose OPEN plane the eye is furthest beyond — the side the
+   * player actually approaches the doorway from. Faces buried in a wall (an
+   * adjacent wall cell in the gate's own area) cannot be approached, so a
+   * door sitting in a wall always resolves to its facing axis even when the
+   * eye hugs that wall far off to the side. With every open face behind the
+   * eye (inside the cell footprint), fall back to the facing-axis rule.
+   */
+  _approachFacing(gate, camera) {
+    let approach = null;
+    let best = 0.05;
+    for (const f of this._openFacings(gate)) {
+      const d =
+        FACING_VECTORS[f].x * (camera.position.x - gate.position.x) +
+        FACING_VECTORS[f].z * (camera.position.z - gate.position.z);
+      if (d > best) {
+        best = d;
+        approach = f;
+      }
+    }
+    if (approach) return approach;
+    const axis = FACING_VECTORS[gate.facing] || FACING_VECTORS.north;
+    const eyeSide =
+      axis.x * (camera.position.x - gate.position.x) +
+      axis.z * (camera.position.z - gate.position.z);
+    return eyeSide > 0 ? gate.facing : OPPOSITE_FACING[gate.facing];
+  }
+
+  /**
+   * Facings of `gate` whose adjacent cell holds no wall (in the gate's own
+   * area, at the gate's storey). Gates and walls never move, so the answer
+   * is cached until the views are torn down.
+   */
+  _openFacings(gate) {
+    let open = this._openFacingsByGate.get(gate);
+    if (open) return open;
+    const entities = (gate.area && gate.area.entities) || [];
+    const walls = entities.filter((e) => e.type === 'wall');
+    open = Object.keys(FACING_VECTORS).filter((f) => {
+      const v = FACING_VECTORS[f];
+      const cx = gate.position.x + v.x * WORLD_SCALE;
+      const cz = gate.position.z + v.z * WORLD_SCALE;
+      return !walls.some(
+        (w) =>
+          Math.abs(w.position.x - cx) < WORLD_SCALE / 2 &&
+          Math.abs(w.position.z - cz) < WORLD_SCALE / 2 &&
+          Math.abs(w.position.y - gate.position.y) < WORLD_SCALE / 2
+      );
+    });
+    this._openFacingsByGate.set(gate, open);
+    return open;
   }
 
   // --- Doorway sound model (stage 3) -------------------------------------
@@ -654,6 +714,7 @@ class PortalManager {
       for (const view of faces.values()) view.dispose();
     }
     this._views.clear();
+    this._openFacingsByGate.clear();
   }
 
   /**
