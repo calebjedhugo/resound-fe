@@ -44,6 +44,21 @@ const DOORWAY_ROTATION_Y = {
 // (back-face culled / viewed edge-on), so the pass is skipped.
 const MIN_EYE_DISTANCE = 0.05;
 
+// Grazing-angle fade for the doorway surface, mirroring NotationDisplay's
+// staff fade: a panel seen nearly edge-on compresses its whole texture —
+// arrival staff included — into a thin dark streak floating in the doorway
+// (an eye a hair past a panel's plane kept it eligible by a whisker,
+// 2026-07-15 nitpick). Fading on the eye angle also softens the side
+// window's arrival at a jamb: it eases in over the first step instead of
+// popping at the eligibility threshold. Below LO invisible, above HI fully
+// opaque (cosine of the angle between the panel normal and the eye
+// direction; the panel is unreadable that far edge-on anyway).
+const GRAZE_LO = 0.05;
+const GRAZE_HI = 0.15;
+const scratchNormal = new THREE.Vector3();
+const scratchSurfacePos = new THREE.Vector3();
+const scratchToCamera = new THREE.Vector3();
+
 const scratchSize = new THREE.Vector2();
 
 class PortalView {
@@ -210,8 +225,12 @@ class PortalView {
 
   _buildDoorwaySurface() {
     const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
-    // Shows the READ buffer (the one not being written this frame)
-    const material = new THREE.MeshBasicMaterial({ map: this._targets[1].texture });
+    // Shows the READ buffer (the one not being written this frame).
+    // Transparent so the grazing fade below can dissolve it.
+    const material = new THREE.MeshBasicMaterial({
+      map: this._targets[1].texture,
+      transparent: true,
+    });
     this.surface = new THREE.Mesh(geometry, material);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
     // OPPOSITE panel, facing back at the viewer
@@ -221,6 +240,17 @@ class PortalView {
     this.surface.visible = false;
     // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)
     this.surface._isPortalSurface = true;
+    // Fade toward edge-on, per draw and per CAMERA (portal passes render
+    // other doors' surfaces from their own mapped eyes — the recursion —
+    // and need the same treatment). See the GRAZE_* constants above.
+    const { surface } = this;
+    surface.onBeforeRender = (renderer, scene, camera) => {
+      scratchNormal.set(0, 0, 1).transformDirection(surface.matrixWorld);
+      scratchSurfacePos.setFromMatrixPosition(surface.matrixWorld);
+      scratchToCamera.copy(camera.position).sub(scratchSurfacePos).normalize();
+      const facing = scratchNormal.dot(scratchToCamera);
+      material.opacity = Math.min(1, Math.max(0, (facing - GRAZE_LO) / (GRAZE_HI - GRAZE_LO)));
+    };
     this.gate.mesh.add(this.surface);
   }
 
