@@ -44,22 +44,17 @@ const DOORWAY_ROTATION_Y = {
 // (back-face culled / viewed edge-on), so the pass is skipped.
 const MIN_EYE_DISTANCE = 0.05;
 
-// Plane-distance fade for the doorway surface, mirroring NotationDisplay's
-// staff fade: an eye a hair past a panel's PLANE sees the quad as a sliver
-// — its whole texture, arrival staff included, compressed into a thin dark
-// streak floating in the doorway (2026-07-15 nitpick). The fade key is the
-// eye's perpendicular DISTANCE past the plane — the same position-based
-// language as panel eligibility — NOT the viewing angle: a door's side
-// panels are legitimately watched at shallow angles all the time (they are
-// the oblique windows), and an angle fade left them semi-transparent on
-// ordinary sightlines (QA, 2026-07-16). Invisible at the eligibility
-// threshold, fully opaque half a unit past the plane; between, the side
-// window eases in across a step instead of popping.
-const FADE_NEAR = MIN_EYE_DISTANCE;
-const FADE_FAR = 0.5;
-const scratchNormal = new THREE.Vector3();
-const scratchSurfacePos = new THREE.Vector3();
-const scratchToCamera = new THREE.Vector3();
+// The portal camera never renders from closer than this to the window
+// plane. An eye a hair past the plane hands frameCorners a razor-thin
+// off-axis frustum whose render is an incoherent anamorphic smear — the
+// floating dashed streak (2026-07-15) and gray towers at grazing angles.
+// Clamping the RENDER eye back keeps the texture coherent; the panel on
+// screen is a few-degree sliver at such angles, so the sub-half-unit
+// parallax error is imperceptible. This replaces two rounds of opacity
+// fades (by angle, then by plane distance): every fade has a mid-band, and
+// a semi-transparent doorway wall always reads as broken (QA, 2026-07-16)
+// — the panels stay fully opaque, always.
+const MIN_RENDER_EYE_DISTANCE = 0.5;
 
 const scratchSize = new THREE.Vector2();
 
@@ -95,6 +90,9 @@ class PortalView {
     const mapping = portalMapping(gate.position, sourceFacing, partnerGate.position, partnerFacing);
     this._map = mapping.map;
     this._outward = FACING_VECTORS[sourceFacing] || FACING_VECTORS.north;
+    // The view direction in NEIGHBOR space (out of the partner's exit face);
+    // render() pulls the portal camera back along it near the window plane
+    this._outwardMapped = mapping.outward;
 
     // The view surface sits on the FAR plane of the cell — just inside the
     // OPPOSITE panel, facing back through the cell toward its viewers. The
@@ -227,21 +225,12 @@ class PortalView {
 
   _buildDoorwaySurface() {
     const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
-    // Shows the READ buffer (the one not being written this frame).
-    // Transparent so the grazing fade below can dissolve it. depthWrite
-    // OFF (like the staff planes): a door shows several transparent panels
-    // at once, and three.js sorts transparent meshes by view-axis depth —
-    // which reorders on a HEAD TURN. With depth writes on, whichever panel
-    // drew first blocked its overlap with the others, punching
-    // floor-colored holes in the doorway that flickered with the camera
-    // (regression, 2026-07-16). The shared clip keeps neighboring panels'
-    // content agreeing where they overlap, so draw order barely matters
-    // once nothing discards.
-    const material = new THREE.MeshBasicMaterial({
-      map: this._targets[1].texture,
-      transparent: true,
-      depthWrite: false,
-    });
+    // Shows the READ buffer (the one not being written this frame). Plain
+    // OPAQUE: two rounds of grazing-fade transparency each regressed —
+    // semi-transparent walls on ordinary sightlines and sort-order flicker
+    // (QA, 2026-07-16). A doorway wall is never translucent; near-plane
+    // coherence is the render camera's job (MIN_RENDER_EYE_DISTANCE).
+    const material = new THREE.MeshBasicMaterial({ map: this._targets[1].texture });
     this.surface = new THREE.Mesh(geometry, material);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
     // OPPOSITE panel, facing back at the viewer
@@ -251,21 +240,6 @@ class PortalView {
     this.surface.visible = false;
     // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)
     this.surface._isPortalSurface = true;
-    // Fade by the eye's distance past this panel's PLANE, per draw and per
-    // CAMERA (portal passes render other doors' surfaces from their own
-    // mapped eyes — the recursion — and need the same treatment). See the
-    // FADE_* constants above.
-    const { surface } = this;
-    surface.onBeforeRender = (renderer, scene, camera) => {
-      scratchNormal.set(0, 0, 1).transformDirection(surface.matrixWorld);
-      scratchSurfacePos.setFromMatrixPosition(surface.matrixWorld);
-      scratchToCamera.copy(camera.position).sub(scratchSurfacePos);
-      const planeDistance = scratchNormal.dot(scratchToCamera);
-      material.opacity = Math.min(
-        1,
-        Math.max(0, (planeDistance - FADE_NEAR) / (FADE_FAR - FADE_NEAR))
-      );
-    };
     this.gate.mesh.add(this.surface);
   }
 
@@ -351,6 +325,15 @@ class PortalView {
     }
 
     const mappedEye = this._map({ x: eye.x, y: eye.y, z: eye.z });
+    // Never render from closer than MIN_RENDER_EYE_DISTANCE to the window
+    // plane (see constant above): pull the render eye straight back along
+    // the view axis. eyeDistance is the same in source and neighbor space —
+    // the mapping is rigid.
+    if (eyeDistance < MIN_RENDER_EYE_DISTANCE) {
+      const pullBack = MIN_RENDER_EYE_DISTANCE - eyeDistance;
+      mappedEye.x -= this._outwardMapped.x * pullBack;
+      mappedEye.z -= this._outwardMapped.z * pullBack;
+    }
     this._camera.position.set(mappedEye.x, mappedEye.y, mappedEye.z);
     frameCorners(
       this._camera,
