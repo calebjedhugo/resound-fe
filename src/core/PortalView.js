@@ -226,10 +226,19 @@ class PortalView {
   _buildDoorwaySurface() {
     const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
     // Shows the READ buffer (the one not being written this frame).
-    // Transparent so the grazing fade below can dissolve it.
+    // Transparent so the grazing fade below can dissolve it. depthWrite
+    // OFF (like the staff planes): a door shows several transparent panels
+    // at once, and three.js sorts transparent meshes by view-axis depth —
+    // which reorders on a HEAD TURN. With depth writes on, whichever panel
+    // drew first blocked its overlap with the others, punching
+    // floor-colored holes in the doorway that flickered with the camera
+    // (regression, 2026-07-16). The shared clip keeps neighboring panels'
+    // content agreeing where they overlap, so draw order barely matters
+    // once nothing discards.
     const material = new THREE.MeshBasicMaterial({
       map: this._targets[1].texture,
       transparent: true,
+      depthWrite: false,
     });
     this.surface = new THREE.Mesh(geometry, material);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
