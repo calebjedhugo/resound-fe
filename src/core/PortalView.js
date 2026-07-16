@@ -44,17 +44,19 @@ const DOORWAY_ROTATION_Y = {
 // (back-face culled / viewed edge-on), so the pass is skipped.
 const MIN_EYE_DISTANCE = 0.05;
 
-// Grazing-angle fade for the doorway surface, mirroring NotationDisplay's
-// staff fade: a panel seen nearly edge-on compresses its whole texture —
-// arrival staff included — into a thin dark streak floating in the doorway
-// (an eye a hair past a panel's plane kept it eligible by a whisker,
-// 2026-07-15 nitpick). Fading on the eye angle also softens the side
-// window's arrival at a jamb: it eases in over the first step instead of
-// popping at the eligibility threshold. Below LO invisible, above HI fully
-// opaque (cosine of the angle between the panel normal and the eye
-// direction; the panel is unreadable that far edge-on anyway).
-const GRAZE_LO = 0.05;
-const GRAZE_HI = 0.15;
+// Plane-distance fade for the doorway surface, mirroring NotationDisplay's
+// staff fade: an eye a hair past a panel's PLANE sees the quad as a sliver
+// — its whole texture, arrival staff included, compressed into a thin dark
+// streak floating in the doorway (2026-07-15 nitpick). The fade key is the
+// eye's perpendicular DISTANCE past the plane — the same position-based
+// language as panel eligibility — NOT the viewing angle: a door's side
+// panels are legitimately watched at shallow angles all the time (they are
+// the oblique windows), and an angle fade left them semi-transparent on
+// ordinary sightlines (QA, 2026-07-16). Invisible at the eligibility
+// threshold, fully opaque half a unit past the plane; between, the side
+// window eases in across a step instead of popping.
+const FADE_NEAR = MIN_EYE_DISTANCE;
+const FADE_FAR = 0.5;
 const scratchNormal = new THREE.Vector3();
 const scratchSurfacePos = new THREE.Vector3();
 const scratchToCamera = new THREE.Vector3();
@@ -249,16 +251,20 @@ class PortalView {
     this.surface.visible = false;
     // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)
     this.surface._isPortalSurface = true;
-    // Fade toward edge-on, per draw and per CAMERA (portal passes render
-    // other doors' surfaces from their own mapped eyes — the recursion —
-    // and need the same treatment). See the GRAZE_* constants above.
+    // Fade by the eye's distance past this panel's PLANE, per draw and per
+    // CAMERA (portal passes render other doors' surfaces from their own
+    // mapped eyes — the recursion — and need the same treatment). See the
+    // FADE_* constants above.
     const { surface } = this;
     surface.onBeforeRender = (renderer, scene, camera) => {
       scratchNormal.set(0, 0, 1).transformDirection(surface.matrixWorld);
       scratchSurfacePos.setFromMatrixPosition(surface.matrixWorld);
-      scratchToCamera.copy(camera.position).sub(scratchSurfacePos).normalize();
-      const facing = scratchNormal.dot(scratchToCamera);
-      material.opacity = Math.min(1, Math.max(0, (facing - GRAZE_LO) / (GRAZE_HI - GRAZE_LO)));
+      scratchToCamera.copy(camera.position).sub(scratchSurfacePos);
+      const planeDistance = scratchNormal.dot(scratchToCamera);
+      material.opacity = Math.min(
+        1,
+        Math.max(0, (planeDistance - FADE_NEAR) / (FADE_FAR - FADE_NEAR))
+      );
     };
     this.gate.mesh.add(this.surface);
   }

@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 import { NotationRenderer } from 'resound-notation/NotationRenderer';
 
-// Grazing-angle fade for staff planes: below GRAZE_LO (cosine of the angle
-// between the plane normal and the eye direction) the staff is invisible,
-// above GRAZE_HI it is fully opaque, blending between. A staff plane floats
-// 0.02 off its entity face; on an OPEN gate there is no box behind it, so a
-// razor-grazing sightline used to catch the texture's dark rows as a thin
-// dashed line floating over the floor (nitpick, 2026-07-14). At these
-// angles the staff is unreadable anyway.
-const GRAZE_LO = 0.05;
-const GRAZE_HI = 0.15;
+// Plane-distance fade for staff planes: invisible while the eye is within
+// FADE_NEAR of the staff's PLANE, fully opaque past FADE_FAR, blending
+// between. A staff plane floats 0.02 off its entity face; on an OPEN gate
+// there is no box behind it, so an eye almost IN the plane used to catch
+// the texture's dark rows as a thin dashed line floating over the floor
+// (nitpick, 2026-07-14). The key is the eye's perpendicular distance past
+// the plane — position, not viewing angle: an angle fade left planes
+// semi-transparent on ordinary oblique sightlines (QA, 2026-07-16), while
+// every sliver artifact had the eye within a hair of the plane.
+const FADE_NEAR = 0.05;
+const FADE_FAR = 0.5;
 const scratchNormal = new THREE.Vector3();
 const scratchPosition = new THREE.Vector3();
 const scratchToCamera = new THREE.Vector3();
@@ -93,19 +95,20 @@ class NotationDisplay {
       mesh._isNotationMesh = true;
 
       // Base opacity: 0 while the texture is loading, 1 once applied. The
-      // per-draw grazing fade below multiplies against this so it never
-      // reveals a plane whose texture has not arrived.
+      // per-draw plane-distance fade below multiplies against this so it
+      // never reveals a plane whose texture has not arrived.
       mesh._notationOpacity = 0;
-      // Fade out toward edge-on, per draw and per CAMERA — portal passes
-      // render these same meshes from their own mapped eyes and need the
-      // same treatment (see the GRAZE_* constants above).
+      // Fade by the eye's distance past this staff's PLANE, per draw and
+      // per CAMERA — portal passes render these same meshes from their own
+      // mapped eyes and need the same treatment (see the FADE_* constants
+      // above).
       mesh.onBeforeRender = (renderer, scene, camera) => {
         scratchNormal.set(0, 0, 1).transformDirection(mesh.matrixWorld);
         scratchPosition.setFromMatrixPosition(mesh.matrixWorld);
-        scratchToCamera.copy(camera.position).sub(scratchPosition).normalize();
-        const facing = scratchNormal.dot(scratchToCamera);
-        const graze = Math.min(1, Math.max(0, (facing - GRAZE_LO) / (GRAZE_HI - GRAZE_LO)));
-        material.opacity = mesh._notationOpacity * graze;
+        scratchToCamera.copy(camera.position).sub(scratchPosition);
+        const planeDistance = scratchNormal.dot(scratchToCamera);
+        const fade = Math.min(1, Math.max(0, (planeDistance - FADE_NEAR) / (FADE_FAR - FADE_NEAR)));
+        material.opacity = mesh._notationOpacity * fade;
       };
 
       this.meshes.push(mesh);
