@@ -1235,6 +1235,52 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(farPanel.visible).toBe(true);
   });
 
+  it('passes skip while the doorway is outside the player view; panels stay visible (perf, 2026-07-16)', () => {
+    // Every open face re-renders the whole neighbor scene each frame, even
+    // with the doorway at the player's back — measured ~7ms/frame of pure
+    // waste in poc-return. A camera that carries a pose (quaternion + fov +
+    // aspect: the real player camera) culls each pass against its frustum;
+    // the panel keeps last frame's texture and re-renders the same frame it
+    // comes back on screen, before the main render draws it. Bare
+    // {position} cameras (every other test here) keep the old always-render
+    // behavior.
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render() {
+        this.renderCalls.push(1);
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorA.open();
+    const pose = (quaternion) => ({
+      // south of door-a (world (15,6)), on the approach side
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
+      quaternion,
+      fov: 75,
+      aspect: 16 / 9,
+    });
+
+    // Facing NORTH (toward the door): passes run
+    PortalManager.renderPortals(renderer, pose({ x: 0, y: 0, z: 0, w: 1 }));
+    expect(renderer.renderCalls.length).toBeGreaterThan(0);
+
+    // Facing SOUTH (door at the back): every pass skips, no scene renders
+    renderer.renderCalls = [];
+    PortalManager.renderPortals(renderer, pose({ x: 0, y: 1, z: 0, w: 0 }));
+    expect(renderer.renderCalls).toHaveLength(0);
+    // The panels are NOT hidden — they are simply off screen, still showing
+    // last frame's texture for the instant the player swings back
+    const visible = doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
+    expect(visible.length).toBeGreaterThan(0);
+
+    // Swinging back: the very same call renders again (fresh before main)
+    renderer.renderCalls = [];
+    PortalManager.renderPortals(renderer, pose({ x: 0, y: 0, z: 0, w: 1 }));
+    expect(renderer.renderCalls.length).toBeGreaterThan(0);
+  });
+
   it('EVERY open gate sheds its shell — linked doors and plain gates alike (ruled 2026-07-11)', () => {
     const renderer = {
       clippingPlanes: [],

@@ -6,7 +6,13 @@
  * is where you land when you walk through it.
  */
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
-import { doorwayCorners, portalMapping, DOORWAY_OFFSET, OPPOSITE_FACING } from 'core/portalMath';
+import {
+  doorwayCorners,
+  portalMapping,
+  sphereInView,
+  DOORWAY_OFFSET,
+  OPPOSITE_FACING,
+} from 'core/portalMath';
 
 const expectPoint = (actual, expected) => {
   expect(actual.x).toBeCloseTo(expected.x);
@@ -109,5 +115,50 @@ describe('opposite-face pairing (entry face -> exit face)', () => {
     expect(OPPOSITE_FACING.south).toBe('north');
     expect(OPPOSITE_FACING.east).toBe('west');
     expect(OPPOSITE_FACING.west).toBe('east');
+  });
+});
+
+describe('sphereInView (portal pass frustum cull)', () => {
+  // Plain-object camera pose: position + quaternion + vertical fov + aspect.
+  // Quaternions about Y: identity looks north (-Z), (0,1,0,0) looks south.
+  const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
+  const YAW_180 = { x: 0, y: 1, z: 0, w: 0 };
+  const YAW_90_EAST = { x: 0, y: -Math.sin(Math.PI / 4), z: 0, w: Math.cos(Math.PI / 4) };
+  const camera = (quaternion) => ({
+    position: { x: 0, y: 1.8, z: 0 },
+    quaternion,
+    fov: 75,
+    aspect: 16 / 9,
+  });
+
+  it('sees a sphere straight ahead', () => {
+    expect(sphereInView(camera(IDENTITY), { x: 0, y: 1.8, z: -10 }, 2.5)).toBe(true);
+  });
+
+  it('culls a sphere behind the eye', () => {
+    expect(sphereInView(camera(IDENTITY), { x: 0, y: 1.8, z: 10 }, 2.5)).toBe(false);
+  });
+
+  it('culls a sphere far off to the side, keeps one inside the horizontal fov', () => {
+    // 75° vertical at 16:9 ≈ ±53.7° horizontal: x=10 at z=-10 is 45° — in;
+    // x=30 at z=-10 is ~71.6° — out even with the radius
+    expect(sphereInView(camera(IDENTITY), { x: 10, y: 1.8, z: -10 }, 2.5)).toBe(true);
+    expect(sphereInView(camera(IDENTITY), { x: 30, y: 1.8, z: -10 }, 2.5)).toBe(false);
+  });
+
+  it('the radius keeps a sphere whose center just left the frustum', () => {
+    // Straight up at 60° elevation is outside the ±37.5° vertical fov, but a
+    // large radius still clips the top plane
+    const high = { x: 0, y: 1.8 + Math.tan(Math.PI / 3) * 10, z: -10 };
+    expect(sphereInView(camera(IDENTITY), high, 0.1)).toBe(false);
+    expect(sphereInView(camera(IDENTITY), high, 8)).toBe(true);
+  });
+
+  it('respects the camera pose: the same sphere flips with a turn', () => {
+    const north = { x: 0, y: 1.8, z: -10 };
+    expect(sphereInView(camera(YAW_180), north, 2.5)).toBe(false);
+    const east = { x: 10, y: 1.8, z: 0 };
+    expect(sphereInView(camera(YAW_90_EAST), east, 2.5)).toBe(true);
+    expect(sphereInView(camera(IDENTITY), east, 2.5)).toBe(false);
   });
 });

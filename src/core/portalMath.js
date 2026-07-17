@@ -68,6 +68,67 @@ export function doorwayCorners(gatePosition, facing) {
   };
 }
 
+/** Rotate a plain {x,y,z} vector by a plain {x,y,z,w} quaternion. */
+function rotate(q, v) {
+  // t = 2 q×v ; v' = v + w t + q×t
+  const tx = 2 * (q.y * v.z - q.z * v.y);
+  const ty = 2 * (q.z * v.x - q.x * v.z);
+  const tz = 2 * (q.x * v.y - q.y * v.x);
+  return {
+    x: v.x + q.w * tx + (q.y * tz - q.z * ty),
+    y: v.y + q.w * ty + (q.z * tx - q.x * tz),
+    z: v.z + q.w * tz + (q.x * ty - q.y * tx),
+  };
+}
+
+/**
+ * Is a sphere at least partly inside the camera's view frustum? Pure plain-
+ * object math (position + quaternion + vertical fov in degrees + aspect), so
+ * it works on the real player camera and stays testable under the mocked
+ * renderer. Used to skip portal passes for doorway panels the player cannot
+ * see this frame (the far plane is ignored — the game never culls by
+ * distance).
+ *
+ * @param {{position, quaternion, fov, aspect}} camera
+ * @param {{x,y,z}} center - sphere center, world space
+ * @param {number} radius
+ */
+export function sphereInView(camera, center, radius) {
+  const q = camera.quaternion;
+  const forward = rotate(q, { x: 0, y: 0, z: -1 });
+  const right = rotate(q, { x: 1, y: 0, z: 0 });
+  const up = rotate(q, { x: 0, y: 1, z: 0 });
+  const halfV = (camera.fov / 2) * (Math.PI / 180);
+  const halfH = Math.atan(Math.tan(halfV) * camera.aspect);
+  const d = {
+    x: center.x - camera.position.x,
+    y: center.y - camera.position.y,
+    z: center.z - camera.position.z,
+  };
+  const dot = (n) => n.x * d.x + n.y * d.y + n.z * d.z;
+  // Inward normals of the near + four side planes, all through the eye
+  const mix = (a, sa, b, cb) => ({
+    x: a.x * sa + b.x * cb,
+    y: a.y * sa + b.y * cb,
+    z: a.z * sa + b.z * cb,
+  });
+  const sinH = Math.sin(halfH);
+  const cosH = Math.cos(halfH);
+  const sinV = Math.sin(halfV);
+  const cosV = Math.cos(halfV);
+  const planes = [
+    forward,
+    mix(forward, sinH, right, cosH),
+    mix(forward, sinH, right, -cosH),
+    mix(forward, sinV, up, cosV),
+    mix(forward, sinV, up, -cosV),
+  ];
+  for (const n of planes) {
+    if (dot(n) < -radius) return false;
+  }
+  return true;
+}
+
 /**
  * Rigid mapping from source-puzzle world space to neighbor-puzzle world
  * space for a linked gate pair: a rotation about Y carrying the walk-through

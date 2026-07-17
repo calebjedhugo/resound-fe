@@ -29,6 +29,7 @@ import {
   PANEL_EPSILON,
   doorwayCorners,
   portalMapping,
+  sphereInView,
 } from 'core/portalMath';
 
 // Doorway surface rotation: PlaneGeometry's +Z normal turned to face outward.
@@ -55,6 +56,13 @@ const MIN_EYE_DISTANCE = 0.05;
 // a semi-transparent doorway wall always reads as broken (QA, 2026-07-16)
 // — the panels stay fully opaque, always.
 const MIN_RENDER_EYE_DISTANCE = 0.5;
+
+// Bounding-sphere radius of the doorway quad (WORLD_SCALE square: half-
+// diagonal ≈ 2.13) with margin. Panels outside the player's view frustum
+// skip their pass — each open face otherwise re-renders the whole scene
+// every frame even with the doorway at the player's back (measured ~7ms/
+// frame of pure waste in poc-return, 2026-07-16).
+const PANEL_CULL_RADIUS = 2.5;
 
 const scratchSize = new THREE.Vector2();
 
@@ -310,6 +318,18 @@ class PortalView {
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
     // The eye must be on the outward side of this face
     if (eyeDistance < MIN_EYE_DISTANCE) return;
+
+    // Skip the pass while the doorway quad is outside the player's view:
+    // the panel keeps last frame's texture, and passes run BEFORE the main
+    // render, so it re-renders the same frame it comes back on screen —
+    // never a stale visible frame. (Sole tradeoff: a panel watched only
+    // through ANOTHER door's view while off the player's own frustum shows
+    // frozen content — the mirror view hugs the player's sightlines, so
+    // that is a sub-degree edge case.) Test cameras are bare {position}
+    // objects: no pose, no cull.
+    if (camera.quaternion && camera.fov && !sphereInView(camera, center, PANEL_CULL_RADIUS)) {
+      return;
+    }
 
     // Half-resolution target: every visible face of an open door re-renders
     // the whole neighbor scene each frame, and full-res targets made open
