@@ -6,6 +6,7 @@
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
+  "teaches": [],
   "playerStart": { "x": 10, "y": 0, "z": 9 },
   "floors": [],
   "entities": [
