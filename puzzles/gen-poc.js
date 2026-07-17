@@ -93,10 +93,19 @@
 //     Both relaxations are flagged for the designer.
 //   * Links are written bidirectionally, one song per pair.
 //
-// Edit this generator and rerun; do NOT hand-edit the JSONs:
-//   node puzzles/gen-poc.js
+// ⚠️  The poc-*.json files are HAND-EDITED in the game editor (173fd15) and
+// drift from this generator BY DESIGN. This script is kept as the v5
+// reference model + constraint checker only.
+//
+//   node puzzles/gen-poc.js          # check-only: build model + run asserts,
+//                                    # writes NOTHING
+//   node puzzles/gen-poc.js --write  # regenerate all nine JSONs — OVERWRITES
+//                                    # the hand-edited files. Don't, unless
+//                                    # you mean to reset the world to v5.
 const fs = require('fs');
 const path = require('path');
+
+const WRITE = process.argv.includes('--write');
 
 const WORLD_SCALE = 3;
 const TEMPO = 100;
@@ -607,7 +616,7 @@ A8.gates.exit = {
 //
 const A9 = makeArea('poc-return', 'IX. The Star', 21);
 A9.spawn = { x: 19, y: 0, z: 19 }; // just west of the entry, in the vestibule
-A9.teaches = ['slots']; // the finale is serious tape ordering (slots)
+A9.teaches = []; // slots was taught once, at area III (each lesson happens once)
 // fVoice sings the warm-up F4 in the vestibule (south corridor). Every hall
 // voice sits at the dead end of its own passage, in SONG ORDER walking the
 // spine from the warm-up door (south) to the portal (north):
@@ -1780,10 +1789,22 @@ assert(
     A2.teaches.join(',')
   );
   assert('teaches: slots arrive at area III', A3.teaches.includes('slots'), A3.teaches.join(','));
+  // Each lesson happens once (ruled 2026-07-16): slots is taught at the duet
+  // and NOWHERE later — the finale must not re-hint it.
+  assert(
+    'teaches: slots is taught only at area III',
+    AREAS.every((a) => a === A3 || !a.teaches.includes('slots')),
+    assigned.join(',')
+  );
   assert(
     'teaches: clap arrives at the clap area',
     A8.teaches.includes('clap'),
     A8.teaches.join(',')
+  );
+  assert(
+    'teaches: clap is taught only at the clap area',
+    AREAS.every((a) => a === A8 || !a.teaches.includes('clap')),
+    assigned.join(',')
   );
   assert(
     'teaches: every hint verb is taught somewhere',
@@ -1817,6 +1838,10 @@ const gateFacing = (area, g) => {
 };
 
 const outDir = path.join(__dirname, '..', 'public', 'puzzles');
+if (WRITE) {
+  console.warn('\n⚠️  --write: REGENERATING all nine poc-*.json files.');
+  console.warn('    These are HAND-EDITED in the editor (173fd15); this overwrites those edits.\n');
+}
 AREAS.forEach((area) => {
   const entities = [];
   Object.values(area.creatures).forEach((c) => {
@@ -1867,7 +1892,19 @@ AREAS.forEach((area) => {
     entities,
   };
   const file = path.join(outDir, `${area.id}.json`);
-  fs.writeFileSync(file, `${JSON.stringify(puzzle, null, 2)}\n`);
-  console.log(`wrote ${file} (${entities.length} entities)`);
+  if (WRITE) {
+    fs.writeFileSync(file, `${JSON.stringify(puzzle, null, 2)}\n`);
+    console.log(`wrote ${file} (${entities.length} entities)`);
+  }
 });
-console.log(`\nall ${checks.length} constraints pass — POC world written`);
+if (WRITE) {
+  console.log(`\nall ${checks.length} constraints pass — POC world written`);
+  console.warn(
+    '\n⚠️  --write OVERWROTE the hand-edited poc-*.json files with the v5 generator output.'
+  );
+  console.warn('    If that was not intended, recover them with: git checkout -- public/puzzles');
+} else {
+  console.log(
+    `\nall ${checks.length} constraints pass — check-only mode, nothing written (use --write to regenerate the JSONs; this OVERWRITES the hand-edited poc files)`
+  );
+}

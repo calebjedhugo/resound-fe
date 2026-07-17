@@ -157,9 +157,12 @@ instead of "fixing" it.
   public/puzzles/awakening.json`). Edit the generator + rerun; don't hand-edit
   `public/puzzles/awakening.json`.
 - **The POC world (`poc-*`, NINE portal-linked areas, the boot entry) is
-  generated** by `puzzles/gen-poc.js` (480+-assert checker; writes all nine
-  JSONs + their bidirectional door links): `node puzzles/gen-poc.js`.
-  Don't hand-edit the `poc-*.json` files. v5 chain (round-4 restructure):
+  now HAND-EDITED in the editor** (designer pass 173fd15) — the files drift
+  from `puzzles/gen-poc.js` BY DESIGN. `node puzzles/gen-poc.js` is
+  CHECK-ONLY (builds the model + runs asserts, writes nothing); **NEVER pass
+  `--write`: it REWRITES all nine JSONs and clobbers the hand edits** (a
+  then-unflagged run did, on 2026-07-16 — recovered from git). The generator
+  + its 480+-assert checker are kept as v5 reference only. v5 chain (round-4 restructure):
   threshold → two-keys → duet → jam → dance → pull → push → clap → return
   ("The Star"); `poc-climb` was cut. STRICT element economy: every exit's
   (pitch, length) elements are recordable in its own area or earlier, never
