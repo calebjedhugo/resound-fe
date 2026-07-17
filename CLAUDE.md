@@ -187,9 +187,10 @@ instead of "fixing" it.
 - Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
 - `ui/StartGate.js` freezes the world per level start until a key/click
-- Dev-only `window.__resoundDebug` exposes `camera` + `syncCameraToPlayer`
-  for scripted browser verification (reposition + screenshot), and
-  `setTapImpulse(true)` to re-enable the tap-impulse affordance
+- Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
+  `syncCameraToPlayer` for scripted browser verification (reposition +
+  screenshot), and `setTapImpulse(true)` to re-enable the tap-impulse
+  affordance
 
 ### Notation Coordinate System
 - All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model

@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import WebGL from 'isWebGLAvailable';
-import motion, { camera, syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
+import motion, {
+  camera,
+  renderer,
+  syncCameraToPlayer,
+} from 'resoundModules/playerControls/motion/motion';
 
 import gameState from 'core/GameState';
 import GameLoop from 'core/GameLoop';
@@ -164,7 +168,9 @@ function render() {
   stateMachine.render();
   // Open linked gates draw their see-through neighbor view first, so the
   // doorway texture is current when the main scene renders
-  motion(scene, (renderer, playerCamera) => PortalManager.renderPortals(renderer, playerCamera));
+  motion(scene, (webglRenderer, playerCamera) =>
+    PortalManager.renderPortals(webglRenderer, playerCamera)
+  );
 }
 
 // Keyboard handler for pause and metronome
@@ -240,6 +246,7 @@ if (import.meta.env.DEV) {
     ListeningManager,
     PortalManager,
     camera,
+    renderer,
     syncCameraToPlayer,
     // Re-enable the tap-impulse affordance (OFF by default): a quick key tap
     // then yields one guaranteed movement/look step, so scripted single-frame

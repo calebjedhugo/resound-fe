@@ -1,0 +1,30 @@
+{
+  "id": "portal-self-adjacent",
+  "name": "Portal Self Adjacent",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 8 },
+  "entities": [
+    {
+      "type": "gate",
+      "id": "door-in",
+      "facing": "north",
+      "link": { "puzzleId": "portal-self-adjacent", "gateId": "door-out" },
+      "position": { "x": 5, "y": 0, "z": 6 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    {
+      "type": "gate",
+      "id": "door-out",
+      "facing": "north",
+      "link": { "puzzleId": "portal-self-adjacent", "gateId": "door-in" },
+      "position": { "x": 5, "y": 0, "z": 5 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": 5 } }
+  ]
+}

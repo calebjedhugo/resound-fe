@@ -376,6 +376,35 @@ class PortalView {
         }
       }
     }
+    // This gate's OWN surfaces normally aren't in the rendered scene (the
+    // neighbor is another area) — but a SAME-AREA door renders the main
+    // scene, where they are. For an ADJACENT pair (partner one cell along
+    // the axis) the one-cell translation maps this very panel into the clip
+    // plane's one-cell overreach, square between the mapped eye and the
+    // window: the pass paints the panel's own one-frame-stale texture
+    // across the whole doorway, which feeds back to solid black. Hide an
+    // own surface only when it actually sits in that junk zone — inside
+    // the overreach slab behind the window AND laterally overlapping the
+    // doorway column (deeper eye-side content is clipped by _clipPlane;
+    // lateral content is outside the window's frustum). Own surfaces
+    // BEYOND the window always stay: a distant same-area pair really does
+    // see its own door through the doorway (recursive doorways, ruled
+    // 2026-07-14). Gate meshes are unrotated, so local offsets add.
+    for (const child of this.gate.mesh.children) {
+      if (!child._isPortalSurface || !child.visible) continue; // eslint-disable-line no-continue
+      const dx = this.gate.mesh.position.x + child.position.x - this._mappedWindowCenter.x;
+      const dz = this.gate.mesh.position.z + child.position.z - this._mappedWindowCenter.z;
+      const proj = dx * this._outwardMapped.x + dz * this._outwardMapped.z;
+      const lat = dx * this._right.x + dz * this._right.z;
+      if (
+        proj < PANEL_EPSILON &&
+        proj > -(WORLD_SCALE + 0.1 + PANEL_EPSILON) &&
+        Math.abs(lat) < WORLD_SCALE
+      ) {
+        child.visible = false;
+        hiddenSurfaces.push(child);
+      }
+    }
     // Hide the eye-side walls (this panel's own set + the approach
     // panel's — see constructor and wallsToHide) so their outside faces
     // don't paint into the doorway view.

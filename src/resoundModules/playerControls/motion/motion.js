@@ -190,5 +190,5 @@ const syncCameraToPlayer = (position) => {
   camera.position.y = position.y || fixedYPosition;
 };
 
-export { camera, syncCameraToPlayer };
+export { camera, renderer, syncCameraToPlayer };
 export default motion;

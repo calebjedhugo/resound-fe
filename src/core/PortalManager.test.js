@@ -1180,6 +1180,61 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(anyVisible).toBe(true);
   });
 
+  it("adjacent pair: the pass hides the door's OWN far-plane panel — it sits in the clip overreach and occluded the whole window (the black doorway, 2026-07-16)", () => {
+    // A same-area door whose partner sits ONE CELL along the facing axis
+    // (poc-return's warmup pair) maps the source's own far-plane panel into
+    // the clip plane's one-cell overreach, square between the mapped eye
+    // and the window: every pass painted the panel's own one-frame-stale
+    // texture across the whole doorway, feeding back to solid black. The
+    // pass must hide that panel — and ONLY surfaces inside the junk slab:
+    // own surfaces elsewhere keep the recursive-doorway ruling (2026-07-14).
+    PortalManager.reset();
+    ctx.loadPuzzle('portal-self-adjacent');
+    const [doorIn, doorOut] = ctx.getGates();
+
+    const snaps = [];
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {
+        const own = doorIn.mesh.children.filter((c) => c._isPortalSurface);
+        snaps.push({
+          isApproach: this.clippingPlanes.length === 1, // shared == own plane
+          farPanel: own.find((c) => c.position.z < 0 && c.position.x === 0).visible,
+          ownSides: own.filter((c) => c.position.x !== 0).map((c) => c.visible),
+          partnerVisible: doorOut.mesh.children.filter((c) => c._isPortalSurface && c.visible)
+            .length,
+        });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    doorIn.open(); // door-out stays closed: only door-in's views render
+    // Just off-axis south of door-in (the report's stance), looking north
+    const camera = { position: { x: 5 * WORLD_SCALE - 0.1, y: 1.8, z: 6 * WORLD_SCALE + 4.1 } };
+    PortalManager.renderPortals(renderer, camera); // frame 1 builds views lazily
+    snaps.length = 0;
+    PortalManager.renderPortals(renderer, camera); // assert on the steady frame
+
+    const approach = snaps.filter((s) => s.isApproach);
+    expect(approach.length).toBeGreaterThan(0);
+    for (const snap of approach) {
+      // The own far-plane panel (one cell before the window, dead center)
+      // hides — it is never legitimate content, only the feedback occluder
+      expect(snap.farPanel).toBe(false);
+      // Own side panels sit OUTSIDE the overreach slab: they stay, so a
+      // distant own door seen through a doorway still recurses
+      expect(snap.ownSides.length).toBeGreaterThan(0);
+      for (const visible of snap.ownSides) expect(visible).toBe(true);
+      // The partner end hides fully, as for every door
+      expect(snap.partnerVisible).toBe(0);
+    }
+    // Restored after the passes: the panel still shows its view to the player
+    const farPanel = doorIn.mesh.children.find(
+      (c) => c._isPortalSurface && c.position.z < 0 && c.position.x === 0
+    );
+    expect(farPanel.visible).toBe(true);
+  });
+
   it('EVERY open gate sheds its shell — linked doors and plain gates alike (ruled 2026-07-11)', () => {
     const renderer = {
       clippingPlanes: [],
@@ -1248,7 +1303,12 @@ describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () 
 
     await ctx.advanceBeats(2);
 
-    expect(gate.capturedNotes.some((n) => n.pitch === 'D4')).toBe(true);
+    // The wrong-note lockout (2026-07-16) wipes capturedNotes the moment the
+    // foreign D4 is judged, so the proof it crossed the seam is the judgment
+    // itself: the near face flashed and locked out.
+    expect(gate.lastPhraseResult).toBeDefined();
+    expect(gate.lastPhraseResult.matched).toBe(false);
+    expect(gate._lockoutUntilMs).toBeGreaterThan(0);
   });
 
   it('a continuous singer beside the far face JAMS the door from BOTH sides', async () => {
@@ -1307,8 +1367,13 @@ describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () 
 
     await ctx.advanceBeats(2);
 
-    expect(doorA.capturedNotes.some((n) => n.pitch === 'D4')).toBe(true);
-    expect(doorB.capturedNotes.some((n) => n.pitch === 'D4')).toBe(true);
+    // Judged (and lockout engaged) on BOTH faces — capturedNotes are wiped
+    // at judgment time (wrong-note lockout, 2026-07-16), so the judgment is
+    // the evidence the note reached each face.
+    expect(doorA.lastPhraseResult).toBeDefined();
+    expect(doorA.lastPhraseResult.matched).toBe(false);
+    expect(doorB.lastPhraseResult).toBeDefined();
+    expect(doorB.lastPhraseResult.matched).toBe(false);
   });
 });
 
