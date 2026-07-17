@@ -1,15 +1,17 @@
 /**
  * HintMemory - which contextual key hints are ACTIVE, and which the player
- * has performed THIS VISIT.
+ * has already performed.
  *
  * Hints are driven by the PUZZLE (ruled 2026-07-11, superseding the
  * permanent localStorage retirement): a puzzle declares what it teaches
  * (`teaches: ["move", "record", ...]` in its JSON — see puzzles/schema.md)
- * and those hints are live in that puzzle regardless of what the player has
- * ever done before. A hint retires when the player performs its action, but
- * only for the CURRENT VISIT: re-entering the puzzle (world entry or a
- * doorway crossing back in) re-arms its hints. A puzzle with no `teaches`
- * field keeps EVERY hint eligible (dev/legacy levels teach on every visit).
+ * and only those hints are live there. A hint retires the first time the
+ * player performs its action, and STAYS retired for the whole session
+ * (ruled 2026-07-16, superseding per-visit re-arming): each lesson happens
+ * once — re-entering a puzzle does not re-show hints the player has already
+ * acted on. A page reload starts a fresh session (no browser storage). A
+ * puzzle with no `teaches` field keeps EVERY hint eligible (dev/legacy
+ * levels).
  */
 class HintMemory {
   static _teaches = null; // null = every hint eligible
@@ -17,14 +19,14 @@ class HintMemory {
   static _performed = new Set();
 
   /**
-   * A puzzle visit begins: activate ITS hints, forget this-visit history.
-   * Called on world entry and on every doorway crossing.
+   * A puzzle visit begins: activate ITS hints. Performed-hint history is
+   * session-wide and survives this. Called on world entry and on every
+   * doorway crossing.
    * @param {?string[]} teaches - the puzzle's `teaches` list (undefined/null
    *   = all hints eligible)
    */
   static arm(teaches) {
     this._teaches = Array.isArray(teaches) ? teaches.slice() : null;
-    this._performed = new Set();
   }
 
   static isRetired(hintId) {

@@ -220,3 +220,73 @@ describe('Gate completion commit + listening fade', () => {
     expect(gate.isOpen).toBe(true);
   });
 });
+
+// A wrong note voids the attempt AND deafens the gate for a short window
+// (ruled 2026-07-16): the target can never ride in behind wrong notes — it
+// must START a fresh, clean attempt. The red flash spans the lockout.
+describe('Gate wrong-note lockout (ruled 2026-07-16)', () => {
+  const song = [{ pitch: 'C4', length: '1/4' }];
+  const MS_PER_BEAT = 500; // no musical clock in these unit tests -> 120 BPM
+  const heard = (pitch, timestamp, gate) => ({
+    pitch,
+    length: '1/4',
+    timestamp,
+    sourcePosition: gate.position,
+    sourceRange: 15,
+  });
+
+  beforeEach(() => {
+    gameState.player.position = { x: 0, y: 1.8, z: 0 };
+    gameState.player.elevation = 0;
+  });
+
+  /** A gate that just judged a wrong D4 (mismatch landed on this update). */
+  function mismatchedGate() {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+    const t0 = Date.now() - 2 * MS_PER_BEAT;
+    gate.listeningStartTime = t0;
+    gate.capturedNotes.push(heard('D4', t0, gate)); // wrong, conclusively past
+    gate.update(0.016);
+    return gate;
+  }
+
+  it('a mismatch voids the heard notes and engages the lockout', () => {
+    const gate = mismatchedGate();
+    expect(gate.capturedNotes).toHaveLength(0);
+    expect(gate._lockoutUntilMs).toBeGreaterThan(Date.now());
+    expect(gate.mesh.material.emissive.getHex()).toBe(0xaa1111);
+  });
+
+  it('the gate is DEAF during the lockout — even the correct note is not captured', () => {
+    const gate = mismatchedGate();
+    gate.onNoteCaptured(heard('C4', Date.now(), gate));
+    expect(gate.capturedNotes).toHaveLength(0);
+    gate.update(0.016);
+    expect(gate.isOpen).toBe(false);
+  });
+
+  it('after the lockout passes, a fresh clean take opens the gate', () => {
+    const gate = mismatchedGate();
+    // 1.6s elapse: rewind the lockout/trim bookkeeping instead of sleeping
+    gate._lockoutUntilMs -= 1600;
+    gate._trimHorizonMs -= 1600;
+    gate._mismatchFlashUntil = null;
+    gate.onNoteCaptured(heard('C4', Date.now() - 600, gate)); // span elapsed
+    gate.update(0.016);
+    expect(gate.isOpen).toBe(true);
+  });
+
+  it('the red flash decays across the lockout window', () => {
+    const gate = mismatchedGate();
+    expect(gate.mesh.material.emissiveIntensity).toBeCloseTo(1.0, 1);
+    gate._mismatchFlashUntil = Date.now() + 200; // window nearly over
+    gate._updateMismatchFlash();
+    expect(gate.mesh.material.emissiveIntensity).toBeLessThan(0.5);
+  });
+
+  it('close() clears the lockout (a fresh crossing starts clean)', () => {
+    const gate = mismatchedGate();
+    gate.close();
+    expect(gate._lockoutUntilMs).toBe(0);
+  });
+});

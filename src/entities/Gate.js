@@ -29,6 +29,15 @@ class Gate extends Entity {
   // This recovery rate governs only the snap-back / lapse easing.
   static FADE_RECOVER_RATE_PER_S = 4;
 
+  // Wrong-note LOCKOUT (ruled 2026-07-16): a mismatch voids the attempt AND
+  // deafens the gate for this long — notes played during the lockout are not
+  // heard at all. So a correct song can never ride in behind wrong notes:
+  // the target must START clean (trailing extras remain fine, since a
+  // completion fires the moment the target's own span elapses). The red
+  // flash decays over exactly this window — wordless "wait" feedback that
+  // ends when the gate is listening again.
+  static MISMATCH_LOCKOUT_MS = 1500;
+
   constructor(position, data = {}) {
     super('gate', position, data);
 
@@ -65,6 +74,7 @@ class Gate extends Entity {
     this._inProgress = false;
     this._fade = 0;
     this._wasPlayerInside = false;
+    this._lockoutUntilMs = 0;
 
     // Listening state
     this.capturedNotes = [];
@@ -118,6 +128,11 @@ class Gate extends Entity {
    * @param {Object} noteEvent - { pitch, length, timestamp, source, sourcePosition }
    */
   onNoteCaptured(noteEvent) {
+    // Deaf during the wrong-note lockout: the note isn't captured at all, so
+    // a correct song started inside the window can only ever land as a tail
+    // (which mismatches and re-locks). See MISMATCH_LOCKOUT_MS.
+    if (Date.now() < this._lockoutUntilMs) return;
+
     // A sound carries as far as its source's audible range (fall back to our
     // own range for sources that don't declare one). Sound from another area
     // arrives via the doorway: sourcePosition is the door on OUR side and
@@ -198,6 +213,12 @@ class Gate extends Entity {
       // A wrong note snaps the gate back to solid (then the red flash lands)
       this._fade = 0;
       this._inProgressSinceMs = null;
+      // ...and voids the attempt: everything heard is dropped and the gate
+      // goes deaf for the lockout window (see MISMATCH_LOCKOUT_MS).
+      this.capturedNotes = [];
+      this._trimHorizonMs = Date.now();
+      this._lastJudgedStartBeat = undefined;
+      this._lockoutUntilMs = Date.now() + Gate.MISMATCH_LOCKOUT_MS;
       this._applyLook();
       this._flashMismatch();
     }
@@ -296,17 +317,28 @@ class Gate extends Entity {
     );
   }
 
-  /** Brief red pulse when a completed phrase failed to match (wordless feedback). */
+  /**
+   * Red pulse on a wrong note (wordless feedback). It spans the wrong-note
+   * lockout, decaying as the window runs out, so the glow doubles as the
+   * "gate is resetting — wait" signifier.
+   */
   _flashMismatch() {
     if (!this.mesh || !this.mesh.material) return;
-    this._mismatchFlashUntil = Date.now() + 600;
+    this._mismatchFlashUntil = Date.now() + Gate.MISMATCH_LOCKOUT_MS;
     this.mesh.material.emissive.setHex(0xaa1111);
     this.mesh.material.emissiveIntensity = 1.0;
   }
 
   _updateMismatchFlash() {
     if (!this._mismatchFlashUntil) return;
-    if (Date.now() <= this._mismatchFlashUntil) return;
+    const remaining = this._mismatchFlashUntil - Date.now();
+    if (remaining > 0) {
+      // Decay the red glow in step with the lockout running out.
+      if (this.mesh && this.mesh.material) {
+        this.mesh.material.emissiveIntensity = 0.3 + 0.7 * (remaining / Gate.MISMATCH_LOCKOUT_MS);
+      }
+      return;
+    }
     this._mismatchFlashUntil = null;
     // Restore the emissive that matches the CURRENT open/closed state — never
     // a snapshot, which could capture the wrong state if the gate flipped
@@ -344,6 +376,7 @@ class Gate extends Entity {
     this._fade = 0;
     this._inProgressSinceMs = null;
     this._mismatchFlashUntil = null;
+    this._lockoutUntilMs = 0;
     this._applyLook();
   }
 

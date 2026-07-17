@@ -10,9 +10,8 @@ import { CLAP_RANGE } from 'core/constants';
  *
  * Each hint is a bare keycap glyph (no sentences) that appears when the
  * situation calls for its action. WHICH hints are live comes from the
- * puzzle's `teaches` list (HintMemory, armed per visit — re-entering a
- * puzzle re-arms them); performing the action retires the hint for the
- * current visit:
+ * puzzle's `teaches` list (HintMemory); performing the action retires the
+ * hint for the rest of the playthrough — each lesson happens once:
  *
  *   move     - W A S D cluster, bottom-center HUD; retires on first movement
  *   record   - "R" sprite floating over a creature in recording range;
@@ -29,7 +28,10 @@ import { CLAP_RANGE } from 'core/constants';
  */
 
 const MOVE_HINT_DELAY_S = 1.5;
-const SPRITE_HEIGHT = 3.4; // world units above the entity's base position
+// World units above the entity's base position. Low enough to stay in frame
+// when the player stands right next to the entity (3.4 hovered out of view
+// up close).
+const SPRITE_HEIGHT = 2.6;
 const BOB_AMPLITUDE = 0.25;
 
 /** Draw a single keycap onto a canvas context. */

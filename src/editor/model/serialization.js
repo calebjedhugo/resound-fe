@@ -42,6 +42,13 @@ export function serializePuzzle(model) {
   json.keySignature = metadata.keySignature;
   json.timeSignature = metadata.timeSignature;
 
+  // Key-hint verbs (`teaches`) round-trip untouched — dropping the field
+  // once made every hint eligible on hand-edited puzzles (empty array and
+  // absent mean different things in-game).
+  if (Array.isArray(metadata.teaches)) {
+    json.teaches = metadata.teaches;
+  }
+
   json.playerStart = playerSpawn
     ? { x: playerSpawn.x, y: playerSpawn.y, z: playerSpawn.z }
     : { x: 0, y: 0, z: 0 };
@@ -177,6 +184,7 @@ export function deserializePuzzle(json) {
     clapDisplacement: json.clapDisplacement ?? null,
     keySignature,
     timeSignature,
+    teaches: Array.isArray(json.teaches) ? json.teaches : null,
   });
 
   // Player spawn

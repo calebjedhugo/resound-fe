@@ -62,8 +62,9 @@ ClapManager.setVisualCallback((position, range) => {
 // The world orchestrator: owns the active area + live neighbor areas; the
 // active area's content group is parented into this render scene.
 // Arriving through an `ending: true` gate (the finale portal back into
-// area I) rolls the demo's closing card. Every crossing is a fresh VISIT:
-// the destination puzzle's `teaches` list re-arms its key hints.
+// area I) rolls the demo's closing card. Every crossing activates the
+// destination puzzle's `teaches` list; hints already performed this
+// session stay retired (each lesson happens once).
 PortalManager.initialize(scene, (puzzle, arrivalGate) => {
   HintMemory.arm(puzzle && puzzle.teaches);
   keyHints.hideAll();
@@ -80,6 +81,9 @@ async function startPuzzle(puzzleId) {
     const puzzleData = await PuzzleLoader.load(puzzleId);
     PortalManager.enterWorld(puzzleData);
     stateMachine.setState('PLAYING');
+    // A world entry is a fresh playthrough: forget performed hints (doorway
+    // crossings within it don't — each lesson happens once per playthrough).
+    HintMemory.reset();
     HintMemory.arm(puzzleData.teaches);
     keyHints.hideAll();
     startGate.show();

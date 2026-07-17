@@ -36,8 +36,10 @@ export default class EntityPlacer {
   }
 
   placeEntity(type, gridX, gridZ, elevation, data = {}) {
-    // One thing per tile: refuse to stack onto an occupied cell.
-    if (this._isCellOccupied(gridX, elevation, gridZ)) return null;
+    // One thing per tile — except the player spawn and a cleanser, which may
+    // share a cell (spawning on a cleansing tile is legal; the tape starts
+    // empty anyway).
+    if (this._isCellOccupied(gridX, elevation, gridZ, type)) return null;
 
     if (type === 'player') {
       return this._placePlayerSpawn(gridX, gridZ, elevation);
@@ -66,9 +68,16 @@ export default class EntityPlacer {
     mesh.position.set(world.x, elevation * ELEVATION_HEIGHT + offset, world.z);
   }
 
-  /** True if an entity or the player spawn already occupies cell (x,y,z). */
-  _isCellOccupied(x, y, z) {
-    if (this._undoManager.getEntitiesAt(x, y, z).length > 0) return true;
+  /**
+   * True if cell (x,y,z) already holds something that blocks placing `type`
+   * there. The player spawn and a cleanser tolerate each other; everything
+   * else is one-per-tile.
+   */
+  _isCellOccupied(x, y, z, type = null) {
+    const entities = this._undoManager.getEntitiesAt(x, y, z);
+    if (type === 'player') return entities.some((e) => e.type !== 'cleanser');
+    if (entities.length > 0) return true;
+    if (type === 'cleanser') return false; // the spawn doesn't block a cleanser
     const spawn = this._undoManager.getPlayerSpawn();
     return Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
   }

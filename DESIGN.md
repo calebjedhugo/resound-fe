@@ -84,6 +84,24 @@ automated playtesters can observe them.)
     between the notes of a correct performance. A WRONG note at the onset
     still fails instantly; Gate's fade also RESUMES from its current level
     rather than restarting at opaque after any momentary judgment gap.
+  - **Wrong notes are judged IMMEDIATELY (ruled 2026-07-16, superseding
+    judge-at-utterance-end):** the red flash lands on the offending note
+    itself, whatever its source — player OR creature. (The old rule waited
+    for the utterance to end plus a beat of silence, so a continuous singer
+    near a gate never flashed it; only poc-clap's gapped singers did.) The
+    one grace: a beat-group whose grid slot is still within tolerance may
+    be a chord mid-assembly, so judgment holds until its slot passes
+    (`TOL_BEATS`, ~a 16th).
+  - **Wrong-note LOCKOUT on gates (ruled 2026-07-16):** a mismatch voids
+    everything the gate has heard AND deafens it for a short window
+    (`Gate.MISMATCH_LOCKOUT_MS`) — notes played during the lockout are not
+    captured at all. Consequence: the target can no longer ride in behind
+    wrong notes — **a performance must START with the target's first note**
+    (pre-window surplus is dead; post-window surplus is still fine, since
+    completion fires the instant the target's own span elapses). The red
+    flash decays over exactly the lockout window, doubling as the wordless
+    "gate is resetting — wait" signifier. Fountains keep the old
+    no-lockout capture (flash is immediate there too).
 - **Gates open on the COMPLETED song, LATCH, and close when you walk
   through** (ruled 2026-07-10, superseding the 2026-07-05 play-to-pass grace
   and its multi-note caveat). The full rule:
@@ -391,12 +409,17 @@ rulings, in the designer's words where it matters:
   situation calls for an action. **Hints are PUZZLE-DRIVEN (ruled
   2026-07-11, round 4, superseding the permanent localStorage
   retirement):** each puzzle declares what it teaches (`teaches:
-  ["move", ...]` in its JSON — see puzzles/schema.md) and those hints are
-  live there regardless of player history; performing the action retires
-  the hint for the CURRENT VISIT only, and re-entering the puzzle (world
-  entry or a doorway crossing back in) re-arms it (`core/HintMemory.js`,
-  in-memory only — no browser storage). A puzzle with no `teaches` keeps
-  every hint eligible (dev/legacy levels); `teaches: []` shows none.
+  ["move", ...]` in its JSON — see puzzles/schema.md) and only those hints
+  are live there. **Each lesson happens ONCE (ruled 2026-07-16,
+  superseding per-visit re-arming):** performing the action retires the
+  hint for the rest of the PLAYTHROUGH — doorway crossings never re-show
+  a performed hint; a fresh world entry (menu / deep link) resets the
+  slate (`core/HintMemory.js`, in-memory only — no browser storage). A
+  puzzle with no `teaches` keeps every hint eligible (dev/legacy levels);
+  `teaches: []` shows none — and the editor round-trips the field
+  (a 2026-07-16 editor save used to drop it, which un-gated every hint on
+  the hand-edited POC areas). In the POC chain `slots` is taught only at
+  the duet (III) and `clap` only at the clap (VIII).
   Hints: WASD cluster (idle at spawn), floating "R" over a creature in
   recording range, floating spacebar over a target in playback reach, slot
   arrows when recording would overwrite the active slot, "⌫" after a

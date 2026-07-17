@@ -354,6 +354,41 @@ describe('Puzzle Serialization', () => {
 
       expect(json.timeSignature).toBeNull();
     });
+
+    it('teaches round-trips: an empty list survives, an absent field stays absent', () => {
+      // Empty array and absent mean different things in-game ([] = no hints,
+      // absent = every hint eligible) — an editor save must not turn one
+      // into the other. A 2026-07-16 save dropped the field entirely and
+      // un-gated every hint on the hand-edited POC areas.
+      const withTeaches = deserializePuzzle({
+        id: 'teaches-test',
+        name: 'Teaches',
+        gridSize: 9,
+        playerStart: { x: 0, y: 0, z: 0 },
+        teaches: [],
+        entities: [],
+      });
+      expect(serializePuzzle(withTeaches).teaches).toEqual([]);
+
+      const withVerbs = deserializePuzzle({
+        id: 'teaches-verbs',
+        name: 'Teaches Verbs',
+        gridSize: 9,
+        playerStart: { x: 0, y: 0, z: 0 },
+        teaches: ['slots'],
+        entities: [],
+      });
+      expect(serializePuzzle(withVerbs).teaches).toEqual(['slots']);
+
+      const without = deserializePuzzle({
+        id: 'no-teaches',
+        name: 'No Teaches',
+        gridSize: 9,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [],
+      });
+      expect(serializePuzzle(without)).not.toHaveProperty('teaches');
+    });
   });
 
   describe('deserialization', () => {

@@ -14,6 +14,10 @@ const DEFAULT_METADATA = {
   clapDisplacement: null,
   keySignature: 'C',
   timeSignature: [4, 4],
+  // Key-hint verbs this puzzle teaches (see puzzles/schema.md). null =
+  // field absent (all hints eligible in-game). The editor has no UI for it;
+  // it must survive the open→save round trip untouched.
+  teaches: null,
 };
 
 export default class EditorPuzzleModel {

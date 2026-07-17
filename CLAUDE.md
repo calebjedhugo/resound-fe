@@ -97,9 +97,13 @@ instead of "fixing" it.
   seamlessly — takes are stored dense); solo starts snap to the beat grid
   (late grace is `PLAYBACK_LATE_GRACE_BEATS`, tempo-relative); Space
   during a playback is ignored (one performance at a time)
-- Matching tolerates sounds OUTSIDE the aligned window (a door opens when
-  its song occurs cleanly anywhere in the performance) but a foreign note
-  INSIDE it corrupts — see DESIGN.md "Matching" (ruled 2026-07-11)
+- Matching tolerates sounds AFTER the aligned window but a foreign note
+  INSIDE it corrupts, and (ruled 2026-07-16) a wrong note is judged
+  IMMEDIATELY — red flash on the note itself, creature noise included —
+  and LOCKS a gate out (`Gate.MISMATCH_LOCKOUT_MS`: heard notes voided,
+  deaf for the window, red glow decays across it). So a gate's song must
+  START clean; it can no longer ride in behind wrong notes. Fountains
+  flash immediately but don't lock out. See DESIGN.md "Matching"
 
 ### Creatures
 - Harmony forces apply only WHILE the creature is singing and another note
@@ -182,8 +186,11 @@ instead of "fixing" it.
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +
   `core/HintMemory.js`). Hints are PUZZLE-DRIVEN: puzzle JSON declares
-  `teaches: ["move", ...]`; retirement is per-VISIT (re-entry re-arms), no
-  browser storage. No `teaches` = all hints eligible (dev levels)
+  `teaches: ["move", ...]`; each lesson happens ONCE per playthrough
+  (ruled 2026-07-16 — performing it retires the hint; crossings never
+  re-arm, a fresh world entry resets), no browser storage. No `teaches` =
+  all hints eligible (dev levels); the editor round-trips the field. POC:
+  `slots` only at the duet, `clap` only at the clap
 - Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
 - `ui/StartGate.js` freezes the world per level start until a key/click

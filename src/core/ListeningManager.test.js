@@ -451,16 +451,35 @@ describe('Gates and Fountains recognizing songs', () => {
   });
 
   describe('tape playback (all slots, concatenated)', () => {
-    it('opens a door whose song occurs ANYWHERE in the tape (ruled 2026-07-11)', async () => {
+    it('a foreign note BEFORE the song voids the attempt (wrong-note lockout, ruled 2026-07-16)', async () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
-      // A foreign note in slot 0, the door's song in slot 2: the whole tape
-      // plays on Space, and the door hears its song exactly — the E4 before
-      // it is sequential surplus and none of the door's business.
+      // A foreign note in slot 0, the door's song in slot 2: the E4
+      // mismatches the moment it lands and the lockout deafens the door
+      // through the C4 that follows — the target must START clean now
+      // (supersedes the 2026-07-11 "anywhere in the tape" ruling).
       ctx.setInventorySlot(0, [{ pitch: 'E4', length: '1/4' }]);
       ctx.setInventorySlot(2, [{ pitch: 'C4', length: '1/4' }]);
       ctx.setActiveSlot(2);
+
+      const gates = ctx.getGates();
+
+      ctx.pressKey('space');
+      await ctx.advanceBeats(3);
+
+      expect(ctx.isGateOpen(gates[0])).toBe(false);
+    });
+
+    it('opens on the song at the START of the tape — trailing surplus is still fine', async () => {
+      ctx.loadPuzzle('listening-gate-basic');
+      await ctx.tick(16);
+
+      // The door's song leads the tape; the E4 after it lands past the
+      // window (completion fires the instant the target's span elapses).
+      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
+      ctx.setInventorySlot(2, [{ pitch: 'E4', length: '1/4' }]);
+      ctx.setActiveSlot(0);
 
       const gates = ctx.getGates();
 

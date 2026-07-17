@@ -15,11 +15,12 @@ This document defines the structure for Resound puzzle files.
                                      // If omitted, uses system default (1/16)
   "teaches": ["string"],             // OPTIONAL: key-hint verbs this puzzle teaches — any of
                                      // "move", "record", "playback", "slots", "delete", "clap".
-                                     // Hints for these verbs are ACTIVE in this puzzle regardless
-                                     // of player history; each retires for the CURRENT VISIT when
-                                     // performed and re-arms on re-entry (world entry or a doorway
-                                     // crossing back in). [] = no hints here. Omitted = every hint
-                                     // eligible (dev/legacy levels).
+                                     // Hints for these verbs are ACTIVE in this puzzle; each
+                                     // retires ONCE PERFORMED for the rest of the playthrough
+                                     // (ruled 2026-07-16 — doorway crossings never re-arm; a
+                                     // fresh world entry resets). [] = no hints here. Omitted =
+                                     // every hint eligible (dev/legacy levels). The editor
+                                     // preserves this field through open/save.
   "playerStart": {                   // Player starting position (grid coordinates)
     "x": number,                     // Grid X
     "y": number,                     // Elevation level (integer, 0 = ground)

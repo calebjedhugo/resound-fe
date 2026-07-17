@@ -166,12 +166,14 @@ describe('evaluatePhrases — exact anchored matching', () => {
     expect(evaluatePhrases(listener)).toBe('in-progress');
   });
 
-  it('drops in-progress once a due onset is conclusively missed (past tolerance)', () => {
+  it('a conclusively missed due onset is a mismatch AT ONCE (ruled 2026-07-16)', () => {
+    // The performance died — no waiting for the utterance to end: the flash
+    // lands immediately (and a gate starts its lockout).
     const listener = makeListener({
       notes: [[0, 'B4']],
       nowBeats: 1.2, // past beat 1 + tolerance: the performance died
     });
-    expect(evaluatePhrases(listener)).toBe(false);
+    expect(evaluatePhrases(listener)).toBe('mismatch');
   });
 
   it('a WRONG note at the due onset fails immediately — the grace is only for silence', () => {

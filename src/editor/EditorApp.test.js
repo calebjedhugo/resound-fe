@@ -692,6 +692,27 @@ describe('EditorApp wiring', () => {
       expect(app.entityPlacer.placeEntity).not.toHaveBeenCalled();
     });
 
+    it('allows a cleanser on the player spawn cell (the one sharing exception)', () => {
+      app.undoManager.setPlayerSpawn(7, 0, 7);
+      app.entityPlacer.placeEntity.mockClear();
+      press('l');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('cleanser', 7, 7, 0);
+    });
+
+    it('allows the player spawn on a cleanser tile', () => {
+      app.undoManager.addEntity('cleanser', 7, 0, 7, {});
+      app.entityPlacer.placeEntity.mockClear();
+      press('p');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('player', 7, 7, 0);
+    });
+
+    it('still refuses a non-cleanser entity on the spawn cell', () => {
+      app.undoManager.setPlayerSpawn(7, 0, 7);
+      app.entityPlacer.placeEntity.mockClear();
+      press('c');
+      expect(app.entityPlacer.placeEntity).not.toHaveBeenCalled();
+    });
+
     it('does not navigate or place while typing in a field', () => {
       const input = document.createElement('input');
       document.body.appendChild(input);
@@ -756,6 +777,14 @@ describe('EditorApp wiring', () => {
 
     it('relocates the player spawn with Shift+Arrow', () => {
       app.undoManager.setPlayerSpawn(7, 0, 7);
+      shiftPress('ArrowRight');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('player', 8, 7, 0);
+    });
+
+    it('Shift+Arrow may park the spawn on a cleanser tile', () => {
+      app.undoManager.addEntity('cleanser', 8, 0, 7, {});
+      app.undoManager.setPlayerSpawn(7, 0, 7);
+      app.entityPlacer.placeEntity.mockClear();
       shiftPress('ArrowRight');
       expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('player', 8, 7, 0);
     });

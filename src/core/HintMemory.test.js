@@ -1,8 +1,9 @@
 import HintMemory from 'core/HintMemory';
 
 // Hints are puzzle-driven (ruled 2026-07-11): the puzzle's `teaches` list
-// activates hints for the visit; performing an action retires its hint for
-// THIS VISIT ONLY — re-entering the puzzle re-arms everything.
+// activates hints there. Performing an action retires its hint for the rest
+// of the PLAYTHROUGH (ruled 2026-07-16 — each lesson happens once; doorway
+// crossings never re-arm it; a fresh world entry calls reset()).
 describe('HintMemory', () => {
   beforeEach(() => {
     HintMemory.reset();
@@ -20,19 +21,28 @@ describe('HintMemory', () => {
     expect(HintMemory.isRetired('clap')).toBe(true);
   });
 
-  it('performing the action retires the hint for the current visit', () => {
+  it('performing the action retires the hint', () => {
     HintMemory.arm(['move', 'record']);
     HintMemory.retire('move');
     expect(HintMemory.isRetired('move')).toBe(true);
     expect(HintMemory.isRetired('record')).toBe(false);
   });
 
-  it('re-entering a puzzle re-arms its hints (retirement is per-visit, not forever)', () => {
+  it('a performed hint STAYS retired across visits (each lesson happens once, ruled 2026-07-16)', () => {
     HintMemory.arm(['move']);
     HintMemory.retire('move');
     expect(HintMemory.isRetired('move')).toBe(true);
 
-    HintMemory.arm(['move']); // a fresh visit to a puzzle teaching move
+    HintMemory.arm(['move']); // crossing back into a puzzle that teaches move
+    expect(HintMemory.isRetired('move')).toBe(true);
+  });
+
+  it('a fresh playthrough (reset) re-arms everything', () => {
+    HintMemory.arm(['move']);
+    HintMemory.retire('move');
+
+    HintMemory.reset(); // world entry from the menu / deep link
+    HintMemory.arm(['move']);
     expect(HintMemory.isRetired('move')).toBe(false);
   });
 

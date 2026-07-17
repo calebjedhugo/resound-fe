@@ -25,8 +25,9 @@ import SongMatcher from 'core/SongMatcher';
 import gameState from 'core/GameState';
 
 // Silence (in beats) that separates UTTERANCES — used only to segment the
-// heard stream for mismatch feedback (one red flash per utterance). Matching
-// itself requires no surrounding silence (ruled 2026-07-11).
+// heard stream for the debug readout's note count. Matching itself requires
+// no surrounding silence (ruled 2026-07-11), and mismatch feedback fires on
+// the offending note itself (ruled 2026-07-16).
 export const PHRASE_GAP_BEATS = 1;
 
 // Alignment tolerance: within one 16th-note grid slot (grid step = 0.25)
@@ -51,8 +52,9 @@ function groupMatchesOnset(group, onset) {
  *   performance matches (full target + trailing silence). 'in-progress' = a
  *   correct performance is UNDERWAY (every onset due so far matches, nothing
  *   extra, the trailing silence hasn't elapsed yet) — used by play-to-pass
- *   gates to open AS the song is performed. 'mismatch' = an utterance ended
- *   and nothing aligned (flash feedback once). false = nothing to judge.
+ *   gates to open AS the song is performed. 'mismatch' = a wrong note just
+ *   landed and no alignment survives (flash feedback at once — ruled
+ *   2026-07-16). false = nothing to judge.
  */
 export default function evaluatePhrases(listener) {
   const tempo = gameState.musicalClock?.tempo || 120;
@@ -132,11 +134,17 @@ export default function evaluatePhrases(listener) {
   // that isn't `true`, so their exact-full-match semantics are unchanged.)
   if (inProgress) return 'in-progress';
 
-  // Nothing aligned and nothing can: report a mismatch once per utterance,
-  // after its final note has been followed by silence
+  // Nothing aligned and nothing underway: the newest sound is a WRONG note.
+  // Judge it IMMEDIATELY (ruled 2026-07-16, superseding the wait-for-
+  // utterance-end rule) — the red flash lands on the offending note itself,
+  // creature noise included (a continuous singer never yields the trailing
+  // silence the old rule waited for, so gates near jammers never flashed).
   const lastGroup = groups[groups.length - 1];
-  const lastDur = Math.min(...lastGroup.notes.map((n) => SongMatcher.lengthToBeats(n.length)));
-  if (nowBeat <= lastGroup.beat + lastDur + PHRASE_GAP_BEATS) return false;
+  // One grace: a group whose grid slot is still within tolerance may be a
+  // chord mid-assembly (mates from independent sources land frames apart) —
+  // hold judgment until its slot has passed.
+  if (nowBeat <= lastGroup.beat + TOL_BEATS) return false;
+  // One report per offending sound: stay silent until something NEW lands.
   if (
     listener._lastJudgedStartBeat !== undefined &&
     lastGroup.beat <= listener._lastJudgedStartBeat
@@ -148,9 +156,8 @@ export default function evaluatePhrases(listener) {
   listener.lastPhraseResult = {
     noteCount: phrases[phrases.length - 1].elements.length,
     matched: false,
-    // Stamp when the utterance ENDED, not when it was judged (judgment
-    // waits out the silence margin, which read as inflated "Xs ago")
-    at: listener.listeningStartTime + (lastGroup.beat + lastDur) * msPerBeat,
+    // Stamp the offending sound's onset (this IS judgment time now)
+    at: listener.listeningStartTime + lastGroup.beat * msPerBeat,
   };
   return 'mismatch';
 }

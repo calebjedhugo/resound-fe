@@ -209,9 +209,16 @@ export default class EditorApp {
     window.addEventListener('resize', () => this._onResize());
   }
 
-  /** True if a cell already holds an entity or the player spawn (one per tile). */
-  _isCellOccupied(x, y, z) {
-    if (this.undoManager.getEntitiesAt(x, y, z).length > 0) return true;
+  /**
+   * True if a cell already holds something that blocks placing/moving `type`
+   * there. One per tile — except the player spawn and a cleanser, which may
+   * share a cell (spawning on a cleansing tile is legal).
+   */
+  _isCellOccupied(x, y, z, type = null) {
+    const entities = this.undoManager.getEntitiesAt(x, y, z);
+    if (type === 'player') return entities.some((e) => e.type !== 'cleanser');
+    if (entities.length > 0) return true;
+    if (type === 'cleanser') return false; // the spawn doesn't block a cleanser
     const spawn = this.undoManager.getPlayerSpawn();
     return Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
   }
@@ -783,7 +790,8 @@ export default class EditorApp {
 
     const entityId = this._entityIdAtCell(cell);
     if (entityId !== null) {
-      if (this._isCellOccupied(tx, elevation, tz)) {
+      const movingType = this.undoManager.getEntity(entityId).type;
+      if (this._isCellOccupied(tx, elevation, tz, movingType)) {
         this._showToast('That cell is already occupied');
         return;
       }
@@ -796,7 +804,7 @@ export default class EditorApp {
 
     const spawn = this.undoManager.getPlayerSpawn();
     if (spawn && spawn.x === cell.x && spawn.y === elevation && spawn.z === cell.z) {
-      if (this._isCellOccupied(tx, elevation, tz)) {
+      if (this._isCellOccupied(tx, elevation, tz, 'player')) {
         this._showToast('That cell is already occupied');
         return;
       }
@@ -822,7 +830,8 @@ export default class EditorApp {
 
     const entityId = this._entityIdAtCell(cell); // at the current elevation
     if (entityId !== null) {
-      if (this._isCellOccupied(cell.x, targetElev, cell.z)) {
+      const movingType = this.undoManager.getEntity(entityId).type;
+      if (this._isCellOccupied(cell.x, targetElev, cell.z, movingType)) {
         this._showToast('That cell is already occupied');
         return;
       }
@@ -835,7 +844,7 @@ export default class EditorApp {
 
     const spawn = this.undoManager.getPlayerSpawn();
     if (spawn && spawn.x === cell.x && spawn.y === current && spawn.z === cell.z) {
-      if (this._isCellOccupied(cell.x, targetElev, cell.z)) {
+      if (this._isCellOccupied(cell.x, targetElev, cell.z, 'player')) {
         this._showToast('That cell is already occupied');
         return;
       }
@@ -919,7 +928,7 @@ export default class EditorApp {
   _placeAtCursor(type) {
     const cell = this.editorScene.getHoveredGrid();
     const elevation = this.editorScene.activeElevation;
-    if (this._isCellOccupied(cell.x, elevation, cell.z)) {
+    if (this._isCellOccupied(cell.x, elevation, cell.z, type)) {
       this._showToast('That cell is already occupied');
       return;
     }

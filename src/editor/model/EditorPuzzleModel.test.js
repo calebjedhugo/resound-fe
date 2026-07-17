@@ -182,6 +182,7 @@ describe('EditorPuzzleModel', () => {
         clapDisplacement: null,
         keySignature: 'C',
         timeSignature: [4, 4],
+        teaches: null,
       });
     });
 
