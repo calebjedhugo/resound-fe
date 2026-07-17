@@ -6,332 +6,68 @@
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
-  "teaches": ["slots"],
-  "playerStart": {
-    "x": 4,
-    "y": 0,
-    "z": 7
-  },
+  "playerStart": { "x": 4, "y": 0, "z": 6 },
+  "floors": [],
   "entities": [
     {
       "type": "creature",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 4
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "E5",
-            "length": "1/2"
-          }
-        ],
-        "interval": 8,
-        "audibleRange": 7
-      }
+      "position": { "x": 2, "y": 0, "z": 4 },
+      "data": { "song": [{ "pitch": "E5", "length": "1/2" }], "interval": 8, "audibleRange": 7 }
     },
     {
       "type": "creature",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 4
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "G5",
-            "length": "1/2"
-          }
-        ],
-        "interval": 8,
-        "audibleRange": 7
-      }
+      "position": { "x": 6, "y": 0, "z": 4 },
+      "data": { "song": [{ "pitch": "G5", "length": "1/2" }], "interval": 8, "audibleRange": 7 }
     },
-    {
-      "type": "wall",
-      "position": {
-        "x": 0,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 0,
-        "z": 8
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 1
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 2
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 3
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 4
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 5
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 5
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 6
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 7
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 7
-      }
-    },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 8, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 8, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 1 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 1 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 2 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 2 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 3 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 3 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 4 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 4 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 7 } },
     {
       "type": "gate",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 8
-      },
-      "song": [
-        {
-          "pitch": "G4",
-          "length": "1/1"
-        }
-      ],
+      "position": { "x": 4, "y": 0, "z": 8 },
+      "song": [{ "pitch": "G4", "length": "1/1" }],
       "id": "entry",
       "facing": "north",
-      "link": {
-        "puzzleId": "poc-two-keys",
-        "gateId": "exit"
-      }
+      "link": { "puzzleId": "poc-two-keys", "gateId": "exit" }
     },
     {
       "type": "gate",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 0
-      },
+      "position": { "x": 4, "y": 0, "z": 0 },
       "song": [
-        {
-          "pitch": "E5",
-          "length": "1/2"
-        },
-        {
-          "pitch": "G5",
-          "length": "1/2"
-        }
+        { "pitch": "E5", "length": "1/2" },
+        { "pitch": "G5", "length": "1/2" }
       ],
       "id": "exit",
       "facing": "north",
-      "link": {
-        "puzzleId": "poc-jam",
-        "gateId": "entry"
-      }
-    }
+      "link": { "puzzleId": "poc-jam", "gateId": "entry" }
+    },
+    { "type": "cleanser", "position": { "x": 4, "y": 0, "z": 7 } }
   ]
 }

@@ -1,114 +1,26 @@
 {
   "puzzles": [
-    {
-      "id": "poc-threshold",
-      "name": "I. Threshold",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-two-keys",
-      "name": "II. Two Keys",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-duet",
-      "name": "III. The Duet",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-jam",
-      "name": "IV. The Jam",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-dance",
-      "name": "V. The Dance",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-pull",
-      "name": "VI. The Pull",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-push",
-      "name": "VII. The Push",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-clap",
-      "name": "VIII. The Clap",
-      "difficulty": 1
-    },
-    {
-      "id": "poc-return",
-      "name": "IX. The Star",
-      "difficulty": 1
-    },
-    {
-      "id": "awakening",
-      "name": "Awakening",
-      "difficulty": 1
-    },
-    {
-      "id": "the-lure",
-      "name": "The Lure",
-      "difficulty": 1
-    },
-    {
-      "id": "test-001",
-      "name": "First Steps",
-      "difficulty": 1
-    },
-    {
-      "id": "test-002",
-      "name": "Opening Gates",
-      "difficulty": 1
-    },
-    {
-      "id": "test-003",
-      "name": "Harmonic Motion",
-      "difficulty": 2
-    },
-    {
-      "id": "test-004",
-      "name": "Complex Harmony",
-      "difficulty": 2
-    },
-    {
-      "id": "elevation-demo",
-      "name": "Elevated Harmony",
-      "difficulty": 2
-    },
-    {
-      "id": "playtest-r1",
-      "name": "playtest-r1",
-      "difficulty": 1
-    },
-    {
-      "id": "playtest-r2",
-      "name": "playtest-r2",
-      "difficulty": 1
-    },
-    {
-      "id": "playtest-r3",
-      "name": "playtest-r3",
-      "difficulty": 1
-    },
-    {
-      "id": "playtest-r4-selfsolve",
-      "name": "playtest-r4-selfsolve",
-      "difficulty": 1
-    },
-    {
-      "id": "playtest-r4-legit",
-      "name": "playtest-r4-legit",
-      "difficulty": 1
-    },
-    {
-      "id": "teleport",
-      "name": "teleport",
-      "difficulty": 1
-    }
+    { "id": "poc-threshold", "name": "I. Threshold", "difficulty": 1 },
+    { "id": "poc-two-keys", "name": "II. Two Keys", "difficulty": 1 },
+    { "id": "poc-duet", "name": "III. The Duet", "difficulty": 1 },
+    { "id": "poc-jam", "name": "IV. The Jam", "difficulty": 1 },
+    { "id": "poc-dance", "name": "V. The Dance", "difficulty": 1 },
+    { "id": "poc-pull", "name": "VI. The Pull", "difficulty": 1 },
+    { "id": "poc-push", "name": "VII. The Push", "difficulty": 1 },
+    { "id": "poc-clap", "name": "VIII. The Clap", "difficulty": 1 },
+    { "id": "poc-return", "name": "IX. The Star", "difficulty": 1 },
+    { "id": "awakening", "name": "Awakening", "difficulty": 1 },
+    { "id": "the-lure", "name": "The Lure", "difficulty": 1 },
+    { "id": "test-001", "name": "First Steps", "difficulty": 1 },
+    { "id": "test-002", "name": "Opening Gates", "difficulty": 1 },
+    { "id": "test-003", "name": "Harmonic Motion", "difficulty": 2 },
+    { "id": "test-004", "name": "Complex Harmony", "difficulty": 2 },
+    { "id": "elevation-demo", "name": "Elevated Harmony", "difficulty": 2 },
+    { "id": "playtest-r1", "name": "playtest-r1", "difficulty": 1 },
+    { "id": "playtest-r2", "name": "playtest-r2", "difficulty": 1 },
+    { "id": "playtest-r3", "name": "playtest-r3", "difficulty": 1 },
+    { "id": "playtest-r4-selfsolve", "name": "playtest-r4-selfsolve", "difficulty": 1 },
+    { "id": "playtest-r4-legit", "name": "playtest-r4-legit", "difficulty": 1 },
+    { "id": "teleport", "name": "teleport", "difficulty": 1 }
   ]
 }

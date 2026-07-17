@@ -6,264 +6,57 @@
   "tempo": 100,
   "keySignature": "C",
   "timeSignature": [4, 4],
-  "teaches": [],
-  "playerStart": {
-    "x": 6,
-    "y": 0,
-    "z": 10
-  },
+  "playerStart": { "x": 10, "y": 0, "z": 9 },
+  "floors": [],
   "entities": [
     {
       "type": "creature",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 6
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "A4",
-            "length": "1/1"
-          }
-        ],
-        "interval": 8,
-        "audibleRange": 7
-      }
+      "position": { "x": 2, "y": 0, "z": 6 },
+      "data": { "song": [{ "pitch": "A4", "length": "1/1" }], "interval": 8, "audibleRange": 7 }
     },
     {
       "type": "creature",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 2
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "C5",
-            "length": "1/1"
-          }
-        ],
-        "interval": 4,
-        "audibleRange": 8
-      }
+      "position": { "x": 6, "y": 0, "z": 2 },
+      "data": { "song": [{ "pitch": "C5", "length": "1/1" }], "interval": 4, "audibleRange": 8 }
     },
-    {
-      "type": "wall",
-      "position": {
-        "x": 0,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 0,
-        "z": 11
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 0,
-        "z": 0
-      }
-    },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 8, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 9, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 10, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 11, "y": 0, "z": 11 } },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 8, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 9, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 10, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 11, "y": 0, "z": 0 } },
     {
       "type": "gate",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 11
-      },
-      "song": [
-        {
-          "pitch": "F4",
-          "length": "1/1"
-        }
-      ],
+      "position": { "x": 6, "y": 0, "z": 11 },
+      "song": [{ "pitch": "F4", "length": "1/1" }],
       "id": "entry",
       "facing": "north",
-      "link": {
-        "puzzleId": "poc-dance",
-        "gateId": "exit"
-      }
+      "link": { "puzzleId": "poc-dance", "gateId": "exit" }
     },
     {
       "type": "gate",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 0
-      },
-      "song": [
-        {
-          "pitch": "A4",
-          "length": "1/1"
-        }
-      ],
+      "position": { "x": 6, "y": 0, "z": 0 },
+      "song": [{ "pitch": "A4", "length": "1/1" }],
       "id": "exit",
       "facing": "north",
-      "link": {
-        "puzzleId": "poc-push",
-        "gateId": "entry"
-      }
-    }
+      "link": { "puzzleId": "poc-push", "gateId": "entry" }
+    },
+    { "type": "cleanser", "position": { "x": 6, "y": 0, "z": 10 } }
   ]
 }
