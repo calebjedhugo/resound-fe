@@ -513,6 +513,40 @@ describe('Recursive mirrors render frame-fresh (the tunnel is never laggy)', () 
     PortalManager.renderPortals(renderer, camera);
     expect(PortalManager._frameId - south._freshFrame).toBe(0);
   });
+
+  it('sweeps under REAL frustum culling: chains grow from doors that drew', () => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-two-pairs');
+    const gates = ctx.getGates();
+    for (const g of gates) g.open();
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render(scene, cam) {
+        this.renderCalls.push({ scene, cam });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    // A posed camera (quaternion + fov engage the per-panel frustum cull)
+    // looking into pair1-a: the sweep must key off faces that ACTUALLY
+    // drew, not merely eligible ones, or an off-frustum eligible face
+    // silently drops to the rotor (the depth-2 creature's dropped frames).
+    const camera = {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE },
+      quaternion: { x: 0, y: 0, z: 0, w: 1 },
+      fov: 75,
+      aspect: 1,
+    };
+    PortalManager.renderPortals(renderer, camera); // materialize + warm
+    PortalManager.renderPortals(renderer, camera); // steady frame
+
+    // pair1-a's view shows pair2-a's south face — mirror-fresh THIS frame
+    // even though the player camera's frustum culls it.
+    const pair2a = gates.find((g) => g.gateId === 'pair2-a');
+    const south = PortalManager._views.get(pair2a).get('south');
+    expect(PortalManager._frameId - south._freshFrame).toBe(0);
+  });
 });
 
 describe('Cleanser under a door mirrors to the partner face (one door, one tile)', () => {

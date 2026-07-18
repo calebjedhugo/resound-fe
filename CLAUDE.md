@@ -145,15 +145,19 @@ instead of "fixing" it.
   or hidden face used to sample as a BLACK hole until the player looked at
   it directly (the teleport stress test, fixed 2026-07-18). Freshness is
   three-tier: player-eligible faces render fresh each frame (level 0); the
-  MIRROR SWEEP (`_renderMirrorLevel`) re-renders, every frame and from the
-  door's own mapped eye, the mirror-only faces of OTHER same-area doors
-  that each visible door's view shows — so recursive tunnels flow at full
-  frame rate (deeper levels inherit one-frame-per-level via the
-  double-buffered cascade; self/partner recursion rides the cascade
-  alone); and faces in NO sightline fall back to the stale rotor
+  recursive MIRROR SWEEP (`_mirrorSweep`) does a budgeted BFS of the
+  portal graph from every same-area door that ACTUALLY DREW this frame,
+  composing mapped eyes hop by hop and re-rendering — deepest level first
+  — each mirror-only face a chain shows that the player pass didn't draw,
+  so a creature seen N portals deep updates at full frame rate (caps:
+  `MIRROR_MAX_DEPTH`/`_PASSES`/`_FRONTIER`; self/partner recursion still
+  rides the double-buffered cascade; cross-area door interiors unchanged);
+  and faces in NO sightline fall back to the stale rotor
   (`_refreshStaleFaces`, ≤ `STALE_MAX_FRAMES` old, oldest-first, bounded
-  per frame) so nothing ever freezes in time. The cleanser gate's pad
-  panels age the same way (DeployManager.renderPortal).
+  per frame) so nothing ever freezes in time. Keyed off `_playerFresh`
+  (a face that was ELIGIBLE but frustum-culled still needs a mirror
+  render). The cleanser gate's pad panels age via the rotor
+  (DeployManager.renderPortal).
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS
