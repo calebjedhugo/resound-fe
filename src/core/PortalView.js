@@ -317,7 +317,7 @@ class PortalView {
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
     // The eye must be on the outward side of this face
-    if (eyeDistance < MIN_EYE_DISTANCE) return;
+    if (eyeDistance < MIN_EYE_DISTANCE) return false;
 
     // Skip the pass while the doorway quad is outside the player's view:
     // the panel keeps last frame's texture, and passes run BEFORE the main
@@ -328,7 +328,7 @@ class PortalView {
     // that is a sub-degree edge case.) Test cameras are bare {position}
     // objects: no pose, no cull.
     if (camera.quaternion && camera.fov && !sphereInView(camera, center, PANEL_CULL_RADIUS)) {
-      return;
+      return false;
     }
 
     // Half-resolution target: every visible face of an open door re-renders
@@ -460,6 +460,7 @@ class PortalView {
     // other becomes next frame's write target.
     this.surface.material.map = writeTarget.texture;
     this._writeIndex = 1 - this._writeIndex;
+    return true; // a pass actually ran (callers track face freshness)
   }
 
   dispose() {

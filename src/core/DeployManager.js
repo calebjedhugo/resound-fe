@@ -145,7 +145,20 @@ class DeployManager {
         PortalManager.renderPortals(renderer, eye);
       }
     }
-    for (const view of this._views) view.render(renderer, camera);
+    // Track which faces actually drew; a face the eye never renders still
+    // shows in door mirrors and must not freeze in time — refresh the
+    // stalest one per frame (same doctrine as PortalManager's door faces).
+    this._padFrame = (this._padFrame || 0) + 1;
+    for (const view of this._views) {
+      if (view.render(renderer, camera)) view._padFresh = this._padFrame;
+    }
+    const stale = this._views
+      .filter((v) => this._padFrame - (v._padFresh || 0) > 15)
+      .sort((a, b) => (a._padFresh || 0) - (b._padFresh || 0));
+    if (stale.length > 0) {
+      PortalManager.warmView(stale[0], renderer);
+      stale[0]._padFresh = this._padFrame;
+    }
     if (neighborDest) PortalManager.hideAreaPortals(neighborDest);
   }
 

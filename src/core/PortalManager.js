@@ -91,6 +91,9 @@ class PortalManager {
     // Faces created this render frame, pending a second warm-up pass
     // (_flushWarmUps) once every peer face holds content
     this._newViews = [];
+    // Frame counter for face freshness: a face nobody's eye renders still
+    // shows in other portals' mirrors, and must not freeze in time
+    this._frameId = 0;
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -258,6 +261,7 @@ class PortalManager {
    * @param {THREE.Camera} camera - the player camera
    */
   renderPortals(renderer, camera) {
+    this._frameId += 1;
     for (const gate of this._linkedGates) {
       const faces = this._views.get(gate);
       if (faces === null) continue; // eslint-disable-line no-continue -- dangling link: ordinary gate
@@ -283,6 +287,7 @@ class PortalManager {
       }
     }
     this._flushWarmUps(renderer);
+    this._refreshStaleFaces(renderer);
   }
 
   /** Hide every view of a gate. */
@@ -392,17 +397,22 @@ class PortalManager {
     // pass, not just the approach panel's own.
     const sharedWalls = approachView ? approachView.wallsToHide(camera) : null;
     for (const f of eligible) {
-      faces.get(f).render(renderer, camera, sharedClip, sharedWalls);
+      const view = faces.get(f);
+      // A pass may still skip inside render() (frustum cull) — only a pass
+      // that actually ran counts as fresh (see _refreshStaleFaces).
+      if (view.render(renderer, camera, sharedClip, sharedWalls)) {
+        view._freshFrame = this._frameId;
+      }
     }
     return false;
   }
 
   /**
-   * Seed a face's buffers with one straight-on render (an eye 1.5 cells
-   * out from the face, at head height) so a portal pass sampling it never
-   * reads an unwritten black target. Bare eye: no frustum cull applies.
+   * Seed or refresh a face's buffers with one straight-on render (an eye
+   * 1.5 cells out from the face, at head height) so a portal pass sampling
+   * it never reads an unwritten black target — or a frozen-in-time one.
+   * Bare eye: no frustum cull applies.
    */
-  // eslint-disable-next-line class-methods-use-this
   _warmUpView(view, gate, facing, renderer) {
     const v = FACING_VECTORS[facing];
     view.render(renderer, {
@@ -412,6 +422,45 @@ class PortalManager {
         z: gate.position.z + v.z * WORLD_SCALE * 1.5,
       },
     });
+    view._freshFrame = this._frameId;
+  }
+
+  /**
+   * Public warm hook for views owned elsewhere (the cleanser gate's pad
+   * panels): one straight-on refresh of `view`, derived from its own gate
+   * and facing.
+   */
+  warmView(view, renderer) {
+    this._warmUpView(view, view.gate, view.facing, renderer);
+  }
+
+  // A face nobody's eye has rendered for this many renderPortals frames is
+  // STALE: it still shows in other portals' mirrors, and a frozen snapshot
+  // (a closed gate that has since opened, a creature stuck mid-song) reads
+  // as a bug the moment the world moves on. Refresh the oldest few per
+  // frame — bounded cost, everything tours within a fraction of a second.
+  static STALE_MAX_FRAMES = 15;
+
+  static STALE_REFRESH_PER_FRAME = 2;
+
+  _refreshStaleFaces(renderer) {
+    const stale = [];
+    for (const [gate, faces] of this._views) {
+      if (!faces || !gate.isOpen) continue; // eslint-disable-line no-continue
+      if (this._insideDoor && this._insideDoor.gate === gate) continue; // eslint-disable-line no-continue
+      for (const view of faces.values()) {
+        if (!view.surface.visible) continue; // eslint-disable-line no-continue -- hidden = never sampled
+        if (this._frameId - (view._freshFrame || 0) > PortalManager.STALE_MAX_FRAMES) {
+          stale.push(view);
+        }
+      }
+    }
+    if (stale.length === 0) return;
+    stale.sort((a, b) => (a._freshFrame || 0) - (b._freshFrame || 0));
+    const budget = Math.min(PortalManager.STALE_REFRESH_PER_FRAME, stale.length);
+    for (let i = 0; i < budget; i += 1) {
+      this._warmUpView(stale[i], stale[i].gate, stale[i].facing, renderer);
+    }
   }
 
   /**

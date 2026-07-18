@@ -295,6 +295,33 @@ describe('PortalManager see-through rendering', () => {
     expect(renderer.targets[renderer.targets.length - 1]).toBeNull();
   });
 
+  it('a face nobody looks at refreshes on the stale rotor — mirrors never freeze in time', () => {
+    gate.open();
+    // Materialize + warm all faces, then reach steady state
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
+
+    // Within the stale window: steady frames render only the eligible faces
+    // (3 here) — no refresh churn.
+    for (let i = 0; i < 3; i += 1) {
+      PortalManager.renderPortals(renderer, camera);
+      expect(renderer.renderCalls).toHaveLength(3);
+      renderer.renderCalls.length = 0;
+    }
+
+    // Push past STALE_MAX_FRAMES: the never-eligible north face has not
+    // rendered since its warm-up and must refresh (a frozen snapshot shows
+    // a closed gate as closed forever — the teleport stress test's
+    // "static creature" bug).
+    let extraPasses = 0;
+    for (let i = 0; i < PortalManager.constructor.STALE_MAX_FRAMES + 2; i += 1) {
+      PortalManager.renderPortals(renderer, camera);
+      extraPasses += renderer.renderCalls.length - 3;
+      renderer.renderCalls.length = 0;
+    }
+    expect(extraPasses).toBeGreaterThan(0);
+  });
+
   it('the neighbor pass is clipped at the doorway plane and restores renderer state', () => {
     gate.open();
 

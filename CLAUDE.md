@@ -144,8 +144,12 @@ instead of "fixing" it.
   (mirror sightlines, the cleanser gate's mapped eye), and a lazily-created
   or hidden face used to sample as a BLACK hole until the player looked at
   it directly (the teleport stress test, fixed 2026-07-18). Only
-  player-eligible faces re-render fresh each frame; the rest show their
-  last content, stale but world-like.
+  player-eligible faces re-render fresh each frame; the rest REFRESH on a
+  stale rotor (`_refreshStaleFaces`: every visible face re-renders at
+  least every `STALE_MAX_FRAMES`, oldest first, bounded per frame) so a
+  mirror never freezes in time (a closed-then-opened gate, a creature
+  stuck mid-song — same stress test). The cleanser gate's pad panels age
+  the same way (DeployManager.renderPortal).
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS
