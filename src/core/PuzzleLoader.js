@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import Creature from 'entities/Creature';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
@@ -8,6 +9,7 @@ import CleansingTile from 'entities/CleansingTile';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Area from 'core/Area';
 import ElevationGrid from 'core/ElevationGrid';
+import { inPortalHideBand } from 'core/portalMath';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 class PuzzleLoader {
@@ -85,8 +87,28 @@ class PuzzleLoader {
     const floor = new Floor(puzzleData.gridSize, puzzleData.floors || []);
     entityManager.add(floor);
 
+    // Static-wall batching: an area's walls are identical immovable boxes,
+    // but each one as its own THREE.Mesh made long sightlines submit
+    // hundreds of draw calls (387 walls ≈ 11.7ms/frame in poc-return,
+    // multiplied by every open portal pass — profiled 2026-07-16). Walls a
+    // PortalView hide-set could ever need to toggle per pass (near a linked
+    // gate — see inPortalHideBand) keep individual meshes; every other wall
+    // becomes an instance of ONE InstancedMesh, added to the group below.
+    const doorPositions = puzzleData.entities
+      .filter((e) => e.type === 'gate' && e.link && e.link.puzzleId)
+      .map((e) => ({ x: e.position.x * WORLD_SCALE, z: e.position.z * WORLD_SCALE }));
+    const batchedWallPositions = [];
+    const addWall = (position) => {
+      if (doorPositions.some((g) => inPortalHideBand(position, g))) {
+        entityManager.add(new Wall(position));
+      } else {
+        entityManager.add(new Wall(position, { batched: true }));
+        batchedWallPositions.push(position);
+      }
+    };
+
     for (const position of this.perimeterWallPositions(puzzleData.gridSize)) {
-      entityManager.add(new Wall(position));
+      addWall(position);
     }
 
     // Create entities
@@ -130,7 +152,7 @@ class PuzzleLoader {
             });
             break;
           case 'wall':
-            entity = new Wall(scaledPosition);
+            addWall(scaledPosition);
             break;
           case 'cleanser':
             entity = new CleansingTile(scaledPosition, entityData.data || {});
@@ -153,6 +175,22 @@ class PuzzleLoader {
         entityManager.add(entity);
       }
     });
+
+    if (batchedWallPositions.length > 0) {
+      const batch = new THREE.InstancedMesh(
+        Wall.GEOMETRY,
+        Wall.MATERIAL,
+        batchedWallPositions.length
+      );
+      const matrix = new THREE.Matrix4();
+      batchedWallPositions.forEach((p, i) => {
+        batch.setMatrixAt(i, matrix.makeTranslation(p.x, p.y + Wall.MESH_Y_OFFSET, p.z));
+      });
+      // three frustum-culls an InstancedMesh by object.boundingSphere; the
+      // instances span the whole area, not just the template box.
+      batch.computeBoundingSphere();
+      area.setStaticWalls(batch);
+    }
 
     return area;
   }

@@ -68,6 +68,33 @@ export function doorwayCorners(gatePosition, facing) {
   };
 }
 
+/**
+ * Could a PortalView hide-set ever NEED to hide a wall at `wallPosition` for
+ * a door at `gatePosition`? Drives the static-wall batching split
+ * (PuzzleLoader.buildArea): walls outside every linked gate's band merge into
+ * one InstancedMesh per area, so they can no longer be hidden individually —
+ * this predicate must cover every wall whose hiding has a visible effect.
+ *
+ * Derivation (see PortalView's _wallsStrictBehind/_wallsFlushLateral): a
+ * door's window plane sits half a cell from the gate center along one of the
+ * four facings, and per-pass hiding matters only for
+ * - flush-lateral walls: outward·(wall - gate) = 0 — the gate's own row or
+ *   column, at ANY lateral distance (the jamb rule needs each one toggleable
+ *   by eye position), and
+ * - strictly-behind walls the doorway clip plane doesn't fully remove:
+ *   outward·(wall - gate) = -WORLD_SCALE (one cell). Anything deeper is
+ *   entirely behind the clip plane in every pass (shared clip included), so
+ *   hiding it is visually redundant and it can merge.
+ * Over all four facings that is: x or z distance to the gate of 0 or 1 cell
+ * (positions are exact grid multiples; y is ignored, matching the hide-sets).
+ */
+export function inPortalHideBand(wallPosition, gatePosition) {
+  const dx = Math.abs(wallPosition.x - gatePosition.x);
+  const dz = Math.abs(wallPosition.z - gatePosition.z);
+  const band = WORLD_SCALE * 1.5; // covers axis distances {0, WORLD_SCALE}
+  return dx < band || dz < band;
+}
+
 /** Rotate a plain {x,y,z} vector by a plain {x,y,z,w} quaternion. */
 function rotate(q, v) {
   // t = 2 q×v ; v' = v + w t + q×t

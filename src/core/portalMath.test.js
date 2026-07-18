@@ -10,6 +10,7 @@ import {
   doorwayCorners,
   portalMapping,
   sphereInView,
+  inPortalHideBand,
   DOORWAY_OFFSET,
   OPPOSITE_FACING,
 } from 'core/portalMath';
@@ -160,5 +161,35 @@ describe('sphereInView (portal pass frustum cull)', () => {
     const east = { x: 10, y: 1.8, z: 0 };
     expect(sphereInView(camera(YAW_90_EAST), east, 2.5)).toBe(true);
     expect(sphereInView(camera(IDENTITY), east, 2.5)).toBe(false);
+  });
+});
+
+describe('inPortalHideBand (static-wall batching split)', () => {
+  // Walls outside every linked gate's band merge into one InstancedMesh and
+  // can never be hidden per portal pass, so the band must cover exactly the
+  // walls whose hiding is visible: the gate's own row/column (flush jambs,
+  // any lateral distance) and one cell off it (the strip wall the doorway
+  // clip plane cannot fully remove). Two cells off is entirely clipped.
+  const gate = { x: 5 * WORLD_SCALE, z: 7 * WORLD_SCALE };
+  const wallAtCell = (gx, gz) => ({ x: gx * WORLD_SCALE, y: 0, z: gz * WORLD_SCALE });
+
+  it('keeps the row and column through the gate at any distance (flush jambs)', () => {
+    expect(inPortalHideBand(wallAtCell(5, -1), gate)).toBe(true); // far up the column
+    expect(inPortalHideBand(wallAtCell(-1, 7), gate)).toBe(true); // far down the row
+  });
+
+  it('keeps walls one cell off the row/column (the doorway strip)', () => {
+    expect(inPortalHideBand(wallAtCell(4, 0), gate)).toBe(true);
+    expect(inPortalHideBand(wallAtCell(0, 8), gate)).toBe(true);
+  });
+
+  it('releases walls two or more cells off both axes to the batch', () => {
+    expect(inPortalHideBand(wallAtCell(3, 5), gate)).toBe(false);
+    expect(inPortalHideBand(wallAtCell(7, 9), gate)).toBe(false);
+    expect(inPortalHideBand(wallAtCell(0, 0), gate)).toBe(false);
+  });
+
+  it('ignores elevation, matching the hide-sets', () => {
+    expect(inPortalHideBand({ x: gate.x, y: 99, z: gate.z - 5 * WORLD_SCALE }, gate)).toBe(true);
   });
 });

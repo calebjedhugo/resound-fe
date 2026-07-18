@@ -50,6 +50,16 @@ class Area {
 
     this.entityManager = new EntityManager(this.group, this);
     this.elevationGrid = null;
+
+    // ONE InstancedMesh holding every batched wall (PuzzleLoader.buildArea):
+    // static scenery drawn in a single call instead of one per wall
+    this.staticWalls = null;
+  }
+
+  /** Install the area's static-wall batch mesh (PuzzleLoader.buildArea). */
+  setStaticWalls(batch) {
+    this.staticWalls = batch;
+    this.group.add(batch);
   }
 
   /** Advance this area's simulation by one tick. */
@@ -60,6 +70,13 @@ class Area {
   /** Tear down every entity (meshes, listeners, instruments). */
   dispose() {
     this.entityManager.clear();
+    if (this.staticWalls) {
+      this.group.remove(this.staticWalls);
+      // Frees the instance buffers only — the geometry/material are Wall's
+      // shared statics, still in use by every other area's walls
+      this.staticWalls.dispose();
+      this.staticWalls = null;
+    }
   }
 }
 

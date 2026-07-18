@@ -123,6 +123,10 @@ class Matrix4 {
   invert() {
     return this;
   }
+
+  makeTranslation() {
+    return this;
+  }
 }
 
 class Plane {
@@ -248,6 +252,31 @@ class Mesh {
   }
 
   setRotationFromQuaternion() {}
+
+  // Like three: the clone SHARES geometry and material with the original
+  clone() {
+    const copy = new Mesh(this.geometry, this.material);
+    copy.position.copy(this.position);
+    copy.rotation = { ...this.rotation };
+    copy.visible = this.visible;
+    return copy;
+  }
+}
+
+class InstancedMesh extends Mesh {
+  constructor(geometry, material, count) {
+    super(geometry, material);
+    this.isInstancedMesh = true;
+    this.count = count;
+    this.instanceMatrix = { needsUpdate: false };
+    this.boundingSphere = null;
+  }
+
+  setMatrixAt() {}
+
+  computeBoundingSphere() {}
+
+  dispose() {}
 }
 
 class Group {
@@ -364,6 +393,7 @@ module.exports = {
   Group,
   Scene,
   Mesh,
+  InstancedMesh,
   PerspectiveCamera,
   WebGLRenderer,
   WebGLRenderTarget,

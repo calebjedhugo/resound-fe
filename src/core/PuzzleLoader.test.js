@@ -129,6 +129,68 @@ describe('PuzzleLoader', () => {
     });
   });
 
+  describe('static wall batching', () => {
+    // Walls are identical immovable boxes: rendering each as its own mesh
+    // made long sightlines cost one draw call per wall. Walls merge into ONE
+    // InstancedMesh per area — except walls near a linked door, which portal
+    // render passes must be able to hide individually (PortalView hide-sets).
+
+    it('batches every wall into one instanced mesh when the puzzle has no linked gates', () => {
+      ctx.loadPuzzle('parse-wall-basic');
+
+      const area = gameState.activeArea;
+      const walls = ctx.getEntityManager().getByType('wall');
+
+      expect(walls.length).toBeGreaterThan(0);
+      for (const wall of walls) {
+        expect(wall.mesh).toBeNull(); // no per-wall draw calls
+      }
+      expect(area.staticWalls).not.toBeNull();
+      expect(area.staticWalls.count).toBe(walls.length);
+      expect(area.group.children).toContain(area.staticWalls); // still rendered
+    });
+
+    it('keeps walls near a linked door individual so portal passes can hide them', () => {
+      ctx.loadPuzzle('portal-walls-b'); // south-door at grid (5,7)
+
+      const walls = ctx.getEntityManager().getByType('wall');
+      const wallAt = (gridX, gridZ) =>
+        walls.find(
+          (w) => w.position.x === gridX * WORLD_SCALE && w.position.z === gridZ * WORLD_SCALE
+        );
+
+      // The door's jambs, the strip wall behind it, and anything sharing its
+      // row/column stay individually hideable (PortalView hide-sets)
+      expect(wallAt(5, 6).mesh).not.toBeNull(); // one cell behind the door
+      expect(wallAt(4, 7).mesh).not.toBeNull(); // jamb beside it
+      expect(wallAt(5, 9).mesh).not.toBeNull(); // the door's own column
+      expect(wallAt(5, -1).mesh).not.toBeNull(); // perimeter, door's column
+
+      // A perimeter wall far from the door merges into the batch
+      const farCorner = wallAt(-1, 1);
+      expect(farCorner).toBeDefined();
+      expect(farCorner.mesh).toBeNull();
+
+      const area = gameState.activeArea;
+      const batchedCount = walls.filter((w) => !w.mesh).length;
+      expect(batchedCount).toBeGreaterThan(0);
+      expect(area.staticWalls.count).toBe(batchedCount);
+    });
+
+    it('disposes the wall batch with the area', () => {
+      ctx.loadPuzzle('parse-wall-basic');
+
+      const area = gameState.activeArea;
+      const batch = area.staticWalls;
+      expect(batch).not.toBeNull();
+
+      area.dispose();
+
+      expect(area.staticWalls).toBeNull();
+      expect(area.group.children).not.toContain(batch);
+    });
+  });
+
   describe('when player loads a puzzle with ramps', () => {
     it('places ramp entities with direction in the world at scaled positions', () => {
       // Load puzzle with a ramp at grid position (2, 0, 2) facing north
