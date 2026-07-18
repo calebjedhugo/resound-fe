@@ -4,311 +4,70 @@
   "difficulty": 1,
   "gridSize": 13,
   "tempo": 100,
+  "clapDisplacement": "1/4",
   "keySignature": "C",
   "timeSignature": [4, 4],
   "teaches": ["clap"],
-  "clapDisplacement": "1/4",
-  "playerStart": {
-    "x": 6,
-    "y": 0,
-    "z": 11
-  },
+  "playerStart": { "x": 6, "y": 0, "z": 11 },
   "floors": [
-    {
-      "elevation": 1,
-      "x1": 3,
-      "z1": 1,
-      "x2": 3,
-      "z2": 1
-    },
-    {
-      "elevation": 1,
-      "x1": 9,
-      "z1": 1,
-      "x2": 9,
-      "z2": 1
-    }
+    { "elevation": 1, "x1": 3, "z1": 1, "x2": 3, "z2": 1 },
+    { "elevation": 1, "x1": 9, "z1": 1, "x2": 9, "z2": 1 }
   ],
   "entities": [
     {
       "type": "creature",
-      "position": {
-        "x": 3,
-        "y": 1,
-        "z": 1
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "D4",
-            "length": "1/4"
-          }
-        ],
-        "interval": 2,
-        "audibleRange": 15
-      }
+      "position": { "x": 3, "y": 0, "z": 1 },
+      "data": { "song": [{ "pitch": "D4", "length": "1/4" }], "interval": 2, "audibleRange": 15 }
     },
     {
       "type": "creature",
-      "position": {
-        "x": 9,
-        "y": 1,
-        "z": 1
-      },
-      "data": {
-        "song": [
-          {
-            "pitch": "A4",
-            "length": "1/4"
-          }
-        ],
-        "interval": 2,
-        "audibleRange": 15
-      }
+      "position": { "x": 9, "y": 1, "z": 1 },
+      "data": { "song": [{ "pitch": "A4", "length": "1/4" }], "interval": 2, "audibleRange": 15 }
     },
-    {
-      "type": "wall",
-      "position": {
-        "x": 0,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 12,
-        "y": 0,
-        "z": 12
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 1,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 2,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 3,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 4,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 5,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 7,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 8,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 9,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 10,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 11,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "type": "wall",
-      "position": {
-        "x": 12,
-        "y": 0,
-        "z": 0
-      }
-    },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 8, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 9, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 10, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 11, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 12, "y": 0, "z": 12 } },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 8, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 9, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 10, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 11, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 12, "y": 0, "z": 0 } },
     {
       "type": "gate",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 12
-      },
-      "song": [
-        {
-          "pitch": "Bb5",
-          "length": "1/1"
-        }
-      ],
+      "position": { "x": 6, "y": 0, "z": 12 },
+      "song": [{ "pitch": "Bb5", "length": "1/1" }],
       "id": "entry",
       "facing": "north",
-      "link": {
-        "puzzleId": "poc-push",
-        "gateId": "exit"
-      }
+      "link": { "puzzleId": "poc-push", "gateId": "exit" }
     },
     {
       "type": "gate",
-      "position": {
-        "x": 6,
-        "y": 0,
-        "z": 0
-      },
+      "position": { "x": 6, "y": 0, "z": 0 },
       "song": [
-        {
-          "pitch": "D4",
-          "length": "1/4"
-        },
-        {
-          "pitch": "A4",
-          "length": "1/4"
-        },
-        {
-          "pitch": "D4",
-          "length": "1/4"
-        },
-        {
-          "pitch": "A4",
-          "length": "1/4"
-        }
+        { "pitch": "D4", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "D4", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" }
       ],
       "id": "exit",
       "facing": "north",
-      "link": {
-        "puzzleId": "poc-return",
-        "gateId": "entry"
-      }
+      "link": { "puzzleId": "poc-return", "gateId": "entry" }
     }
   ]
 }
