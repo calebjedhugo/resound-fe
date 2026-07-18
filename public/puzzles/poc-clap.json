@@ -9,10 +9,7 @@
   "timeSignature": [4, 4],
   "teaches": ["clap"],
   "playerStart": { "x": 6, "y": 0, "z": 11 },
-  "floors": [
-    { "elevation": 1, "x1": 3, "z1": 1, "x2": 3, "z2": 1 },
-    { "elevation": 1, "x1": 9, "z1": 1, "x2": 9, "z2": 1 }
-  ],
+  "floors": [],
   "entities": [
     {
       "type": "creature",
@@ -21,7 +18,7 @@
     },
     {
       "type": "creature",
-      "position": { "x": 9, "y": 1, "z": 1 },
+      "position": { "x": 9, "y": 0, "z": 1 },
       "data": { "song": [{ "pitch": "A4", "length": "1/4" }], "interval": 2, "audibleRange": 15 }
     },
     { "type": "wall", "position": { "x": 0, "y": 0, "z": 12 } },
