@@ -885,6 +885,59 @@ class PortalManager {
   }
 
   /**
+   * Travel to a cleanser tile (the deployable cleanser gate's arrival —
+   * see core/DeployManager): place the player ON the tile at
+   * `target.position` in `target.puzzleId`, loading and swapping to that
+   * area if it isn't the active one. Landing on the tile fires it as usual
+   * (tape wipe + it stays the active cleanser). The ONE world clock keeps
+   * running — this is a crossing without a door, not a rebuild.
+   * @param {{puzzleId: string, position: {x,y,z}}} target
+   * @returns {Promise<boolean>} false if the target area can't be loaded
+   */
+  async teleportToCleanser(target) {
+    if (!target || !target.puzzleId || this._transitioning) return false;
+
+    const arrive = (area) => {
+      gameState.player.position = {
+        x: target.position.x,
+        y: target.position.y + 1.8,
+        z: target.position.z,
+      };
+      gameState.player.elevation = Math.round(target.position.y / ELEVATION_HEIGHT);
+      syncCameraToPlayer(gameState.player.position);
+      return area;
+    };
+
+    if (this._activeArea && this._activeArea.id === target.puzzleId) {
+      arrive(this._activeArea);
+      return true;
+    }
+
+    this._transitioning = true;
+    let area = this._areas.get(target.puzzleId);
+    if (!area) {
+      try {
+        const data = await PuzzleLoader.load(target.puzzleId);
+        area = PuzzleLoader.buildArea(data);
+        this._areas.set(area.id, area);
+      } catch {
+        // Unloadable destination: stay put rather than crash the game
+        this._transitioning = false;
+        return false;
+      }
+    }
+
+    this._setActiveArea(area);
+    arrive(area);
+    this._insideDoor = null; // not standing in any doorway after a jump
+    this._afterActiveChange(); // rebuilds neighbors/doors; clears _transitioning
+    // Same refresh path as a doorway crossing (hints re-arm, UI updates);
+    // no arrival gate — a cleanser jump can never be an ending
+    if (this._onCrossed) this._onCrossed(area.puzzle, null);
+    return true;
+  }
+
+  /**
    * A crossing was consumed (the player walked out of the destination face):
    * close BOTH faces of the door — unless either face is still held open by
    * a performance (a parked performer keeps the way back open), or a face is

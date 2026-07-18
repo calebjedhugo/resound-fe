@@ -26,6 +26,7 @@ import ClapManager from 'core/ClapManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
+import DeployManager from 'core/DeployManager';
 import HintMemory from 'core/HintMemory';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
@@ -71,6 +72,9 @@ PortalManager.initialize(scene, (puzzle, arrivalGate) => {
   if (arrivalGate && arrivalGate.ending) endingOverlay.show();
 });
 
+// The deployable cleanser gate's aiming phantom renders in the main scene
+DeployManager.initialize(scene);
+
 // State machine
 const stateMachine = new StateMachine(gameState);
 gameState.stateMachine = stateMachine;
@@ -80,6 +84,7 @@ async function startPuzzle(puzzleId) {
   try {
     const puzzleData = await PuzzleLoader.load(puzzleId);
     PortalManager.enterWorld(puzzleData);
+    DeployManager.reset(); // fresh world: no phantom, no deployed gate
     stateMachine.setState('PLAYING');
     // A world entry is a fresh playthrough: forget performed hints (doorway
     // crossings within it don't — each lesson happens once per playthrough).
@@ -113,6 +118,7 @@ function resumeGame() {
 
 function exitToMenu() {
   PortalManager.reset();
+  DeployManager.reset();
   gameState.reset();
   clapVisual.clear();
   ClapManager.reset();
@@ -160,6 +166,7 @@ function update(deltaTime) {
     PortalManager.updateAreas(deltaTime);
     // Crossing an open linked gate hands the world to the neighbor puzzle
     PortalManager.update();
+    DeployManager.update();
     clapVisual.update();
     recordingUI.update();
     keyHints.update(deltaTime);

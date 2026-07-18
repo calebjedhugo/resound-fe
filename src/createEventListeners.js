@@ -4,6 +4,7 @@ import { Random } from 'resound-sound';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';
+import DeployManager from 'core/DeployManager';
 import Tape from 'core/Tape';
 import showToast from 'ui/Toast';
 
@@ -123,6 +124,12 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
       // Clap (quantized to 16th notes)
       if (value) {
         ClapManager.requestClap();
+      }
+      break;
+    case 'KeyG':
+      // Deployable cleanser gate: aim -> deploy -> remove (core/DeployManager)
+      if (value && !repeat) {
+        DeployManager.toggle();
       }
       break;
     default:
