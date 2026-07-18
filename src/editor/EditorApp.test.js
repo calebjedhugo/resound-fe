@@ -158,6 +158,7 @@ function setupEditorDOM() {
       <div id="toolbar-panel"></div>
       <div id="puzzle-panel"></div>
       <div id="world-panel"></div>
+      <div id="git-panel"></div>
       <div id="elevation-panel"></div>
       <div id="floor-panel"></div>
       <div id="entity-toolbar"></div>

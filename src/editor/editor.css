@@ -73,6 +73,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .save-status.save-saving { color: #8899aa; }
 .save-status.save-saved { color: #44ff88; }
 .save-status.save-error { color: #ff4444; }
+.git-panel .panel-title { font-size: 12px; font-weight: 600; color: #aab7c4; margin-bottom: 6px; }
+.git-message { width: 100%; box-sizing: border-box; margin-bottom: 6px; }
+.git-row { flex-wrap: wrap; }
+.git-btn { width: auto; padding: 0 10px; font-size: 12px; }
+.git-btn.git-danger { color: #ffaa88; border-color: #7a3a2a; }
+.git-btn.git-danger:hover:not(:disabled) { background: #7a3a2a; }
+.git-status.git-error { color: #ff4444; }
 .shortcut-help { margin-top: 8px; padding: 8px; background: #0a1628; border: 1px solid #0f3460; border-radius: 4px; font-size: 11px; }
 .shortcut-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
 .shortcut-row kbd { color: #aab7c4; font-family: ui-monospace, monospace; white-space: nowrap; }

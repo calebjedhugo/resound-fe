@@ -18,10 +18,12 @@ import ValidationPanel from 'editor/ui/ValidationPanel';
 import PuzzlePicker from 'editor/ui/PuzzlePicker';
 import WorldOverview from 'editor/ui/WorldOverview';
 import EditorToolbar from 'editor/ui/EditorToolbar';
+import GitPanel from 'editor/ui/GitPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
 import { savePuzzleToRepo, listRepoPuzzles, loadRepoPuzzle } from 'editor/io/repoPersistence';
+import { gitCommit, gitPull, gitPush, gitRevert, gitUnrevert } from 'editor/io/gitControls';
 import {
   createLink,
   clearLink,
@@ -56,6 +58,10 @@ export default class EditorApp {
     this.controls = null;
     this._frameId = null; // pending on-demand render frame
     this._dirty = false;
+    // One-shot flag: set after a git revert so the next Cmd-Z restores the
+    // reverted puzzle edits (git stash pop) instead of doing a model undo.
+    // Any model mutation clears it (see the setOnChange hook).
+    this._pendingUnrevert = false;
     this._floorDraft = null; // { anchor: {x,z}, elevation } while sizing a new floor
     this._validationTimer = null;
     this._autoSaveTimer = null;
@@ -151,6 +157,12 @@ export default class EditorApp {
       onOpenPuzzle: (id) => this.puzzlePicker.open(id),
       getCurrentPuzzleId: () => this.undoManager.getMetadata().id,
     });
+    this.gitPanel = new GitPanel(document.getElementById('git-panel'), {
+      onCommit: (message) => this._gitCommit(message),
+      onPull: () => this._gitPull(),
+      onPush: () => this._gitPush(),
+      onRevert: () => this._gitRevert(),
+    });
     this.entityDragger = new EntityDragger(
       this.scene,
       this.camera,
@@ -165,12 +177,16 @@ export default class EditorApp {
     // a level replaces the model directly and bypasses this, so it does
     // not immediately write back.
     this.undoManager.setOnChange(() => {
+      // A real edit lands: the pending "Cmd-Z restores the revert" one-shot no
+      // longer applies (autosave has re-diverged the file from HEAD anyway).
+      this._pendingUnrevert = false;
       this._syncGridToScene();
       this._refreshRangeIndicator();
       this._requestFrame();
       this._scheduleValidation();
       this._scheduleAutoSave();
       this.toolbar.refresh();
+      if (this.gitPanel) this.gitPanel.refresh();
       const { id } = this.undoManager.getMetadata();
       this.toolbar.setStatus(id ? 'dirty' : 'unnamed');
     });
@@ -533,6 +549,71 @@ export default class EditorApp {
       return;
     }
     window.open(`/?puzzle=${encodeURIComponent(id)}`, '_blank', 'noopener');
+  }
+
+  // --- Git controls (dev-only; see ui/GitPanel.js + io/gitControls.js) ---
+
+  /** Commit the staged puzzle files. Throws (surfaced by GitPanel) on failure. */
+  async _gitCommit(message) {
+    await gitCommit(message);
+    return 'Committed puzzle files';
+  }
+
+  /** Pull (whole repo), then reload the open puzzle in case it changed. */
+  async _gitPull() {
+    await gitPull();
+    await this._reloadCurrentPuzzleFromDisk();
+    return 'Pulled';
+  }
+
+  /** Push (whole repo). */
+  async _gitPush() {
+    await gitPush();
+    return 'Pushed';
+  }
+
+  /**
+   * Discard uncommitted puzzle edits (stashed, so it's undoable), reload the
+   * open puzzle from the reverted files, and arm the one-shot Cmd-Z restore.
+   */
+  async _gitRevert() {
+    const result = await gitRevert();
+    if (result.nothing) return 'Nothing to revert';
+    await this._reloadCurrentPuzzleFromDisk();
+    this._pendingUnrevert = true;
+    return 'Reverted — ⌘Z to restore';
+  }
+
+  /** Restore the last reverted puzzle edits (git stash pop) and reload. */
+  async _gitUnrevert() {
+    this._pendingUnrevert = false;
+    try {
+      await gitUnrevert();
+      await this._reloadCurrentPuzzleFromDisk();
+      if (this.gitPanel) {
+        await this.gitPanel.refresh();
+        this.gitPanel.setStatus('Restored reverted edits');
+      }
+    } catch (err) {
+      if (this.gitPanel) this.gitPanel.setStatus(err.message || String(err), true);
+    }
+  }
+
+  /**
+   * Re-read the open puzzle from disk after a git op changed the files.
+   * Refreshes the picker's manifest list first (files may have appeared or
+   * vanished); if the open puzzle's file is gone (e.g. a new puzzle reverted
+   * away), drops to a fresh, unsaved puzzle.
+   */
+  async _reloadCurrentPuzzleFromDisk() {
+    const { id } = this.undoManager.getMetadata();
+    await this.puzzlePicker.refresh(id);
+    if (id && this.puzzlePicker.hasLevel(id)) {
+      await this.puzzlePicker.open(id);
+    } else if (id) {
+      this._puzzleCommitted = false;
+      this._applyRestoredModel(new EditorPuzzleModel());
+    }
   }
 
   _setupRenderer() {
@@ -1020,6 +1101,12 @@ export default class EditorApp {
       // Undo / redo work regardless of focus (before the text-field guard).
       if ((e.metaKey || e.ctrlKey) && key.toLowerCase() === 'z') {
         e.preventDefault();
+        // A just-performed git revert takes priority: plain Cmd-Z restores the
+        // reverted puzzle edits (git stash pop) rather than a model undo.
+        if (!e.shiftKey && this._pendingUnrevert) {
+          this._gitUnrevert();
+          return;
+        }
         if (e.shiftKey) this._redo();
         else this._undo();
         return;

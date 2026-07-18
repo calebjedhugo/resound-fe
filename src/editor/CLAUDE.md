@@ -71,6 +71,18 @@ edits show up in the game on a manual reload.
   middleware in `vite.config.js` (dev-only; validates the id, matches body id,
   writes pretty-printed JSON). Browsers can't write repo files, so this bridge
   is required. **Changing `vite.config.js` requires a dev-server restart.**
+- **Git controls** (`ui/GitPanel.js` + `io/gitControls.js`) — dev-only
+  Commit / Pull / Push / Revert in the sidebar, over `/api/git/*` (a second
+  `configureServer` middleware, `gitPlugin`, that shells out via `execFile`).
+  The panel **hides itself** when `/api/git` is unreachable (production build).
+  **Commit and Revert scope to `public/puzzles/`** (Commit stages only that
+  path, so Husky/lint-staged never sees unrelated files); **Pull/Push are
+  whole-repo** (git can't push a subtree). **Revert = `git stash push -u --
+  public/puzzles`** (undoable, sweeps up new untracked puzzle files too); the
+  editor then reloads the open puzzle from disk and arms a **one-shot Cmd-Z**
+  that pops the stash (`EditorApp._pendingUnrevert`, cleared by any model
+  mutation — see the `setOnChange` hook and the keydown handler). Pull also
+  reloads the open puzzle. **`vite.config.js` changes need a server restart.**
 - First edit through the editor **reformats** a hand-authored puzzle file to
   2-space JSON (compact inline note objects expand). Expected; commit it once.
 - The game picks up changes on a plain tab reload (`PuzzleLoader` fetches at
