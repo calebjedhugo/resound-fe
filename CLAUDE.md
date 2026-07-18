@@ -182,6 +182,14 @@ instead of "fixing" it.
   performer's completions keep a door open behind you; `alwaysOpen: true`
   marks a permanently-open face (one-way doors). See DESIGN.md; don't "fix"
   a door that ignores a correct first note or one that "won't close".
+- **Walls render BATCHED**: each area's walls draw as ONE `InstancedMesh`
+  (`PuzzleLoader.buildArea`; one mesh per wall was the dominant frame cost —
+  profiled 2026-07-16, fixed 2026-07-17). Only walls near a linked gate stay
+  individual meshes (`portalMath.inPortalHideBand`: the gate's row/column
+  plus one cell off it — exactly what PortalView hide-sets must toggle per
+  portal pass). **A batched wall entity has `mesh: null`** — never assume a
+  wall has a mesh (collision/elevation/editor use entity data and don't
+  care); `Area.staticWalls` holds the batch.
 
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +
@@ -212,8 +220,14 @@ instead of "fixing" it.
   entity (`entities/CleansingTile.js`): a pulsing walkable tile that
   empties the tape when you step onto it (edge-triggered, active-area
   only). A cleanse can leave an empty tape, so gen-poc.js still asserts
-  every pocket is escapable from an empty tape. First one ships in
-  `poc-two-keys` (entry corridor); V/IX cleanser placement is an open call
+  every pocket is escapable from an empty tape. A cleanser MAY share a
+  cell with a gate (editor allows it; the POC puts one under most entry
+  doors). Under a LINKED door the portal panel would clip the tile to a
+  sliver (it only paints past the window plane), so `PortalManager`
+  mirrors it: a visual-only clone at the partner face, sharing the real
+  tile's material so the glow syncs (`_rebuildTileMirrors`); gameplay
+  needs no mirror — crossing commits on entry and the REAL tile fires
+  on arrival
 
 ---
 
@@ -225,4 +239,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-07-11 — v5 round-4 restructure: 9-area chain (climb cut), both-ears doors, puzzle-driven hints (`teaches`), tension-release dance, plinth pens*
+*Last Updated: 2026-07-17 — static wall batching (per-area InstancedMesh; portal-jamb walls stay individual)*

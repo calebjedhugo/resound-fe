@@ -56,6 +56,18 @@ import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion'
 // Stable empty list for the common no-seam case (avoids per-frame garbage)
 const NO_SOURCES = Object.freeze([]);
 
+/** The cleanser standing exactly on `gate`'s cell in `area`, if any. */
+function cleanserAtGate(area, gate) {
+  return area.entityManager
+    .getByType('cleanser')
+    .find(
+      (c) =>
+        Math.abs(c.position.x - gate.position.x) < 0.01 &&
+        Math.abs(c.position.y - gate.position.y) < 0.01 &&
+        Math.abs(c.position.z - gate.position.z) < 0.01
+    );
+}
+
 class PortalManager {
   constructor() {
     this._mainScene = null;
@@ -63,6 +75,9 @@ class PortalManager {
     this._areas = new Map(); // puzzleId -> live Area (includes the active one)
     this._doors = []; // one entry per linked gate PAIR with both areas loaded
     this._linkedGates = []; // active area's linked gates (crossing + views)
+    // Visual-only clones of a cleanser sitting under a door's PARTNER face
+    // (see _rebuildTileMirrors): { mesh, group } pairs, rebuilt with doors
+    this._tileMirrors = [];
     // gate -> Map<facing, PortalView> (a view per player-visible face) or
     // null once the link proves dangling (the gate stays an ordinary gate)
     this._views = new Map();
@@ -108,6 +123,7 @@ class PortalManager {
     }
     this._areas.clear();
     this._doors = [];
+    this._tileMirrors = []; // meshes died with their areas' groups
     this._linkedGates = [];
     this._transitioning = false;
     this._insideDoor = null;
@@ -706,6 +722,44 @@ class PortalManager {
         this._doors.push({ gateA: gate, areaA: area, gateB: partnerGate, areaB: partnerArea });
       }
     }
+    this._rebuildTileMirrors();
+  }
+
+  /**
+   * A cleanser under ONE face of a door is the same tile under BOTH faces —
+   * a linked pair is one cell seen from two sides. But the portal panel sits
+   * on the far plane of the cell and can only paint what falls within the
+   * doorway aperture; a floor tile in the doorway cell itself projects
+   * mostly OUTSIDE the panel from an approaching eye, clipping it to a
+   * sliver at the threshold. So each door face whose PARTNER cell holds a
+   * cleanser gets a visual-only mirror mesh at its own cell: a clone
+   * sharing the real tile's geometry AND material instance, so the
+   * breathing pulse and clear-flash stay in sync for free (the neighbor is
+   * fully live). Gameplay needs no mirror — stepping into the cell commits
+   * the crossing, and the REAL tile fires on arrival.
+   */
+  _rebuildTileMirrors() {
+    for (const { mesh, group } of this._tileMirrors) group.remove(mesh);
+    this._tileMirrors = [];
+    for (const door of this._doors) {
+      this._mirrorDoorTile(door.areaA, door.gateA, door.areaB, door.gateB);
+      this._mirrorDoorTile(door.areaB, door.gateB, door.areaA, door.gateA);
+    }
+  }
+
+  /**
+   * If `fromGate`'s cell holds a cleanser and `toGate`'s own cell does not,
+   * clone the tile's mesh under `toGate` in `toArea`.
+   */
+  _mirrorDoorTile(fromArea, fromGate, toArea, toGate) {
+    const tile = cleanserAtGate(fromArea, fromGate);
+    if (!tile || !tile.mesh || cleanserAtGate(toArea, toGate)) return;
+    const mirror = tile.mesh.clone(); // shares geometry + material: glow stays in sync
+    const lift = tile.mesh.position.y - tile.position.y;
+    mirror.position.set(toGate.position.x, toGate.position.y + lift, toGate.position.z);
+    mirror._isCleanserMirror = true; // tag for tests/debugging
+    toArea.group.add(mirror);
+    this._tileMirrors.push({ mesh: mirror, group: toArea.group });
   }
 
   _disposeViews() {

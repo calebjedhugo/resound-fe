@@ -431,6 +431,72 @@ describe('PortalManager see-through rendering', () => {
   });
 });
 
+describe('Cleanser under a door mirrors to the partner face (one door, one tile)', () => {
+  // portal-b with a cleanser sitting ON its south-door cell (5, 7) — the
+  // portal panel can only paint beyond the window plane, so without a
+  // mirror the tile clips to a sliver from the approaching side.
+  const portalBWithTile = {
+    ...portalB,
+    entities: [...portalB.entities, { type: 'cleanser', position: { x: 5, y: 0, z: 7 } }],
+  };
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  const mirrorsIn = (group) => group.children.filter((child) => child._isCleanserMirror);
+
+  it("shows the partner cell's cleanser at the local face of the door", async () => {
+    installFetchMock({ 'portal-b': portalBWithTile });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync(); // let the neighbor area load
+
+    const mirrors = mirrorsIn(gameState.activeArea.group);
+    expect(mirrors).toHaveLength(1);
+    // At the LOCAL gate's cell (5, 2), lifted off the floor like the real tile
+    expect(mirrors[0].position.x).toBeCloseTo(5 * WORLD_SCALE);
+    expect(mirrors[0].position.z).toBeCloseTo(2 * WORLD_SCALE);
+    expect(mirrors[0].position.y).toBeGreaterThan(0);
+  });
+
+  it('the mirror SHARES the real tile material, so the glow pulses in sync', async () => {
+    installFetchMock({ 'portal-b': portalBWithTile });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+
+    const [mirror] = mirrorsIn(gameState.activeArea.group);
+    const neighbor = PortalManager._areas.get('portal-b');
+    const [tile] = neighbor.entityManager.getByType('cleanser');
+    expect(mirror.material).toBe(tile.mesh.material);
+  });
+
+  it('no cleanser at the partner cell means no mirror', async () => {
+    installFetchMock({ 'portal-b': portalB });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+
+    expect(mirrorsIn(gameState.activeArea.group)).toHaveLength(0);
+  });
+
+  it('crossing rebuilds mirrors without duplicating them', async () => {
+    installFetchMock({ 'portal-b': portalBWithTile });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+    const [gate] = ctx.getGates();
+    gate.open();
+
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1); // commit the crossing
+
+    expect(gameState.currentPuzzle.id).toBe('portal-b');
+    // The active side has the REAL tile — no mirror on top of it
+    expect(mirrorsIn(gameState.activeArea.group)).toHaveLength(0);
+    // The old side (now the neighbor) holds exactly one mirror at its face
+    const neighborA = PortalManager._areas.get('portal-a');
+    expect(mirrorsIn(neighborA.group)).toHaveLength(1);
+  });
+});
+
 describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2026-07-12)', () => {
   // The clip reaches a hair past the arrival floor's far edge to paint it
   // seamlessly, which also grazes the near FACE of the perimeter wall sitting

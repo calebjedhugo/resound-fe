@@ -227,16 +227,21 @@ export default class EditorApp {
 
   /**
    * True if a cell already holds something that blocks placing/moving `type`
-   * there. One per tile — except the player spawn and a cleanser, which may
-   * share a cell (spawning on a cleansing tile is legal).
+   * there. One per tile — except a cleanser, which may share a cell with the
+   * player spawn (spawning on a cleansing tile is legal) and with a gate (a
+   * cleansing tile under a doorway).
    */
   _isCellOccupied(x, y, z, type = null) {
     const entities = this.undoManager.getEntitiesAt(x, y, z);
+    const spawn = this.undoManager.getPlayerSpawn();
+    const spawnHere = Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
+    // A cleanser is blocked only by a non-gate entity (spawn never blocks it).
+    if (type === 'cleanser') return entities.some((e) => e.type !== 'gate');
+    // A gate tolerates a cleanser but nothing else (incl. the spawn).
+    if (type === 'gate') return spawnHere || entities.some((e) => e.type !== 'cleanser');
     if (type === 'player') return entities.some((e) => e.type !== 'cleanser');
     if (entities.length > 0) return true;
-    if (type === 'cleanser') return false; // the spawn doesn't block a cleanser
-    const spawn = this.undoManager.getPlayerSpawn();
-    return Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
+    return spawnHere;
   }
 
   /** Create the viewport overlay: a live hover-cell readout + a transient toast. */

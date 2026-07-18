@@ -36,9 +36,9 @@ export default class EntityPlacer {
   }
 
   placeEntity(type, gridX, gridZ, elevation, data = {}) {
-    // One thing per tile — except the player spawn and a cleanser, which may
-    // share a cell (spawning on a cleansing tile is legal; the tape starts
-    // empty anyway).
+    // One thing per tile — except a cleanser, which may share a cell with the
+    // player spawn (spawning on a cleansing tile is legal; the tape starts
+    // empty anyway) and with a gate (a cleansing tile under a doorway).
     if (this._isCellOccupied(gridX, elevation, gridZ, type)) return null;
 
     if (type === 'player') {
@@ -70,16 +70,21 @@ export default class EntityPlacer {
 
   /**
    * True if cell (x,y,z) already holds something that blocks placing `type`
-   * there. The player spawn and a cleanser tolerate each other; everything
-   * else is one-per-tile.
+   * there. A cleanser shares a cell with the player spawn AND with a gate
+   * (a cleansing tile under a doorway is legal); everything else is
+   * one-per-tile.
    */
   _isCellOccupied(x, y, z, type = null) {
     const entities = this._undoManager.getEntitiesAt(x, y, z);
+    const spawn = this._undoManager.getPlayerSpawn();
+    const spawnHere = Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
+    // A cleanser is blocked only by a non-gate entity (spawn never blocks it).
+    if (type === 'cleanser') return entities.some((e) => e.type !== 'gate');
+    // A gate tolerates a cleanser but nothing else (incl. the spawn).
+    if (type === 'gate') return spawnHere || entities.some((e) => e.type !== 'cleanser');
     if (type === 'player') return entities.some((e) => e.type !== 'cleanser');
     if (entities.length > 0) return true;
-    if (type === 'cleanser') return false; // the spawn doesn't block a cleanser
-    const spawn = this._undoManager.getPlayerSpawn();
-    return Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
+    return spawnHere;
   }
 
   _placePlayerSpawn(gridX, gridZ, elevation) {

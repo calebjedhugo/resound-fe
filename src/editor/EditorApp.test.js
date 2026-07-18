@@ -707,6 +707,20 @@ describe('EditorApp wiring', () => {
       expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('player', 7, 7, 0);
     });
 
+    it('allows a cleanser on a gate cell (cleansing tile under a doorway)', () => {
+      app.undoManager.addEntity('gate', 7, 0, 7, {});
+      app.entityPlacer.placeEntity.mockClear();
+      press('l');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('cleanser', 7, 7, 0);
+    });
+
+    it('allows a gate on a cleanser tile', () => {
+      app.undoManager.addEntity('cleanser', 7, 0, 7, {});
+      app.entityPlacer.placeEntity.mockClear();
+      press('g');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('gate', 7, 7, 0);
+    });
+
     it('still refuses a non-cleanser entity on the spawn cell', () => {
       app.undoManager.setPlayerSpawn(7, 0, 7);
       app.entityPlacer.placeEntity.mockClear();
