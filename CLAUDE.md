@@ -236,11 +236,17 @@ instead of "fixing" it.
   `CleanserGatePad`; walking into the gate teleports to the active
   cleanser (`PortalManager.teleportToCleanser`, cross-area, loads on
   demand) and consumes it. The deployed gate LOOKS LIKE any activated
-  gate: a box of see-through PortalView panels (one per face; NO
-  cleanser disc — the gold tile shows THROUGH the gate; pad mesh is an
-  empty anchor at gate-center height). Its area is RETAINED
-  (`PortalManager.retainArea`) while the gate exists; views retarget
-  when a new cleanser is claimed. One-way, one use; arrival fires the
+  gate: a box of see-through PortalView panels (one per face; pad mesh
+  is an empty anchor at gate-center height). The gold tile shows AT the
+  gate via a mirror clone (the panel aperture would clip the arrival
+  cell's tile to a crescent — same fix as door tile mirrors), and doors
+  seen through the gate are themselves see-through: the pad pre-pass
+  renders door views for its MAPPED eye (active-area doors via
+  renderPortals re-run, a neighbor destination's own doors via
+  `renderAreaPortals`, hidden again after sampling). Its area is
+  RETAINED (`PortalManager.retainArea`) while the gate exists; views
+  retarget when a new cleanser is claimed. One-way, one use; arrival
+  fires the
   cleanser (tape wipe — intended cost); world state does NOT reset.
   Taught in IX via `teaches: ["deploy"]` (G keycap HUD hint, retiring
   only when a gate is removed/walked through; while deployed the hint

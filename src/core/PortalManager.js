@@ -288,6 +288,36 @@ class PortalManager {
   }
 
   /**
+   * Render see-through views for the OPEN linked gates of a specific
+   * (usually neighbor) area, for an arbitrary eye — the deployable
+   * cleanser gate's pre-pass uses this so a door seen through the gate is
+   * itself see-through even when the destination isn't the active area.
+   * Only doors whose partner area is loaded render (a partner at
+   * link-depth 2 isn't live). Views land in the same per-gate registry as
+   * the active area's (disposed together on active change); callers hide
+   * them again after sampling (hideAreaPortals) so their textures — valid
+   * for this eye only — never smear into other sightlines.
+   */
+  renderAreaPortals(area, renderer, camera) {
+    for (const gate of area.entityManager.getByType('gate')) {
+      if (!gate.link || !gate.link.puzzleId || !gate.isOpen) continue; // eslint-disable-line no-continue
+      if (this._views.get(gate) === null) continue; // eslint-disable-line no-continue -- dangling
+      const broken = this._renderExteriorViews(gate, renderer, camera);
+      if (broken) {
+        this._hideGateViews(gate);
+        this._views.set(gate, null);
+      }
+    }
+  }
+
+  /** Hide every view rendered by renderAreaPortals for this area. */
+  hideAreaPortals(area) {
+    for (const gate of area.entityManager.getByType('gate')) {
+      this._hideGateViews(gate);
+    }
+  }
+
+  /**
    * Standard door look from outside: every face the eye is on the outward
    * side of renders the partner's world (two at a corner).
    * @returns {boolean} true when the link proved dangling

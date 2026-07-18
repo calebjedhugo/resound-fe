@@ -177,12 +177,14 @@ function update(deltaTime) {
 
 function render() {
   stateMachine.render();
-  // Open linked gates draw their see-through neighbor view first, so the
-  // doorway texture is current when the main scene renders. The deployed
-  // cleanser gate's pad panel renders the same way.
+  // Open linked gates draw their see-through neighbor view before the main
+  // scene renders. The deployed cleanser gate goes FIRST: it pre-renders
+  // door views for its own mapped eye (so doors inside its panels are
+  // see-through), then the regular door pass re-renders them for the
+  // player's real eye — each surface shows its last completed write.
   motion(scene, (webglRenderer, playerCamera) => {
-    PortalManager.renderPortals(webglRenderer, playerCamera);
     DeployManager.renderPortal(webglRenderer, playerCamera);
+    PortalManager.renderPortals(webglRenderer, playerCamera);
   });
 }
 

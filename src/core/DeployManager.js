@@ -53,7 +53,14 @@ class DeployManager {
     this._pad = null; // { area, id, entity } while deployed
     this._views = []; // the gate's see-through panels (one per face)
     this._viewKey = null; // what the current panels were built against
+    this._viewTarget = null; // the active cleanser the panels point at
     this._retainedId = null; // destination area pinned live for the views
+    // Visual clone of the destination cleanser tile under the gate — the
+    // panel aperture can only paint past the window plane, so the tile in
+    // the arrival cell would clip to a crescent; the mirror IS the "seen
+    // through the gate" tile (same doctrine as door tile mirrors).
+    this._tileMirror = null;
+    this._tileMirrorGroup = null;
   }
 
   /** @param {THREE.Scene} scene - the render scene (phantom lives here) */
@@ -101,14 +108,45 @@ class DeployManager {
 
   /**
    * Render the gate's see-through panels (call from the game's
-   * beforeRender, alongside PortalManager.renderPortals). Each panel
-   * skips itself unless the eye is on its outward side and it's in view —
-   * the same self-culling a door's window box does.
+   * beforeRender, BEFORE PortalManager.renderPortals). Each panel skips
+   * itself unless the eye is on its outward side and it's in view — the
+   * same self-culling a door's window box does.
+   *
+   * Doors seen THROUGH the gate must themselves be see-through, and the
+   * player's own door pass can't provide that: the gate's mapped eye
+   * looks at faces the player camera may never see. So door views render
+   * an extra pass here for the MAPPED eye (the pad->cleanser mapping is a
+   * pure translation, shared by all four faces) before the panels sample
+   * them. A destination in the ACTIVE area reuses the regular door pass
+   * (re-run afterwards for the player's real eye — each surface shows its
+   * last completed write); a NEIGHBOR destination gets its own doors
+   * rendered via renderAreaPortals and hidden again after sampling, so
+   * their mapped-eye textures never smear into other sightlines.
    */
   renderPortal(renderer, camera) {
     if (this._views.length === 0 || !this._pad) return;
     if (this._pad.area !== gameState.activeArea) return;
+    let neighborDest = null;
+    if (this._viewTarget) {
+      const padPos = this._pad.entity.position;
+      const t = this._viewTarget.position;
+      const eye = {
+        position: {
+          x: camera.position.x + (t.x - padPos.x),
+          y: camera.position.y + (t.y - padPos.y),
+          z: camera.position.z + (t.z - padPos.z),
+        },
+      };
+      const destArea = PortalManager.getArea(this._viewTarget.puzzleId);
+      if (destArea && destArea !== gameState.activeArea) {
+        neighborDest = destArea;
+        PortalManager.renderAreaPortals(destArea, renderer, eye);
+      } else {
+        PortalManager.renderPortals(renderer, eye);
+      }
+    }
     for (const view of this._views) view.render(renderer, camera);
+    if (neighborDest) PortalManager.hideAreaPortals(neighborDest);
   }
 
   /** Tear down (menu exit / new world entry). */
@@ -159,15 +197,51 @@ class DeployManager {
       // seamlessly at the cleanser.
       this._views = PortalManager.createCleanserGateViews(this._pad.entity, target);
       this._viewKey = this._views.length > 0 ? key : null;
+      this._viewTarget = this._views.length > 0 ? target : null;
+      this._buildTileMirror(destArea, target);
     }
     const visible = this._pad.area === gameState.activeArea;
     for (const view of this._views) view.setVisible(visible);
+  }
+
+  /**
+   * The destination cleanser, visible AT the gate: a clone of the real
+   * tile's mesh (shared material — gold and pulse stay in sync, the
+   * destination is live) sitting under the gate. The panel aperture only
+   * paints past the window plane, so without this the tile in the arrival
+   * cell clips to a far crescent (same fix as PortalManager's door tile
+   * mirrors: the two cells are one place).
+   */
+  _buildTileMirror(destArea, target) {
+    const tile = destArea.entityManager
+      .getByType('cleanser')
+      .find(
+        (c) =>
+          Math.abs(c.position.x - target.position.x) < 0.01 &&
+          Math.abs(c.position.y - target.position.y) < 0.01 &&
+          Math.abs(c.position.z - target.position.z) < 0.01
+      );
+    if (!tile || !tile.mesh) return;
+    const padPos = this._pad.entity.position;
+    const mirror = tile.mesh.clone(); // shares geometry + material
+    const lift = tile.mesh.position.y - tile.position.y;
+    mirror.position.set(padPos.x, padPos.y + lift, padPos.z);
+    mirror._isCleanserMirror = true; // tag for tests/debugging
+    this._pad.area.group.add(mirror);
+    this._tileMirror = mirror;
+    this._tileMirrorGroup = this._pad.area.group;
   }
 
   _disposeView() {
     for (const view of this._views) view.dispose();
     this._views = [];
     this._viewKey = null;
+    this._viewTarget = null;
+    if (this._tileMirror) {
+      this._tileMirrorGroup.remove(this._tileMirror);
+      this._tileMirror = null;
+      this._tileMirrorGroup = null;
+    }
   }
 
   _enterAiming() {

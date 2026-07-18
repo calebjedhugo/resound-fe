@@ -208,6 +208,52 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     expect(renderer.renderCalls).toHaveLength(2);
   });
 
+  it('shows the destination cleanser AT the gate (mirror tile, shared material)', async () => {
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+
+    // The panel aperture clips a floor tile in the arrival cell to a
+    // crescent, so the tile is mirrored under the gate instead — cloned
+    // from the real tile, material shared so the gold glow stays in sync.
+    const mirror = gameState.activeArea.group.children.find((child) => child._isCleanserMirror);
+    expect(mirror).toBeDefined();
+    expect(mirror.position.x).toBeCloseTo(30);
+    expect(mirror.position.z).toBeCloseTo(39 - 2 * WORLD_SCALE);
+    const [tile] = gameState.activeArea.entityManager.getByType('cleanser');
+    expect(mirror.material).toBe(tile.mesh.material);
+
+    DeployManager.toggle(); // remove
+    expect(gameState.activeArea.group.children.some((child) => child._isCleanserMirror)).toBe(
+      false
+    );
+  });
+
+  it('pre-renders door views for the MAPPED eye so doors through the gate are see-through', async () => {
+    await activateCleanser();
+    standAt(30, 39); // gate at (30, 33); cleanser at (21, 33): offset (-9, 0, 0)
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+
+    const spy = jest.spyOn(PortalManager, 'renderPortals');
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {},
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    DeployManager.renderPortal(renderer, { position: { x: 30, y: 1.8, z: 39 } });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const eye = spy.mock.calls[0][1];
+    expect(eye.position.x).toBeCloseTo(30 - 9);
+    expect(eye.position.y).toBeCloseTo(1.8);
+    expect(eye.position.z).toBeCloseTo(39);
+    spy.mockRestore();
+  });
+
   it('removing the gate disposes the panels and releases the retained area', async () => {
     await activateCleanser();
     standAt(30, 39);
@@ -315,6 +361,45 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
 
     expect(ok).toBe(true);
     expect(gameState.activeArea.id).toBe('portal-b');
+  });
+
+  it("a NEIGHBOR destination's own open doors render for the mapped eye, then hide", async () => {
+    installFetchMock({ 'portal-b': portalB });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+    gameState.mode = 'PLAYING';
+    DeployManager.reset();
+    // Active cleanser lives in the NEIGHBOR (portal-b); deploy in portal-a
+    gameState.activeCleanser = { puzzleId: 'portal-b', position: { x: 6, y: 0, z: 6 } };
+    gameState.player.position = { x: 6, y: 1.8, z: 6 };
+    gameState.player.elevation = 0;
+    gameState.camera.viewCenter = [0, 0];
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+    expect(DeployManager._views.length).toBe(4);
+
+    // Open portal-b's door so it has something to be see-through about
+    const areaB = PortalManager._areas.get('portal-b');
+    const doorB = areaB.entityManager.getByType('gate').find((g) => g.gateId === 'south-door');
+    doorB.open();
+
+    const areaSpy = jest.spyOn(PortalManager, 'renderAreaPortals');
+    const hideSpy = jest.spyOn(PortalManager, 'hideAreaPortals');
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {},
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    DeployManager.renderPortal(renderer, { position: { x: 6, y: 1.8, z: 6 } });
+
+    expect(areaSpy).toHaveBeenCalledWith(areaB, renderer, expect.anything());
+    expect(hideSpy).toHaveBeenCalledWith(areaB);
+    // The neighbor door got real faces built for the mapped eye
+    expect(PortalManager._views.get(doorB)).toBeTruthy();
+    areaSpy.mockRestore();
+    hideSpy.mockRestore();
   });
 
   it('stays put when the destination cannot be loaded', async () => {
