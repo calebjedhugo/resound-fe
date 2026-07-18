@@ -7,7 +7,7 @@
   "keySignature": "C",
   "timeSignature": [4, 4],
   "teaches": ["slots"],
-  "playerStart": { "x": 4, "y": 0, "z": 6 },
+  "playerStart": { "x": 4, "y": 0, "z": 7 },
   "floors": [],
   "entities": [
     {
