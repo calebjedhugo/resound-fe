@@ -48,6 +48,32 @@
       "id": "gate-2",
       "facing": "north",
       "link": { "puzzleId": "teleport", "gateId": "gate-1" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 14, "y": 0, "z": 8 },
+      "song": [
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "G5", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" }
+      ],
+      "id": "gate-3",
+      "facing": "north",
+      "link": { "puzzleId": "teleport", "gateId": "gate-4" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 3, "y": 0, "z": 6 },
+      "song": [
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "G5", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" }
+      ],
+      "id": "gate-4",
+      "facing": "north",
+      "link": { "puzzleId": "teleport", "gateId": "gate-3" }
     }
   ]
 }
