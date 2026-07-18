@@ -92,6 +92,12 @@ class GameState {
       capturedNotes: [],
     };
 
+    // The ACTIVE cleanser — the last cleansing tile the player stepped on
+    // ({ puzzleId, position } or null). It glows gold instead of cyan, and
+    // it is where a deployed cleanser gate leads (core/DeployManager).
+    // Positional, not an entity reference: it survives area prune/rebuild.
+    this.activeCleanser = null;
+
     // Harmony detection log (for debug UI)
     this.harmonyLog = [];
   }
@@ -129,6 +135,7 @@ class GameState {
       startTime: null,
       capturedNotes: [],
     };
+    this.activeCleanser = null;
   }
 
   /**

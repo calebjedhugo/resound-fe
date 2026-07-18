@@ -30,6 +30,14 @@ class CleansingTile extends Entity {
   static FLASH_INTENSITY = 2.2;
   static FLASH_DECAY_PER_S = 3.5;
 
+  // Resting (cyan) look, and the gold look of the ACTIVE cleanser — the last
+  // tile the player stepped on, where a deployed cleanser gate leads
+  // (core/DeployManager). One tile is active at a time, world-wide.
+  static BASE_COLOR = 0x66ddff;
+  static BASE_EMISSIVE = 0x2299cc;
+  static ACTIVE_COLOR = 0xffd97a;
+  static ACTIVE_EMISSIVE = 0xbb7711;
+
   constructor(position, data = {}) {
     super('cleanser', position, data);
     this._pulse = 0;
@@ -46,10 +54,10 @@ class CleansingTile extends Entity {
   static buildTileMesh(position) {
     const geometry = new THREE.CylinderGeometry(1.25, 1.25, 0.12, 32);
     const material = new THREE.MeshStandardMaterial({
-      color: 0x66ddff,
+      color: CleansingTile.BASE_COLOR,
       roughness: 0.25,
       metalness: 0.2,
-      emissive: 0x2299cc,
+      emissive: CleansingTile.BASE_EMISSIVE,
       emissiveIntensity: CleansingTile.PULSE_MIN,
       transparent: true,
       opacity: 0.85,
@@ -76,6 +84,13 @@ class CleansingTile extends Entity {
     if (inside && !this._wasPlayerInside) {
       Tape.clear();
       this._flash = 1; // spike the glow so the wipe reads as caused by the tile
+      // Stepping on a cleanser makes it the ACTIVE one — the destination of
+      // a deployed cleanser gate. Stored positionally so it survives the
+      // entity being pruned and rebuilt with its area.
+      gameState.activeCleanser = {
+        puzzleId: this.area ? this.area.id : null,
+        position: { x: this.position.x, y: this.position.y, z: this.position.z },
+      };
     }
     this._wasPlayerInside = inside;
 
@@ -93,6 +108,26 @@ class CleansingTile extends Entity {
       PULSE_MIN + (PULSE_MAX - PULSE_MIN) * (0.5 - 0.5 * Math.cos(this._pulse * Math.PI * 2));
     const flash = this._flash * (FLASH_INTENSITY - PULSE_MAX);
     this.mesh.material.emissiveIntensity = breathe + flash;
+    // Re-checked every frame (not just on claim) so the PREVIOUS active tile
+    // reverts to cyan on its own, and a rebuilt area's tile picks its gold
+    // back up — no registry to keep in sync.
+    const active = this.isActiveCleanser();
+    this.mesh.material.color.setHex(active ? CleansingTile.ACTIVE_COLOR : CleansingTile.BASE_COLOR);
+    this.mesh.material.emissive.setHex(
+      active ? CleansingTile.ACTIVE_EMISSIVE : CleansingTile.BASE_EMISSIVE
+    );
+  }
+
+  /** Is THIS tile the world's active cleanser (positional match)? */
+  isActiveCleanser() {
+    const target = gameState.activeCleanser;
+    if (!target) return false;
+    if (this.area && target.puzzleId !== this.area.id) return false;
+    return (
+      Math.abs(target.position.x - this.position.x) < 0.01 &&
+      Math.abs(target.position.y - this.position.y) < 0.01 &&
+      Math.abs(target.position.z - this.position.z) < 0.01
+    );
   }
 
   /**

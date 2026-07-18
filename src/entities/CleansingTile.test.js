@@ -63,6 +63,61 @@ describe('CleansingTile', () => {
     expect(gameState.player.inventory).toHaveLength(1);
   });
 
+  it('stepping on a tile makes it the ACTIVE cleanser and turns it gold', () => {
+    const tile = new CleansingTile({ x: 30, y: 0, z: 30 });
+    tile.area = { id: 'here' };
+    gameState.activeArea = tile.area;
+    gameState.player.position = { ...OFF_TILE };
+    gameState.player.elevation = 0;
+
+    tile.update(0.016);
+    expect(gameState.activeCleanser).toBeNull();
+    expect(tile.mesh.material.color.getHex()).toBe(CleansingTile.BASE_COLOR);
+
+    gameState.player.position = { ...ON_TILE };
+    tile.update(0.016);
+    expect(gameState.activeCleanser).toEqual({
+      puzzleId: 'here',
+      position: { x: 30, y: 0, z: 30 },
+    });
+    expect(tile.mesh.material.color.getHex()).toBe(CleansingTile.ACTIVE_COLOR);
+  });
+
+  it('claiming a new active cleanser reverts the previous one to cyan', () => {
+    const area = { id: 'here' };
+    const first = new CleansingTile({ x: 30, y: 0, z: 30 });
+    const second = new CleansingTile({ x: 0, y: 0, z: 0 });
+    first.area = area;
+    second.area = area;
+    gameState.activeArea = area;
+    gameState.player.elevation = 0;
+
+    gameState.player.position = { ...ON_TILE };
+    first.update(0.016);
+    second.update(0.016);
+    expect(first.mesh.material.color.getHex()).toBe(CleansingTile.ACTIVE_COLOR);
+
+    gameState.player.position = { ...OFF_TILE }; // OFF_TILE sits on `second`
+    first.update(0.016);
+    second.update(0.016); // second claims the active slot...
+    first.update(0.016); // ...and first repaints on its next frame
+    expect(second.mesh.material.color.getHex()).toBe(CleansingTile.ACTIVE_COLOR);
+    expect(first.mesh.material.color.getHex()).toBe(CleansingTile.BASE_COLOR);
+  });
+
+  it('a rebuilt tile at the active position picks its gold back up (positional match)', () => {
+    const area = { id: 'here' };
+    gameState.activeArea = area;
+    gameState.activeCleanser = { puzzleId: 'here', position: { x: 30, y: 0, z: 30 } };
+    gameState.player.position = { ...OFF_TILE };
+    gameState.player.elevation = 0;
+
+    const rebuilt = new CleansingTile({ x: 30, y: 0, z: 30 });
+    rebuilt.area = area;
+    rebuilt.update(0.016);
+    expect(rebuilt.mesh.material.color.getHex()).toBe(CleansingTile.ACTIVE_COLOR);
+  });
+
   it('spikes the glow on a fresh clear, then settles back toward the resting pulse', () => {
     const tile = new CleansingTile({ x: 30, y: 0, z: 30 });
     gameState.player.position = { ...ON_TILE };
