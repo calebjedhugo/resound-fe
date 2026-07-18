@@ -116,11 +116,19 @@ export default class GitPanel {
     let status;
     try {
       status = await gitStatus();
-    } catch {
-      // No dev git endpoint (production build) — hide the whole panel.
-      this._container.style.display = 'none';
+    } catch (err) {
+      // On the FIRST load a failure means there's no dev git endpoint
+      // (production build) — hide the whole panel. But once we've connected,
+      // a later blip must NOT make the panel vanish (that reads as "the action
+      // silently failed"): keep it visible and show the error inline.
+      if (this._everConnected) {
+        this.setStatus(`git status unavailable: ${err.message || err}`, true);
+      } else {
+        this._container.style.display = 'none';
+      }
       return;
     }
+    this._everConnected = true;
     this._container.style.display = '';
     const parts = [status.branch || '(detached)'];
     parts.push(

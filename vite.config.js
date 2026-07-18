@@ -139,22 +139,44 @@ function puzzleWriterPlugin() {
  * Run a git subcommand at the repo root. Never throws — resolves a result
  * object so the caller can report stdout/stderr to the editor UI. execFile
  * (no shell) makes user-supplied args like a commit message injection-safe.
+ *
+ * A timeout + GIT_TERMINAL_PROMPT=0 turn a would-be hang (network stall or a
+ * credential prompt with no TTY behind the dev server) into a fast, reported
+ * error instead of a request that never resolves and a UI stuck "busy".
  */
-function runGit(args) {
+function runGit(args, { timeoutMs = 30000 } = {}) {
   return new Promise((resolve) => {
     execFile(
       'git',
       args,
-      { cwd: __dirname, maxBuffer: 16 * 1024 * 1024 },
+      {
+        cwd: __dirname,
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: timeoutMs,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      },
       (err, stdout, stderr) => {
+        // execFile kills with SIGTERM on timeout (err.killed + signal set).
+        const timedOut = Boolean(err && err.killed && err.signal === 'SIGTERM');
         resolve({
           ok: !err,
+          timedOut,
           stdout: (stdout || '').toString(),
           stderr: (stderr || '').toString(),
         });
       }
     );
   });
+}
+
+// Strip ANSI color escapes (git hooks like lint-staged emit them) so the
+// editor status line shows clean text, not "[34m→".
+const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+
+/** Human-readable failure text from a runGit result (prefers git's own stderr). */
+function gitError(r) {
+  if (r.timedOut) return 'git timed out — network stall or a credential prompt (no terminal here)';
+  return (r.stderr || r.stdout || 'git command failed').replace(ANSI_ESCAPE, '').trim();
 }
 
 /**
@@ -217,24 +239,59 @@ function gitPlugin() {
             }
             const add = await runGit(['add', '--', PUZZLES_PATHSPEC]);
             if (!add.ok) {
-              send(500, { ok: false, error: add.stderr || add.stdout });
+              send(500, { ok: false, error: gitError(add) });
               return;
             }
             const commit = await runGit(['commit', '-m', message]);
-            send(commit.ok ? 200 : 500, {
-              ok: commit.ok,
-              error: commit.ok ? undefined : commit.stderr || commit.stdout,
+            if (!commit.ok) {
+              // Non-zero here is usually "nothing to commit" (button raced a
+              // stale status) or a failing pre-commit hook — surface it.
+              send(500, { ok: false, error: gitError(commit) });
+              return;
+            }
+            const head = await runGit(['rev-parse', '--short', 'HEAD']);
+            const hash = head.stdout.trim();
+            send(200, {
+              ok: true,
+              hash,
+              summary: `Committed ${hash}`,
               stdout: commit.stdout,
               stderr: commit.stderr,
             });
             return;
           }
 
-          if (req.method === 'POST' && (action === 'pull' || action === 'push')) {
-            const r = await runGit(action === 'pull' ? ['pull', '--rebase'] : ['push']);
-            send(r.ok ? 200 : 500, {
-              ok: r.ok,
-              error: r.ok ? undefined : r.stderr || r.stdout,
+          if (req.method === 'POST' && action === 'push') {
+            const r = await runGit(['push']);
+            if (!r.ok) {
+              send(500, { ok: false, error: gitError(r) });
+              return;
+            }
+            const out = `${r.stderr}\n${r.stdout}`;
+            const noop = /Everything up-to-date/i.test(out);
+            // git prints the update like "   e8b2365..3b363cd  main -> main".
+            const refLine = (out.match(/[0-9a-f]{4,}\.\.[0-9a-f]{4,}\s+\S+\s+->\s+\S+/) || [])[0];
+            const summary = noop
+              ? 'Nothing to push — remote already up to date'
+              : `Pushed${refLine ? ` (${refLine.trim()})` : ' to remote'}`;
+            send(200, { ok: true, noop, summary, stdout: r.stdout, stderr: r.stderr });
+            return;
+          }
+
+          if (req.method === 'POST' && action === 'pull') {
+            // --autostash: the working tree almost always carries unrelated
+            // WIP (src/ edits); without it rebase refuses to run at all.
+            const r = await runGit(['pull', '--rebase', '--autostash']);
+            if (!r.ok) {
+              send(500, { ok: false, error: gitError(r) });
+              return;
+            }
+            const out = `${r.stdout}\n${r.stderr}`;
+            const noop = /Already up to date/i.test(out);
+            send(200, {
+              ok: true,
+              noop,
+              summary: noop ? 'Already up to date — nothing pulled' : 'Pulled changes from remote',
               stdout: r.stdout,
               stderr: r.stderr,
             });
@@ -257,7 +314,8 @@ function gitPlugin() {
             send(r.ok ? 200 : 500, {
               ok: r.ok,
               nothing,
-              error: r.ok ? undefined : r.stderr || r.stdout,
+              summary: nothing ? 'Nothing to revert' : 'Reverted — ⌘Z to restore',
+              error: r.ok ? undefined : gitError(r),
               stdout: r.stdout,
               stderr: r.stderr,
             });
@@ -268,7 +326,8 @@ function gitPlugin() {
             const r = await runGit(['stash', 'pop']);
             send(r.ok ? 200 : 500, {
               ok: r.ok,
-              error: r.ok ? undefined : r.stderr || r.stdout,
+              summary: r.ok ? 'Restored reverted edits' : undefined,
+              error: r.ok ? undefined : gitError(r),
               stdout: r.stdout,
               stderr: r.stderr,
             });

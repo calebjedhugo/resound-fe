@@ -555,21 +555,21 @@ export default class EditorApp {
 
   /** Commit the staged puzzle files. Throws (surfaced by GitPanel) on failure. */
   async _gitCommit(message) {
-    await gitCommit(message);
-    return 'Committed puzzle files';
+    const result = await gitCommit(message);
+    return result.summary || 'Committed';
   }
 
   /** Pull (whole repo), then reload the open puzzle in case it changed. */
   async _gitPull() {
-    await gitPull();
+    const result = await gitPull();
     await this._reloadCurrentPuzzleFromDisk();
-    return 'Pulled';
+    return result.summary || 'Pulled';
   }
 
-  /** Push (whole repo). */
+  /** Push (whole repo). Reports git's actual result (ref update or no-op). */
   async _gitPush() {
-    await gitPush();
-    return 'Pushed';
+    const result = await gitPush();
+    return result.summary || 'Pushed';
   }
 
   /**
