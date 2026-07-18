@@ -28,8 +28,9 @@ import { CLAP_RANGE } from 'core/constants';
  *   deploy   - "G" keycap, bottom-center HUD (above the move cluster): the
  *              deployable cleanser gate (core/DeployManager). Shows once an
  *              ACTIVE cleanser exists (the mechanic leads to it — before
- *              that the key is silent); retires when a pad is deployed
- *              (DeployManager retires it).
+ *              that the key is silent). It teaches the WHOLE g-cycle,
+ *              "g again to cancel" included: retires only when a deployed
+ *              pad is removed or walked through (DeployManager retires it).
  */
 
 const MOVE_HINT_DELAY_S = 1.5;

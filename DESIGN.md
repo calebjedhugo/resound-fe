@@ -183,8 +183,14 @@ automated playtesters can observe them.)
     2026-07-18). Stepping on a cleanser makes it the ACTIVE one — it turns
     GOLD (the rest stay cyan; one active tile world-wide) and becomes the
     destination of the player's deployable gate. "G" cycles: aim (a phantom
-    cleanser two tiles ahead — free placement on walkable ground, NOT
-    grid-quantized, red over invalid spots) → deploy (a real pad) → remove.
+    cleanser two tiles ahead along the EFFECTIVE camera heading — mouse
+    offset included, so it answers the look as well as the body; free
+    placement on walkable ground, NOT grid-quantized, red over invalid
+    spots) → deploy (a real pad) → remove. A deployed pad is SEE-THROUGH
+    like any other gate: a portal panel stands on it (facing back at the
+    deployer) showing the live view of the active cleanser's cell and the
+    room beyond — its area is retained live while the pad exists, and the
+    view retargets if a new cleanser is claimed.
     Walking onto the pad teleports the player to the active cleanser and
     CONSUMES the pad — strictly one-way, one use, one pad at a time, and
     the gate can lead anywhere (cross-area; the destination loads on
@@ -197,8 +203,11 @@ automated playtesters can observe them.)
     the mechanical never-soft-lock guarantee. Aiming requires an active
     cleanser (no touched drain, no gate); the lesson is taught in IX ("The
     Star", `teaches: ["deploy"]`) where the player steps on a cleanser on
-    the way in. Aiming is currently NOT cancelable without deploying —
-    known, awaiting a playtest ruling. See `core/DeployManager.js`,
+    the way in. Cancel (interim ruling 2026-07-18): "g again to cancel" —
+    a deployed gate is removed by the third G, and the G hint teaches the
+    WHOLE cycle (it retires only when a deployed pad is removed or walked
+    through, not on deploy). Aiming itself still can't be exited without
+    deploying — revisit after play. See `core/DeployManager.js`,
     `entities/CleanserGatePad.js`, `PortalManager.teleportToCleanser`.
   Solo starts keep the beat grid with the late grace expressed in BEATS
   (`PLAYBACK_LATE_GRACE_BEATS`, kept under the matcher tolerance so a

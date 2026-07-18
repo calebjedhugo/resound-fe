@@ -78,6 +78,10 @@ class PortalManager {
     // Visual-only clones of a cleanser sitting under a door's PARTNER face
     // (see _rebuildTileMirrors): { mesh, group } pairs, rebuilt with doors
     this._tileMirrors = [];
+    // Areas pinned live beyond the link-adjacency rule — the deployable
+    // cleanser gate retains its destination so the pad's see-through view
+    // has a live scene to render (core/DeployManager).
+    this._retained = new Set();
     // gate -> Map<facing, PortalView> (a view per player-visible face) or
     // null once the link proves dangling (the gate stays an ordinary gate)
     this._views = new Map();
@@ -124,6 +128,7 @@ class PortalManager {
     this._areas.clear();
     this._doors = [];
     this._tileMirrors = []; // meshes died with their areas' groups
+    this._retained.clear();
     this._linkedGates = [];
     this._transitioning = false;
     this._insideDoor = null;
@@ -660,8 +665,9 @@ class PortalManager {
       : [];
 
     // Prune areas that are neither active nor adjacent to it (their state
-    // resets on the next visit — streaming beyond depth 1 is a later stage)
-    const wanted = new Set();
+    // resets on the next visit — streaming beyond depth 1 is a later stage).
+    // Retained areas (the deployable gate's destination) are kept live too.
+    const wanted = new Set(this._retained);
     if (this._activeArea) wanted.add(this._activeArea.id);
     for (const gate of this._linkedGates) wanted.add(gate.link.puzzleId);
     for (const [id, area] of [...this._areas]) {
@@ -673,6 +679,9 @@ class PortalManager {
 
     for (const gate of this._linkedGates) {
       this._loadNeighbor(gate.link.puzzleId);
+    }
+    for (const id of this._retained) {
+      this._loadNeighbor(id);
     }
     this._rebuildDoors();
   }
@@ -698,7 +707,58 @@ class PortalManager {
   }
 
   _stillWanted(puzzleId) {
-    return this._linkedGates.some((g) => g.link && g.link.puzzleId === puzzleId);
+    return (
+      this._retained.has(puzzleId) ||
+      this._linkedGates.some((g) => g.link && g.link.puzzleId === puzzleId)
+    );
+  }
+
+  /**
+   * Pin an area live regardless of link adjacency (loading it if needed) —
+   * the deployable cleanser gate retains its destination so the pad's
+   * see-through view always has a live scene. Balanced by releaseArea.
+   */
+  retainArea(puzzleId) {
+    if (!puzzleId) return;
+    this._retained.add(puzzleId);
+    this._loadNeighbor(puzzleId);
+  }
+
+  /** Un-pin a retained area; it prunes on the next adjacency rescan. */
+  releaseArea(puzzleId) {
+    this._retained.delete(puzzleId);
+  }
+
+  /**
+   * Build the see-through view for a deployed cleanser gate pad: a single
+   * PortalView panel on the pad, facing `sourceFacing` (back toward the
+   * deployer), showing the ACTIVE cleanser's cell and the room beyond it —
+   * the same window a linked door gets, with the cleanser cell as the
+   * partner "gate" (a positional stub; there is no mesh to hide).
+   * @param {Entity} pad - the CleanserGatePad (its mesh hosts the surface)
+   * @param {{puzzleId: string, position: {x,y,z}}} target - active cleanser
+   * @param {string} sourceFacing - cardinal face the panel renders on
+   * @returns {PortalView|undefined} undefined while the destination area
+   *   isn't loaded yet (retainArea's fetch may still be in flight)
+   */
+  createCleanserGateView(pad, target, sourceFacing) {
+    const destArea = this._areas.get(target.puzzleId);
+    if (!destArea || !pad.mesh) return undefined;
+    // A destination in the ACTIVE area lives in the main scene (its own
+    // Area.scene is empty) — same rule as same-puzzle doors.
+    const sceneOverride = destArea === this._activeArea ? this._mainScene : null;
+    const partnerStub = { position: target.position, mesh: null, gateId: 'active-cleanser' };
+    const view = new PortalView(pad, partnerStub, destArea, {
+      sceneOverride,
+      sourceFacing,
+      partnerFacing: OPPOSITE_FACING[sourceFacing] || 'south',
+    });
+    // PortalView parents the surface to the host mesh assuming a gate BOX
+    // centered at cell-center height; the pad disc sits on the floor
+    // (position.y + 0.08), so lift the surface up to the doorway's center.
+    view.surface.position.y += WORLD_SCALE / 2 - 0.08;
+    view.setVisible(true);
+    return view;
   }
 
   /** Doors = linked gate pairs whose BOTH areas are currently loaded. */

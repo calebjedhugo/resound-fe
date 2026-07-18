@@ -231,13 +231,19 @@ instead of "fixing" it.
   stepping on a cleanser turns it GOLD (one active tile world-wide) and
   makes it the destination of the player's deployable gate. G cycles
   aim → deploy → remove (`core/DeployManager`): a phantom cleanser two
-  tiles ahead (free placement, NOT grid-quantized, red = invalid),
-  deployed as a `CleanserGatePad`; walking onto the pad teleports to the
-  active cleanser (`PortalManager.teleportToCleanser`, cross-area, loads
-  on demand) and consumes the pad. One-way, one use; arrival fires the
-  cleanser (tape wipe — intended cost); world state does NOT reset.
-  Taught in IX via `teaches: ["deploy"]` (G keycap HUD hint). Aiming
-  requires an active cleanser. See DESIGN.md "The ACTIVE cleanser"
+  tiles ahead along the EFFECTIVE camera heading (mouse offset included;
+  free placement, NOT grid-quantized, red = invalid), deployed as a
+  `CleanserGatePad`; walking onto the pad teleports to the active
+  cleanser (`PortalManager.teleportToCleanser`, cross-area, loads on
+  demand) and consumes the pad. The pad is SEE-THROUGH like a door: a
+  PortalView panel on the pad shows the destination live (its area is
+  RETAINED — `PortalManager.retainArea` — while the pad exists, and the
+  view retargets when a new cleanser is claimed). One-way, one use;
+  arrival fires the cleanser (tape wipe — intended cost); world state
+  does NOT reset. Taught in IX via `teaches: ["deploy"]` (G keycap HUD
+  hint, retiring only when a pad is removed/walked through — "g again to
+  cancel" is part of the lesson). Aiming requires an active cleanser.
+  See DESIGN.md "The ACTIVE cleanser"
 
 ---
 

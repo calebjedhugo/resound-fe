@@ -107,6 +107,113 @@ describe('DeployManager state machine', () => {
   });
 });
 
+describe('Aiming answers the CAMERA, not just the body', () => {
+  afterEach(() => {
+    // The mouse state lives on the gameState singleton — restore it so the
+    // far-left offset never leaks into later tests.
+    const [cx, cy] = gameState.input.mouse.screenCenter;
+    gameState.input.mouse.position = [cx, cy];
+    gameState.input.mouse.centered = true;
+  });
+
+  it('the live mouse-look offset swings the phantom with the view', async () => {
+    await activateCleanser();
+    standAt(30, 39); // viewCenter yaw 0 (facing -z): straight-ahead spot is (30, 33)
+    // Mouse pushed to the far left edge: effective yaw swings ~+90° -> aim -x
+    gameState.input.mouseLookEnabled = true;
+    const [, cy] = gameState.input.mouse.screenCenter;
+    gameState.input.mouse.position = [0, cy];
+    gameState.input.mouse.centered = false;
+
+    DeployManager.toggle();
+
+    // The phantom left the straight-ahead spot and swung toward -x
+    expect(DeployManager._phantom.position.x).toBeLessThan(27);
+    expect(DeployManager._phantom.position.z).toBeGreaterThan(36);
+  });
+});
+
+describe('The G hint teaches the whole cycle ("g again to cancel")', () => {
+  it('deploying does NOT retire the hint; removing the pad does', async () => {
+    const HintMemory = (await import('core/HintMemory')).default;
+    HintMemory.reset();
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    DeployManager.toggle(); // deployed
+    expect(HintMemory.isRetired('deploy')).toBe(false);
+    DeployManager.toggle(); // removed — full cycle performed
+    expect(HintMemory.isRetired('deploy')).toBe(true);
+  });
+
+  it('walking through the pad also completes the lesson', async () => {
+    const HintMemory = (await import('core/HintMemory')).default;
+    HintMemory.reset();
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    DeployManager.toggle();
+    const [pad] = padsInActiveArea();
+    standAt(pad.position.x, pad.position.z);
+    await ctx.tick(20);
+    DeployManager.update();
+    expect(HintMemory.isRetired('deploy')).toBe(true);
+  });
+});
+
+describe('The deployed pad is SEE-THROUGH (a portal view of the destination)', () => {
+  it('deploying stands a portal panel on the pad, facing the deployer', async () => {
+    await activateCleanser();
+    standAt(30, 39); // facing -z: pad at (30, 33), player south of it
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+
+    const [pad] = padsInActiveArea();
+    const surface = pad.mesh.children.find((child) => child._isPortalSurface);
+    expect(surface).toBeDefined();
+    expect(surface.visible).toBe(true);
+    // Lifted from the floor disc up to doorway center height
+    expect(surface.position.y).toBeCloseTo(WORLD_SCALE / 2 - 0.08);
+    expect(DeployManager._pad.facing).toBe('south');
+  });
+
+  it('the view renders the destination scene through the pad panel', async () => {
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render(scene, cam) {
+        this.renderCalls.push({ scene, cam });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    // Player camera standing back from the pad, on its facing side
+    DeployManager.renderPortal(renderer, { position: { x: 30, y: 1.8, z: 39 } });
+    expect(renderer.renderCalls).toHaveLength(1);
+  });
+
+  it('removing the pad disposes the view and releases the retained area', async () => {
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+    expect(DeployManager._view).toBeTruthy();
+    expect(PortalManager._retained.has('deploy-basic')).toBe(true);
+
+    DeployManager.toggle(); // remove
+    expect(DeployManager._view).toBeNull();
+    expect(PortalManager._retained.has('deploy-basic')).toBe(false);
+  });
+});
+
 describe('Walking through the deployed cleanser gate', () => {
   it('teleports to the active cleanser, wipes the tape, and consumes the pad', async () => {
     await activateCleanser();

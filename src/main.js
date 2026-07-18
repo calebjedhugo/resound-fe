@@ -178,10 +178,12 @@ function update(deltaTime) {
 function render() {
   stateMachine.render();
   // Open linked gates draw their see-through neighbor view first, so the
-  // doorway texture is current when the main scene renders
-  motion(scene, (webglRenderer, playerCamera) =>
-    PortalManager.renderPortals(webglRenderer, playerCamera)
-  );
+  // doorway texture is current when the main scene renders. The deployed
+  // cleanser gate's pad panel renders the same way.
+  motion(scene, (webglRenderer, playerCamera) => {
+    PortalManager.renderPortals(webglRenderer, playerCamera);
+    DeployManager.renderPortal(webglRenderer, playerCamera);
+  });
 }
 
 // Keyboard handler for pause and metronome
