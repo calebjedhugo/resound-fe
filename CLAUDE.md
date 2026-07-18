@@ -137,7 +137,15 @@ instead of "fixing" it.
 - **Open linked gates are see-through**: the `facing` face shows the LIVE
   neighbor area (`core/PortalView.js` renders the neighbor's `Area.scene`).
   The extra pass runs only while a linked gate is open; a closed linked gate
-  looks identical to a normal gate.
+  looks identical to a normal gate. ALL FOUR faces of an open door are
+  materialized eagerly, WARM-rendered once at creation (straight-on eye),
+  and stay VISIBLE whatever side the player's eye is on (front-side culling
+  hides them from behind) — a panel is sampled by OTHER portals' passes
+  (mirror sightlines, the cleanser gate's mapped eye), and a lazily-created
+  or hidden face used to sample as a BLACK hole until the player looked at
+  it directly (the teleport stress test, fixed 2026-07-18). Only
+  player-eligible faces re-render fresh each frame; the rest show their
+  last content, stale but world-like.
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS

@@ -276,6 +276,11 @@ describe('PortalManager see-through rendering', () => {
 
   it('an open linked gate shows the neighbor view through its doorway', () => {
     gate.open();
+    // First frame materializes + WARMS every face (buffer seeding — the
+    // teleport stress test); assert on the steady-state pass that follows.
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
+    renderer.targets.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
 
@@ -340,6 +345,10 @@ describe('PortalManager see-through rendering', () => {
     // Crossing a jamb popped a side panel in/out and the neighbour geometry
     // visibly jumped. All panels must now clip with the SAME plane.
     gate.open();
+    // First frame materializes + WARMS every face (buffer seeding — the
+    // teleport stress test); assert on the steady-state pass that follows.
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
 
@@ -373,6 +382,10 @@ describe('PortalManager see-through rendering', () => {
 
   it('closing the gate hides the doorway and stops paying for the pass', () => {
     gate.open();
+    // First frame materializes + WARMS every face (buffer seeding — the
+    // teleport stress test); assert on the steady-state pass that follows.
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
     PortalManager.renderPortals(renderer, camera);
     gate.close();
 
@@ -424,6 +437,11 @@ describe('PortalManager see-through rendering', () => {
     gate.open();
     // Stand south of the partner gate (grid 5,7 facing south), looking north at it
     camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 9 * WORLD_SCALE } };
+    // First frame materializes + WARMS every face (buffer seeding — the
+    // teleport stress test); assert on the steady-state pass that follows.
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
+    renderer.targets.length = 0;
     PortalManager.renderPortals(renderer, camera);
 
     expect(doorwaySurface().visible).toBe(true);
@@ -575,6 +593,11 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     // showed the strip.
     const camera = { position: { x: 3 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
 
+    // First frame materializes + WARMS every face (buffer seeding); assert
+    // on the steady-state passes that follow.
+    PortalManager.renderPortals(renderer, camera);
+    seen.length = 0;
+
     PortalManager.renderPortals(renderer, camera);
 
     expect(seen.length).toBeGreaterThan(0);
@@ -606,6 +629,11 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     // Far back but dead on the door axis
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: -1 * WORLD_SCALE } };
 
+    // First frame materializes + WARMS every face (buffer seeding); assert
+    // on the steady-state passes that follow.
+    PortalManager.renderPortals(renderer, camera);
+    seen.length = 0;
+
     PortalManager.renderPortals(renderer, camera);
 
     const approachPasses = seen.filter((s) => s.isApproach);
@@ -630,6 +658,11 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     gate.open();
     // Inside the source doorway cell, a step shy of the commit line
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 6 - 0.5 } };
+
+    // First frame materializes + WARMS every face (buffer seeding); assert
+    // on the steady-state passes that follow.
+    PortalManager.renderPortals(renderer, camera);
+    seen.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
 
@@ -690,6 +723,11 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
     // the real approach axis is X, perpendicular to the authored facing
     const camera = { position: { x: 2 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE } };
 
+    // First frame materializes + WARMS every face (buffer seeding); assert
+    // on the steady-state pass that follows.
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
+
     PortalManager.renderPortals(renderer, camera);
 
     expect(renderer.renderCalls.length).toBeGreaterThan(1); // approach + sides
@@ -740,6 +778,11 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
     // lie BEYOND (south of door-b) — the black-sky bug hid them anyway.
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 0 } };
 
+    // First frame materializes + WARMS every face (buffer seeding); assert
+    // on the steady-state passes that follow.
+    PortalManager.renderPortals(renderer, camera);
+    seen.length = 0;
+
     PortalManager.renderPortals(renderer, camera);
 
     expect(seen.length).toBeGreaterThan(0);
@@ -768,6 +811,11 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
     // SE of door-a (world (15,6)): south offset 4 dominates, east 3.1 —
     // approach resolves south, east panel still visible
     const camera = { position: { x: 18.1, y: 1.8, z: 10 } };
+
+    // First frame materializes + WARMS every face (buffer seeding); assert
+    // on the steady-state pass that follows.
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
 
@@ -1087,6 +1135,11 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     // Player one cell north of door-a, looking at its doorway face
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
 
+    // First frame materializes + WARMS every face (buffer seeding); assert
+    // on the steady-state pass that follows.
+    PortalManager.renderPortals(renderer, camera);
+    renderer.renderCalls.length = 0;
+
     PortalManager.renderPortals(renderer, camera);
 
     expect(renderer.renderCalls).toHaveLength(3); // approach + two side panels
@@ -1112,22 +1165,31 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     const visibleSurfaces = () =>
       doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
 
-    // Straight south of the gate: the approach panel plus the two side
-    // panels (oblique rays through the cell hit the sides — the doorway is
-    // a box of windows, and side views must never pop in or out as the eye
-    // crosses the cell's center axes)
+    // First frame materializes + WARMS all four faces (buffer seeding —
+    // the teleport stress test); count fresh passes on steady frames.
     PortalManager.renderPortals(renderer, {
       position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
-    expect(visibleSurfaces()).toHaveLength(3);
+    renderer.renderCalls = [];
+
+    // Straight south of the gate: the approach panel plus the two side
+    // panels render FRESH (oblique rays through the cell hit the sides —
+    // the doorway is a box of windows). Every face STAYS visible (a face
+    // the eye is behind is front-side culled for the player, but other
+    // portals' passes sample its warmed content — hiding it punched a
+    // black hole into mirror sightlines).
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
+    });
+    expect(visibleSurfaces()).toHaveLength(4);
     expect(renderer.renderCalls).toHaveLength(3);
 
-    // At the SOUTH-EAST corner: both visible faces see through, two passes
+    // At the SOUTH-EAST corner: the two faces toward the eye render fresh
     renderer.renderCalls = [];
     PortalManager.renderPortals(renderer, {
       position: { x: 7 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
-    expect(visibleSurfaces()).toHaveLength(2);
+    expect(visibleSurfaces()).toHaveLength(4);
     expect(renderer.renderCalls).toHaveLength(2);
     // Each view sits on the FAR plane of the cell, facing back at its
     // viewer: the south approach's on the north panel (-z), the east
@@ -1136,12 +1198,12 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(offsets.some((o) => o.z < 0 && o.x === 0)).toBe(true);
     expect(offsets.some((o) => o.x < 0 && o.z === 0)).toBe(true);
 
-    // Back to straight south: the full three-panel set again, no popping
+    // Back to straight south: the full three-pass set again, no popping
     renderer.renderCalls = [];
     PortalManager.renderPortals(renderer, {
       position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
-    expect(visibleSurfaces()).toHaveLength(3);
+    expect(visibleSurfaces()).toHaveLength(4);
     expect(renderer.renderCalls).toHaveLength(3);
   });
 
@@ -1264,9 +1326,14 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
       setRenderTarget() {},
       render() {
         const own = doorIn.mesh.children.filter((c) => c._isPortalSurface);
+        const farPanelSurface = own.find((c) => c.position.z < 0 && c.position.x === 0);
+        // Frame 1's warm-up passes run while faces are still being
+        // materialized — skip recording until the far panel exists (the
+        // primed frame 2 is what the assertions read anyway).
+        if (!farPanelSurface) return;
         snaps.push({
           isApproach: this.clippingPlanes.length === 1, // shared == own plane
-          farPanel: own.find((c) => c.position.z < 0 && c.position.x === 0).visible,
+          farPanel: farPanelSurface.visible,
           ownSides: own.filter((c) => c.position.x !== 0).map((c) => c.visible),
           partnerVisible: doorOut.mesh.children.filter((c) => c._isPortalSurface && c.visible)
             .length,

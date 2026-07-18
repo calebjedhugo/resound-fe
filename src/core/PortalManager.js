@@ -88,6 +88,9 @@ class PortalManager {
     // gate -> facings whose adjacent cell holds no wall (static per area,
     // computed lazily; drives the shared-clip approach axis)
     this._openFacingsByGate = new Map();
+    // Faces created this render frame, pending a second warm-up pass
+    // (_flushWarmUps) once every peer face holds content
+    this._newViews = [];
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -279,6 +282,7 @@ class PortalManager {
         this._views.set(gate, null); // the gate stays an ordinary gate
       }
     }
+    this._flushWarmUps(renderer);
   }
 
   /** Hide every view of a gate. */
@@ -308,6 +312,7 @@ class PortalManager {
         this._views.set(gate, null);
       }
     }
+    this._flushWarmUps(renderer);
   }
 
   /** Hide every view rendered by renderAreaPortals for this area. */
@@ -328,34 +333,41 @@ class PortalManager {
       faces = new Map(); // facing -> PortalView
       this._views.set(gate, faces);
     }
+    const facings = Object.keys(FACING_VECTORS);
+    // Materialize EVERY face once the neighbor is loaded — not just the
+    // player-eligible ones — and WARM each new face's buffers immediately
+    // with one straight-on render. A panel is sampled by OTHER portal
+    // passes too (mirror sightlines through doors, the cleanser gate's
+    // mapped eye), whose eyes see faces the player's own eye may never
+    // make eligible; an unwritten target samples BLACK (the teleport
+    // stress test: "portals start black, settle after walking around").
+    // Warm content is stale until the face renders for a real eye, but
+    // stale reads as the world — black reads as a hole.
+    for (const f of facings) {
+      if (faces.get(f)) continue; // eslint-disable-line no-continue
+      const view = this._createView(gate, f);
+      if (view === undefined) return false; // neighbor not loaded yet: retry next frame
+      if (view === null) return true; // dangling link
+      faces.set(f, view);
+      this._warmUpView(view, gate, f, renderer);
+      this._newViews.push({ view, gate, facing: f });
+    }
+    // Every face of an open gate stays VISIBLE, whatever side the eye is
+    // on: the player can't see a face they're behind anyway (front-side
+    // culling), but other portals' passes must sample its last content —
+    // hiding it punched a black hole into every mirror sightline.
+    for (const view of faces.values()) view.setVisible(true);
     // Signed distance of the eye past each panel's plane (the cell's far face
     // for that approach). Oblique sightlines through the cell legitimately
-    // hit the SIDE panels, so more than one can be eligible at once.
+    // hit the SIDE panels, so more than one can be eligible at once — these
+    // are the faces that re-render FRESH for this eye.
     const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
-    const facings = Object.keys(FACING_VECTORS);
     const past = (facing) =>
       FACING_VECTORS[facing].x * (camera.position.x - gate.position.x) +
       FACING_VECTORS[facing].z * (camera.position.z - gate.position.z) +
       panelPlane;
     const eligible = facings.filter((f) => past(f) > 0.05);
-    // Hide any panel the eye has moved behind.
-    for (const f of facings) {
-      if (!eligible.includes(f)) {
-        const v = faces.get(f);
-        if (v) v.setVisible(false);
-      }
-    }
     if (eligible.length === 0) return false;
-    // Materialize every eligible panel's view (retrying / disabling on the
-    // neighbor's load state, exactly as before).
-    for (const f of eligible) {
-      if (!faces.get(f)) {
-        const view = this._createView(gate, f);
-        if (view === undefined) return false; // neighbor not loaded yet: retry next frame
-        if (view === null) return true; // dangling link
-        faces.set(f, view);
-      }
-    }
     // The APPROACH panel owns the true doorway clip plane, and EVERY visible
     // panel clips with it, so the oblique side windows slice the neighbor
     // along the doorway axis instead of perpendicular to it (a perpendicular
@@ -380,11 +392,39 @@ class PortalManager {
     // pass, not just the approach panel's own.
     const sharedWalls = approachView ? approachView.wallsToHide(camera) : null;
     for (const f of eligible) {
-      const view = faces.get(f);
-      view.setVisible(true);
-      view.render(renderer, camera, sharedClip, sharedWalls);
+      faces.get(f).render(renderer, camera, sharedClip, sharedWalls);
     }
     return false;
+  }
+
+  /**
+   * Seed a face's buffers with one straight-on render (an eye 1.5 cells
+   * out from the face, at head height) so a portal pass sampling it never
+   * reads an unwritten black target. Bare eye: no frustum cull applies.
+   */
+  // eslint-disable-next-line class-methods-use-this
+  _warmUpView(view, gate, facing, renderer) {
+    const v = FACING_VECTORS[facing];
+    view.render(renderer, {
+      position: {
+        x: gate.position.x + v.x * WORLD_SCALE * 1.5,
+        y: gate.position.y + 1.8,
+        z: gate.position.z + v.z * WORLD_SCALE * 1.5,
+      },
+    });
+  }
+
+  /**
+   * Faces created this frame warmed up before some of their peers existed
+   * and may have sampled a still-black panel — warm each once more now
+   * that every face holds content.
+   */
+  _flushWarmUps(renderer) {
+    if (this._newViews.length === 0) return;
+    for (const { view, gate, facing } of this._newViews) {
+      this._warmUpView(view, gate, facing, renderer);
+    }
+    this._newViews = [];
   }
 
   /**
