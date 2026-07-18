@@ -1031,7 +1031,82 @@ export default class EditorApp {
     const spawn = this.undoManager.getPlayerSpawn();
     if (spawn && spawn.x === cell.x && spawn.y === elevation && spawn.z === cell.z) {
       this.entityPlacer.clearPlayerSpawn(); // the marker disappears — no toast needed
+      return;
     }
+    // Nothing occupies the cell: fall through to removing the floor region here.
+    this._deleteFloorAtCursor(cell, elevation);
+  }
+
+  /**
+   * Delete on an otherwise-empty cell: remove the WHOLE floor region the cursor
+   * sits in at the active elevation (floors are rectangles — no per-tile holes).
+   * Refuses while any entity rests on the region, so an elevated creature/gate
+   * never gets orphaned in mid-air.
+   */
+  _deleteFloorAtCursor(cell, elevation) {
+    const floors = this.undoManager.getFloors();
+    const index = floors.findIndex(
+      (f) =>
+        f.elevation === elevation &&
+        cell.x >= f.x1 &&
+        cell.x <= f.x2 &&
+        cell.z >= f.z1 &&
+        cell.z <= f.z2
+    );
+    if (index === -1) return; // no floor here (e.g. the implicit ground)
+    if (this._floorHasEntities(floors[index])) {
+      this._showToast('Clear entities off the floor first');
+      return;
+    }
+    this.undoManager.removeFloor(index);
+    this.floorRegionPanel.refresh(); // rebuild floor meshes + sidebar list
+    this._requestFrame();
+  }
+
+  /** True when any entity rests ON the given floor region (its own elevation). */
+  _floorHasEntities(floor) {
+    return this.undoManager
+      .getEntities()
+      .some(
+        (e) =>
+          e.y === floor.elevation &&
+          e.x >= floor.x1 &&
+          e.x <= floor.x2 &&
+          e.z >= floor.z1 &&
+          e.z <= floor.z2
+      );
+  }
+
+  /**
+   * `f`: arm a floor draft at the active elevation (then arrows size it, Enter
+   * commits — the same flow as climbing onto an empty layer). Only above the
+   * ground and only on a cell that doesn't already carry a floor, so it can
+   * start a SECOND region on a storey that already has one (which climbing to
+   * an occupied layer can't reach).
+   */
+  _startFloorAtCursor() {
+    const elevation = this.editorScene.activeElevation;
+    if (elevation < 1) {
+      this._showToast('Floors sit above the ground');
+      return;
+    }
+    const cell = this.editorScene.getHoveredGrid();
+    const onFloor = this.undoManager
+      .getFloors()
+      .some(
+        (f) =>
+          f.elevation === elevation &&
+          cell.x >= f.x1 &&
+          cell.x <= f.x2 &&
+          cell.z >= f.z1 &&
+          cell.z <= f.z2
+      );
+    if (onFloor) {
+      this._showToast('There’s already a floor here');
+      return;
+    }
+    this._enterOrAdvanceFloorDraft(elevation);
+    this._requestFrame();
   }
 
   /** True when the key event targets a text field — never hijack typing. */
@@ -1161,6 +1236,11 @@ export default class EditorApp {
         case 'Backspace':
           e.preventDefault();
           this._deleteAtCursor();
+          return;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          this._startFloorAtCursor();
           return;
         default:
           break;

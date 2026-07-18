@@ -902,6 +902,124 @@ describe('EditorApp wiring', () => {
     });
   });
 
+  // The `f` key arms a floor draft at the current elevation — same size-with-
+  // arrows / Enter-to-commit flow as climbing onto an empty layer, but reachable
+  // even on a storey that already carries a floor elsewhere.
+  describe('floor draft via the F key', () => {
+    const press = (key, opts = {}) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts })
+      );
+
+    it('does nothing on the ground (floors sit above E0)', () => {
+      app.editorScene.activeElevation = 0;
+      press('f');
+      expect(app._floorDraft).toBeNull();
+      expect(app.editorScene.setFloorDraft).not.toHaveBeenCalled();
+    });
+
+    it('arms a draft anchored at the cursor on an empty upper cell', () => {
+      app.editorScene.activeElevation = 1;
+      press('f');
+      expect(app._floorDraft).toEqual({ anchor: { x: 7, z: 7 }, elevation: 1 });
+      expect(app.editorScene.setFloorDraft).toHaveBeenCalled();
+      expect(app.undoManager.getFloors()).toHaveLength(0);
+    });
+
+    it('refuses when the cursor cell already carries a floor', () => {
+      app.undoManager.addFloor(1, 7, 7, 7, 7); // under the cursor (7,7)
+      app.editorScene.activeElevation = 1;
+      press('f');
+      expect(app._floorDraft).toBeNull();
+    });
+
+    it('starts a SECOND region on a storey that already has a floor elsewhere', () => {
+      app.undoManager.addFloor(1, 0, 0, 2, 2); // a floor NOT under the cursor
+      app.editorScene.activeElevation = 1;
+      press('f');
+      expect(app._floorDraft).toEqual({ anchor: { x: 7, z: 7 }, elevation: 1 });
+    });
+
+    it('commits the drafted region on Enter (F → Enter creates a floor)', () => {
+      app.editorScene.activeElevation = 1;
+      press('f');
+      press('Enter'); // cursor (7,7) == anchor → 1×1 floor at E1
+      expect(app.undoManager.getFloors()).toContainEqual({
+        elevation: 1,
+        x1: 7,
+        z1: 7,
+        x2: 7,
+        z2: 7,
+      });
+      expect(app._floorDraft).toBeNull();
+    });
+
+    it('capital F works too, and is ignored while typing in a field', () => {
+      app.editorScene.activeElevation = 1;
+      press('F');
+      expect(app._floorDraft).not.toBeNull();
+
+      app._exitFloorDraft();
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));
+      expect(app._floorDraft).toBeNull();
+      input.remove();
+    });
+  });
+
+  // Delete on an otherwise-empty cell removes the WHOLE floor region under the
+  // cursor (floors are rectangles — no per-tile holes), guarded so an elevated
+  // entity is never left floating.
+  describe('Delete removes a floor region', () => {
+    const press = (key) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      );
+
+    it('removes the region the cursor sits in when the cell is empty', () => {
+      app.undoManager.addFloor(1, 5, 5, 9, 9); // covers the cursor (7,7)
+      app.editorScene.activeElevation = 1;
+      press('Delete');
+      expect(app.undoManager.getFloors()).toHaveLength(0);
+    });
+
+    it('refuses while an entity rests anywhere on the region', () => {
+      app.undoManager.addFloor(1, 5, 5, 9, 9);
+      app.undoManager.addEntity('creature', 5, 1, 5, {}); // on the region, not the cursor cell
+      app.editorScene.activeElevation = 1;
+      const toast = jest.spyOn(app, '_showToast');
+      press('Delete'); // cursor (7,7) holds no entity → falls through to floor delete
+      expect(app.undoManager.getFloors()).toHaveLength(1);
+      expect(toast).toHaveBeenCalled();
+    });
+
+    it('deletes the entity first when one is under the cursor, keeping the floor', async () => {
+      app.undoManager.addFloor(1, 7, 7, 7, 7);
+      const id = app.undoManager.addEntity('wall', 7, 1, 7, {}); // on the cursor cell
+      app.editorScene.activeElevation = 1;
+      press('Delete');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(app.entityPlacer.removeEntityById).toHaveBeenCalledWith(id);
+      expect(app.undoManager.getFloors()).toHaveLength(1); // floor untouched this press
+    });
+
+    it('is a no-op on the ground where there is no floor data', () => {
+      app.editorScene.activeElevation = 0;
+      expect(() => press('Delete')).not.toThrow();
+      expect(app.undoManager.getFloors()).toHaveLength(0);
+    });
+
+    it('removes only the region at the active elevation when regions stack', () => {
+      app.undoManager.addFloor(1, 5, 5, 9, 9); // E1 under the cursor
+      app.undoManager.addFloor(2, 5, 5, 9, 9); // E2 stacked on top
+      app.editorScene.activeElevation = 2;
+      press('Delete');
+      expect(app.undoManager.getFloors()).toEqual([{ elevation: 1, x1: 5, z1: 5, x2: 9, z2: 9 }]);
+    });
+  });
+
   describe('range indicator', () => {
     it('shows range spheres for a selected creature and hides them otherwise', () => {
       const cId = app.undoManager.addEntity('creature', 5, 0, 5, { audibleRange: 12 });
