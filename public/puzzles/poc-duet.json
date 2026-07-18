@@ -69,6 +69,6 @@
       "facing": "north",
       "link": { "puzzleId": "poc-jam", "gateId": "entry" }
     },
-    { "type": "cleanser", "position": { "x": 4, "y": 0, "z": 7 } }
+    { "type": "cleanser", "position": { "x": 4, "y": 0, "z": 8 } }
   ]
 }
