@@ -161,24 +161,27 @@ describe('The G hint teaches the whole cycle ("g again to cancel")', () => {
   });
 });
 
-describe('The deployed pad is SEE-THROUGH (a portal view of the destination)', () => {
-  it('deploying stands a portal panel on the pad, facing the deployer', async () => {
+describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any open door)', () => {
+  it('deploying stands a full window box on the gate — one panel per face, no cleanser disc', async () => {
     await activateCleanser();
-    standAt(30, 39); // facing -z: pad at (30, 33), player south of it
+    standAt(30, 39); // facing -z: gate at (30, 33)
     DeployManager.toggle();
     DeployManager.toggle();
     DeployManager.update();
 
     const [pad] = padsInActiveArea();
-    const surface = pad.mesh.children.find((child) => child._isPortalSurface);
-    expect(surface).toBeDefined();
-    expect(surface.visible).toBe(true);
-    // Lifted from the floor disc up to doorway center height
-    expect(surface.position.y).toBeCloseTo(WORLD_SCALE / 2 - 0.08);
-    expect(DeployManager._pad.facing).toBe('south');
+    const surfaces = pad.mesh.children.filter((child) => child._isPortalSurface);
+    expect(surfaces).toHaveLength(4);
+    for (const surface of surfaces) expect(surface.visible).toBe(true);
+    // The anchor sits at gate-box-center height, like a real gate mesh —
+    // panels land exactly where a door's do (local y 0).
+    expect(pad.mesh.position.y).toBeCloseTo(WORLD_SCALE / 2);
+    expect(surfaces[0].position.y).toBeCloseTo(0);
+    // No disc: the anchor holds nothing but the panels
+    expect(pad.mesh.children).toHaveLength(4);
   });
 
-  it('the view renders the destination scene through the pad panel', async () => {
+  it('renders the destination through the face the eye is on (panels self-cull)', async () => {
     await activateCleanser();
     standAt(30, 39);
     DeployManager.toggle();
@@ -194,22 +197,28 @@ describe('The deployed pad is SEE-THROUGH (a portal view of the destination)', (
       },
       getDrawingBufferSize: (size) => size.set(800, 600),
     };
-    // Player camera standing back from the pad, on its facing side
+    // Approach panel + the two (near edge-on) side panels — exactly a
+    // door's window box (windows sit on the FAR plane of the cell, so the
+    // approach eye is on the outward side of the sides too)
     DeployManager.renderPortal(renderer, { position: { x: 30, y: 1.8, z: 39 } });
-    expect(renderer.renderCalls).toHaveLength(1);
+    expect(renderer.renderCalls).toHaveLength(3);
+    // From a corner, the two faces toward the eye render
+    renderer.renderCalls.length = 0;
+    DeployManager.renderPortal(renderer, { position: { x: 36, y: 1.8, z: 39 } });
+    expect(renderer.renderCalls).toHaveLength(2);
   });
 
-  it('removing the pad disposes the view and releases the retained area', async () => {
+  it('removing the gate disposes the panels and releases the retained area', async () => {
     await activateCleanser();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
     DeployManager.update();
-    expect(DeployManager._view).toBeTruthy();
+    expect(DeployManager._views).toHaveLength(4);
     expect(PortalManager._retained.has('deploy-basic')).toBe(true);
 
     DeployManager.toggle(); // remove
-    expect(DeployManager._view).toBeNull();
+    expect(DeployManager._views).toHaveLength(0);
     expect(PortalManager._retained.has('deploy-basic')).toBe(false);
   });
 });

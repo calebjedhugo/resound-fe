@@ -730,35 +730,35 @@ class PortalManager {
   }
 
   /**
-   * Build the see-through view for a deployed cleanser gate pad: a single
-   * PortalView panel on the pad, facing `sourceFacing` (back toward the
-   * deployer), showing the ACTIVE cleanser's cell and the room beyond it —
-   * the same window a linked door gets, with the cleanser cell as the
-   * partner "gate" (a positional stub; there is no mesh to hide).
-   * @param {Entity} pad - the CleanserGatePad (its mesh hosts the surface)
+   * Build the see-through panels for a deployed cleanser gate: one
+   * PortalView per cardinal face — the same box of windows an open linked
+   * door gets — each showing the ACTIVE cleanser's cell and the room
+   * beyond it, with the cleanser cell as the partner "gate" (a positional
+   * stub; there is no partner mesh to hide). Each face maps to the
+   * OPPOSITE exit face, so walking in from any side continues seamlessly
+   * at the cleanser.
+   * @param {Entity} pad - the CleanserGatePad (its mesh anchor hosts the
+   *   surfaces, at gate-box-center height like a real gate mesh)
    * @param {{puzzleId: string, position: {x,y,z}}} target - active cleanser
-   * @param {string} sourceFacing - cardinal face the panel renders on
-   * @returns {PortalView|undefined} undefined while the destination area
-   *   isn't loaded yet (retainArea's fetch may still be in flight)
+   * @returns {PortalView[]} empty while the destination area isn't loaded
+   *   yet (retainArea's fetch may still be in flight)
    */
-  createCleanserGateView(pad, target, sourceFacing) {
+  createCleanserGateViews(pad, target) {
     const destArea = this._areas.get(target.puzzleId);
-    if (!destArea || !pad.mesh) return undefined;
+    if (!destArea || !pad.mesh) return [];
     // A destination in the ACTIVE area lives in the main scene (its own
     // Area.scene is empty) — same rule as same-puzzle doors.
     const sceneOverride = destArea === this._activeArea ? this._mainScene : null;
     const partnerStub = { position: target.position, mesh: null, gateId: 'active-cleanser' };
-    const view = new PortalView(pad, partnerStub, destArea, {
-      sceneOverride,
-      sourceFacing,
-      partnerFacing: OPPOSITE_FACING[sourceFacing] || 'south',
+    return Object.keys(FACING_VECTORS).map((sourceFacing) => {
+      const view = new PortalView(pad, partnerStub, destArea, {
+        sceneOverride,
+        sourceFacing,
+        partnerFacing: OPPOSITE_FACING[sourceFacing] || 'south',
+      });
+      view.setVisible(true);
+      return view;
     });
-    // PortalView parents the surface to the host mesh assuming a gate BOX
-    // centered at cell-center height; the pad disc sits on the floor
-    // (position.y + 0.08), so lift the surface up to the doorway's center.
-    view.surface.position.y += WORLD_SCALE / 2 - 0.08;
-    view.setVisible(true);
-    return view;
   }
 
   /** Doors = linked gate pairs whose BOTH areas are currently loaded. */

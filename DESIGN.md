@@ -186,12 +186,15 @@ automated playtesters can observe them.)
     cleanser two tiles ahead along the EFFECTIVE camera heading — mouse
     offset included, so it answers the look as well as the body; free
     placement on walkable ground, NOT grid-quantized, red over invalid
-    spots) → deploy (a real pad) → remove. A deployed pad is SEE-THROUGH
-    like any other gate: a portal panel stands on it (facing back at the
-    deployer) showing the live view of the active cleanser's cell and the
-    room beyond — its area is retained live while the pad exists, and the
-    view retargets if a new cleanser is claimed.
-    Walking onto the pad teleports the player to the active cleanser and
+    spots) → deploy → remove. A deployed gate looks JUST LIKE any other
+    activated gate: a full box of see-through portal panels (one per
+    face, self-culling like a door's window box) showing the live view
+    of the active cleanser's cell and the room beyond — the GOLD tile is
+    visible THROUGH the gate, so the deployed gate draws no cleanser
+    disc of its own. Its area is retained live while the gate exists,
+    and the views retarget if a new cleanser is claimed. While a gate is
+    deployed the G hint wears a 🚫 badge: G now means cancel.
+    Walking into the gate teleports the player to the active cleanser and
     CONSUMES the pad — strictly one-way, one use, one pad at a time, and
     the gate can lead anywhere (cross-area; the destination loads on
     demand). Arrival lands ON the cleanser, which fires as usual — escape

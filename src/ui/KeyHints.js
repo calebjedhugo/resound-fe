@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import gameState from 'core/GameState';
 import HintMemory from 'core/HintMemory';
 import RecordingManager from 'core/RecordingManager';
+import DeployManager from 'core/DeployManager';
 import { getDistance } from 'core/utils';
 import { CLAP_RANGE } from 'core/constants';
 
@@ -143,7 +144,9 @@ class KeyHints {
     this.moveEl.appendChild(bottomRow);
     document.body.appendChild(this.moveEl);
 
-    // HUD: "G" keycap for the deployable cleanser gate, above the move cluster
+    // HUD: "G" keycap for the deployable cleanser gate, above the move
+    // cluster. While a gate is DEPLOYED, a 🚫 badge appears beside the
+    // keycap: G now means cancel.
     this.deployEl = document.createElement('div');
     this.deployEl.id = 'hint-deploy';
     this.deployEl.style.cssText = `
@@ -151,6 +154,9 @@ class KeyHints {
       bottom: 148px;
       left: 50%;
       transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 6px;
       opacity: 0;
       transition: opacity 0.4s;
       pointer-events: none;
@@ -158,6 +164,14 @@ class KeyHints {
       animation: hint-breathe 1.6s ease-in-out infinite;
     `;
     this.deployEl.appendChild(makeKeycapEl('G'));
+    this.deployCancelEl = document.createElement('div');
+    this.deployCancelEl.textContent = '🚫';
+    this.deployCancelEl.style.cssText = `
+      font-size: 20px;
+      line-height: 1;
+      display: none;
+    `;
+    this.deployEl.appendChild(this.deployCancelEl);
     document.body.appendChild(this.deployEl);
 
     // The "grow the tape" (slots) hint lives in the tape strip itself now —
@@ -219,6 +233,8 @@ class KeyHints {
       return;
     }
     this.deployEl.style.opacity = '1';
+    // With a gate deployed, G means cancel — badge it.
+    this.deployCancelEl.style.display = DeployManager.state === 'deployed' ? 'block' : 'none';
   }
 
   _updateMove(deltaTime) {

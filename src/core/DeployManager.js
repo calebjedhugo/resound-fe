@@ -26,11 +26,14 @@ import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
  * cleanser: the gate is "a remote opening of the drain you touched" — no
  * touched drain, no gate.
  *
- * A deployed pad is SEE-THROUGH like any other gate: a PortalView panel
- * stands on the pad (facing back at the deployer) showing the live view of
- * the active cleanser's cell and the room beyond. The destination area is
- * retained live (PortalManager.retainArea) while the pad exists, and the
- * view retargets if the player claims a different active cleanser.
+ * A deployed gate looks like any other ACTIVATED gate: a box of
+ * see-through portal panels — one PortalView per cardinal face, each
+ * showing the live view of the active cleanser's cell and the room
+ * beyond (the gold tile is visible THROUGH the gate, so the pad draws no
+ * cleanser disc of its own). Each panel self-culls to the eye's side,
+ * exactly like a door's window box. The destination area is retained
+ * live (PortalManager.retainArea) while the gate exists, and the views
+ * retarget if the player claims a different active cleanser.
  */
 
 // Two tiles ahead of the player.
@@ -47,10 +50,10 @@ class DeployManager {
     this._state = 'idle'; // 'idle' | 'aiming' | 'deployed'
     this._phantom = null; // ghost mesh while aiming
     this._spot = null; // { x, y, z, valid } — the phantom's current target
-    this._pad = null; // { area, id, entity, facing } while deployed
-    this._view = null; // the pad's see-through PortalView (when renderable)
-    this._viewKey = null; // what the current view was built against
-    this._retainedId = null; // destination area pinned live for the view
+    this._pad = null; // { area, id, entity } while deployed
+    this._views = []; // the gate's see-through panels (one per face)
+    this._viewKey = null; // what the current panels were built against
+    this._retainedId = null; // destination area pinned live for the views
   }
 
   /** @param {THREE.Scene} scene - the render scene (phantom lives here) */
@@ -97,13 +100,15 @@ class DeployManager {
   }
 
   /**
-   * Render the pad's see-through panel (call from the game's beforeRender,
-   * alongside PortalManager.renderPortals).
+   * Render the gate's see-through panels (call from the game's
+   * beforeRender, alongside PortalManager.renderPortals). Each panel
+   * skips itself unless the eye is on its outward side and it's in view —
+   * the same self-culling a door's window box does.
    */
   renderPortal(renderer, camera) {
-    if (!this._view || !this._pad) return;
+    if (this._views.length === 0 || !this._pad) return;
     if (this._pad.area !== gameState.activeArea) return;
-    this._view.render(renderer, camera);
+    for (const view of this._views) view.render(renderer, camera);
   }
 
   /** Tear down (menu exit / new world entry). */
@@ -124,11 +129,11 @@ class DeployManager {
   }
 
   /**
-   * Keep the see-through view matched to the world: the destination is the
-   * CURRENT active cleanser (stepping on a new one retargets the pad), its
-   * area must be live, and a destination in the active area renders the
-   * main scene. Any mismatch rebuilds the view; hidden whenever the pad
-   * isn't in the player's area (its texture would be stale).
+   * Keep the see-through panels matched to the world: the destination is
+   * the CURRENT active cleanser (stepping on a new one retargets the
+   * gate), its area must be live, and a destination in the active area
+   * renders the main scene. Any mismatch rebuilds all four panels; hidden
+   * whenever the gate isn't in the player's area (textures would be stale).
    */
   _syncView() {
     const target = gameState.activeCleanser;
@@ -147,21 +152,21 @@ class DeployManager {
       destArea &&
       `${target.puzzleId}:${target.position.x},${target.position.y},${target.position.z}:` +
         `${destArea === gameState.activeArea ? 'main' : 'own'}`;
-    if (this._view && this._viewKey !== key) this._disposeView();
-    if (!this._view && destArea) {
-      const pad = this._pad.entity;
-      this._view = PortalManager.createCleanserGateView(pad, target, this._pad.facing);
-      this._viewKey = this._view ? key : null;
+    if (this._views.length > 0 && this._viewKey !== key) this._disposeView();
+    if (this._views.length === 0 && destArea) {
+      // A box of windows, like any other activated gate: one panel per
+      // cardinal face, each mapped so walking in from that side continues
+      // seamlessly at the cleanser.
+      this._views = PortalManager.createCleanserGateViews(this._pad.entity, target);
+      this._viewKey = this._views.length > 0 ? key : null;
     }
-    if (this._view) {
-      this._view.setVisible(this._pad.area === gameState.activeArea);
-    }
+    const visible = this._pad.area === gameState.activeArea;
+    for (const view of this._views) view.setVisible(visible);
   }
 
   _disposeView() {
-    if (!this._view) return;
-    this._view.dispose();
-    this._view = null;
+    for (const view of this._views) view.dispose();
+    this._views = [];
     this._viewKey = null;
   }
 
@@ -237,18 +242,11 @@ class DeployManager {
     const area = gameState.activeArea;
     const pad = new CleanserGatePad({ x: this._spot.x, y: this._spot.y, z: this._spot.z });
     area.entityManager.add(pad);
-    // The see-through panel faces back at the deployer: cardinal direction
-    // of the player from the pad, dominant axis.
-    const dx = gameState.player.position.x - this._spot.x;
-    const dz = gameState.player.position.z - this._spot.z;
-    let facing;
-    if (Math.abs(dx) > Math.abs(dz)) facing = dx > 0 ? 'east' : 'west';
-    else facing = dz > 0 ? 'south' : 'north';
-    this._pad = { area, id: pad.id, entity: pad, facing };
+    this._pad = { area, id: pad.id, entity: pad };
     this._removePhantom();
     this._state = 'deployed';
     // The hint stays: the remaining lesson is "g again to cancel" — it
-    // retires when the pad is removed (or used). See _removePad / update.
+    // retires when the gate is removed (or used). See _removePad / update.
     this._syncView();
   }
 
