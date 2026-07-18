@@ -58,7 +58,6 @@
       "position": { "x": 13, "y": 0, "z": 5 },
       "data": { "song": [{ "pitch": "C4", "length": "1/2" }], "interval": 4, "audibleRange": 7 }
     },
-    { "type": "cleanser", "position": { "x": 10, "y": 0, "z": 19 } },
     {
       "type": "gate",
       "position": { "x": 5, "y": 5, "z": 17 },

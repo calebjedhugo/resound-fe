@@ -7,7 +7,7 @@
   "keySignature": "C",
   "timeSignature": [4, 4],
   "teaches": [],
-  "playerStart": { "x": 12, "y": 0, "z": 11 },
+  "playerStart": { "x": 10, "y": 0, "z": 13 },
   "floors": [],
   "entities": [
     {
@@ -90,7 +90,7 @@
       "facing": "north",
       "link": { "puzzleId": "poc-pull", "gateId": "entry" }
     },
-    { "type": "cleanser", "position": { "x": 10, "y": 0, "z": 14 } },
+    { "type": "cleanser", "position": { "x": 10, "y": 0, "z": 13 } },
     { "type": "wall", "position": { "x": 12, "y": 0, "z": 13 } },
     { "type": "wall", "position": { "x": 13, "y": 0, "z": 12 } },
     { "type": "wall", "position": { "x": 14, "y": 0, "z": 11 } },
