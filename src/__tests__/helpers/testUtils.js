@@ -65,6 +65,7 @@ import portalOneway from '../fixtures/puzzles/portal-oneway.json';
 import portalWallsA from '../fixtures/puzzles/portal-walls-a.json';
 import portalWallsB from '../fixtures/puzzles/portal-walls-b.json';
 import deployBasic from '../fixtures/puzzles/deploy-basic.json';
+import portalTwoPairs from '../fixtures/puzzles/portal-two-pairs.json';
 
 // Puzzle fixture registry
 const TEST_PUZZLES = {
@@ -113,6 +114,7 @@ const TEST_PUZZLES = {
   'portal-walls-a': portalWallsA,
   'portal-walls-b': portalWallsB,
   'deploy-basic': deployBasic,
+  'portal-two-pairs': portalTwoPairs,
 };
 
 /**

@@ -1,0 +1,42 @@
+{
+  "id": "portal-two-pairs",
+  "name": "Portal Two Pairs",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "playerStart": { "x": 5, "y": 0, "z": 7 },
+  "entities": [
+    {
+      "type": "gate",
+      "id": "pair1-a",
+      "facing": "north",
+      "link": { "puzzleId": "portal-two-pairs", "gateId": "pair1-b" },
+      "position": { "x": 5, "y": 0, "z": 5 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    {
+      "type": "gate",
+      "id": "pair1-b",
+      "facing": "south",
+      "link": { "puzzleId": "portal-two-pairs", "gateId": "pair1-a" },
+      "position": { "x": 10, "y": 0, "z": 10 },
+      "song": [{ "pitch": "C4", "length": "1/4" }]
+    },
+    {
+      "type": "gate",
+      "id": "pair2-a",
+      "facing": "north",
+      "link": { "puzzleId": "portal-two-pairs", "gateId": "pair2-b" },
+      "position": { "x": 10, "y": 0, "z": 8 },
+      "song": [{ "pitch": "E4", "length": "1/4" }]
+    },
+    {
+      "type": "gate",
+      "id": "pair2-b",
+      "facing": "south",
+      "link": { "puzzleId": "portal-two-pairs", "gateId": "pair2-a" },
+      "position": { "x": 2, "y": 0, "z": 2 },
+      "song": [{ "pitch": "E4", "length": "1/4" }]
+    }
+  ]
+}

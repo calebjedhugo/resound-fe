@@ -262,6 +262,15 @@ class PortalManager {
    */
   renderPortals(renderer, camera) {
     this._frameId += 1;
+    // MIRROR sweep first (recursion level 1): for every open door the
+    // player can see into, re-render the faces ITS VIEW shows — from the
+    // door's own mapped eye — so the first level of every recursive
+    // tunnel is this-frame fresh with the correct perspective. Deeper
+    // levels inherit through the double-buffered cascade, one frame per
+    // level — a 60fps flow, never the stale rotor's canned angle.
+    for (const { eye, sourceGate } of this._collectMirrorEyes(camera)) {
+      this._renderMirrorLevel(renderer, eye, sourceGate, camera.position);
+    }
     for (const gate of this._linkedGates) {
       const faces = this._views.get(gate);
       if (faces === null) continue; // eslint-disable-line no-continue -- dangling link: ordinary gate
@@ -434,11 +443,89 @@ class PortalManager {
     this._warmUpView(view, view.gate, view.facing, renderer);
   }
 
+  /**
+   * Faces of `gate` whose panel plane the eye at `eyePos` is past — the
+   * faces that eye can look into (same math the player-eligibility uses).
+   */
+  // eslint-disable-next-line class-methods-use-this
+  _eligibleFaces(gate, eyePos) {
+    const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
+    return Object.keys(FACING_VECTORS).filter(
+      (f) =>
+        FACING_VECTORS[f].x * (eyePos.x - gate.position.x) +
+          FACING_VECTORS[f].z * (eyePos.z - gate.position.z) +
+          panelPlane >
+        0.05
+    );
+  }
+
+  /** The other end of `gate`'s door pair, if both areas are loaded. */
+  _partnerGate(gate) {
+    const door = this._doors.find((d) => d.gateA === gate || d.gateB === gate);
+    if (!door) return null;
+    return door.gateA === gate ? door.gateB : door.gateA;
+  }
+
+  /**
+   * One mapped eye per open SAME-AREA door the player's eye can see into
+   * (a cross-area door's view shows the neighbor scene, whose doors have
+   * no panels to refresh — pre-existing limitation). A door's mapping is
+   * one rigid translation (every face maps to the opposite exit face), so
+   * any face's map places the eye correctly in view space.
+   */
+  _collectMirrorEyes(camera) {
+    const eyes = [];
+    for (const gate of this._linkedGates) {
+      if (!gate.isOpen && !(gate._fade > 0)) continue; // eslint-disable-line no-continue
+      if (this._insideDoor && this._insideDoor.gate === gate) continue; // eslint-disable-line no-continue
+      if (!this._activeArea || gate.link.puzzleId !== this._activeArea.id) continue; // eslint-disable-line no-continue
+      const faces = this._views.get(gate);
+      if (!faces || faces.size === 0) continue; // eslint-disable-line no-continue
+      if (this._eligibleFaces(gate, camera.position).length === 0) continue; // eslint-disable-line no-continue
+      const [view] = faces.values();
+      const mapped = view._map({
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z,
+      });
+      eyes.push({ eye: { position: mapped }, sourceGate: gate });
+    }
+    return eyes;
+  }
+
+  /**
+   * Render the MIRROR-ONLY faces `sourceGate`'s view shows: faces of
+   * OTHER open doors that the mapped eye is past but the player's own eye
+   * is not. Player-eligible faces already render fresh in the level-0
+   * pass (and self/partner recursion rides the one-frame-per-level
+   * double-buffer cascade, the pre-rotor doctrine) — this sweep exists so
+   * the faces that USED to be fed by the stale rotor render every frame
+   * from the correct eye instead.
+   */
+  _renderMirrorLevel(renderer, eye, sourceGate, playerEye) {
+    const partner = this._partnerGate(sourceGate);
+    for (const gate of this._linkedGates) {
+      if (gate === sourceGate || gate === partner) continue; // eslint-disable-line no-continue
+      if (!gate.isOpen && !(gate._fade > 0)) continue; // eslint-disable-line no-continue
+      const faces = this._views.get(gate);
+      if (!faces) continue; // eslint-disable-line no-continue
+      const playerFaces = this._eligibleFaces(gate, playerEye);
+      for (const f of this._eligibleFaces(gate, eye.position)) {
+        if (playerFaces.includes(f)) continue; // eslint-disable-line no-continue -- level-0 renders it fresh
+        const view = faces.get(f);
+        if (view && view.surface.visible && view.render(renderer, eye)) {
+          view._freshFrame = this._frameId;
+        }
+      }
+    }
+  }
+
   // A face nobody's eye has rendered for this many renderPortals frames is
   // STALE: it still shows in other portals' mirrors, and a frozen snapshot
   // (a closed gate that has since opened, a creature stuck mid-song) reads
   // as a bug the moment the world moves on. Refresh the oldest few per
-  // frame — bounded cost, everything tours within a fraction of a second.
+  // frame — bounded cost, a BACKSTOP for faces no direct or mirror
+  // sightline touches (mirror faces render fresh via _renderMirrorLevel).
   static STALE_MAX_FRAMES = 15;
 
   static STALE_REFRESH_PER_FRAME = 2;

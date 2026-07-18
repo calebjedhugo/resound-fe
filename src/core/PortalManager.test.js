@@ -476,6 +476,45 @@ describe('PortalManager see-through rendering', () => {
   });
 });
 
+describe('Recursive mirrors render frame-fresh (the tunnel is never laggy)', () => {
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it("the faces a door's view shows re-render EVERY frame from its mapped eye", () => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-two-pairs');
+    const gates = ctx.getGates();
+    for (const g of gates) g.open();
+    const renderer = {
+      clippingPlanes: [],
+      renderCalls: [],
+      setRenderTarget() {},
+      render(scene, cam) {
+        this.renderCalls.push({ scene, cam });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    // Player south of pair1-a, looking into it. Its mapped eye lands south
+    // of pair1-b — where the view shows pair2-a's SOUTH face, a face the
+    // player's own eye is NOT past (only its north face is).
+    const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE } };
+    PortalManager.renderPortals(renderer, camera); // materialize + warm
+    PortalManager.renderPortals(renderer, camera); // steady frame
+
+    const pair2a = gates.find((g) => g.gateId === 'pair2-a');
+    const south = PortalManager._views.get(pair2a).get('south');
+    // Mirror-fresh THIS frame — rendered by the mirror sweep from pair1-a's
+    // mapped eye, not left to the stale rotor (which lags and uses a canned
+    // straight-on angle: the "laggy recursive tunnel").
+    expect(PortalManager._frameId - south._freshFrame).toBe(0);
+    // And it stays frame-fresh on every subsequent frame
+    PortalManager.renderPortals(renderer, camera);
+    expect(PortalManager._frameId - south._freshFrame).toBe(0);
+  });
+});
+
 describe('Cleanser under a door mirrors to the partner face (one door, one tile)', () => {
   // portal-b with a cleanser sitting ON its south-door cell (5, 7) — the
   // portal panel can only paint beyond the window plane, so without a
