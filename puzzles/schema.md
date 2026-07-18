@@ -14,7 +14,8 @@ This document defines the structure for Resound puzzle files.
   "clapDisplacement": "string",      // OPTIONAL: Default beat displacement for claps (e.g., "1/8", "1/4")
                                      // If omitted, uses system default (1/16)
   "teaches": ["string"],             // OPTIONAL: key-hint verbs this puzzle teaches — any of
-                                     // "move", "record", "playback", "slots", "delete", "clap".
+                                     // "move", "record", "playback", "slots", "delete", "clap",
+                                     // "deploy" (the G cleanser gate).
                                      // Hints for these verbs are ACTIVE in this puzzle; each
                                      // retires ONCE PERFORMED for the rest of the playthrough
                                      // (ruled 2026-07-16 — doorway crossings never re-arm; a

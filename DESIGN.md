@@ -179,6 +179,27 @@ automated playtesters can observe them.)
     reachable pocket is escapable from an EMPTY tape (see gen-poc.js). The
     first cleanser ships in `poc-two-keys`, mid-corridor at the entry so
     the player walks through it on the way in (trial placement — 2026-07-12).
+  - **The ACTIVE cleanser + the deployable cleanser gate** (ruled
+    2026-07-18). Stepping on a cleanser makes it the ACTIVE one — it turns
+    GOLD (the rest stay cyan; one active tile world-wide) and becomes the
+    destination of the player's deployable gate. "G" cycles: aim (a phantom
+    cleanser two tiles ahead — free placement on walkable ground, NOT
+    grid-quantized, red over invalid spots) → deploy (a real pad) → remove.
+    Walking onto the pad teleports the player to the active cleanser and
+    CONSUMES the pad — strictly one-way, one use, one pad at a time, and
+    the gate can lead anywhere (cross-area; the destination loads on
+    demand). Arrival lands ON the cleanser, which fires as usual — escape
+    always costs the tape (part of the point: a free, songless teleport
+    must not cheapen earned gates). World state does NOT reset (moved
+    creatures, opened gates persist) — that persistence is what makes it a
+    puzzle piece, not just an escape hatch, and because the exit is a place
+    the player has already stood, it can never skip content forward. Also
+    the mechanical never-soft-lock guarantee. Aiming requires an active
+    cleanser (no touched drain, no gate); the lesson is taught in IX ("The
+    Star", `teaches: ["deploy"]`) where the player steps on a cleanser on
+    the way in. Aiming is currently NOT cancelable without deploying —
+    known, awaiting a playtest ruling. See `core/DeployManager.js`,
+    `entities/CleanserGatePad.js`, `PortalManager.teleportToCleanser`.
   Solo starts keep the beat grid with the late grace expressed in BEATS
   (`PLAYBACK_LATE_GRACE_BEATS`, kept under the matcher tolerance so a
   grace-path onset still matches). See `PlaybackManager`, `core/Tape.js`.

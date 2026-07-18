@@ -221,13 +221,23 @@ instead of "fixing" it.
   empties the tape when you step onto it (edge-triggered, active-area
   only). A cleanse can leave an empty tape, so gen-poc.js still asserts
   every pocket is escapable from an empty tape. A cleanser MAY share a
-  cell with a gate (editor allows it; the POC puts one under most entry
-  doors). Under a LINKED door the portal panel would clip the tile to a
-  sliver (it only paints past the window plane), so `PortalManager`
-  mirrors it: a visual-only clone at the partner face, sharing the real
-  tile's material so the glow syncs (`_rebuildTileMirrors`); gameplay
-  needs no mirror — crossing commits on entry and the REAL tile fires
-  on arrival
+  cell with a gate (editor allows it). Under a LINKED door the portal
+  panel would clip the tile to a sliver (it only paints past the window
+  plane), so `PortalManager` mirrors it: a visual-only clone at the
+  partner face, sharing the real tile's material so the glow syncs
+  (`_rebuildTileMirrors`); gameplay needs no mirror — crossing commits
+  on entry and the REAL tile fires on arrival
+- **The ACTIVE cleanser + deployable cleanser gate** (ruled 2026-07-18):
+  stepping on a cleanser turns it GOLD (one active tile world-wide) and
+  makes it the destination of the player's deployable gate. G cycles
+  aim → deploy → remove (`core/DeployManager`): a phantom cleanser two
+  tiles ahead (free placement, NOT grid-quantized, red = invalid),
+  deployed as a `CleanserGatePad`; walking onto the pad teleports to the
+  active cleanser (`PortalManager.teleportToCleanser`, cross-area, loads
+  on demand) and consumes the pad. One-way, one use; arrival fires the
+  cleanser (tape wipe — intended cost); world state does NOT reset.
+  Taught in IX via `teaches: ["deploy"]` (G keycap HUD hint). Aiming
+  requires an active cleanser. See DESIGN.md "The ACTIVE cleanser"
 
 ---
 

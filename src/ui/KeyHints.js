@@ -25,6 +25,11 @@ import { CLAP_RANGE } from 'core/constants';
  *   clap     - "C" sprite over the nearest clap-range creature while TWO OR
  *              MORE audible creatures sing at once (the chord a clap can fix);
  *              retires on the first C pressed at such a moment
+ *   deploy   - "G" keycap, bottom-center HUD (above the move cluster): the
+ *              deployable cleanser gate (core/DeployManager). Shows once an
+ *              ACTIVE cleanser exists (the mechanic leads to it — before
+ *              that the key is silent); retires when a pad is deployed
+ *              (DeployManager retires it).
  */
 
 const MOVE_HINT_DELAY_S = 1.5;
@@ -137,6 +142,23 @@ class KeyHints {
     this.moveEl.appendChild(bottomRow);
     document.body.appendChild(this.moveEl);
 
+    // HUD: "G" keycap for the deployable cleanser gate, above the move cluster
+    this.deployEl = document.createElement('div');
+    this.deployEl.id = 'hint-deploy';
+    this.deployEl.style.cssText = `
+      position: fixed;
+      bottom: 148px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+      z-index: 1000;
+      animation: hint-breathe 1.6s ease-in-out infinite;
+    `;
+    this.deployEl.appendChild(makeKeycapEl('G'));
+    document.body.appendChild(this.deployEl);
+
     // The "grow the tape" (slots) hint lives in the tape strip itself now —
     // RecordingUI blooms a ghost slot with a pulsing ► at the next position.
 
@@ -184,6 +206,18 @@ class KeyHints {
     this._updateRecord();
     this._updatePlayback();
     this._updateClap();
+    this._updateDeploy();
+  }
+
+  _updateDeploy() {
+    // Teachable the moment the mechanic can work: an active cleanser exists
+    // for the gate to lead to (in a level that teaches "deploy", the player
+    // steps on one on the way in).
+    if (HintMemory.isRetired('deploy') || !gameState.activeCleanser) {
+      this.deployEl.style.opacity = '0';
+      return;
+    }
+    this.deployEl.style.opacity = '1';
   }
 
   _updateMove(deltaTime) {
@@ -300,6 +334,7 @@ class KeyHints {
   /** Hide everything (level change / exit to menu). Retirement is untouched. */
   hideAll() {
     this.moveEl.style.opacity = '0';
+    this.deployEl.style.opacity = '0';
     this.recordSprite.visible = false;
     this.playbackSprite.visible = false;
     this.clapSprite.visible = false;
@@ -310,6 +345,7 @@ class KeyHints {
   dispose() {
     window.removeEventListener('keydown', this._keyHandler);
     this.moveEl.remove();
+    this.deployEl.remove();
     this.scene.remove(this.recordSprite);
     this.scene.remove(this.playbackSprite);
     this.scene.remove(this.clapSprite);
