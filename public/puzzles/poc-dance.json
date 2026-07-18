@@ -90,7 +90,7 @@
       "facing": "north",
       "link": { "puzzleId": "poc-pull", "gateId": "entry" }
     },
-    { "type": "cleanser", "position": { "x": 10, "y": 0, "z": 13 } },
+    { "type": "cleanser", "position": { "x": 10, "y": 0, "z": 14 } },
     { "type": "wall", "position": { "x": 12, "y": 0, "z": 13 } },
     { "type": "wall", "position": { "x": 13, "y": 0, "z": 12 } },
     { "type": "wall", "position": { "x": 14, "y": 0, "z": 11 } },
