@@ -278,7 +278,13 @@ instead of "fixing" it.
 ## Development
 
 - **Dev server:** Port 5173 (Vite)
-- **Deployment:** Planned for Raspberry Pi (static files via nginx)
+- **Deployment:** **POC build is LIVE at https://resound.calebhugo.com** (Pi
+  static hosting, nginx `127.0.0.1:8100` behind the `calebhugo` Cloudflare
+  Tunnel — same house pattern as the other `*.calebhugo.com` apps). Deploy with
+  `./deploy/deploy.sh`: it builds, stages a **POC-only** artifact
+  (`deploy/build-poc.mjs` drops `editor.html` + editor assets and prunes
+  `public/puzzles` to the `poc-*` set + a filtered manifest), and rsyncs to the
+  Pi web root. See `deploy/README.md`.
 - Puzzle JSON changes require manual refresh (no HMR)
 
 ---
