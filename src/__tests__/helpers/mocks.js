@@ -13,6 +13,10 @@ class MockGainNode {
       setValueAtTime: jest.fn(),
       linearRampToValueAtTime: jest.fn(),
       exponentialRampToValueAtTime: jest.fn(),
+      // stopAll()'s click-free fade cancels pending ramps first; without this
+      // the whole fade throws and is swallowed, untested, on every pause.
+      cancelScheduledValues: jest.fn(),
+      setTargetAtTime: jest.fn(),
     };
   }
 
@@ -56,6 +60,27 @@ class MockOscillatorNode {
       setTimeout(() => this.onended(), 0);
     }
   }
+
+  // The additive piano drives its partials from a PeriodicWave.
+  setPeriodicWave() {
+    this.type = 'custom';
+  }
+}
+
+/**
+ * Mock WaveShaperNode — the piano's soft-knee bus limiter.
+ */
+class MockWaveShaperNode {
+  constructor() {
+    this.curve = null;
+    this.oversample = 'none';
+  }
+
+  connect() {
+    return this;
+  }
+
+  disconnect() {}
 }
 
 /**
@@ -108,6 +133,14 @@ class MockAudioContext {
 
   createBiquadFilter() {
     return new MockBiquadFilterNode();
+  }
+
+  createWaveShaper() {
+    return new MockWaveShaperNode();
+  }
+
+  createPeriodicWave() {
+    return {};
   }
 
   createBuffer(channels, length, sampleRate) {
