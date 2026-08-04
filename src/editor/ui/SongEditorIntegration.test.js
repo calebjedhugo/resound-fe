@@ -323,11 +323,10 @@ describe('Song Editor Integration', () => {
       const svg = env.root.querySelector('.notation-staff svg');
       const accidentals = noteAccidentals(svg);
 
-      // Published resound-notation (1.0.0) draws an accidental on every
-      // explicitly-altered note, so both C#4 show a sharp. This tightens to 1
-      // once the in-measure accidental-memory fix (already on the library's
-      // main) is published and consumed here.
-      expect(accidentals.length).toBe(2);
+      // The second C#4 rides the first one's accidental: one sharp, as an
+      // engraver would write it. (Published 1.0.0 drew both; this tightened
+      // when the library's in-measure accidental memory came in.)
+      expect(accidentals.length).toBe(1);
     });
 
     it('accidentals reset at barlines', () => {
@@ -352,10 +351,9 @@ describe('Song Editor Integration', () => {
       const svg = env.root.querySelector('.notation-staff svg');
       const accidentals = noteAccidentals(svg);
 
-      // Published resound-notation (1.0.0) has no in-measure memory, so all
-      // three C#4 draw a sharp. This tightens to 2 (first C#4 + the one after
-      // the barline) once the accidental-memory fix is published.
-      expect(accidentals.length).toBe(3);
+      // Two sharps: the first C#4, and the one after the barline that the
+      // memory no longer covers. (Published 1.0.0 drew all three.)
+      expect(accidentals.length).toBe(2);
     });
 
     it('unmetered mode (null time signature) renders no barlines', () => {

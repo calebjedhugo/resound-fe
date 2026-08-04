@@ -44,9 +44,23 @@ Tests are integration-style: test behaviors through public APIs, mock only brows
 ### IMPORTANT: Package boundaries
 
 `audio` and `notation` are extracted to the published packages `resound-sound`
-and `resound-notation`; the game consumes them from the **registry** (no local
-copies — never hand-copy `dist/` into `node_modules`). `resound-notation` is a
-pure renderer; the game does not hand-draw notation.
+and `resound-notation`; **never hand-copy `dist/` into `node_modules`**.
+`resound-notation` is a pure renderer; the game does not hand-draw notation.
+
+**Currently both are local `file:` links** (`../resound-sound`,
+`../resound-notation`), not registry versions — a pre-publish check that the
+game still runs on what those repos have on `main`. This puts the game a whole
+minor ahead on sound (registry `^0.1.0` → local 0.2.0, the additive-piano
+rewrite) and ahead on notation's unpublished in-measure accidental memory.
+
+Once those versions publish, point `package.json` back at registry ranges and
+delete this paragraph — nothing else has to change. Two `SongEditorIntegration`
+tests assert the accidental-memory behavior and are correct for the local
+library and for anything published after it; they would only need loosening to
+go BACKWARD to notation 1.0.0 (both numbers are in their comments).
+
+Run `npm ls resound-sound` after any relink: two copies in the tree gives two
+AudioContexts and two instrument registries.
 
 - Game UI imports from `resound-sound` and `resound-notation` (not `audio/` / `notation/`, which no longer exist)
 - The **staff editor is local game code** (`src/editor/ui/NotationEditor.js` + `model/SongModel.js` + `ui/RhythmPalette.js` + `ui/staffCoords.js`) built on the published renderer's public API (`render()` + `components/*` + `lib/*`). `SongEditorModal.js` wires it to the entity model (`onChange` → `undoManager`) and injects a `resound-sound` `Synth` for playback. See `src/editor/CLAUDE.md`.
