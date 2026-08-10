@@ -143,10 +143,11 @@ describe('Song Editor Integration', () => {
       // SMuFL time signature exposes the numeric pair via data attributes.
       expect(timeSigGroup.getAttribute('data-beats')).toBe('3');
       expect(timeSigGroup.getAttribute('data-beat-value')).toBe('4');
-      // Each digit position renders a SMuFL glyph group containing a path.
+      // Each digit position renders a SMuFL glyph instance (<use> into the
+      // SVG's shared <defs>).
       expect(timeSigGroup.querySelector('.time-numerator')).not.toBeNull();
       expect(timeSigGroup.querySelector('.time-denominator')).not.toBeNull();
-      expect(timeSigGroup.querySelectorAll('path').length).toBeGreaterThanOrEqual(2);
+      expect(timeSigGroup.querySelectorAll('use').length).toBeGreaterThanOrEqual(2);
     });
 
     it('changing key signature in metadata then opening modal shows updated key', () => {
