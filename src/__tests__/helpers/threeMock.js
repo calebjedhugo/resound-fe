@@ -183,6 +183,7 @@ class Color {
 
 class Material {
   constructor(opts = {}) {
+    this.type = 'Material'; // like three: a built-in's type picks its shader
     this.opacity = opts.opacity !== undefined ? opts.opacity : 1;
     this.transparent = opts.transparent || false;
     this.depthWrite = opts.depthWrite !== undefined ? opts.depthWrite : true;
@@ -190,6 +191,8 @@ class Material {
     // side so tests can assert single- vs double-sided rendering.
     this.side = opts.side !== undefined ? opts.side : FrontSide;
     this.color = opts.color !== undefined ? new Color(opts.color) : new Color();
+    this.map = opts.map || null;
+    this.blending = opts.blending !== undefined ? opts.blending : NormalBlending;
     this.emissive = new Color(0x000000);
     this.emissiveIntensity = 0;
     this.roughness = 0.5;
@@ -205,13 +208,40 @@ class Material {
     if (value === true) this.version += 1;
   }
 
-  // three calls this once per program re-derivation (FrameProfiler counts it)
+  // three's default hook: none (passContext.showStoredTexels sets one)
   // eslint-disable-next-line class-methods-use-this
+  onBeforeCompile() {}
+
+  // three calls this once per program re-derivation (FrameProfiler counts
+  // it); like three, it is the onBeforeCompile hook's source
   customProgramCacheKey() {
-    return '';
+    return this.onBeforeCompile.toString();
   }
 
   dispose() {}
+}
+
+// The built-in materials three picks a shader program for by `type`
+class MeshStandardMaterial extends Material {
+  constructor(opts) {
+    super(opts);
+    this.type = 'MeshStandardMaterial';
+  }
+}
+
+class MeshBasicMaterial extends Material {
+  constructor(opts) {
+    super(opts);
+    this.type = 'MeshBasicMaterial';
+  }
+}
+
+class SpriteMaterial extends Material {
+  constructor(opts = {}) {
+    super({ transparent: true, ...opts }); // three's sprite default
+    this.type = 'SpriteMaterial';
+    this.sizeAttenuation = true;
+  }
 }
 
 // Custom-shader material: keeps its uniforms (per-material, like three) so
@@ -219,10 +249,10 @@ class Material {
 class ShaderMaterial extends Material {
   constructor(opts = {}) {
     super(opts);
+    this.type = 'ShaderMaterial';
     this.uniforms = opts.uniforms || {};
     this.vertexShader = opts.vertexShader || '';
     this.fragmentShader = opts.fragmentShader || '';
-    this.blending = opts.blending !== undefined ? opts.blending : NormalBlending;
     this.clipping = opts.clipping || false;
   }
 }
@@ -315,6 +345,20 @@ class Mesh {
   }
 }
 
+// A camera-facing quad (three draws every sprite with one shared quad)
+class Sprite {
+  constructor(material = new SpriteMaterial()) {
+    this.isSprite = true;
+    this.material = material;
+    this.position = new Vector3();
+    this.scale = new Vector3(1, 1, 1);
+    this.visible = true;
+    this.renderOrder = 0;
+    this.children = [];
+    this.userData = {};
+  }
+}
+
 class InstancedMesh extends Mesh {
   constructor(geometry, material, count) {
     super(geometry, material);
@@ -349,6 +393,27 @@ class Group {
     if (idx > -1) this.children.splice(idx, 1);
   }
 }
+
+// Lights draw nothing, but three keys programs by the scene's light counts
+// (ShaderPrewarm mirrors the world's lights into its stand-in scene)
+class Light extends Group {
+  constructor(color = 0xffffff, intensity = 1) {
+    super();
+    this.isLight = true;
+    this.color = new Color(color);
+    this.intensity = intensity;
+  }
+
+  clone() {
+    const copy = new this.constructor(this.color.getHex(), this.intensity);
+    copy.position.copy(this.position);
+    return copy;
+  }
+}
+
+class AmbientLight extends Light {}
+
+class DirectionalLight extends Light {}
 
 class Scene {
   constructor() {
@@ -415,14 +480,16 @@ class WebGLRenderer {
   dispose() {}
 }
 
-class CanvasTexture {
-  constructor(canvas) {
-    this.image = canvas;
+class Texture {
+  constructor(image) {
+    this.image = image;
     this.needsUpdate = false;
   }
 
   dispose() {}
 }
+
+class CanvasTexture extends Texture {}
 
 class Vector2 {
   constructor(x = 0, y = 0) {
@@ -480,18 +547,21 @@ module.exports = {
   BufferGeometry,
   Float32BufferAttribute,
   Material,
-  MeshStandardMaterial: Material,
-  MeshBasicMaterial: Material,
+  MeshStandardMaterial,
+  MeshBasicMaterial,
+  SpriteMaterial,
   ShaderMaterial,
+  Sprite,
   NormalBlending,
   AdditiveBlending,
   SRGBColorSpace,
+  Texture,
   CanvasTexture,
   FrontSide,
   BackSide,
   DoubleSide,
   Vector2,
   Raycaster,
-  AmbientLight: Mesh,
-  DirectionalLight: Mesh,
+  AmbientLight,
+  DirectionalLight,
 };

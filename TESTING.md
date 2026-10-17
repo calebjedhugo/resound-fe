@@ -36,7 +36,7 @@ src/
     helpers/
       testUtils.js         # createTestContext and test utilities
       mocks.js             # Mock implementations
-      drawList.js          # What three would draw from a scene graph
+      drawList.js          # What three would draw from a scene graph + each draw's program key
     fixtures/
       puzzles/             # Test puzzle JSON files
   core/
@@ -139,7 +139,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/ListeningManager.test.js` | Gates/Fountains recognizing correct songs |
 | `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials) |
 | `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections by triad, added sixth, lone-note paleness, painter's complement + dissonance, register lightness; memoized path = reference) |
-| `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share |
+| `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share; every look the game builds (levels, fades, open doors, key hints, clap ring) finds its program among the prewarm's stand-ins |
 | `src/core/FrameProfiler.test.js` | Dev profiler times each call by caller (self excludes timed children), counts draw calls and GPU time per pass, reports the worst frames first, and unwraps everything after a run |
 | `src/core/passContext.test.js` | Main view binds no-op clip planes; door targets render in the canvas colour space; panels never encode twice |
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |

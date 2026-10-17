@@ -140,8 +140,9 @@ instead of "fixing" it.
   `userData.shared`): per-creature state lives in `look._uniforms` and is
   copied in by each mesh's `onBeforeRender` — never write a uniform on the
   material itself. Shader programs compile behind the StartGate
-  (`core/ShaderPrewarm`); a new material config that first draws mid-game
-  (or in a portal pass) hitches unless it is drawn there too
+  (`core/ShaderPrewarm`: one never-disposed STAND-IN per program a look can
+  need); a new material config hitches mid-game unless it gets a stand-in —
+  `ShaderPrewarm.test` checks every look against them (extend its looks)
 
 ### Gates & elevation
 - **Gates LATCH**: they open on the COMPLETED song, stay open with NO timer,
