@@ -145,6 +145,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
 | `src/core/NeighborLoading.test.js` | Neighbor areas build in idle slices (≤1 staff per slice with no idle time to spare), assemble + go live in ONE slice (never partially built; ONE world clock), stand down when the world moves on or a crossing builds them first; timer slices without requestIdleCallback |
+| `src/ui/StartGate.test.js` | The scrim goes up while the world loads (input swallowed, nothing wakes it) and is wakeable by any key/click once the world is built — one overlay throughout |
 | `src/ui/NotationDisplay.test.js` | Gate/fountain staff planes (layout, one-sided, disposal); engravings SHARED per distinct staff (song + meter + key), reference-counted across gates and areas |
 
 ---

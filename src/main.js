@@ -85,13 +85,35 @@ DeployManager.initialize(scene);
 const stateMachine = new StateMachine(gameState);
 gameState.stateMachine = stateMachine;
 
+/**
+ * Resolves once the browser has painted what the DOM holds now: a timer
+ * queued from the next frame's rAF runs after that frame's paint. Frames
+ * stop on a hidden page, so a beat later it resolves regardless.
+ */
+function afterNextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+    setTimeout(resolve, 100);
+  });
+}
+
 // Game functions
-async function startPuzzle(puzzleId) {
+/**
+ * @param {string} puzzleId
+ * @param {?Promise<object>} [pendingLoad] - the puzzle's load, if already
+ *   under way (the boot fetches a deep-linked puzzle alongside the manifest)
+ */
+async function startPuzzle(puzzleId, pendingLoad = null) {
+  // The scrim goes up before anything loads, and is painted before the
+  // heavy part (the area build, then the first frame's shader prewarm) can
+  // block the page: it used to appear only after all of it (60-150 ms)
+  startGate.showLoading();
+  const painted = afterNextPaint();
   try {
     // A world entry starts from the puzzle files as they are now (the editor
     // may have saved some since the last world loaded them)
     PuzzleLoader.clearCache();
-    const puzzleData = await PuzzleLoader.load(puzzleId);
+    const [puzzleData] = await Promise.all([pendingLoad || PuzzleLoader.load(puzzleId), painted]);
     PortalManager.enterWorld(puzzleData);
     DeployManager.reset(); // fresh world: no phantom, no deployed gate
     stateMachine.setState('PLAYING');
@@ -100,12 +122,13 @@ async function startPuzzle(puzzleId) {
     HintMemory.reset();
     HintMemory.arm(puzzleData.teaches);
     keyHints.hideAll();
-    startGate.show();
+    startGate.show(); // the world exists: a key/click may wake it now
   } catch (error) {
     console.error('Failed to load puzzle:', error);
     // A partial build may have created areas/state — clean up before returning to menu
     PortalManager.reset();
     gameState.reset();
+    startGate.hide();
     showToast(`Couldn't load puzzle "${puzzleId}": ${error.message}`, {
       type: 'error',
       duration: 9000,
@@ -244,6 +267,16 @@ function handleKeyDown(event) {
 
 // Initialize game
 async function initializeGame() {
+  // Up before the first fetch, so the boot paints the scrim, not a blank page
+  startGate.showLoading();
+
+  // A deep link from the editor's "Test in game" (?puzzle=<id>) fetches its
+  // puzzle alongside the manifest instead of after it. It is entered only if
+  // the manifest lists it; startPuzzle reports a failed load.
+  const requestedPuzzle = new URLSearchParams(window.location.search).get('puzzle');
+  const requestedLoad = requestedPuzzle ? PuzzleLoader.load(requestedPuzzle) : null;
+  if (requestedLoad) requestedLoad.catch(() => {});
+
   // Load puzzle list
   const puzzles = await PuzzleLoader.loadPuzzleList();
 
@@ -258,9 +291,8 @@ async function initializeGame() {
 
   // Deep link from the editor's "Test in game": ?puzzle=<id> jumps straight in.
   // Checked (and awaited) first so the menu never flashes while a puzzle loads.
-  const requestedPuzzle = new URLSearchParams(window.location.search).get('puzzle');
   if (requestedPuzzle && puzzles.some((p) => p.id === requestedPuzzle)) {
-    await startPuzzle(requestedPuzzle);
+    await startPuzzle(requestedPuzzle, requestedLoad);
   }
   if (gameState.mode !== 'PLAYING' && puzzles.length > 0) {
     // No menu at boot: wake up in the world. The first manifest entry is the
@@ -269,6 +301,7 @@ async function initializeGame() {
   }
   if (gameState.mode !== 'PLAYING') {
     // Nothing loadable (empty manifest or load failure) — fall back to menu.
+    startGate.hide();
     stateMachine.setState('MENU');
   }
 

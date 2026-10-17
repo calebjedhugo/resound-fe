@@ -266,7 +266,9 @@ instead of "fixing" it.
   `slots` only at the duet, `clap` only at the clap
 - Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
-- `ui/StartGate.js` freezes the world per level start until a key/click
+- `ui/StartGate.js` freezes the world per level start until a key/click.
+  It goes up BEFORE the puzzle loads (`showLoading`: the first paint) and
+  is wakeable only once the world is built (`show`)
 - Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
   `syncCameraToPlayer` for scripted browser verification (reposition +
   screenshot), `setTapImpulse(true)` to re-enable the tap-impulse
