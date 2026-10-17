@@ -156,6 +156,107 @@ export function sphereInView(camera, center, radius) {
   return true;
 }
 
+// A quad reaching this close to the eye plane (or behind it) has no finite
+// texel density: its target is as big as targets get
+const MIN_CORNER_DEPTH = 0.05;
+
+/**
+ * Where a doorway quad lands on a viewer's screen: how many texels its view
+ * target needs across and up to sample ~1:1 where the panel is DENSEST on
+ * screen, and the share of the screen its bounding box covers. Plain-object
+ * math like sphereInView.
+ *
+ * A pass renders the WHOLE quad into its target (the off-axis frustum is
+ * fitted to the corners), and the player sees that target through
+ * perspective: an oblique panel's near edge spends more screen pixels per
+ * texel than its far edge. The density along each quad axis is projective —
+ * |d screen / du| varies only as 1/depth² along u — so it peaks at a corner,
+ * and the per-corner maximum is the size that never samples soft.
+ *
+ * @param {{x, y, z}} eye - the viewer's position
+ * @param {{quaternion, fov, aspect}} pose - which way it looks, and its lens
+ *   (vertical fov in degrees, like a PerspectiveCamera)
+ * @param {{bottomLeft, bottomRight, topLeft}} corners - the quad, world
+ *   space; "across" runs bottomLeft→bottomRight, "up" bottomLeft→topLeft
+ * @param {number} screenWidth - drawing-buffer pixels
+ * @param {number} screenHeight
+ * @returns {{texelsAcross: number, texelsUp: number, screenShare: number}}
+ *   Infinity texels for a quad reaching the eye plane (its share is then
+ *   what lies in front of the eye); nothing at all for one wholly behind
+ */
+export function panelFootprint(eye, pose, corners, screenWidth, screenHeight) {
+  const q = pose.quaternion;
+  const toView = { x: -q.x, y: -q.y, z: -q.z, w: q.w }; // world -> camera
+  const { bottomLeft: bl, bottomRight: br, topLeft: tl } = corners;
+  const origin = rotate(toView, { x: bl.x - eye.x, y: bl.y - eye.y, z: bl.z - eye.z });
+  const across = rotate(toView, { x: br.x - bl.x, y: br.y - bl.y, z: br.z - bl.z });
+  const up = rotate(toView, { x: tl.x - bl.x, y: tl.y - bl.y, z: tl.z - bl.z });
+  const tanV = Math.tan((pose.fov / 2) * (Math.PI / 180));
+  const fx = screenWidth / 2 / (tanV * pose.aspect); // pixels per unit at depth 1
+  const fy = screenHeight / 2 / tanV;
+
+  // The quad's outline, in order, camera space (it looks down -z)
+  const outline = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ].map(([u, v]) => ({
+    x: origin.x + u * across.x + v * up.x,
+    y: origin.y + u * across.y + v * up.y,
+    depth: -(origin.z + u * across.z + v * up.z),
+  }));
+
+  let texelsAcross = 0;
+  let texelsUp = 0;
+  for (const p of outline) {
+    if (p.depth < MIN_CORNER_DEPTH) {
+      texelsAcross = Infinity;
+      texelsUp = Infinity;
+      break;
+    }
+    // d(screen)/d(quad axis) at this corner, in pixels per whole axis
+    const rate = (d) =>
+      Math.hypot(
+        (fx * (d.x * p.depth + p.x * d.z)) / (p.depth * p.depth),
+        (fy * (d.y * p.depth + p.y * d.z)) / (p.depth * p.depth)
+      );
+    texelsAcross = Math.max(texelsAcross, rate(across));
+    texelsUp = Math.max(texelsUp, rate(up));
+  }
+
+  // Screen share: the outline cut at the near plane, projected, boxed
+  const visible = [];
+  outline.forEach((p, i) => {
+    const next = outline[(i + 1) % outline.length];
+    if (p.depth >= MIN_CORNER_DEPTH) visible.push(p);
+    if (p.depth >= MIN_CORNER_DEPTH !== next.depth >= MIN_CORNER_DEPTH) {
+      const t = (MIN_CORNER_DEPTH - p.depth) / (next.depth - p.depth);
+      visible.push({
+        x: p.x + t * (next.x - p.x),
+        y: p.y + t * (next.y - p.y),
+        depth: MIN_CORNER_DEPTH,
+      });
+    }
+  });
+  if (visible.length === 0) return { texelsAcross: 0, texelsUp: 0, screenShare: 0 };
+  let left = Infinity;
+  let right = -Infinity;
+  let bottom = Infinity;
+  let top = -Infinity;
+  for (const p of visible) {
+    left = Math.min(left, (fx * p.x) / p.depth);
+    right = Math.max(right, (fx * p.x) / p.depth);
+    bottom = Math.min(bottom, (fy * p.y) / p.depth);
+    top = Math.max(top, (fy * p.y) / p.depth);
+  }
+  const halfW = screenWidth / 2;
+  const halfH = screenHeight / 2;
+  const width = Math.max(0, Math.min(halfW, right) - Math.max(-halfW, left));
+  const height = Math.max(0, Math.min(halfH, top) - Math.max(-halfH, bottom));
+  return { texelsAcross, texelsUp, screenShare: (width * height) / (screenWidth * screenHeight) };
+}
+
 /**
  * Rigid mapping from source-puzzle world space to neighbor-puzzle world
  * space for a linked gate pair: a rotation about Y carrying the walk-through

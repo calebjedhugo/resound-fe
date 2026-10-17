@@ -197,6 +197,12 @@ instead of "fixing" it.
   door pass (`renderPortalsFor`) counts none. Its pad panels age via their
   own rotor (DeployManager.renderPortal), and a frame with no pad pass to
   run (gate off screen) skips that door pre-pass too.
+- **Door passes cost what the screen shows** (2026-10-17): each pass's
+  target fits its panel's densest size ON SCREEN (`portalMath.panelFootprint`,
+  `PortalView._fitTarget`: power-of-two per axis, 32 px floor, half-res cap —
+  a door filling the screen keeps half-res; grows at once, shrinks after 30
+  passes asking less). Mirror and warm-up eyes borrow the player's look and
+  lens (`eye.pose`)
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS

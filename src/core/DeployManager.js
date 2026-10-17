@@ -165,6 +165,9 @@ class DeployManager {
           y: camera.position.y + (t.y - padPos.y),
           z: camera.position.z + (t.z - padPos.z),
         },
+        // Looks the way the player does: sizes each door target it draws
+        // (a bare position — no frustum cull)
+        pose: camera,
       };
       const destArea = PortalManager.getArea(this._viewTarget.puzzleId);
       if (destArea && destArea !== gameState.activeArea) {

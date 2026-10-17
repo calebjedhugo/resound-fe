@@ -443,9 +443,12 @@ rulings, in the designer's words where it matters:
   edge and the wall's near face coincide, so any clip back-off gaps the floor).
   A reverted earlier attempt hid the FRAME walls instead, which are the ones to
   keep.
-  Portal render targets are HALF-resolution — a doorway panel covers a
+  Portal render targets are AT MOST half-resolution — a doorway panel covers a
   fraction of the screen, and full-res targets made open doors cost several
-  fullscreen renders per frame (the round-4 fan spin). A door's panels
+  fullscreen renders per frame (the round-4 fan spin). Below that cap each
+  pass's target follows its panel's size ON SCREEN, never coarser than the
+  screen samples it (2026-10-17): a distant door draws a 32-128 px target,
+  a door filling the screen keeps half-res. A door's panels
   (approach + oblique side windows) all share ONE clip plane — the plane of
   the APPROACH panel along the gate's FACING axis (the wall the door sits
   in; the eye only picks which side). Each panel clipping along its own

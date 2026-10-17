@@ -10,6 +10,7 @@ import {
   doorwayCorners,
   portalMapping,
   sphereInView,
+  panelFootprint,
   inPortalHideBand,
   DOORWAY_OFFSET,
   OPPOSITE_FACING,
@@ -161,6 +162,64 @@ describe('sphereInView (portal pass frustum cull)', () => {
     const east = { x: 10, y: 1.8, z: 0 };
     expect(sphereInView(camera(YAW_90_EAST), east, 2.5)).toBe(true);
     expect(sphereInView(camera(IDENTITY), east, 2.5)).toBe(false);
+  });
+});
+
+describe('panelFootprint (what a door pass needs to draw)', () => {
+  // A 3x3 quad facing an eye at the origin that looks north (-Z), on an
+  // 800x600 screen at 75° vertical fov: one world unit at depth 1 spans
+  // FOCAL pixels both ways (aspect 4:3)
+  const SCREEN = [800, 600];
+  const FOCAL = 300 / Math.tan((37.5 * Math.PI) / 180);
+  const LOOK_NORTH = { quaternion: { x: 0, y: 0, z: 0, w: 1 }, fov: 75, aspect: 4 / 3 };
+  const LOOK_SOUTH = { ...LOOK_NORTH, quaternion: { x: 0, y: 1, z: 0, w: 0 } };
+  const eye = { x: 0, y: 0, z: 0 };
+  /** A quad across x0..x0+3, up -1.5..1.5, from depth `nearZ` to `farZ`. */
+  const quad = (x0, nearZ, farZ = nearZ) => ({
+    bottomLeft: { x: x0, y: -1.5, z: -nearZ },
+    bottomRight: { x: x0 + 3, y: -1.5, z: -farZ },
+    topLeft: { x: x0, y: 1.5, z: -nearZ },
+  });
+
+  it('a quad facing the eye needs as many texels as it spans pixels', () => {
+    const { texelsAcross, texelsUp, screenShare } = panelFootprint(
+      eye,
+      LOOK_NORTH,
+      quad(-1.5, 10),
+      ...SCREEN
+    );
+    const pixels = (3 * FOCAL) / 10;
+    expect(texelsAcross).toBeCloseTo(pixels);
+    expect(texelsUp).toBeCloseTo(pixels);
+    expect(screenShare).toBeCloseTo((pixels * pixels) / (800 * 600));
+  });
+
+  it('an oblique quad is sized for its NEAR edge, where texels spread widest', () => {
+    // Left edge at depth 4, right edge at depth 7
+    const { texelsAcross, texelsUp } = panelFootprint(eye, LOOK_NORTH, quad(-1.5, 4, 7), ...SCREEN);
+    const leftX = (-1.5 * FOCAL) / 4;
+    const rightX = (1.5 * FOCAL) / 7;
+    expect(texelsAcross).toBeGreaterThan(rightX - leftX); // more than its width on screen
+    expect(texelsUp).toBeCloseTo((3 * FOCAL) / 4); // the near edge's height
+  });
+
+  it('a quad behind the eye needs nothing and covers nothing', () => {
+    expect(panelFootprint(eye, LOOK_SOUTH, quad(-1.5, 10), ...SCREEN)).toEqual({
+      texelsAcross: 0,
+      texelsUp: 0,
+      screenShare: 0,
+    });
+  });
+
+  it('a quad reaching past the eye plane needs the most a target can be; only its front counts', () => {
+    // From 2 units ahead to 1 unit behind, far off to the left: unbounded
+    // density, but nothing of it lands on the screen
+    const offScreen = panelFootprint(eye, LOOK_NORTH, quad(-40, 2, -1), ...SCREEN);
+    expect(offScreen.texelsAcross).toBe(Infinity);
+    expect(offScreen.screenShare).toBe(0);
+    // The same reach straight ahead covers the screen
+    const ahead = panelFootprint(eye, LOOK_NORTH, quad(-1.5, 2, -1), ...SCREEN);
+    expect(ahead.screenShare).toBeGreaterThan(0.2);
   });
 });
 

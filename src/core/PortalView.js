@@ -30,6 +30,7 @@ import {
   DOORWAY_OFFSET,
   PANEL_EPSILON,
   doorwayCorners,
+  panelFootprint,
   portalMapping,
   sphereInView,
 } from 'core/portalMath';
@@ -66,7 +67,26 @@ const MIN_RENDER_EYE_DISTANCE = 0.5;
 // frame of pure waste in poc-return, 2026-07-16).
 const PANEL_CULL_RADIUS = 2.5;
 
+// A pass's target matches what its panel occupies on screen (_fitTarget):
+// tiny and distant doors once rendered the full half-res target each — at
+// The Star's NE corner 26 of 27 player passes drew 640x328 for a panel
+// under 0.5% of the screen. Each axis rounds UP to a power of two (never
+// coarser than the screen: no panel samples soft), at least MIN_TARGET_SIZE
+// and at most HALF the drawing buffer — a door filling the screen keeps the
+// half-res target it always had.
+const MIN_TARGET_SIZE = 32;
+
+// Resizing reallocates the target's GPU buffers, so a target grows at once
+// but shrinks only after this many passes running have asked for a smaller
+// one (a panel near a bucket edge, or sized for two eyes in turn, would
+// otherwise reallocate every frame).
+const SHRINK_AFTER_PASSES = 30;
+
 const scratchSize = new THREE.Vector2();
+
+/** Target size along one axis for `texels` of panel, under `cap`. */
+const bucket = (texels, cap) =>
+  Math.min(cap, Math.max(MIN_TARGET_SIZE, 2 ** Math.ceil(Math.log2(Math.max(1, texels)))));
 
 class PortalView {
   /**
@@ -233,6 +253,11 @@ class PortalView {
     // view would show.
     this._targets = [createSceneTarget(1, 1), createSceneTarget(1, 1)];
     this._writeIndex = 0;
+    // The size passes write at (_fitTarget), and how many passes running
+    // have asked for a smaller one
+    this._width = 0;
+    this._height = 0;
+    this._shrinkVotes = 0;
     // A surface shows only once a pass has written its buffer: an unwritten
     // target samples BLACK, in the main view and in every other portal's
     // pass alike. setVisible records the wish; the first write grants it.
@@ -307,6 +332,23 @@ class PortalView {
   }
 
   /**
+   * Where this panel lands on `eye`'s screen (portalMath.panelFootprint):
+   * the texels its target needs, and its share of the screen. An eye with
+   * no pose of its own may borrow one (`eye.pose`): a mirror sweep's mapped
+   * eye looks the way the player does. null without any pose — a pass for
+   * such an eye writes the full half-res target.
+   * @param {{position, quaternion?, fov?, aspect?, pose?}} eye
+   * @param {THREE.WebGLRenderer} renderer - for the drawing-buffer size
+   */
+  footprint(eye, renderer) {
+    const posed = (camera) => Boolean(camera && camera.quaternion && camera.fov);
+    const pose = posed(eye) ? eye : eye.pose;
+    if (!posed(pose)) return null;
+    renderer.getDrawingBufferSize(scratchSize);
+    return panelFootprint(eye.position, pose, this._corners, scratchSize.x, scratchSize.y);
+  }
+
+  /**
    * This panel's own doorway clip plane (neighbor-world space). PortalManager
    * shares the PRIMARY approach panel's plane across every panel of a door so
    * the side windows clip along the SAME axis as the approach — otherwise a
@@ -350,19 +392,25 @@ class PortalView {
    * texture. Call only while the gate is open.
    * @param {THREE.WebGLRenderer} renderer - the game's renderer
    * @param {THREE.Camera} camera - the player camera (world position)
-   * @param {THREE.Plane} [clipOverride] - the door's SHARED clip plane (the
-   *   primary approach panel's). When given, every panel clips along the
-   *   same doorway axis, so side windows show a consistent slice instead of
-   *   a perpendicular full-height one that pops at a jamb. The panel's OWN
-   *   plane is ALWAYS applied too: it cuts content between the mapped eye
-   *   and the window along this panel's axis — junk the shared plane cannot
-   *   reach (a side panel of a freestanding door once painted a whole
-   *   perimeter wall standing beside its mapped eye into the doorway).
-   * @param {THREE.Mesh[]} [extraWallsBehind] - the APPROACH panel's
+   * @param {object} [options]
+   * @param {THREE.Plane} [options.clipOverride] - the door's SHARED clip
+   *   plane (the primary approach panel's). When given, every panel clips
+   *   along the same doorway axis, so side windows show a consistent slice
+   *   instead of a perpendicular full-height one that pops at a jamb. The
+   *   panel's OWN plane is ALWAYS applied too: it cuts content between the
+   *   mapped eye and the window along this panel's axis — junk the shared
+   *   plane cannot reach (a side panel of a freestanding door once painted
+   *   a whole perimeter wall standing beside its mapped eye into the
+   *   doorway).
+   * @param {THREE.Mesh[]} [options.extraWallsBehind] - the APPROACH panel's
    *   walls-behind row, hidden alongside this panel's own so the shared
    *   clip's overreach never leaks a wall sliver into any panel.
+   * @param {?object} [options.footprint] - this panel's footprint on the
+   *   screen the pass is for, when the caller already has it (footprint());
+   *   worked out from `camera` otherwise
    */
-  render(renderer, camera, clipOverride = null, extraWallsBehind = null) {
+  render(renderer, camera, options = {}) {
+    const { clipOverride = null, extraWallsBehind = null } = options;
     // The eye must be on the outward side of this face, and the doorway quad
     // inside the player's view: an off-screen panel keeps last frame's
     // texture, and passes run BEFORE the main render, so it re-renders the
@@ -376,18 +424,10 @@ class PortalView {
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
 
-    // Half-resolution target: every visible face of an open door re-renders
-    // the whole neighbor scene each frame, and full-res targets made open
-    // doors cost several fullscreen renders per frame (GPU fan spin,
-    // round-4 playtest). At half size the doorway panel — a fraction of the
-    // screen — still oversamples in practice.
-    renderer.getDrawingBufferSize(scratchSize);
-    const targetW = Math.max(1, Math.floor(scratchSize.x / 2));
-    const targetH = Math.max(1, Math.floor(scratchSize.y / 2));
-    const writeTarget = this._targets[this._writeIndex];
-    if (writeTarget.width !== targetW || writeTarget.height !== targetH) {
-      writeTarget.setSize(targetW, targetH);
-    }
+    const writeTarget = this._fitTarget(
+      renderer,
+      options.footprint === undefined ? this.footprint(camera, renderer) : options.footprint
+    );
 
     const mappedEye = this._map({ x: eye.x, y: eye.y, z: eye.z });
     // Never render from closer than MIN_RENDER_EYE_DISTANCE to the window
@@ -512,6 +552,43 @@ class PortalView {
       this.surface.visible = this._shown; // safe to sample from now on
     }
     return true; // a pass actually ran (callers track face freshness)
+  }
+
+  /**
+   * Size the target this pass writes to the panel's footprint (null: the
+   * full half-res cap). Every visible face of an open door re-renders the
+   * whole neighbor scene each frame, and full-res targets made open doors
+   * cost several fullscreen renders per frame (GPU fan spin, round-4
+   * playtest) — so half the drawing buffer is the ceiling; below it the
+   * target follows what the panel occupies (see MIN_TARGET_SIZE).
+   */
+  _fitTarget(renderer, footprint) {
+    renderer.getDrawingBufferSize(scratchSize);
+    const capW = Math.max(1, Math.floor(scratchSize.x / 2));
+    const capH = Math.max(1, Math.floor(scratchSize.y / 2));
+    const wantW = footprint ? bucket(footprint.texelsAcross, capW) : capW;
+    const wantH = footprint ? bucket(footprint.texelsUp, capH) : capH;
+    let width = Math.min(this._width, capW);
+    let height = Math.min(this._height, capH);
+    if (wantW > width || wantH > height) {
+      width = Math.max(width, wantW);
+      height = Math.max(height, wantH);
+      this._shrinkVotes = 0;
+    } else if (wantW < width || wantH < height) {
+      this._shrinkVotes += 1;
+      if (this._shrinkVotes >= SHRINK_AFTER_PASSES) {
+        width = wantW;
+        height = wantH;
+        this._shrinkVotes = 0;
+      }
+    } else {
+      this._shrinkVotes = 0;
+    }
+    this._width = width;
+    this._height = height;
+    const target = this._targets[this._writeIndex];
+    if (target.width !== width || target.height !== height) target.setSize(width, height);
+    return target;
   }
 
   dispose() {

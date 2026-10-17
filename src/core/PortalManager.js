@@ -59,6 +59,17 @@ const NO_SOURCES = Object.freeze([]);
 // A door's four faces, in one fixed order
 const FACINGS = Object.freeze(Object.keys(FACING_VECTORS));
 
+// The pose a straight-on warm-up eye looks with, per face: level, straight
+// at the panel (along -outward). Its lens is the player camera's.
+const WARM_UP_TURN = Object.freeze(
+  Object.fromEntries(
+    FACINGS.map((f) => {
+      const yaw = Math.atan2(FACING_VECTORS[f].x, FACING_VECTORS[f].z);
+      return [f, Object.freeze({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) })];
+    })
+  )
+);
+
 /** The cleanser standing exactly on `gate`'s cell in `area`, if any. */
 function cleanserAtGate(area, gate) {
   return area.entityManager
@@ -103,6 +114,9 @@ class PortalManager {
     // One per run of door passes (an eye's player faces + its mirror sweep):
     // which faces THIS eye already drew (view._playerFresh)
     this._passId = 0;
+    // The player camera (once one with a pose has rendered): the lens that
+    // warm-up and mirror eyes size their targets with (PortalView.footprint)
+    this._playerCamera = null;
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
@@ -273,6 +287,7 @@ class PortalManager {
    */
   renderPortals(renderer, camera) {
     this._frameId += 1;
+    if (camera.quaternion && camera.fov) this._playerCamera = camera;
     this._renderDoorPasses(renderer, camera);
     this._refreshStaleFaces(renderer);
   }
@@ -284,7 +299,8 @@ class PortalManager {
    * freshness ages in real frames) and runs no stale rotor (renderPortals
    * runs it, once a frame); the player's renderPortals re-renders the faces
    * the real eye looks into afterwards.
-   * @param {{position: {x, y, z}}} eye
+   * @param {{position: {x, y, z}, pose?: THREE.Camera}} eye - `pose`: the
+   *   camera whose look and lens this eye borrows to size its targets
    */
   renderPortalsFor(renderer, eye) {
     this._renderDoorPasses(renderer, eye);
@@ -503,7 +519,8 @@ class PortalManager {
       // that actually ran counts as fresh. _playerFresh drives the mirror
       // sweep (an ELIGIBLE face that was frustum-culled still needs a
       // mirror render); _freshFrame drives the stale rotor.
-      if (view.render(renderer, camera, sharedClip, sharedWalls)) {
+      const options = { clipOverride: sharedClip, extraWallsBehind: sharedWalls };
+      if (view.render(renderer, camera, options)) {
         view._freshFrame = this._frameId;
         view._playerFresh = this._passId;
       }
@@ -514,16 +531,19 @@ class PortalManager {
    * Seed or refresh a face's buffers with one straight-on render (an eye
    * 1.5 cells out from the face, at head height) so a portal pass sampling
    * it never reads an unwritten black target — or a frozen-in-time one.
-   * Bare eye: no frustum cull applies.
+   * Bare eye: no frustum cull applies. Its target is sized for what it
+   * draws — the panel as that eye sees it through the player's lens.
    */
   _warmUpView(view, gate, facing, renderer) {
     const v = FACING_VECTORS[facing];
+    const lens = this._playerCamera;
     view.render(renderer, {
       position: {
         x: gate.position.x + v.x * WORLD_SCALE * 1.5,
         y: gate.position.y + 1.8,
         z: gate.position.z + v.z * WORLD_SCALE * 1.5,
       },
+      pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
     });
     view._freshFrame = this._frameId;
   }
@@ -635,13 +655,16 @@ class PortalManager {
 
     if (scheduled.size === 0) return;
     // Shallowest-first for the cap (keep what dominates the screen), then
-    // render the keepers deepest-first so each level samples fresh content
+    // render the keepers deepest-first so each level samples fresh content.
+    // Mirror eyes look the way this eye does (a door's mapping is a pure
+    // translation): their targets are sized through its look and lens
+    const pose = camera.quaternion && camera.fov ? camera : camera.pose;
     const kept = [...scheduled.entries()]
       .sort((a, b) => a[1].depth - b[1].depth)
       .slice(0, PortalManager.MIRROR_MAX_PASSES)
       .reverse();
     for (const [view, { eye }] of kept) {
-      if (view.render(renderer, { position: eye })) {
+      if (view.render(renderer, { position: eye, pose })) {
         view._freshFrame = this._frameId;
       }
     }
