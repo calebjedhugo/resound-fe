@@ -191,13 +191,15 @@ instead of "fixing" it.
   biggest-on-screen-first, so the cap keeps what is in sight; self/partner
   recursion still rides the double-buffered cascade; cross-area door
   interiors unchanged); and faces in NO sightline fall back to the stale
-  rotor (`_refreshStaleFaces`, ≤ `STALE_MAX_FRAMES` old, oldest-first,
-  bounded per frame) so nothing ever freezes in time. Keyed off
-  `_playerFresh` (a face that was ELIGIBLE but frustum-culled still needs a
-  mirror render). Freshness ages in REAL frames: the cleanser gate's
-  mapped-eye door pass (`renderPortalsFor`) counts none. Its pad panels age
-  via their own rotor (DeployManager.renderPortal), and a frame with no pad
-  pass to run (gate off screen) skips that door pre-pass too.
+  rotor (`_refreshStaleFaces`, ≤ `STALE_MAX_FRAMES` old, the sweep's
+  overflow first, then oldest-first, bounded per frame) so nothing ever
+  freezes in time — it idles in frames that draw no door panel (nothing
+  could show its faces). Keyed off `_playerFresh` (a face that was
+  ELIGIBLE but frustum-culled still needs a mirror render). Freshness ages
+  in REAL frames: the cleanser gate's mapped-eye door pass
+  (`renderPortalsFor`) counts none. Its pad panels age via their own rotor
+  (DeployManager.renderPortal), and a frame with no pad pass to run (gate
+  off screen) skips that door pre-pass too.
 - **Door passes cost what the screen shows** (2026-10-17): each pass's
   target fits its panel's densest size ON SCREEN (`portalMath.panelFootprint`,
   `PortalView._fitTarget`: power-of-two per axis, 32 px floor, half-res cap —

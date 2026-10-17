@@ -118,11 +118,17 @@ class PortalManager {
     // One per run of door passes (an eye's player faces + its mirror sweep):
     // which faces THIS eye already drew (view._playerFresh)
     this._passId = 0;
+    // Did any eye's door pass draw a face this frame (the cleanser gate's
+    // pre-pass included)? Without one, the stale rotor has no viewer
+    this._panelDrawn = false;
     // The player camera (once one with a pose has rendered): the lens that
     // warm-up and mirror eyes size their targets with (PortalView.footprint)
     this._playerCamera = null;
     // Next small-panel beat to hand out (_restsThisFrame)
     this._nextBeat = 0;
+    // Faces the last mirror sweep reached but its cap left out -> their
+    // share of the screen (the stale rotor serves them first)
+    this._sweepOverflow = new Map();
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
@@ -295,7 +301,11 @@ class PortalManager {
     this._frameId += 1;
     if (camera.quaternion && camera.fov) this._playerCamera = camera;
     this._renderDoorPasses(renderer, camera);
-    this._refreshStaleFaces(renderer);
+    // The rotor's faces show only THROUGH other door panels: a frame that
+    // drew none (every door off screen or behind the eye — and so no mirror
+    // sweep either) has nowhere they could be seen
+    if (this._panelDrawn) this._refreshStaleFaces(renderer);
+    this._panelDrawn = false;
   }
 
   /**
@@ -532,12 +542,14 @@ class PortalManager {
         // On screen, showing this same eye's picture from a frame or two
         // ago: the eye owns it this frame all the same
         view._playerFresh = this._passId;
+        this._panelDrawn = true;
         continue; // eslint-disable-line no-continue
       }
       const options = { clipOverride: sharedClip, extraWallsBehind: sharedWalls, footprint };
       if (view.render(renderer, camera, options)) {
         this._wrote(view, camera, camera.position);
         view._playerFresh = this._passId;
+        this._panelDrawn = true;
       }
     }
   }
@@ -675,6 +687,7 @@ class PortalManager {
    * limitation).
    */
   _mirrorSweep(renderer, camera) {
+    this._sweepOverflow.clear();
     const scheduled = new Map(); // view -> { eye, depth, bound }
     // Seeds: doors whose views the player is actually looking into. Each
     // chain carries a BOUND on how much of the screen anything seen through
@@ -749,6 +762,10 @@ class PortalManager {
     // deepest-first so each level samples fresh content
     ranked.sort((a, b) => a[1].depth - b[1].depth || b[1].share - a[1].share);
     const kept = ranked.slice(0, PortalManager.MIRROR_MAX_PASSES).reverse();
+    for (let i = PortalManager.MIRROR_MAX_PASSES; i < ranked.length; i += 1) {
+      const [view, { share }] = ranked[i];
+      if (share > 0) this._sweepOverflow.set(view, share);
+    }
     for (const [view, { eye, footprint, share }] of kept) {
       const seen = footprint && { ...footprint, screenShare: share };
       if (this._restsThisFrame(view, seen, MIRROR_WRITER, eye, renderer)) continue; // eslint-disable-line no-continue
@@ -772,9 +789,10 @@ class PortalManager {
   // A face nobody's eye has rendered for this many renderPortals frames is
   // STALE: it still shows in other portals' mirrors, and a frozen snapshot
   // (a closed gate that has since opened, a creature stuck mid-song) reads
-  // as a bug the moment the world moves on. Refresh the oldest few per
-  // frame — bounded cost, a BACKSTOP for faces no direct or mirror
-  // sightline touches (mirror faces render fresh via _mirrorSweep).
+  // as a bug the moment the world moves on. Refresh a few per frame —
+  // bounded cost, a BACKSTOP for faces no direct or mirror sightline
+  // touches (mirror faces render fresh via _mirrorSweep), and for mirror
+  // faces past the sweep's cap.
   static STALE_MAX_FRAMES = 15;
 
   static STALE_REFRESH_PER_FRAME = 2;
@@ -792,7 +810,15 @@ class PortalManager {
       }
     }
     if (stale.length === 0) return;
-    stale.sort((a, b) => (a._freshFrame || 0) - (b._freshFrame || 0));
+    // What the mirror sweep reached but had no room for goes first, biggest
+    // on screen first — those faces are the likeliest in sight; then the
+    // oldest
+    const overflow = this._sweepOverflow;
+    stale.sort(
+      (a, b) =>
+        (overflow.get(b) || 0) - (overflow.get(a) || 0) ||
+        (a._freshFrame || 0) - (b._freshFrame || 0)
+    );
     const budget = Math.min(PortalManager.STALE_REFRESH_PER_FRAME, stale.length);
     for (let i = 0; i < budget; i += 1) {
       this._warmUpView(stale[i], stale[i].gate, stale[i].facing, renderer);

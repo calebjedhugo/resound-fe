@@ -1,8 +1,9 @@
 /**
  * What each door pass costs (core/PortalManager + core/PortalView): a pass
  * draws at the size its panel shows on screen, a small panel re-renders one
- * frame in three — never while a creature shows through it — and the mirror
- * sweep spends its passes on what the screen can show.
+ * frame in three — never while a creature shows through it — the mirror
+ * sweep spends its passes on what the screen can show, and the stale rotor
+ * works only while some door panel is drawn.
  *
  * Rendering is mocked: a recording renderer stands in for three's, logging
  * every pass (frame, target, size) and the panel it drew. Eyes carry a pose
@@ -284,6 +285,42 @@ describe('A small panel re-renders one frame in three', () => {
   });
 });
 
+describe('The stale rotor works only while a door panel is drawn', () => {
+  it('with every door off screen, no pass runs at all', async () => {
+    await openPortalA();
+    const renderer = createRecordingRenderer();
+    const away = eyeAt(DOOR.x, 9 * WORLD_SCALE, LOOK_SOUTH); // the door at the back
+    drawFrame(renderer, away); // the door's first frame writes every face
+    const opened = renderer.passes.length;
+
+    for (let i = 0; i < PortalManager.constructor.STALE_MAX_FRAMES * 2; i += 1) {
+      drawFrame(renderer, away);
+    }
+
+    expect(renderer.passes.length).toBe(opened);
+  });
+
+  it('a door back in view brings the rotor back: a face no eye draws refreshes', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const z = 9 * WORLD_SCALE;
+    drawFrame(renderer, eyeAt(DOOR.x, z, LOOK_SOUTH));
+    for (let i = 0; i < PortalManager.constructor.STALE_MAX_FRAMES * 2; i += 1) {
+      drawFrame(renderer, eyeAt(DOOR.x, z, LOOK_SOUTH));
+    }
+
+    // The NORTH face can only be seen through other panels from here
+    const north = panelOf(door, 'north');
+    drawFrame(renderer, eyeAt(DOOR.x, z));
+    let refreshedWithin = null;
+    for (let i = 0; i < 4 && refreshedWithin === null; i += 1) {
+      if (renderer.writesOf(north).length > 0) refreshedWithin = i;
+      else drawFrame(renderer, eyeAt(DOOR.x, z));
+    }
+    expect(refreshedWithin).not.toBeNull();
+  });
+});
+
 describe('The mirror sweep spends its passes on what the screen can show', () => {
   // A same-area world built for the cap: looking north into S1 shows the
   // room north of S2, where V1 stands straight ahead; X1's faces are also
@@ -336,5 +373,34 @@ describe('The mirror sweep spends its passes on what the screen can show', () =>
     const byId = (id) => gates.find((g) => g.gateId === id);
     expect(renderer.writesOf(panelOf(byId('v1'), 'south'))).toHaveLength(2);
     expect(renderer.writesOf(panelOf(byId('x1'), 'north'))).toHaveLength(1);
+  });
+
+  it('back in view after a pause, the rotor serves faces the cap left out first', () => {
+    installFetchMock({});
+    PortalManager.enterWorld(world);
+    const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of gates) g.open();
+    PortalManager.constructor.MIRROR_MAX_PASSES = 1;
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(3 * WORLD_SCALE, 9 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    // Look straight up long enough for every face to go stale, rotor idle
+    eye.quaternion = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
+    for (let i = 0; i < PortalManager.constructor.STALE_MAX_FRAMES * 2; i += 1) {
+      drawFrame(renderer, eye);
+    }
+
+    eye.quaternion = LOOK_NORTH;
+    drawFrame(renderer, eye);
+
+    // Every face is equally stale. The sweep's one pass went to V1's south
+    // face; of the faces it reached but had no room for, X2's south face
+    // (two doors deep) and V1's east side (an edge-on sliver) show biggest,
+    // and take the rotor's two refreshes — not S1's north face, first in
+    // line by age alone
+    const byId = (id) => gates.find((g) => g.gateId === id);
+    expect(renderer.writesOf(panelOf(byId('x2'), 'south'))).toHaveLength(1);
+    expect(renderer.writesOf(panelOf(byId('v1'), 'east'))).toHaveLength(1);
+    expect(renderer.writesOf(panelOf(byId('s1'), 'north'))).toHaveLength(0);
   });
 });
