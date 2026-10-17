@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import WebGL from 'isWebGLAvailable';
 import motion, {
   camera,
   renderer,
@@ -418,11 +417,6 @@ if (import.meta.env.DEV) {
 }
 
 // Start the game
-if (WebGL.isWebGLAvailable()) {
-  initializeGame().catch((error) => {
-    console.error('Failed to initialize game:', error);
-  });
-} else {
-  const warning = WebGL.getWebGLErrorMessage();
-  document.body.appendChild(warning);
-}
+initializeGame().catch((error) => {
+  console.error('Failed to initialize game:', error);
+});

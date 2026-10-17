@@ -1,4 +1,6 @@
-import { clamp } from 'three/src/math/MathUtils';
+import { MathUtils } from 'three';
+
+const { clamp } = MathUtils;
 
 const INCREMENT_DENOMINATOR = 1400000;
 const CENTER_RANGE_PERC_X = 0.4;

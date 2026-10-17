@@ -144,6 +144,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
+| `src/core/CameraController.test.js` | Look limits: keyboard pitch stops at straight up/down; a mouse beyond the look band turns the view at most a quarter turn |
 
 ---
 
