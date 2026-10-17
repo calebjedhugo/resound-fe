@@ -28,8 +28,8 @@ module.exports = {
       },
     },
     {
-      // Node CLI generators — console output is their job
-      files: ['puzzles/**/*.js'],
+      // Node CLI generators and deploy scripts — console output is their job
+      files: ['puzzles/**/*.js', 'deploy/**/*.mjs'],
       env: {
         node: true,
       },

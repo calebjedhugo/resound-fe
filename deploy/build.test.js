@@ -7,12 +7,16 @@
  * is a hashed asset too (it was an unhashed public/ file, revalidated before
  * the game script could run).
  *
+ * The POC stage (build-poc.mjs) then ships the game alone, precompressed for
+ * nginx's gzip_static.
+ *
  * Runs two real Vite builds (deploy/__tests__/viteBuild.mjs).
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import zlib from 'zlib';
 
 const ROOT = path.resolve(__dirname, '..');
 const BUILD_TIMEOUT_MS = 120000;
@@ -47,6 +51,11 @@ beforeAll(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'resound-build-'));
   base = viteBuild(path.join(tmp, 'base'));
   tuned = viteBuild(path.join(tmp, 'tuned'), '--tune');
+  execFileSync(process.execPath, [
+    path.join(__dirname, 'build-poc.mjs'),
+    path.join(tmp, 'base'),
+    path.join(tmp, 'poc'),
+  ]);
 }, BUILD_TIMEOUT_MS);
 
 afterAll(() => {
@@ -121,5 +130,40 @@ describe("The game page's stylesheet", () => {
     expect(fs.readFileSync(path.join(tmp, 'base', href))).toEqual(
       fs.readFileSync(path.join(ROOT, 'src/ui/menu.css'))
     );
+  });
+});
+
+describe('The POC stage', () => {
+  const poc = (...parts) => path.join(tmp, 'poc', ...parts);
+  const stagedFiles = () =>
+    fs.readdirSync(poc(), { recursive: true }).filter((f) => fs.statSync(poc(f)).isFile());
+
+  it('drops the editor', () => {
+    expect(stagedFiles().filter((f) => /editor/.test(f))).toEqual([]);
+  });
+
+  it('ships only the POC levels', () => {
+    const { puzzles } = JSON.parse(fs.readFileSync(poc('puzzles/manifest.json'), 'utf8'));
+    const levels = fs.readdirSync(poc('puzzles')).filter((f) => f.endsWith('.json'));
+
+    expect(puzzles.every(({ id }) => id.startsWith('poc-'))).toBe(true);
+    expect(levels.sort()).toEqual(
+      ['manifest.json', ...puzzles.map(({ id }) => `${id}.json`)].sort()
+    );
+  });
+
+  it('precompresses every page, script, stylesheet and puzzle', () => {
+    const text = stagedFiles().filter((f) => /\.(html|js|css|json)$/.test(f));
+
+    expect(text.filter((f) => !fs.existsSync(poc(`${f}.gz`)))).toEqual([]);
+  });
+
+  it('every .gz unzips to exactly the file beside it', () => {
+    const gzipped = stagedFiles().filter((f) => f.endsWith('.gz'));
+    const unzipsWrong = (gz) =>
+      !zlib.gunzipSync(fs.readFileSync(poc(gz))).equals(fs.readFileSync(poc(gz.slice(0, -3))));
+
+    expect(gzipped.length).toBeGreaterThan(0);
+    expect(gzipped.filter(unzipsWrong)).toEqual([]);
   });
 });
