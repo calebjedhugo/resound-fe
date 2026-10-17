@@ -548,6 +548,8 @@ import {
   WORLD_SCALE,
   CREATURE_HOVER_HEIGHT,
   CREATURE_DECELERATION,
+  ATTRACTION_FORCE_STRENGTH,
+  REPULSION_FORCE_STRENGTH,
 } from 'core/constants';
 import { getDistance, getDistanceVolume } from 'core/utils';
 /* eslint-enable import/first */
@@ -788,6 +790,32 @@ describe('What a creature hears', () => {
     ctx.getEntityManager().remove(e4.id);
     sing(addSinger('A4', 12 * WORLD_SCALE));
     expect(c4.heardNotes()).toEqual([67, 69]);
+  });
+
+  it("feels each heard source's own push or pull, afresh every pass", () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const [c4, e4] = ctx.getCreatures(); // E4 due east of C4: a major 3rd pulls
+    // A D4 due south of C4: a major 2nd pushes
+    const d4 = ctx.addCreature({
+      position: { x: c4.position.x, y: 0, z: c4.position.z + 15 },
+      song: [{ pitch: 'D4', length: '1/1' }],
+    });
+    [c4, e4, d4].forEach(sing);
+
+    c4.calculateForces();
+    expect(c4.forces).toEqual([
+      { x: ATTRACTION_FORCE_STRENGTH, z: 0 },
+      { x: 0, z: -REPULSION_FORCE_STRENGTH },
+    ]);
+
+    // The D4 moves round to the west: now it pushes east
+    d4.position.x = c4.position.x - 15;
+    d4.position.z = c4.position.z;
+    c4.calculateForces();
+    expect(c4.forces).toEqual([
+      { x: ATTRACTION_FORCE_STRENGTH, z: 0 },
+      { x: REPULSION_FORCE_STRENGTH, z: 0 },
+    ]);
   });
 });
 
