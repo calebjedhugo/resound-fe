@@ -33,6 +33,11 @@ import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
 import PausedState from 'states/PausedState';
 import createEventListeners from 'createEventListeners';
+import Creature from 'entities/Creature';
+import Gate from 'entities/Gate';
+import Fountain from 'entities/Fountain';
+import CleansingTile from 'entities/CleansingTile';
+import CleanserGatePad from 'entities/CleanserGatePad';
 
 // Three.js scene
 const scene = new THREE.Scene();
@@ -207,6 +212,8 @@ function render() {
   });
 }
 
+const gameLoop = new GameLoop(update, render);
+
 // Keyboard handler for pause and metronome
 function handleKeyDown(event) {
   if (event.code === 'Escape') {
@@ -267,7 +274,6 @@ async function initializeGame() {
   window.addEventListener('keydown', handleKeyDown);
 
   // Start game loop
-  const gameLoop = new GameLoop(update, render);
   gameLoop.start();
 }
 
@@ -329,6 +335,85 @@ if (import.meta.env.DEV) {
         programs: renderer.info.programs.length,
       };
     },
+    // Per-phase CPU time over the next `frames` frames (core/FrameProfiler):
+    // self/inclusive ms per wrapped call keyed by where it ran, plus frame
+    // work/interval percentiles, draw calls over every pass, derivations,
+    // GPU ms where the browser exposes timer queries, and the JS heap. Pass
+    // extra [owner, method, label] targets to time anything else.
+    // Usage: await window.__resoundDebug.profile(300)
+    async profile(frames = 300, extraTargets = []) {
+      const { default: profileFrames } = await import('core/FrameProfiler');
+      const clock = gameState.musicalClock;
+      return profileFrames({
+        renderer,
+        gameLoop,
+        frames,
+        targets: [
+          [gameLoop, 'update', 'update'],
+          [gameLoop, 'render', 'render'],
+          [stateMachine, 'update', 'update.stateMachine'],
+          [clock, 'update', 'update.clock'],
+          [PortalManager, 'updateAreas', 'update.areas'],
+          [Creature.prototype, 'update', 'entity.creature'],
+          [Creature.prototype, 'updateLook', 'creature.look'],
+          [Creature.prototype, 'updateMovement', 'creature.movement'],
+          [Gate.prototype, 'update', 'entity.gate'],
+          [Fountain.prototype, 'update', 'entity.fountain'],
+          [CleansingTile.prototype, 'update', 'entity.cleanser'],
+          [CleanserGatePad.prototype, 'update', 'entity.cleanserGatePad'],
+          [PortalManager, '_mirrorDoorPairs', 'areas.mirrorDoorPairs'],
+          [PortalManager, '_updateTempoGradient', 'areas.tempoGradient'],
+          [PortalManager, 'update', 'update.crossing'],
+          [DeployManager, 'update', 'update.deploy'],
+          [clapVisual, 'update', 'update.clapVisual'],
+          [recordingUI, 'update', 'update.recordingUI'],
+          [keyHints, 'update', 'update.keyHints'],
+          [debugUI, 'update', 'update.debugUI'],
+          [cameraModeBadge, 'update', 'update.cameraBadge'],
+          [ShaderPrewarm, 'run', 'render.prewarm'],
+          [DeployManager, 'renderPortal', 'render.cleanserGate'],
+          [PortalManager, 'renderPortals', 'render.doors'],
+          [PortalManager, 'renderAreaPortals', 'render.areaDoors'],
+          [PortalManager, '_renderExteriorViews', 'doors.playerFaces'],
+          [PortalManager, '_flushWarmUps', 'doors.warmUps'],
+          [PortalManager, '_mirrorSweep', 'doors.mirrorSweep'],
+          [PortalManager, '_refreshStaleFaces', 'doors.staleRotor'],
+          ...extraTargets,
+        ],
+      });
+    },
+    // Scripted scenarios: enter a puzzle (a fresh world, like the menu) and
+    // drop the start gate once its shader prewarm has seen every linked
+    // neighbor (bounded wait), as a player's would. Dropping it this way
+    // skips the waking gesture, so audio stays suspended until a REAL
+    // key/click (CDP input counts).
+    async enter(puzzleId) {
+      await startPuzzle(puzzleId);
+      const neighborsLoaded = () =>
+        PortalManager.getActiveArea()
+          .entities.filter((e) => e.type === 'gate' && e.link)
+          .every((gate) => PortalManager.getArea(gate.link.puzzleId));
+      await new Promise((resolve) => {
+        let framesLeft = 180;
+        let settleFrames = 2; // the prewarm draws on the frames after a load
+        const tick = () => {
+          framesLeft -= 1;
+          if (neighborsLoaded() || framesLeft <= 0) settleFrames -= 1;
+          if (settleFrames < 0) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      startGate.hide();
+      return gameState.currentPuzzle && gameState.currentPuzzle.id;
+    },
+    startGate,
+    keyHints,
+    clapVisual,
+    DeployManager,
+    ClapManager,
+    PuzzleLoader,
+    ShaderPrewarm,
   };
 }
 

@@ -272,6 +272,14 @@ instead of "fixing" it.
   screenshot), `setTapImpulse(true)` to re-enable the tap-impulse
   affordance, and `countProgramDerivations(frames)` (shader-program
   re-derivations per frame; see "ONE pass context")
+- **Performance: `await __resoundDebug.profile(frames)`** (`core/FrameProfiler`)
+  times every frame phase (self + inclusive ms, keyed by caller), frame
+  percentiles, draw calls and GPU ms PER PASS, derivations and heap; it
+  unwraps itself after the run. It sees only the rAF callback: timer-driven
+  notes and area builds show up only in its `longAnimationFrames`.
+  `enter(puzzleId)` starts a fresh world and drops the start gate once the
+  prewarm has seen the neighbors (audio stays suspended until a REAL key
+  press). The dev server is cross-origin isolated so timers resolve to 5 µs
 
 ### Notation Coordinate System
 - All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model

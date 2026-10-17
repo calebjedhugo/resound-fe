@@ -197,6 +197,12 @@ class Material {
     this.userData = {}; // like three: Entity.dispose reads userData.shared
   }
 
+  // three calls this once per program re-derivation (FrameProfiler counts it)
+  // eslint-disable-next-line class-methods-use-this
+  customProgramCacheKey() {
+    return '';
+  }
+
   dispose() {}
 }
 
@@ -216,6 +222,12 @@ class ShaderMaterial extends Material {
 class Geometry {
   constructor() {
     this.userData = {}; // like three: Entity.dispose reads userData.shared
+  }
+
+  // three calls this once per program re-derivation (FrameProfiler counts it)
+  // eslint-disable-next-line class-methods-use-this
+  customProgramCacheKey() {
+    return '';
   }
 
   dispose() {}
@@ -451,6 +463,7 @@ module.exports = {
   ConeGeometry: Geometry,
   BufferGeometry,
   Float32BufferAttribute,
+  Material,
   MeshStandardMaterial: Material,
   MeshBasicMaterial: Material,
   ShaderMaterial,

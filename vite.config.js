@@ -343,9 +343,20 @@ function gitPlugin() {
   };
 }
 
+// Cross-origin isolation for local serving only (dev + `vite preview`): it
+// raises performance.now() from Chrome's 100 µs to 5 µs resolution, which the
+// dev frame profiler (core/FrameProfiler) needs to time sub-0.1 ms calls.
+// Safe because the app loads nothing cross-origin.
+const ISOLATION_HEADERS = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'require-corp',
+};
+
 export default defineConfig({
   plugins: [jsconfigPaths(), puzzleWriterPlugin(), gitPlugin()],
+  preview: { headers: ISOLATION_HEADERS },
   server: {
+    headers: ISOLATION_HEADERS,
     // Honor an externally assigned port (tooling that can't use 5173);
     // defaults to Vite's standard 5173 otherwise
     port: Number(process.env.PORT) || 5173,
