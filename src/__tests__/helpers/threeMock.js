@@ -195,6 +195,14 @@ class Material {
     this.roughness = 0.5;
     this.metalness = 0.5;
     this.userData = {}; // like three: Entity.dispose reads userData.shared
+    this.visible = true; // like three: a hidden material is left out of the draw
+    this.version = 0;
+  }
+
+  // Like three: flagging an update bumps the version, which makes the
+  // renderer re-derive the material's shader program at its next draw
+  set needsUpdate(value) {
+    if (value === true) this.version += 1;
   }
 
   // three calls this once per program re-derivation (FrameProfiler counts it)

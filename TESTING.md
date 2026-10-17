@@ -36,6 +36,7 @@ src/
     helpers/
       testUtils.js         # createTestContext and test utilities
       mocks.js             # Mock implementations
+      drawList.js          # What three would draw from a scene graph
     fixtures/
       puzzles/             # Test puzzle JSON files
   core/
