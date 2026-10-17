@@ -11,7 +11,8 @@
  *     those entries, in their original order (so the game boots into
  *     `poc-threshold` — puzzles[0] — and Esc's menu lists only the POC set).
  *   - every text file gets a level-9 `.gz` beside it for nginx's gzip_static
- *     (deploy/nginx-resound.conf).
+ *     (deploy/nginx-resound.conf), and `.deploy-assets` lists the hashed
+ *     assets for deploy/upload.sh's prune.
  *
  * The POC files only ever portal-link to each other, so the pruned set is
  * self-contained. Run after `vite build`; see deploy/deploy.sh.
@@ -79,6 +80,14 @@ for (const f of fs.readdirSync(OUT, { recursive: true })) {
     if (gz.length < bytes.length) fs.writeFileSync(`${file}.gz`, gz);
   }
 }
+
+// 4. List the hashed assets (precompressed copies included). upload.sh
+//    records the list on the server, and the NEXT deploy keeps every file in
+//    it: a page loaded just before that deploy still finds its chunks.
+fs.writeFileSync(
+  path.join(OUT, '.deploy-assets'),
+  `${fs.readdirSync(assetsDir).sort().join('\n')}\n`
+);
 
 console.log(`Staged POC build at ${OUT}`);
 console.log(`  levels: ${pocEntries.map((p) => p.id).join(', ')}`);

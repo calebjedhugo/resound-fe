@@ -8,7 +8,7 @@
  * the game script could run).
  *
  * The POC stage (build-poc.mjs) then ships the game alone, precompressed for
- * nginx's gzip_static.
+ * nginx's gzip_static, with the asset list deploy/upload.sh prunes by.
  *
  * Runs two real Vite builds (deploy/__tests__/viteBuild.mjs).
  */
@@ -165,5 +165,11 @@ describe('The POC stage', () => {
 
     expect(gzipped.length).toBeGreaterThan(0);
     expect(gzipped.filter(unzipsWrong)).toEqual([]);
+  });
+
+  it('lists exactly the assets it ships, for the upload to keep next time', () => {
+    expect(fs.readFileSync(poc('.deploy-assets'), 'utf8')).toBe(
+      `${fs.readdirSync(poc('assets')).sort().join('\n')}\n`
+    );
   });
 });

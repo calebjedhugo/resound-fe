@@ -23,11 +23,19 @@ Which does:
    its editor-only assets, prunes `puzzles/` to the `poc-*` files, and writes a
    manifest filtered to those entries (order preserved, so the game boots into
    `poc-threshold` and Esc's menu lists only the POC set). Every text file gets
-   a level-9 `.gz` beside it (for nginx `gzip_static`).
-3. `rsync --delete deploy/dist-poc/ chugo@hugopi:/var/www/resound.calebhugo.com/`.
+   a level-9 `.gz` beside it (for nginx `gzip_static`), and `.deploy-assets`
+   lists the hashed assets.
+3. `deploy/upload.sh deploy/dist-poc chugo@hugopi:/var/www/resound.calebhugo.com/`
+   — plain rsync passes, ordered so no page ever 404s a chunk: new hashed
+   assets first, then the puzzles, then `index.html` (and only then are stale
+   unhashed files deleted). The previous deploy's assets stay for pages loaded
+   before this one; only older ones are pruned (the server's `.deploy-assets`,
+   recorded each deploy, says which). Re-running is safe; the first deploy onto
+   a root with no `.deploy-assets` prunes nothing.
 
 `deploy/dist-poc/` is a build artifact (gitignored). `deploy/build.test.js`
-(in `npm test`) pins the chunking and staging.
+and `deploy/upload.test.js` (in `npm test`) pin the chunking, staging and
+upload order.
 
 ## Caching + compression (`deploy/nginx-resound.conf`)
 
@@ -43,7 +51,8 @@ Which does:
 
 The vhost is infrastructure: `deploy.sh` never touches it. After changing
 `deploy/nginx-resound.conf`, install it (plain `ssh` commands, one per line).
-Either order with a deploy is fine: without a `.gz` nginx gzips on the fly.
+Either order with a deploy is fine: without a `.gz` nginx gzips on the fly,
+and the old vhost already denies dotfiles like `.deploy-assets`.
 
 ```bash
 scp deploy/nginx-resound.conf chugo@hugopi:/tmp/resound.conf
