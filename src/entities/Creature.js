@@ -101,6 +101,10 @@ class Creature extends Entity {
     // Recording state
     this.isRecordable = false; // Is player in recording range?
 
+    // Fountains playing their song in our area (Fountain.activate): silent
+    // while any is
+    this.hushCount = 0;
+
     this.createMesh();
 
     // Register as listener for harmony-based movement
@@ -163,7 +167,7 @@ class Creature extends Entity {
     // Update volume based on distance (inverse square law)
     if (distance <= this.audibleRange) {
       const volume = getDistanceVolume(distance, this.audibleRange);
-      this.instrument.updateVolume(volume);
+      this.instrument.updateVolume(this.hushCount > 0 ? 0 : volume);
 
       // Check if in recording range. Recording takes real proximity, never a
       // doorway: a creature audible through a door (neighbor area OR an

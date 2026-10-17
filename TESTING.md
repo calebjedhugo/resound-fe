@@ -136,6 +136,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/RecordingManager.test.js` | Capturing creature notes into inventory |
 | `src/core/PlaybackManager.test.js` | Playing recorded songs, note emission timing; a reset or new world stops the tape (pending start, notes under way, the old end timer) |
 | `src/core/ListeningManager.test.js` | Gates/Fountains recognizing correct songs |
+| `src/entities/Fountain.test.js` | An activated fountain's song plays alone: its area's creatures stay hushed for the song (and until the last of overlapping songs ends), other fountains get their volume back |
 | `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials) |
 | `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections by triad, added sixth, lone-note paleness, painter's complement + dissonance, register lightness; memoized path = reference) |
 | `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share |
