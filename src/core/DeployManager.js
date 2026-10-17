@@ -65,6 +65,7 @@ class DeployManager {
     // through the gate" tile (same doctrine as door tile mirrors).
     this._tileMirror = null;
     this._tileMirrorGroup = null;
+    this._tileMirrorSource = null; // the real tile's material, when the mirror has its own
   }
 
   /** @param {THREE.Scene} scene - the render scene (phantom lives here) */
@@ -107,6 +108,7 @@ class DeployManager {
         return;
       }
       this._syncView();
+      this._syncTileMirror();
     }
   }
 
@@ -263,12 +265,33 @@ class DeployManager {
     if (!tile || !tile.mesh) return;
     const padPos = this._pad.entity.position;
     const mirror = tile.mesh.clone(); // shares geometry + material
+    if (destArea !== this._pad.area) {
+      // The tile and its mirror draw in DIFFERENT scenes (each area's
+      // content lives in its own while not active). three keys a lit
+      // material's program by the scene's light state, so one material
+      // drawn in both re-derived its program at every switch between
+      // them, twice a frame (core/passContext). The mirror gets its own
+      // copy (same parameters, same program) and follows the tile's glow
+      // each update (_syncTileMirror).
+      mirror.material = tile.mesh.material.clone();
+      this._tileMirrorSource = tile.mesh.material;
+    }
     const lift = tile.mesh.position.y - tile.position.y;
     mirror.position.set(padPos.x, padPos.y + lift, padPos.z);
     mirror._isCleanserMirror = true; // tag for tests/debugging
     this._pad.area.group.add(mirror);
     this._tileMirror = mirror;
     this._tileMirrorGroup = this._pad.area.group;
+  }
+
+  /** Copy the destination tile's live glow onto the mirror's own material. */
+  _syncTileMirror() {
+    if (!this._tileMirror || !this._tileMirrorSource) return;
+    const from = this._tileMirrorSource;
+    const to = this._tileMirror.material;
+    to.color.copy(from.color);
+    to.emissive.copy(from.emissive);
+    to.emissiveIntensity = from.emissiveIntensity;
   }
 
   _disposeView() {
@@ -278,8 +301,10 @@ class DeployManager {
     this._viewTarget = null;
     if (this._tileMirror) {
       this._tileMirrorGroup.remove(this._tileMirror);
+      if (this._tileMirrorSource) this._tileMirror.material.dispose(); // its own copy
       this._tileMirror = null;
       this._tileMirrorGroup = null;
+      this._tileMirrorSource = null;
     }
   }
 

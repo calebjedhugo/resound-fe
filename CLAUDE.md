@@ -323,8 +323,10 @@ instead of "fixing" it.
   gate: a box of see-through PortalView panels (one per face; pad mesh
   is an empty anchor at gate-center height). The gold tile shows AT the
   gate via a mirror clone (the panel aperture would clip the arrival
-  cell's tile to a crescent — same fix as door tile mirrors), and doors
-  seen through the gate are themselves see-through: the pad pre-pass
+  cell's tile to a crescent — same fix as door tile mirrors; a tile in
+  ANOTHER area gives the clone its own material, synced each update — one
+  lit material in two scenes re-derives its program at every switch), and
+  doors seen through the gate are themselves see-through: the pad pre-pass
   renders door views for its MAPPED eye (active-area doors via
   `renderPortalsFor`, a neighbor destination's own doors via
   `renderAreaPortals`, hidden again after sampling). Its area is

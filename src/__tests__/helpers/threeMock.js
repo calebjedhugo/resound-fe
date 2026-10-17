@@ -172,6 +172,11 @@ class Color {
     this.value = color;
   }
 
+  copy(color) {
+    this.value = color.value;
+    return this;
+  }
+
   getHex() {
     return this.value;
   }
@@ -201,6 +206,15 @@ class Material {
   // eslint-disable-next-line class-methods-use-this
   customProgramCacheKey() {
     return '';
+  }
+
+  // Like three: the same parameters in a separate material
+  clone() {
+    const copy = Object.assign(new this.constructor(), this);
+    copy.color = new Color().copy(this.color);
+    copy.emissive = new Color().copy(this.emissive);
+    copy.userData = { ...this.userData };
+    return copy;
   }
 
   dispose() {}

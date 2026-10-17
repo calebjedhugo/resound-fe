@@ -608,4 +608,26 @@ describe('The deployed gate draws only what can show, and never shows a blank pa
       );
     }
   });
+
+  it('a tile in ANOTHER area: its mirror keeps its own material and glows in step', async () => {
+    // Different scenes light differently: one material drawn in both
+    // re-derived its shader program at every switch (core/passContext)
+    await deployInPortalA({ puzzleId: 'deploy-basic', position: CLEANSER });
+    const tile = PortalManager.getArea('deploy-basic').entityManager.getByType('cleanser')[0];
+    const mirror = gameState.activeArea.group.children.find((child) => child._isCleanserMirror);
+    expect(mirror).toBeDefined();
+    expect(mirror.material).not.toBe(tile.mesh.material);
+
+    await ctx.tick(400); // every area simulates: the tile breathes
+    DeployManager.update();
+
+    expect(mirror.material.emissiveIntensity).toBe(tile.mesh.material.emissiveIntensity);
+    expect(mirror.material.color.getHex()).toBe(tile.mesh.material.color.getHex());
+    expect(mirror.material.emissive.getHex()).toBe(tile.mesh.material.emissive.getHex());
+    expect(mirror.material.color.getHex()).toBe(0xffd97a); // the active (gold) tile
+
+    const freed = jest.spyOn(mirror.material, 'dispose');
+    DeployManager.toggle(); // pick the gate back up
+    expect(freed).toHaveBeenCalled();
+  });
 });
