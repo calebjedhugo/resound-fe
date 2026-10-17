@@ -14,10 +14,10 @@ class MockOfflineAudioContext extends global.AudioContext {
     super();
     this.length = length;
     this.sampleRate = sampleRate;
-    MockOfflineAudioContext.renders += 1;
   }
 
   startRendering() {
+    MockOfflineAudioContext.renders += 1;
     return Promise.resolve(this.createBuffer(1, this.length, this.sampleRate));
   }
 }
