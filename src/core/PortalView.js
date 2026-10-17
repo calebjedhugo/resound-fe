@@ -157,6 +157,7 @@ class PortalView {
     // The neighbor's LIVE scene. The partner gate is this same door seen
     // from the other side — its box would fill the whole view, so its mesh
     // is hidden just for this view's render pass.
+    this.neighborArea = neighborArea;
     this._scene = sceneOverride || neighborArea.scene;
     this._partnerGate = partnerGate;
 
@@ -231,6 +232,11 @@ class PortalView {
     // view would show.
     this._targets = [createSceneTarget(1, 1), createSceneTarget(1, 1)];
     this._writeIndex = 0;
+    // A surface shows only once a pass has written its buffer: an unwritten
+    // target samples BLACK, in the main view and in every other portal's
+    // pass alike. setVisible records the wish; the first write grants it.
+    this._written = false;
+    this._shown = false;
 
     this._buildDoorwaySurface();
   }
@@ -259,9 +265,18 @@ class PortalView {
     this.gate.mesh.add(this.surface);
   }
 
-  /** Show/hide the doorway surface (open/closed gate). */
+  /**
+   * Show/hide the doorway surface (open/closed gate). A panel nothing has
+   * written yet stays hidden until its first pass (see constructor).
+   */
   setVisible(visible) {
-    this.surface.visible = visible;
+    this._shown = visible;
+    this.surface.visible = visible && this._written;
+  }
+
+  /** Has any pass written this panel yet (is it safe to sample)? */
+  get written() {
+    return this._written;
   }
 
   /**
@@ -469,6 +484,10 @@ class PortalView {
     // other becomes next frame's write target.
     this.surface.material.map = writeTarget.texture;
     this._writeIndex = 1 - this._writeIndex;
+    if (!this._written) {
+      this._written = true;
+      this.surface.visible = this._shown; // safe to sample from now on
+    }
     return true; // a pass actually ran (callers track face freshness)
   }
 

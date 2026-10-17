@@ -37,6 +37,19 @@ async function activateCleanser() {
 
 const padsInActiveArea = () => gameState.activeArea.entityManager.getByType('cleanser-gate');
 
+/** Minimal stand-in for the game's WebGLRenderer (rendering is mocked). */
+function fakeRenderer() {
+  return {
+    clippingPlanes: [],
+    renderCalls: [],
+    setRenderTarget() {},
+    render(scene, cam) {
+      this.renderCalls.push({ scene, cam });
+    },
+    getDrawingBufferSize: (size) => size.set(800, 600),
+  };
+}
+
 beforeEach(() => {
   ctx.loadPuzzle('deploy-basic');
   gameState.mode = 'PLAYING';
@@ -174,6 +187,10 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     const [pad] = padsInActiveArea();
     const surfaces = pad.mesh.children.filter((child) => child._isPortalSurface);
     expect(surfaces).toHaveLength(4);
+    // Each panel shows from its first pass on — the gate's first frame
+    // writes all four — and never before (an unwritten panel reads black)
+    for (const surface of surfaces) expect(surface.visible).toBe(false);
+    DeployManager.renderPortal(fakeRenderer(), { position: { x: 30, y: 1.8, z: 39 } });
     for (const surface of surfaces) expect(surface.visible).toBe(true);
     // The anchor sits at gate-box-center height, like a real gate mesh —
     // panels land exactly where a door's do (local y 0).
@@ -190,15 +207,10 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     DeployManager.toggle();
     DeployManager.update();
 
-    const renderer = {
-      clippingPlanes: [],
-      renderCalls: [],
-      setRenderTarget() {},
-      render(scene, cam) {
-        this.renderCalls.push({ scene, cam });
-      },
-      getDrawingBufferSize: (size) => size.set(800, 600),
-    };
+    const renderer = fakeRenderer();
+    // The gate's first frame writes every panel (the far one by warm-up)
+    DeployManager.renderPortal(renderer, { position: { x: 30, y: 1.8, z: 39 } });
+    renderer.renderCalls.length = 0;
     // Approach panel + the two (near edge-on) side panels — exactly a
     // door's window box (windows sit on the FAR plane of the cell, so the
     // approach eye is on the outward side of the sides too)
@@ -278,13 +290,7 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     DeployManager.update();
 
     const spy = jest.spyOn(PortalManager, 'renderPortals');
-    const renderer = {
-      clippingPlanes: [],
-      setRenderTarget() {},
-      render() {},
-      getDrawingBufferSize: (size) => size.set(800, 600),
-    };
-    DeployManager.renderPortal(renderer, { position: { x: 30, y: 1.8, z: 39 } });
+    DeployManager.renderPortal(fakeRenderer(), { position: { x: 30, y: 1.8, z: 39 } });
     expect(spy).toHaveBeenCalledTimes(1);
     const eye = spy.mock.calls[0][1];
     expect(eye.position.x).toBeCloseTo(30 - 9);
@@ -454,5 +460,41 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
 
     expect(ok).toBe(false);
     expect(gameState.activeArea).toBe(before);
+  });
+});
+
+describe('The deployed gate never shows a blank panel', () => {
+  it('a fresh gate never shows a panel before a pass has written it', async () => {
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+    const [pad] = padsInActiveArea();
+    const panels = pad.mesh.children.filter((child) => child._isPortalSurface);
+    // Each pass draws the area the gate leads into — the one it stands in —
+    // so every pad pass sees its sibling panels: none may show unwritten
+    const written = new Set();
+    let unwrittenSamples = 0;
+    let target = null;
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget(next) {
+        target = next;
+      },
+      render() {
+        for (const panel of panels) {
+          if (panel.visible && !written.has(panel.material.map)) unwrittenSamples += 1;
+        }
+        if (target) written.add(target.texture);
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+
+    DeployManager.renderPortal(renderer, { position: { x: 30, y: 1.8, z: 39 } });
+    renderer.render(); // the main view
+
+    expect(written.size).toBe(4);
+    expect(unwrittenSamples).toBe(0);
   });
 });

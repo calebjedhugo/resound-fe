@@ -148,9 +148,18 @@ class DeployManager {
     // Track which faces actually drew; a face the eye never renders still
     // shows in door mirrors and must not freeze in time — refresh the
     // stalest one per frame (same doctrine as PortalManager's door faces).
+    // A panel no pass has written yet (a fresh deploy or retarget) stays
+    // hidden until its first write — never sampled black — so it warms up
+    // at once.
     this._padFrame = (this._padFrame || 0) + 1;
     for (const view of this._views) {
       if (view.render(renderer, camera)) view._padFresh = this._padFrame;
+    }
+    for (const view of this._views) {
+      if (!view.written) {
+        PortalManager.warmView(view, renderer);
+        view._padFresh = this._padFrame;
+      }
     }
     const stale = this._views
       .filter((v) => this._padFrame - (v._padFresh || 0) > 15)

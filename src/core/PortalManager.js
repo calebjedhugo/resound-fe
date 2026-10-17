@@ -56,6 +56,9 @@ import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion'
 // Stable empty list for the common no-seam case (avoids per-frame garbage)
 const NO_SOURCES = Object.freeze([]);
 
+// A door's four faces, in one fixed order
+const FACINGS = Object.freeze(Object.keys(FACING_VECTORS));
+
 /** The cleanser standing exactly on `gate`'s cell in `area`, if any. */
 function cleanserAtGate(area, gate) {
   return area.entityManager
@@ -82,18 +85,18 @@ class PortalManager {
     // cleanser gate retains its destination so the pad's see-through view
     // has a live scene to render (core/DeployManager).
     this._retained = new Set();
-    // gate -> Map<facing, PortalView> (a view per player-visible face) or
+    // gate -> Map<facing, PortalView> (all four faces of an open door) or
     // null once the link proves dangling (the gate stays an ordinary gate)
     this._views = new Map();
     // gate -> facings whose adjacent cell holds no wall (static per area,
     // computed lazily; drives the shared-clip approach axis)
     this._openFacingsByGate = new Map();
-    // Faces created this render frame, pending a second warm-up pass
-    // (_flushWarmUps) once every peer face holds content
+    // Faces created this pass, pending their first write (_flushWarmUps)
     this._newViews = [];
     // Frame counter for face freshness: a face nobody's eye renders still
     // shows in other portals' mirrors, and must not freeze in time
     this._frameId = 0;
+    this._drawingDoors = []; // scratch: the gates a run of door passes draws
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -127,6 +130,7 @@ class PortalManager {
   reset() {
     this._generation += 1;
     this._disposeViews();
+    this._newViews = [];
     this._setActiveArea(null);
     for (const area of this._areas.values()) {
       area.dispose();
@@ -253,15 +257,23 @@ class PortalManager {
    * each OPEN linked gate's neighbor view into its doorway surfaces. Doors
    * are omnidirectional: EVERY face the eye is on the outward side of gets a
    * live view (two at a corner — both visible sides see through; a working
-   * door never shows a green shell). Views are built lazily per face (once
-   * the neighbor area is loaded) and kept until the active area changes;
-   * while every linked gate is closed this is a no-op, so the see-through
-   * pass costs nothing.
+   * door never shows a green shell). A door's faces are built once its
+   * neighbor area is loaded and kept until the active area changes; while
+   * every linked gate is closed this is a no-op, so the see-through pass
+   * costs nothing.
    * @param {THREE.WebGLRenderer} renderer
    * @param {THREE.Camera} camera - the player camera
    */
   renderPortals(renderer, camera) {
     this._frameId += 1;
+    this._renderDoorPasses(renderer, camera);
+    this._refreshStaleFaces(renderer);
+  }
+
+  /** One eye's door passes: the faces it looks into, then its mirror sweep. */
+  _renderDoorPasses(renderer, camera) {
+    const doors = this._drawingDoors;
+    doors.length = 0;
     for (const gate of this._linkedGates) {
       const faces = this._views.get(gate);
       if (faces === null) continue; // eslint-disable-line no-continue -- dangling link: ordinary gate
@@ -280,13 +292,9 @@ class PortalManager {
         this._hideGateViews(gate);
         continue; // eslint-disable-line no-continue
       }
-      const broken = this._renderExteriorViews(gate, renderer, camera);
-      if (broken) {
-        this._hideGateViews(gate);
-        this._views.set(gate, null); // the gate stays an ordinary gate
-      }
+      doors.push(gate);
     }
-    this._flushWarmUps(renderer);
+    this._renderDoors(doors, renderer, camera);
     // MIRROR sweep (recursive): walk the portal graph from every door that
     // actually drew this frame, composing mapped eyes hop by hop, and
     // re-render — every frame, deepest level first — each face a chain
@@ -297,7 +305,29 @@ class PortalManager {
     // smoothly as one). Budget-capped; the rotor below remains the
     // backstop for faces no sightline touches.
     this._mirrorSweep(renderer, camera);
-    this._refreshStaleFaces(renderer);
+  }
+
+  /**
+   * Draw the doorway views of `gates` (each open, or fading open) for
+   * `camera`: every face of each door exists, every face born this pass
+   * gets its first write, THEN the faces the eye looks into render — so the
+   * frame a door appears, those faces already show this eye's perspective,
+   * and they sample peers that all hold content.
+   */
+  _renderDoors(gates, renderer, camera) {
+    for (const gate of gates) {
+      if (this._materializeFaces(gate) === null) {
+        this._hideGateViews(gate);
+        this._views.set(gate, null); // dangling link: the gate stays an ordinary gate
+      }
+    }
+    const drawn = this._flushWarmUps(renderer, camera);
+    for (const gate of gates) {
+      const faces = this._views.get(gate);
+      if (faces && faces.size === FACINGS.length && !(drawn && drawn.has(gate))) {
+        this._renderExteriorViews(gate, renderer, camera);
+      }
+    }
   }
 
   /** Hide every view of a gate. */
@@ -318,16 +348,14 @@ class PortalManager {
    * for this eye only — never smear into other sightlines.
    */
   renderAreaPortals(area, renderer, camera) {
+    const doors = this._drawingDoors;
+    doors.length = 0;
     for (const gate of area.entityManager.getByType('gate')) {
       if (!gate.link || !gate.link.puzzleId || !gate.isOpen) continue; // eslint-disable-line no-continue
       if (this._views.get(gate) === null) continue; // eslint-disable-line no-continue -- dangling
-      const broken = this._renderExteriorViews(gate, renderer, camera);
-      if (broken) {
-        this._hideGateViews(gate);
-        this._views.set(gate, null);
-      }
+      doors.push(gate);
     }
-    this._flushWarmUps(renderer);
+    this._renderDoors(doors, renderer, camera);
   }
 
   /** Hide every view rendered by renderAreaPortals for this area. */
@@ -338,51 +366,92 @@ class PortalManager {
   }
 
   /**
-   * Standard door look from outside: every face the eye is on the outward
-   * side of renders the partner's world (two at a corner).
-   * @returns {boolean} true when the link proved dangling
+   * Materialize EVERY face of an open door once its neighbor is loaded —
+   * not just the player-eligible ones. A panel is sampled by OTHER portal
+   * passes too (mirror sightlines through doors, the cleanser gate's mapped
+   * eye), whose eyes see faces the player's own eye may never make
+   * eligible; a lazily-created face sampled as a BLACK hole (the teleport
+   * stress test: "portals start black, settle after walking around"). New
+   * faces queue for their first write (_flushWarmUps) and stay hidden until
+   * it lands. Every face of an open gate is then VISIBLE, whatever side the
+   * eye is on: the player can't see a face they're behind anyway
+   * (front-side culling), but other portals' passes must sample its last
+   * content — hiding it punched a black hole into every mirror sightline.
+   * @returns {?boolean} true with all four faces in place; false while the
+   *   neighbor area is still loading (retried next frame); null when the
+   *   link proves dangling
    */
-  _renderExteriorViews(gate, renderer, camera) {
+  _materializeFaces(gate) {
     let faces = this._views.get(gate);
     if (!faces) {
       faces = new Map(); // facing -> PortalView
       this._views.set(gate, faces);
     }
-    const facings = Object.keys(FACING_VECTORS);
-    // Materialize EVERY face once the neighbor is loaded — not just the
-    // player-eligible ones — and WARM each new face's buffers immediately
-    // with one straight-on render. A panel is sampled by OTHER portal
-    // passes too (mirror sightlines through doors, the cleanser gate's
-    // mapped eye), whose eyes see faces the player's own eye may never
-    // make eligible; an unwritten target samples BLACK (the teleport
-    // stress test: "portals start black, settle after walking around").
-    // Warm content is stale until the face renders for a real eye, but
-    // stale reads as the world — black reads as a hole.
-    for (const f of facings) {
-      if (faces.get(f)) continue; // eslint-disable-line no-continue
-      const view = this._createView(gate, f);
-      if (view === undefined) return false; // neighbor not loaded yet: retry next frame
-      if (view === null) return true; // dangling link
-      faces.set(f, view);
-      this._warmUpView(view, gate, f, renderer);
-      this._newViews.push({ view, gate, facing: f });
+    if (faces.size < FACINGS.length) {
+      for (const f of FACINGS) {
+        if (faces.get(f)) continue; // eslint-disable-line no-continue
+        const view = this._createView(gate, f);
+        if (view === undefined) return false;
+        if (view === null) return null;
+        faces.set(f, view);
+        this._newViews.push(view);
+      }
     }
-    // Every face of an open gate stays VISIBLE, whatever side the eye is
-    // on: the player can't see a face they're behind anyway (front-side
-    // culling), but other portals' passes must sample its last content —
-    // hiding it punched a black hole into every mirror sightline.
     for (const view of faces.values()) view.setVisible(true);
+    return true;
+  }
+
+  /**
+   * Give every face born this pass its FIRST write, before any pass samples
+   * it (an unwritten panel stays hidden; until then a sightline through it
+   * would see the empty cell, not the door). A door into ANOTHER area shows
+   * that area's scene, where none of this pass's panels show: its player
+   * passes are its first write (run right here), and only the faces they
+   * skip warm up. A door into its OWN area shows the scene its peers hang
+   * in, so each of its faces warms up first — visible from that write on,
+   * so later warm-ups sample it — and its player passes follow with every
+   * peer holding content. One write per face: a second round once re-warmed
+   * every new face AFTER the player passes, painting the straight-on
+   * picture over the player's own perspective on the frame a door opened.
+   * @returns {?Set<Gate>} doors whose player passes already ran (null when
+   *   no face was born this pass)
+   */
+  _flushWarmUps(renderer, camera) {
+    if (this._newViews.length === 0) return null;
+    const pending = this._newViews;
+    this._newViews = [];
+    const drawn = new Set();
+    for (const view of pending) {
+      if (view.neighborArea === view.gate.area) continue; // eslint-disable-line no-continue -- own area: below
+      if (!drawn.has(view.gate)) {
+        drawn.add(view.gate);
+        this._renderExteriorViews(view.gate, renderer, camera);
+      }
+      if (!view.written) this._warmUpView(view, view.gate, view.facing, renderer);
+    }
+    for (const view of pending) {
+      if (!view.written) this._warmUpView(view, view.gate, view.facing, renderer);
+    }
+    return drawn;
+  }
+
+  /**
+   * Standard door look from outside: every face the eye is on the outward
+   * side of renders the partner's world (two at a corner) — the faces that
+   * re-render FRESH for this eye.
+   */
+  _renderExteriorViews(gate, renderer, camera) {
+    const faces = this._views.get(gate);
     // Signed distance of the eye past each panel's plane (the cell's far face
     // for that approach). Oblique sightlines through the cell legitimately
-    // hit the SIDE panels, so more than one can be eligible at once — these
-    // are the faces that re-render FRESH for this eye.
+    // hit the SIDE panels, so more than one can be eligible at once.
     const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
     const past = (facing) =>
       FACING_VECTORS[facing].x * (camera.position.x - gate.position.x) +
       FACING_VECTORS[facing].z * (camera.position.z - gate.position.z) +
       panelPlane;
-    const eligible = facings.filter((f) => past(f) > 0.05);
-    if (eligible.length === 0) return false;
+    const eligible = FACINGS.filter((f) => past(f) > 0.05);
+    if (eligible.length === 0) return;
     // The APPROACH panel owns the true doorway clip plane, and EVERY visible
     // panel clips with it, so the oblique side windows slice the neighbor
     // along the doorway axis instead of perpendicular to it (a perpendicular
@@ -397,9 +466,9 @@ class PortalManager {
     // its authored facing there sliced every sightline sideways: black side
     // panels, and viewer-side content painting into the view.
     const approach = this._approachFacing(gate, camera);
-    // The approach face is always eligible (the eye is in front of it), so it
-    // was materialized above; fall back to per-panel clips if it somehow was
-    // not (defensive).
+    // Every face is materialized before any renders (_renderDoors); fall
+    // back to per-panel clips if the approach face somehow is not
+    // (defensive).
     const approachView = faces.get(approach);
     const sharedClip = approachView ? approachView.clipPlane : null;
     // The approach panel's eye-side walls ride along with its clip plane:
@@ -417,7 +486,6 @@ class PortalManager {
         view._playerFresh = this._frameId;
       }
     }
-    return false;
   }
 
   /**
@@ -599,19 +667,6 @@ class PortalManager {
   }
 
   /**
-   * Faces created this frame warmed up before some of their peers existed
-   * and may have sampled a still-black panel — warm each once more now
-   * that every face holds content.
-   */
-  _flushWarmUps(renderer) {
-    if (this._newViews.length === 0) return;
-    for (const { view, gate, facing } of this._newViews) {
-      this._warmUpView(view, gate, facing, renderer);
-    }
-    this._newViews = [];
-  }
-
-  /**
    * The face whose OPEN plane the eye is furthest beyond — the side the
    * player actually approaches the doorway from. Faces buried in a wall (an
    * adjacent wall cell in the gate's own area) cannot be approached, so a
@@ -649,7 +704,7 @@ class PortalManager {
     if (open) return open;
     const entities = (gate.area && gate.area.entities) || [];
     const walls = entities.filter((e) => e.type === 'wall');
-    open = Object.keys(FACING_VECTORS).filter((f) => {
+    open = FACINGS.filter((f) => {
       const v = FACING_VECTORS[f];
       const cx = gate.position.x + v.x * WORLD_SCALE;
       const cz = gate.position.z + v.z * WORLD_SCALE;
