@@ -11,9 +11,9 @@
  * missing (Safari) each slice is a plain timer task with the same budget.
  */
 
-// Longest a slice may run (ms): about half a 60 fps frame, so a slice that
-// lands between two frames can't make the next one late
-export const IDLE_SLICE_MS = 8;
+// Longest a slice may run (ms), idle deadline or not: about half a 60 fps
+// frame (one step longer than this still runs, alone in its slice)
+const IDLE_SLICE_MS = 8;
 
 // A slice runs within this long (ms) even if the browser never goes idle
 const IDLE_TIMEOUT_MS = 100;
