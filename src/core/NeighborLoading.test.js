@@ -8,7 +8,9 @@
  *
  * requestIdleCallback is a browser API, so tests that step slice by slice
  * stand it in with a queue they drain by hand, choosing how much idle time
- * each slice gets. Without it the game falls back to timer slices.
+ * each slice gets. Without it the game falls back to timer slices. jsdom
+ * can't load an SVG as an image or draw on a canvas either: those stand-ins
+ * let a staff's texture arrive as in a browser.
  */
 import { NotationRenderer } from 'resound-notation/NotationRenderer';
 import gameState from 'core/GameState';
@@ -61,10 +63,21 @@ const neighborListeners = () =>
 
 describe('Neighbor areas build in idle time', () => {
   let renderSpy;
+  const originalImage = global.Image;
 
   beforeEach(() => {
     renderSpy = jest.spyOn(NotationRenderer.prototype, 'render');
     installFetchMock();
+    URL.createObjectURL = () => 'blob:staff';
+    URL.revokeObjectURL = () => {};
+    global.Image = class {
+      set src(url) {
+        setTimeout(() => this.onload(), 0);
+      }
+    };
+    jest
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ clearRect() {}, drawImage() {} });
   });
 
   afterEach(async () => {
@@ -72,7 +85,11 @@ describe('Neighbor areas build in idle time', () => {
     // A browser always runs a queued idle callback (at worst on its timeout):
     // let any build still pending see the world is gone and let go
     while (idleQueue.length > 0) await runIdleSlice(0);
-    renderSpy.mockRestore();
+    jest.runAllTimers(); // pending image loads land on the stand-ins
+    jest.restoreAllMocks();
+    global.Image = originalImage;
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
     delete global.fetch;
     delete global.requestIdleCallback;
   });

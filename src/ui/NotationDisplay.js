@@ -107,10 +107,13 @@ function renderWidth({ song, timeSignature }) {
 /**
  * Engrave a staff: render the song to SVG, then (asynchronously, once the
  * SVG has loaded as an image) rasterize it onto a canvas texture and hand
- * that to every display waiting on it.
+ * that to every display waiting on it. A staff that fails is not
+ * remembered: the next display of it tries again, as every display used to.
  */
-function engrave(key, input, width) {
-  const engraving = { key, users: 0, texture: null, aspect: 0, waiting: new Set() };
+function engrave(engraving, input, width) {
+  const forget = () => {
+    if (engravings.get(engraving.key) === engraving) engravings.delete(engraving.key);
+  };
   try {
     const container = document.createElement('div');
     const renderer = new NotationRenderer({
@@ -119,7 +122,10 @@ function engrave(key, input, width) {
     });
 
     const svg = renderer.render(input);
-    if (!svg) return engraving;
+    if (!svg) {
+      forget();
+      return;
+    }
 
     // Mirror the SVG's intrinsic aspect ratio onto the texture canvas so
     // nothing is squashed.
@@ -170,13 +176,14 @@ function engrave(key, input, width) {
     img.onerror = () => {
       URL.revokeObjectURL(url);
       renderer.clear();
+      forget();
     };
 
     img.src = url;
   } catch (e) {
     // Graceful degradation - notation just won't appear
+    forget();
   }
-  return engraving;
 }
 
 /** Take a reference to a staff's engraving, engraving it on first use. */
@@ -186,8 +193,9 @@ function acquireEngraving(staff) {
   const key = JSON.stringify([width, input]);
   let engraving = engravings.get(key);
   if (!engraving) {
-    engraving = engrave(key, input, width);
+    engraving = { key, users: 0, texture: null, aspect: 0, waiting: new Set() };
     engravings.set(key, engraving);
+    engrave(engraving, input, width);
   }
   engraving.users += 1;
   return engraving;
@@ -197,7 +205,8 @@ function acquireEngraving(staff) {
 function releaseEngraving(engraving) {
   engraving.users -= 1;
   if (engraving.users > 0) return;
-  engravings.delete(engraving.key);
+  // (a failed engraving may already be forgotten, its key engraved anew)
+  if (engravings.get(engraving.key) === engraving) engravings.delete(engraving.key);
   if (engraving.texture) engraving.texture.dispose();
 }
 

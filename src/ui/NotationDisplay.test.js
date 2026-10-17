@@ -364,7 +364,7 @@ describe('NotationDisplay on Gates and Fountains', () => {
     it('every display of a staff shows the same texture, fitted the same way', () => {
       const first = new Gate({ x: 0, y: 0, z: 0 }, { song: song('F4', 'A4', 'C5') });
       const second = new Gate({ x: 0, y: 0, z: 0 }, { song: song('F4', 'A4', 'C5') });
-      expect(shownTexture(first)).toBeUndefined(); // nothing until the image loads
+      expect(shownTexture(first)).toBeFalsy(); // nothing until the image loads
 
       jest.runAllTimers();
       // A gate built once the staff exists shows it at once, without engraving
@@ -440,6 +440,24 @@ describe('NotationDisplay on Gates and Fountains', () => {
       expect(drawn[0].width).toBe(vbWidth > 500 ? 1024 : 512);
       expect(drawn[0].height / drawn[0].width).toBeCloseTo(vbHeight / vbWidth, 2);
       expect(shownTexture(gate)).toBeInstanceOf(THREE.CanvasTexture);
+    });
+
+    it('a staff that failed to engrave is tried again by the next gate', () => {
+      // As each gate used to engrave its own: a failure is never shared
+      const { createObjectURL } = URL;
+      delete URL.createObjectURL; // the image can't be made
+      const failed = new Gate({ x: 0, y: 0, z: 0 }, { song: song('E5', 'G5') });
+      URL.createObjectURL = createObjectURL;
+
+      const next = new Gate({ x: 0, y: 0, z: 0 }, { song: song('E5', 'G5') });
+      jest.runAllTimers();
+
+      expect(renderSpy).toHaveBeenCalledTimes(2);
+      expect(shownTexture(next)).toBeInstanceOf(THREE.CanvasTexture);
+      expect(shownTexture(failed)).toBeFalsy();
+      failed.dispose(); // releasing the failed one leaves the good one alone
+      const after = new Gate({ x: 0, y: 0, z: 0 }, { song: song('E5', 'G5') });
+      expect(shownTexture(after)).toBe(shownTexture(next));
     });
 
     it('a staff prepared ahead is not engraved again by the gate built from it', () => {
