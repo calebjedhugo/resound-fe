@@ -438,8 +438,10 @@ class Creature extends Entity {
     const minDistance = this.size + sourceSize;
     if (distance < minDistance) return;
 
-    // Calculate harmony
-    const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, sourceNote.pitch);
+    // Calculate harmony: HarmonyAnalyzer.calculateInterval's octave-reduced
+    // interval, from memoized MIDI numbers (it re-parses both pitch strings
+    // per call, and this runs per heard source per pass)
+    const interval = Math.abs(midiOf(this.currentNote.pitch) - midiOf(sourceNote.pitch)) % 12;
     const harmony = HarmonyAnalyzer.classifyInterval(interval);
 
     // Add force based on harmony
