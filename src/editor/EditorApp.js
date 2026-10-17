@@ -22,7 +22,12 @@ import GitPanel from 'editor/ui/GitPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
-import { savePuzzleToRepo, listRepoPuzzles, loadRepoPuzzle } from 'editor/io/repoPersistence';
+import {
+  savePuzzleToRepo,
+  listRepoPuzzles,
+  loadRepoPuzzle,
+  onRepoWrite,
+} from 'editor/io/repoPersistence';
 import { gitCommit, gitPull, gitPush, gitRevert, gitUnrevert } from 'editor/io/gitControls';
 import {
   createLink,
@@ -163,6 +168,11 @@ export default class EditorApp {
       onPush: () => this._gitPush(),
       onRevert: () => this._gitRevert(),
     });
+    // Git status changes when a puzzle file does, so re-read it once each
+    // write lands (autosave, a link partner's file, a delete) — never per
+    // edit, which spawned git on every keystroke and read the tree before
+    // the autosave had written it.
+    this._stopGitRefresh = onRepoWrite(() => this.gitPanel.refresh());
     this.entityDragger = new EntityDragger(
       this.scene,
       this.camera,
@@ -186,7 +196,6 @@ export default class EditorApp {
       this._scheduleValidation();
       this._scheduleAutoSave();
       this.toolbar.refresh();
-      if (this.gitPanel) this.gitPanel.refresh();
       const { id } = this.undoManager.getMetadata();
       this.toolbar.setStatus(id ? 'dirty' : 'unnamed');
     });
@@ -1318,6 +1327,7 @@ export default class EditorApp {
     clearTimeout(this._validationTimer);
     clearTimeout(this._autoSaveTimer);
     clearTimeout(this._toastTimer);
+    if (this._stopGitRefresh) this._stopGitRefresh();
     this.songEditorModal.dispose();
     this.worldOverview.dispose();
     this.contextMenu.dispose();

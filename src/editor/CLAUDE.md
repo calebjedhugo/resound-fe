@@ -75,6 +75,9 @@ edits show up in the game on a manual reload.
   Commit / Pull / Push / Revert in the sidebar, over `/api/git/*` (a second
   `configureServer` middleware, `gitPlugin`, that shells out via `execFile`).
   The panel **hides itself** when `/api/git` is unreachable (production build).
+  Its status re-reads **after each repo write lands** (`repoPersistence.onRepoWrite`)
+  and after its own actions, one read at a time — never per edit (each read
+  spawns git on the dev server, and a per-edit read ran before the autosave).
   **Commit and Revert scope to `public/puzzles/`** (Commit stages only that
   path, so Husky/lint-staged never sees unrelated files); **Pull/Push are
   whole-repo** (git can't push a subtree). **Revert = `git stash push -u --

@@ -1085,3 +1085,73 @@ describe('EditorApp wiring', () => {
     });
   });
 });
+
+describe('EditorApp git status follows the autosave', () => {
+  let app;
+  let changedFiles; // puzzle files the fake dev server has written (uncommitted)
+  let statusReads;
+
+  /** A dev server that dirties a puzzle file on each POST and reports it in git status. */
+  function fakeDevServer(url, opts = {}) {
+    const reply = (body) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    if (url === '/api/git/status') {
+      statusReads += 1;
+      return reply({
+        ok: true,
+        branch: 'main',
+        changedCount: changedFiles.size,
+        files: [...changedFiles],
+        ahead: 0,
+        behind: 0,
+        hasUpstream: false,
+      });
+    }
+    if (url.startsWith('/api/puzzles/') && opts.method === 'POST') {
+      changedFiles.add(url);
+      return reply({ ok: true });
+    }
+    return reply({ puzzles: [] }); // manifest: nothing saved yet
+  }
+
+  const commitButton = () =>
+    [...document.querySelectorAll('#git-panel button')].find((b) => b.textContent === 'Commit');
+
+  beforeEach(async () => {
+    setupEditorDOM();
+    changedFiles = new Set();
+    statusReads = 0;
+    global.fetch = jest.fn(fakeDevServer);
+    jest.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    app = new EditorApp();
+    app.init();
+    await jest.advanceTimersByTimeAsync(0); // the panel's first read: a clean tree
+  });
+
+  afterEach(() => {
+    app.dispose();
+    app = null;
+    document.body.innerHTML = '';
+    delete global.fetch;
+    jest.restoreAllMocks();
+  });
+
+  it('enables Commit once the first edit on a clean tree has been saved', async () => {
+    expect(commitButton().disabled).toBe(true);
+
+    app.undoManager.setMetadata({ id: 'first-edit', name: 'First Edit' });
+    await jest.advanceTimersByTimeAsync(600); // past the autosave debounce
+
+    expect(changedFiles.size).toBe(1);
+    expect(commitButton().disabled).toBe(false);
+  });
+
+  it('reads git status once per save, not once per edit', async () => {
+    const readsBefore = statusReads;
+
+    app.undoManager.setMetadata({ id: 'burst', name: 'Burst' });
+    for (let tempo = 100; tempo < 110; tempo += 1) app.undoManager.setMetadata({ tempo });
+    await jest.advanceTimersByTimeAsync(600);
+
+    expect(statusReads - readsBefore).toBe(1);
+  });
+});
