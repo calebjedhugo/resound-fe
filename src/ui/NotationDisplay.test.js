@@ -425,6 +425,23 @@ describe('NotationDisplay on Gates and Fountains', () => {
       expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:staff');
     });
 
+    it('a full 4/4 measure too wide for 400 px is drawn whole, at its widened aspect', () => {
+      // Four quarters lay out at ~546 px: the renderer overflows the 400 px
+      // request (warning that it does) and widens the SVG to fit; the canvas
+      // must follow it
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: song('D4', 'A4', 'D4', 'A4') });
+      jest.runAllTimers();
+
+      const svg = renderSpy.mock.results[0].value;
+      const [, , vbWidth, vbHeight] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+      expect(vbWidth).toBeGreaterThan(400);
+      expect(drawn).toHaveLength(1);
+      expect(drawn[0].width).toBe(vbWidth > 500 ? 1024 : 512);
+      expect(drawn[0].height / drawn[0].width).toBeCloseTo(vbHeight / vbWidth, 2);
+      expect(shownTexture(gate)).toBeInstanceOf(THREE.CanvasTexture);
+    });
+
     it('a staff prepared ahead is not engraved again by the gate built from it', () => {
       const release = NotationDisplay.prepare({ song: song('C5', 'E5') });
       const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: song('C5', 'E5') });

@@ -92,7 +92,10 @@ function songBeats(song) {
  * up to two 4/4 measures; beyond that, ~500px per pair of measures (two
  * quarter-note 4/4 measures lay out naturally at just under 1000px —
  * measured against the published renderer), so the breaker packs
- * multi-measure systems instead of stacking one per line.
+ * multi-measure systems instead of stacking one per line. A measure wider
+ * than 400 (four quarters: ~546 px) overflows: the renderer warns, sets it
+ * solo and widens the SVG + viewBox to its content, so it is never clipped
+ * — a one-measure staff comes out exactly as if engraved at that width.
  * @param {{song, timeSignature}} staff
  */
 function renderWidth({ song, timeSignature }) {
