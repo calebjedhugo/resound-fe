@@ -975,12 +975,15 @@ class PortalManager {
   _loadNeighbor(puzzleId) {
     if (this._areas.has(puzzleId)) return;
     const generation = this._generation;
+    // The world may move on while the fetch or the idle-time build runs
+    const wanted = () =>
+      generation === this._generation && !this._areas.has(puzzleId) && this._stillWanted(puzzleId);
     PuzzleLoader.load(puzzleId)
-      .then((data) => {
-        // The world may have moved on while the fetch was in flight
-        if (generation !== this._generation) return;
-        if (this._areas.has(puzzleId) || !this._stillWanted(puzzleId)) return;
-        this._areas.set(puzzleId, PuzzleLoader.buildArea(data));
+      .then((data) => PuzzleLoader.buildAreaWhenIdle(data, wanted))
+      .then((area) => {
+        if (!area) return;
+        // Same task as the build: complete the moment it is registered
+        this._areas.set(puzzleId, area);
         this._rebuildDoors();
       })
       .catch(() => {

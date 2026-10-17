@@ -10,6 +10,8 @@ import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Area from 'core/Area';
 import ElevationGrid from 'core/ElevationGrid';
 import { inPortalHideBand } from 'core/portalMath';
+import runInIdleSlices from 'core/idleSlices';
+import NotationDisplay from 'ui/NotationDisplay';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 // Puzzle files fetched for the current world: id -> promise of the validated
@@ -229,6 +231,51 @@ class PuzzleLoader {
     }
 
     return area;
+  }
+
+  /**
+   * buildArea for an area not needed this instant (a neighbor loading
+   * behind a doorway), without one long task: The Star took 23-29 ms in
+   * one go, 26 of it engraving staves (measured 2026-10-17). First every
+   * staff its gates and fountains show is engraved in idle slices
+   * (NotationDisplay.prepare — shared, so a staff another area already
+   * shows costs nothing), then the area assembles in ONE short idle task.
+   * Assembly stays atomic on purpose: entities register with
+   * ListeningManager and read the world clock as they are constructed, so
+   * a half-built area would already hear notes and keep time. The promise
+   * resolves inside that same task, so a caller registering the area in
+   * `then` has it fully live before the next frame — never partially.
+   * @param {object} puzzleData - validated puzzle JSON
+   * @param {() => boolean} [stillWanted] - checked before every slice; once
+   *   false the build stops (the world moved on) and resolves null
+   * @returns {Promise<?Area>}
+   */
+  static async buildAreaWhenIdle(puzzleData, stillWanted = () => true) {
+    const releases = [];
+    try {
+      // Exactly the staves buildArea's gates and fountains will ask for
+      const engraveSteps = puzzleData.entities
+        .filter((e) => (e.type === 'gate' || e.type === 'fountain') && e.song)
+        .map((e) => () => {
+          releases.push(
+            NotationDisplay.prepare({
+              song: e.song,
+              timeSignature: puzzleData.timeSignature,
+              keySignature: puzzleData.keySignature,
+            })
+          );
+        });
+      if (!(await runInIdleSlices(engraveSteps, stillWanted))) return null;
+
+      let area = null;
+      const assemble = () => {
+        area = this.buildArea(puzzleData);
+      };
+      return (await runInIdleSlices([assemble], stillWanted)) ? area : null;
+    } finally {
+      // The area's own displays hold its staves now (or nobody needs them)
+      for (const release of releases) release();
+    }
   }
 
   /**

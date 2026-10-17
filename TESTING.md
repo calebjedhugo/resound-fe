@@ -144,6 +144,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
+| `src/core/NeighborLoading.test.js` | Neighbor areas build in idle slices (≤1 staff per slice with no idle time to spare), assemble + go live in ONE slice (never partially built; ONE world clock), stand down when the world moves on or a crossing builds them first; timer slices without requestIdleCallback |
 | `src/ui/NotationDisplay.test.js` | Gate/fountain staff planes (layout, one-sided, disposal); engravings SHARED per distinct staff (song + meter + key), reference-counted across gates and areas |
 
 ---
