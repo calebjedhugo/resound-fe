@@ -88,6 +88,9 @@ gameState.stateMachine = stateMachine;
 // Game functions
 async function startPuzzle(puzzleId) {
   try {
+    // A world entry starts from the puzzle files as they are now (the editor
+    // may have saved some since the last world loaded them)
+    PuzzleLoader.clearCache();
     const puzzleData = await PuzzleLoader.load(puzzleId);
     PortalManager.enterWorld(puzzleData);
     DeployManager.reset(); // fresh world: no phantom, no deployed gate

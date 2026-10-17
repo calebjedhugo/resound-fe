@@ -12,8 +12,40 @@ import ElevationGrid from 'core/ElevationGrid';
 import { inPortalHideBand } from 'core/portalMath';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
+// Puzzle files fetched for the current world: id -> promise of the validated
+// JSON. A world loads the same files again and again — every crossing loads
+// the new neighbors, usually areas pruned a few crossings back — and a
+// crossing can race a neighbor load still in flight; both now share one
+// request. Cleared at every world entry (clearCache, main.js startPuzzle):
+// the editor saves puzzles through /api/puzzles while a game tab stays
+// open, and a new world must start from the files as they are now.
+const fetched = new Map();
+
 class PuzzleLoader {
-  static async load(puzzleId) {
+  /**
+   * Fetch and validate a puzzle file, once per world (see `fetched`). Each
+   * call resolves to its OWN copy, as a fresh fetch did: areas built from
+   * the same file never share data. A failed load is not remembered.
+   * @returns {Promise<object>} validated puzzle JSON
+   */
+  static load(puzzleId) {
+    let pending = fetched.get(puzzleId);
+    if (!pending) {
+      pending = this._fetch(puzzleId);
+      fetched.set(puzzleId, pending);
+      pending.catch(() => {
+        if (fetched.get(puzzleId) === pending) fetched.delete(puzzleId);
+      });
+    }
+    return pending.then((data) => JSON.parse(JSON.stringify(data)));
+  }
+
+  /** Forget every fetched puzzle file (a new world re-reads them). */
+  static clearCache() {
+    fetched.clear();
+  }
+
+  static async _fetch(puzzleId) {
     try {
       const response = await fetch(`/puzzles/${puzzleId}.json`);
       if (!response.ok) {

@@ -124,8 +124,10 @@ const TEST_PUZZLES = {
 function createTestContext(options = {}) {
   const { tempo = 120 } = options;
 
-  // Reset all state (the world orchestrator owns/disposes any leftover areas)
+  // Reset all state (the world orchestrator owns/disposes any leftover areas;
+  // each test is a fresh world, so puzzle files are fetched afresh too)
   PortalManager.reset();
+  PuzzleLoader.clearCache();
   gameState.reset();
   ListeningManager.clear();
   ClapManager.reset();
@@ -174,8 +176,10 @@ function createTestContext(options = {}) {
         );
       }
 
-      // Validate and enter the world at this puzzle (same path as the game)
+      // Validate and enter the world at this puzzle (same path as the game,
+      // whose world entry re-reads puzzle files: main.js startPuzzle)
       const validated = PuzzleLoader.validate(puzzleData);
+      PuzzleLoader.clearCache();
       PortalManager.enterWorld(validated);
 
       return validated;
