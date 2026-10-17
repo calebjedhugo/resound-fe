@@ -2,9 +2,9 @@
 
 import * as THREE from 'three';
 import { NotationRenderer } from 'resound-notation/NotationRenderer';
+import NotationDisplay from 'ui/NotationDisplay';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
-import NotationDisplay from 'ui/NotationDisplay';
 
 describe('NotationDisplay on Gates and Fountains', () => {
   const singleNoteSong = [{ pitch: 'C4', length: '1/4' }];

@@ -1,21 +1,6 @@
 import * as THREE from 'three';
 import { NotationRenderer } from 'resound-notation/NotationRenderer';
 
-// Plane-distance fade for staff planes: invisible while the eye is within
-// FADE_NEAR of the staff's PLANE, fully opaque past FADE_FAR, blending
-// between. A staff plane floats 0.02 off its entity face; on an OPEN gate
-// there is no box behind it, so an eye almost IN the plane used to catch
-// the texture's dark rows as a thin dashed line floating over the floor
-// (nitpick, 2026-07-14). The key is the eye's perpendicular distance past
-// the plane — position, not viewing angle: an angle fade left planes
-// semi-transparent on ordinary oblique sightlines (QA, 2026-07-16), while
-// every sliver artifact had the eye within a hair of the plane.
-const FADE_NEAR = 0.05;
-const FADE_FAR = 0.5;
-const scratchNormal = new THREE.Vector3();
-const scratchPosition = new THREE.Vector3();
-const scratchToCamera = new THREE.Vector3();
-
 // Engraved staves, SHARED: every display of the same staff (same song, same
 // render parameters) shows ONE texture. Engraving is the bulk of building an
 // area — ~1.5 ms a staff, 26 ms of The Star's 23-29 ms build (measured
@@ -209,6 +194,21 @@ function releaseEngraving(engraving) {
   if (engravings.get(engraving.key) === engraving) engravings.delete(engraving.key);
   if (engraving.texture) engraving.texture.dispose();
 }
+
+// Plane-distance fade for staff planes: invisible while the eye is within
+// FADE_NEAR of the staff's PLANE, fully opaque past FADE_FAR, blending
+// between. A staff plane floats 0.02 off its entity face; on an OPEN gate
+// there is no box behind it, so an eye almost IN the plane used to catch
+// the texture's dark rows as a thin dashed line floating over the floor
+// (nitpick, 2026-07-14). The key is the eye's perpendicular distance past
+// the plane — position, not viewing angle: an angle fade left planes
+// semi-transparent on ordinary oblique sightlines (QA, 2026-07-16), while
+// every sliver artifact had the eye within a hair of the plane.
+const FADE_NEAR = 0.05;
+const FADE_FAR = 0.5;
+const scratchNormal = new THREE.Vector3();
+const scratchPosition = new THREE.Vector3();
+const scratchToCamera = new THREE.Vector3();
 
 /**
  * Renders musical notation as in-world textures on entity surfaces.
