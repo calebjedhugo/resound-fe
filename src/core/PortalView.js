@@ -88,6 +88,8 @@ const MIN_TARGET_SIZE = 32;
 const SHRINK_AFTER_PASSES = 30;
 
 const scratchSize = new THREE.Vector2();
+// showsCreature's four side normals, [x, y, z] each
+const scratchSides = new Float64Array(12);
 
 /** Target size along one axis for `texels` of panel, under `cap`. */
 const bucket = (texels, cap) =>
@@ -158,6 +160,14 @@ class PortalView {
       bottomRight: this._mappedBottomRight,
       topLeft: this._mappedTopLeft,
     };
+    // The mapped doorway's rim, in order, and its middle (showsCreature)
+    this._mappedRim = [
+      this._mappedBottomLeft,
+      this._mappedBottomRight,
+      { x: br.x + tl.x - bl.x, y: br.y + tl.y - bl.y, z: br.z + tl.z - bl.z },
+      this._mappedTopLeft,
+    ];
+    this._mappedMid = { x: (br.x + tl.x) / 2, y: (br.y + tl.y) / 2, z: (br.z + tl.z) / 2 };
 
     // Clip ONE CELL behind the window plane, so the partner's OWN doorway
     // cell paints into the view: its floor, the walls framing it, and its
@@ -226,6 +236,7 @@ class PortalView {
     // overreach never leaks either.
     this._wallsStrictBehind = [];
     this._wallsFlushLateral = []; // { mesh, lat }
+    this._wallsHidden = []; // wallsToHide's answer, recycled per call
     const { outward } = mapping;
     // Window basis in NEIGHBOR space, for per-frame lateral tests
     this._mappedWindowCenter = { x: mappedCenter.x, z: mappedCenter.z };
@@ -273,6 +284,8 @@ class PortalView {
     // pass alike. setVisible records the wish; the first write grants it.
     this._written = false;
     this._shown = false;
+    // The two clip planes a pass binds (render), recycled pass to pass
+    this._passPlanes = [this._clipPlane, this._clipPlane];
 
     this._buildDoorwaySurface();
   }
@@ -307,8 +320,12 @@ class PortalView {
   /**
    * Show/hide the doorway surface (open/closed gate). A panel nothing has
    * written yet stays hidden until its first pass (see constructor).
+   * Outside a pass the surface shows exactly when it is both wished and
+   * written, so repeating the current wish (every open door asks every
+   * frame) changes nothing.
    */
   setVisible(visible) {
+    if (visible === this._shown) return;
     this._shown = visible;
     this.surface.visible = visible && this._written;
   }
@@ -380,32 +397,43 @@ class PortalView {
   showsCreature(eye) {
     const entities = (this.neighborArea && this.neighborArea.entities) || [];
     const e = this._map(eye);
-    const bl = this._mappedBottomLeft;
-    const br = this._mappedBottomRight;
-    const tl = this._mappedTopLeft;
-    const rim = [
-      bl,
-      br,
-      { x: br.x + tl.x - bl.x, y: br.y + tl.y - bl.y, z: br.z + tl.z - bl.z },
-      tl,
-    ];
-    const mid = { x: (br.x + tl.x) / 2, y: (br.y + tl.y) / 2, z: (br.z + tl.z) / 2 };
+    const rim = this._mappedRim;
+    const mid = this._mappedMid;
     // Inward unit normals of the pyramid's four sides (through the eye)
-    const sides = rim.map((a, i) => {
+    const sides = scratchSides;
+    for (let i = 0; i < rim.length; i += 1) {
+      const a = rim[i];
       const b = rim[(i + 1) % rim.length];
-      const u = { x: a.x - e.x, y: a.y - e.y, z: a.z - e.z };
-      const v = { x: b.x - e.x, y: b.y - e.y, z: b.z - e.z };
-      const n = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x };
-      const toMid = n.x * (mid.x - e.x) + n.y * (mid.y - e.y) + n.z * (mid.z - e.z);
-      const scale = (toMid < 0 ? -1 : 1) / (Math.hypot(n.x, n.y, n.z) || 1);
-      return { x: n.x * scale, y: n.y * scale, z: n.z * scale };
-    });
-    return entities.some((entity) => {
-      if (entity.type !== 'creature' || !entity.mesh) return false;
+      const ux = a.x - e.x;
+      const uy = a.y - e.y;
+      const uz = a.z - e.z;
+      const vx = b.x - e.x;
+      const vy = b.y - e.y;
+      const vz = b.z - e.z;
+      const nx = uy * vz - uz * vy;
+      const ny = uz * vx - ux * vz;
+      const nz = ux * vy - uy * vx;
+      const toMid = nx * (mid.x - e.x) + ny * (mid.y - e.y) + nz * (mid.z - e.z);
+      const scale = (toMid < 0 ? -1 : 1) / (Math.hypot(nx, ny, nz) || 1);
+      sides[3 * i] = nx * scale;
+      sides[3 * i + 1] = ny * scale;
+      sides[3 * i + 2] = nz * scale;
+    }
+    for (const entity of entities) {
+      if (entity.type !== 'creature' || !entity.mesh) continue; // eslint-disable-line no-continue
       const p = entity.mesh.position;
       const reach = CREATURE_GLOW_REACH * (entity.size || 1);
-      return sides.every((n) => n.x * (p.x - e.x) + n.y * (p.y - e.y) + n.z * (p.z - e.z) > -reach);
-    });
+      let inside = true;
+      for (let i = 0; i < rim.length && inside; i += 1) {
+        inside =
+          sides[3 * i] * (p.x - e.x) +
+            sides[3 * i + 1] * (p.y - e.y) +
+            sides[3 * i + 2] * (p.z - e.z) >
+          -reach;
+      }
+      if (inside) return true;
+    }
+    return false;
   }
 
   /**
@@ -491,14 +519,18 @@ class PortalView {
    * frame. PortalManager passes the APPROACH panel's picks into every
    * panel's render so the shared clip's overreach never leaks a wall face.
    * @param {THREE.Camera} camera - the player camera (world position)
+   * @returns {THREE.Mesh[]} recycled by this view's next call (its own
+   *   pass for the same eye refills it with the same walls)
    */
   wallsToHide(camera) {
     if (this._wallsFlushLateral.length === 0) return this._wallsStrictBehind;
-    const eye = this._map({ x: camera.position.x, y: camera.position.y, z: camera.position.z });
+    const eye = this._map(camera.position);
     const latEye =
       (eye.x - this._mappedWindowCenter.x) * this._right.x +
       (eye.z - this._mappedWindowCenter.z) * this._right.z;
-    const hidden = this._wallsStrictBehind.slice();
+    const hidden = this._wallsHidden;
+    hidden.length = 0;
+    for (const mesh of this._wallsStrictBehind) hidden.push(mesh);
     for (const { mesh, lat } of this._wallsFlushLateral) {
       // Laterally beyond the wall, on its side: the eye faces its OUTSIDE
       if (
@@ -644,7 +676,8 @@ class PortalView {
     // once, and every pass binds passContext.CLIP_PLANE_COUNT planes like
     // every other scene draw (three keys a material's shader program by the
     // plane COUNT: a mismatch re-derives it at every pass switch).
-    renderer.clippingPlanes = [clipOverride || this._clipPlane, this._clipPlane];
+    this._passPlanes[0] = clipOverride || this._clipPlane;
+    renderer.clippingPlanes = this._passPlanes;
     renderer.setRenderTarget(writeTarget);
     updateSceneMatrices(this._scene); // once a frame, not once a pass
     renderer.render(this._scene, this._camera);

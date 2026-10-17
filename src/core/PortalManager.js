@@ -114,6 +114,7 @@ class PortalManager {
     this._activeArea = null;
     this._areas = new Map(); // puzzleId -> live Area (includes the active one)
     this._doors = []; // one entry per linked gate PAIR with both areas loaded
+    this._doorOf = new Map(); // gate -> its entry in _doors
     this._linkedGates = []; // active area's linked gates (crossing + views)
     // Visual-only clones of a cleanser sitting under a door's PARTNER face
     // (see _rebuildTileMirrors): { mesh, group } pairs, rebuilt with doors
@@ -201,6 +202,7 @@ class PortalManager {
     }
     this._areas.clear();
     this._doors = [];
+    this._doorOf.clear();
     this._tileMirrors = []; // meshes died with their areas' groups
     this._retained.clear();
     this._linkedGates = [];
@@ -527,16 +529,13 @@ class PortalManager {
    */
   _renderExteriorViews(gate, renderer, camera) {
     const faces = this._views.get(gate);
-    // Signed distance of the eye past each panel's plane (the cell's far face
-    // for that approach). Oblique sightlines through the cell legitimately
-    // hit the SIDE panels, so more than one can be eligible at once.
-    const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
-    const past = (facing) =>
-      FACING_VECTORS[facing].x * (camera.position.x - gate.position.x) +
-      FACING_VECTORS[facing].z * (camera.position.z - gate.position.z) +
-      panelPlane;
-    const eligible = FACINGS.filter((f) => past(f) > 0.05);
-    if (eligible.length === 0) return;
+    // The eye must be past a panel's plane (the cell's far face for that
+    // approach) to look into it. Oblique sightlines through the cell
+    // legitimately hit the SIDE panels, so more than one can be eligible at
+    // once.
+    let eligible = false;
+    for (const f of FACINGS) eligible = eligible || this._canLookInto(gate, f, camera.position);
+    if (!eligible) return;
     // The APPROACH panel owns the true doorway clip plane, and EVERY visible
     // panel clips with it, so the oblique side windows slice the neighbor
     // along the doorway axis instead of perpendicular to it (a perpendicular
@@ -560,7 +559,8 @@ class PortalManager {
     // the shared plane's overreach can graze their faces in EVERY panel's
     // pass, not just the approach panel's own.
     const sharedWalls = approachView ? approachView.wallsToHide(camera) : null;
-    for (const f of eligible) {
+    for (const f of FACINGS) {
+      if (!this._canLookInto(gate, f, camera.position)) continue; // eslint-disable-line no-continue
       const view = faces.get(f);
       // A pass may skip (frustum cull) — only a face actually on screen
       // counts as this eye's. _playerFresh drives the mirror sweep (an
@@ -685,7 +685,7 @@ class PortalManager {
 
   /** The other end of `gate`'s door pair, if both areas are loaded. */
   _partnerGate(gate) {
-    const door = this._doors.find((d) => d.gateA === gate || d.gateB === gate);
+    const door = this._doorOf.get(gate);
     if (!door) return null;
     return door.gateA === gate ? door.gateB : door.gateA;
   }
@@ -1444,6 +1444,7 @@ class PortalManager {
   /** Doors = linked gate pairs whose BOTH areas are currently loaded. */
   _rebuildDoors() {
     this._doors = [];
+    this._doorOf.clear();
     const seen = new Set();
     for (const area of this._areas.values()) {
       for (const gate of area.entityManager.getByType('gate')) {
@@ -1459,7 +1460,12 @@ class PortalManager {
           .join('|');
         if (seen.has(key)) continue;
         seen.add(key);
-        this._doors.push({ gateA: gate, areaA: area, gateB: partnerGate, areaB: partnerArea });
+        const door = { gateA: gate, areaA: area, gateB: partnerGate, areaB: partnerArea };
+        this._doors.push(door);
+        // A gate's first door, should a hand-made link name two
+        for (const end of [gate, partnerGate]) {
+          if (!this._doorOf.has(end)) this._doorOf.set(end, door);
+        }
       }
     }
     this._rebuildTileMirrors();
@@ -1716,7 +1722,7 @@ class PortalManager {
    * permanently open (alwaysOpen faces never close).
    */
   _closeUsedDoor(gate) {
-    const door = this._doors.find((d) => d.gateA === gate || d.gateB === gate);
+    const door = this._doorOf.get(gate);
     if (!door) {
       if (gate.isHeldByPerformance()) gate._closePending = true;
       else gate.close();
