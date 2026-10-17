@@ -24,6 +24,7 @@ import * as THREE from 'three';
 import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
 import { createSceneTarget, showStoredTexels } from 'core/passContext';
+import { updateSceneMatrices } from 'core/sceneMatrices';
 import {
   FACING_VECTORS,
   DOORWAY_OFFSET,
@@ -263,6 +264,9 @@ class PortalView {
     // Tag for tests/debugging (mirrors NotationDisplay's _isNotationMesh)
     this.surface._isPortalSurface = true;
     this.gate.mesh.add(this.surface);
+    // A view can be born mid-frame (a door opening), after its scene's
+    // matrices were updated for the frame (core/sceneMatrices): place it now
+    this.surface.updateMatrixWorld();
   }
 
   /**
@@ -489,6 +493,7 @@ class PortalView {
     // plane COUNT: a mismatch re-derives it at every pass switch).
     renderer.clippingPlanes = [clipOverride || this._clipPlane, this._clipPlane];
     renderer.setRenderTarget(writeTarget);
+    updateSceneMatrices(this._scene); // once a frame, not once a pass
     renderer.render(this._scene, this._camera);
     renderer.setRenderTarget(null);
     renderer.clippingPlanes = previousPlanes;

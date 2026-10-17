@@ -265,6 +265,12 @@ instead of "fixing" it.
   walls. **three is pinned to 0.153.x for this** (`^0.153.0`): re-verify
   passContext before any upgrade. Check: `__resoundDebug.countProgramDerivations()`
   ≈ 0/frame
+- **World matrices update ONCE a frame per scene** (`core/sceneMatrices`): the
+  main scene and every `Area.scene` a pass draws run with
+  `matrixWorldAutoUpdate` off; main.js `render()` and `PortalView.render`
+  update each before its first pass. **Render-time code must never MOVE
+  anything** (visibility/material toggles only), and an object added
+  mid-frame computes its own `updateMatrixWorld()` (doorway surfaces do)
 
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +

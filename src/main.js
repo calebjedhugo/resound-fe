@@ -28,6 +28,7 @@ import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
 import DeployManager from 'core/DeployManager';
 import ShaderPrewarm from 'core/ShaderPrewarm';
+import { beginFrame, updateSceneMatrices } from 'core/sceneMatrices';
 import HintMemory from 'core/HintMemory';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
@@ -203,6 +204,10 @@ function render() {
   // see-through), then the regular door pass re-renders them for the
   // player's real eye — each surface shows its last completed write.
   motion(scene, (webglRenderer, playerCamera) => {
+    // World matrices update once a frame per scene, not once a pass
+    // (core/sceneMatrices): the main scene's here, before anything draws it
+    beginFrame();
+    updateSceneMatrices(scene);
     // While the start gate holds the world still, compile the shader
     // programs the first note / first open door would otherwise compile
     // mid-game (neighbors are warmed as they finish loading)

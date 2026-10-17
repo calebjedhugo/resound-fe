@@ -12,6 +12,23 @@ const AdditiveBlending = 2;
 // Colour-space names (three's values): the pass context tags scene targets
 const SRGBColorSpace = 'srgb';
 
+/** An object's local transform, as one comparable string. */
+const transformOf = (object) => {
+  const { position: p, rotation: r, scale: s } = object;
+  return `${p.x},${p.y},${p.z}|${r.x},${r.y},${r.z}|${s.x},${s.y},${s.z}`;
+};
+
+/**
+ * Like three's Object3D.updateMatrixWorld: this object and its whole subtree.
+ * The mock has no matrices; it records the local transform each world
+ * matrix was derived from (`matrixWorldFrom`), so a test can tell whether an
+ * object moved after its last update.
+ */
+function updateMatrixWorld() {
+  if (this.position) this.matrixWorldFrom = transformOf(this);
+  for (const child of this.children) child.updateMatrixWorld();
+}
+
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) {
     this.x = x;
@@ -297,6 +314,10 @@ class Mesh {
     if (idx > -1) this.children.splice(idx, 1);
   }
 
+  updateMatrixWorld() {
+    updateMatrixWorld.call(this);
+  }
+
   getWorldDirection(target) {
     target.set(0, 0, -1);
     return target;
@@ -347,11 +368,16 @@ class Group {
     const idx = this.children.indexOf(obj);
     if (idx > -1) this.children.splice(idx, 1);
   }
+
+  updateMatrixWorld() {
+    updateMatrixWorld.call(this);
+  }
 }
 
 class Scene {
   constructor() {
     this.children = [];
+    this.matrixWorldAutoUpdate = true; // like three: renderer.render updates it
   }
 
   add(obj) {
@@ -361,6 +387,10 @@ class Scene {
   remove(obj) {
     const idx = this.children.indexOf(obj);
     if (idx > -1) this.children.splice(idx, 1);
+  }
+
+  updateMatrixWorld() {
+    updateMatrixWorld.call(this);
   }
 }
 

@@ -358,6 +358,7 @@ class MockMesh {
 class MockScene {
   constructor() {
     this.children = [];
+    this.matrixWorldAutoUpdate = true;
   }
 
   add(obj) {
@@ -367,6 +368,11 @@ class MockScene {
   remove(obj) {
     const idx = this.children.indexOf(obj);
     if (idx > -1) this.children.splice(idx, 1);
+  }
+
+  // Like three: the whole graph (children are three-mock objects)
+  updateMatrixWorld() {
+    for (const child of this.children) child.updateMatrixWorld();
   }
 }
 
