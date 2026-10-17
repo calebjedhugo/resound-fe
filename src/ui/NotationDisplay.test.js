@@ -187,34 +187,45 @@ describe('NotationDisplay on Gates and Fountains', () => {
       const notationChildren = gate.mesh.children.filter((c) => c._isNotationMesh);
 
       // Spy on dispose methods
-      const geometrySpies = notationChildren.map((c) => jest.spyOn(c.geometry, 'dispose'));
+      const geometrySpy = jest.spyOn(notationChildren[0].geometry, 'dispose');
       const materialSpies = notationChildren.map((c) => jest.spyOn(c.material, 'dispose'));
 
       gate.dispose();
 
-      for (const spy of geometrySpies) {
-        expect(spy).toHaveBeenCalled();
-      }
       for (const spy of materialSpies) {
         expect(spy).toHaveBeenCalled();
       }
+      // The plane quad is every gate's: never freed with one of them
+      expect(geometrySpy).not.toHaveBeenCalled();
+      geometrySpy.mockRestore();
     });
 
     it('notation meshes are disposed when fountain is disposed', () => {
       const fountain = new Fountain({ x: 0, y: 0, z: 0 }, { song: singleNoteSong });
       const notationChildren = fountain.mesh.children.filter((c) => c._isNotationMesh);
 
-      const geometrySpies = notationChildren.map((c) => jest.spyOn(c.geometry, 'dispose'));
+      const geometrySpy = jest.spyOn(notationChildren[0].geometry, 'dispose');
       const materialSpies = notationChildren.map((c) => jest.spyOn(c.material, 'dispose'));
 
       fountain.dispose();
 
-      for (const spy of geometrySpies) {
-        expect(spy).toHaveBeenCalled();
-      }
       for (const spy of materialSpies) {
         expect(spy).toHaveBeenCalled();
       }
+      expect(geometrySpy).not.toHaveBeenCalled();
+      geometrySpy.mockRestore();
+    });
+
+    it("every gate's staff planes share one quad, flagged shared (fountains share theirs)", () => {
+      const planesOf = (entity) => entity.mesh.children.filter((c) => c._isNotationMesh);
+      const [a, b] = [1, 2].map(() => new Gate({ x: 0, y: 0, z: 0 }, { song: singleNoteSong }));
+      const fountain = new Fountain({ x: 0, y: 0, z: 0 }, { song: singleNoteSong });
+
+      const gateQuads = new Set([...planesOf(a), ...planesOf(b)].map((c) => c.geometry));
+      expect(gateQuads.size).toBe(1);
+      expect([...gateQuads][0].userData.shared).toBe(true);
+      expect(planesOf(fountain)[0].geometry).not.toBe([...gateQuads][0]); // a smaller box
+      expect(new Set(planesOf(fountain).map((c) => c.geometry)).size).toBe(1);
     });
   });
 

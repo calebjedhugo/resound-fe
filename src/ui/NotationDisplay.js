@@ -27,6 +27,23 @@ const scratchToCamera = new THREE.Vector3();
 // while a gate in this area or any other still shows it.
 const engravings = new Map(); // key -> { key, users, texture, aspect, waiting }
 
+// Every staff plane of one layout size is the same quad, so they share ONE
+// geometry instead of four fresh ones per entity (The Star's 17 gates built
+// 68, each with its own GPU buffers on first draw). Flagged
+// `userData.shared` so Entity.dispose (and dispose below) leave it alone.
+const planeGeometries = new Map(); // "width x height" -> THREE.PlaneGeometry
+
+function planeGeometry(width, height) {
+  const key = `${width}x${height}`;
+  let geometry = planeGeometries.get(key);
+  if (!geometry) {
+    geometry = new THREE.PlaneGeometry(width, height);
+    geometry.userData.shared = true;
+    planeGeometries.set(key, geometry);
+  }
+  return geometry;
+}
+
 /** No DOM (node env without jsdom): displays get meshes but no texture. */
 function hasDom() {
   return typeof document !== 'undefined' && Boolean(document.createElementNS);
@@ -247,8 +264,7 @@ class NotationDisplay {
       this.entityType === 'gate' ? NotationDisplay.GATE_LAYOUT : NotationDisplay.FOUNTAIN_LAYOUT;
 
     for (const layout of layouts) {
-      const { width, height } = layout;
-      const geometry = new THREE.PlaneGeometry(width, height);
+      const geometry = planeGeometry(layout.width, layout.height);
       const material = new THREE.MeshBasicMaterial({
         transparent: true,
         opacity: 0,
@@ -346,12 +362,12 @@ class NotationDisplay {
   }
 
   /**
-   * Dispose of all notation meshes and their resources. The texture is the
-   * shared engraving's: released here, freed only with its last display.
+   * Dispose of all notation meshes and their resources. The plane geometry
+   * is shared (never freed); the texture is the shared engraving's,
+   * released here and freed only with its last display.
    */
   dispose() {
     for (const mesh of this.meshes) {
-      if (mesh.geometry) mesh.geometry.dispose();
       if (mesh.material) mesh.material.dispose();
     }
     this.meshes = [];
