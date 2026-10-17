@@ -67,6 +67,10 @@ const MIN_RENDER_EYE_DISTANCE = 0.5;
 // frame of pure waste in poc-return, 2026-07-16).
 const PANEL_CULL_RADIUS = 2.5;
 
+// How far a creature's glow reaches from its center, in creature sizes: the
+// halo at full flare (CreatureLook HALO_RADIUS + HALO_FLARE_GROWTH)
+const CREATURE_GLOW_REACH = 3.2;
+
 // A pass's target matches what its panel occupies on screen (_fitTarget):
 // tiny and distant doors once rendered the full half-res target each — at
 // The Star's NE corner 26 of 27 player passes drew 640x328 for a panel
@@ -346,6 +350,56 @@ class PortalView {
     if (!posed(pose)) return null;
     renderer.getDrawingBufferSize(scratchSize);
     return panelFootprint(eye.position, pose, this._corners, scratchSize.x, scratchSize.y);
+  }
+
+  /**
+   * Does the picture this panel shows still sample ~1:1 at `footprint` (the
+   * target it was last drawn into is big enough)?
+   */
+  covers(footprint, renderer) {
+    renderer.getDrawingBufferSize(scratchSize);
+    return (
+      Math.min(Math.floor(scratchSize.x / 2), footprint.texelsAcross) <= this._width &&
+      Math.min(Math.floor(scratchSize.y / 2), footprint.texelsUp) <= this._height
+    );
+  }
+
+  /**
+   * Could a creature of the area beyond show through this panel for an eye
+   * at `eye` — any part of its glow inside the pyramid from the mapped eye
+   * through the doorway? Conservative: a creature on the eye's side of the
+   * window, which the doorway clip mostly cuts away, counts too.
+   * @param {{x, y, z}} eye - world position, this panel's side
+   */
+  showsCreature(eye) {
+    const entities = (this.neighborArea && this.neighborArea.entities) || [];
+    const e = this._map(eye);
+    const bl = this._mappedBottomLeft;
+    const br = this._mappedBottomRight;
+    const tl = this._mappedTopLeft;
+    const rim = [
+      bl,
+      br,
+      { x: br.x + tl.x - bl.x, y: br.y + tl.y - bl.y, z: br.z + tl.z - bl.z },
+      tl,
+    ];
+    const mid = { x: (br.x + tl.x) / 2, y: (br.y + tl.y) / 2, z: (br.z + tl.z) / 2 };
+    // Inward unit normals of the pyramid's four sides (through the eye)
+    const sides = rim.map((a, i) => {
+      const b = rim[(i + 1) % rim.length];
+      const u = { x: a.x - e.x, y: a.y - e.y, z: a.z - e.z };
+      const v = { x: b.x - e.x, y: b.y - e.y, z: b.z - e.z };
+      const n = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x };
+      const toMid = n.x * (mid.x - e.x) + n.y * (mid.y - e.y) + n.z * (mid.z - e.z);
+      const scale = (toMid < 0 ? -1 : 1) / (Math.hypot(n.x, n.y, n.z) || 1);
+      return { x: n.x * scale, y: n.y * scale, z: n.z * scale };
+    });
+    return entities.some((entity) => {
+      if (entity.type !== 'creature' || !entity.mesh) return false;
+      const p = entity.mesh.position;
+      const reach = CREATURE_GLOW_REACH * (entity.size || 1);
+      return sides.every((n) => n.x * (p.x - e.x) + n.y * (p.y - e.y) + n.z * (p.z - e.z) > -reach);
+    });
   }
 
   /**

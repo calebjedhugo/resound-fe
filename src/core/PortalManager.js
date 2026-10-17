@@ -70,6 +70,10 @@ const WARM_UP_TURN = Object.freeze(
   )
 );
 
+// Who drew what a face shows, when it was not an exterior pass's own eye
+// (that eye object itself is recorded): see _restsThisFrame
+const MIRROR_WRITER = 'mirror';
+
 /** The cleanser standing exactly on `gate`'s cell in `area`, if any. */
 function cleanserAtGate(area, gate) {
   return area.entityManager
@@ -117,6 +121,8 @@ class PortalManager {
     // The player camera (once one with a pose has rendered): the lens that
     // warm-up and mirror eyes size their targets with (PortalView.footprint)
     this._playerCamera = null;
+    // Next small-panel beat to hand out (_restsThisFrame)
+    this._nextBeat = 0;
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
@@ -515,18 +521,80 @@ class PortalManager {
     const sharedWalls = approachView ? approachView.wallsToHide(camera) : null;
     for (const f of eligible) {
       const view = faces.get(f);
-      // A pass may still skip inside render() (frustum cull) — only a pass
-      // that actually ran counts as fresh. _playerFresh drives the mirror
-      // sweep (an ELIGIBLE face that was frustum-culled still needs a
-      // mirror render); _freshFrame drives the stale rotor.
+      // A pass may skip (frustum cull) — only a face actually on screen
+      // counts as this eye's. _playerFresh drives the mirror sweep (an
+      // ELIGIBLE face that was frustum-culled still needs a mirror render);
+      // _freshFrame drives the stale rotor.
+      if (!view.inView(camera)) continue; // eslint-disable-line no-continue
       const footprint = view.footprint(camera, renderer);
       view._screenShare = footprint ? footprint.screenShare : 1;
+      if (this._restsThisFrame(view, footprint, camera, camera.position, renderer)) {
+        // On screen, showing this same eye's picture from a frame or two
+        // ago: the eye owns it this frame all the same
+        view._playerFresh = this._passId;
+        continue; // eslint-disable-line no-continue
+      }
       const options = { clipOverride: sharedClip, extraWallsBehind: sharedWalls, footprint };
       if (view.render(renderer, camera, options)) {
-        view._freshFrame = this._frameId;
+        this._wrote(view, camera, camera.position);
         view._playerFresh = this._passId;
       }
     }
+  }
+
+  // A panel covering less than SMALL_PANEL_SHARE of the screen re-renders
+  // one frame in SMALL_PANEL_EVERY, each view on its own beat (so the work
+  // spreads evenly across frames) and keeps its picture in between — at
+  // most SMALL_PANEL_EVERY - 1 frames old. Most open doors are small on
+  // screen at any moment: at The Star's NE corner, 26 of 27 player passes
+  // drew a panel under 0.5% of it.
+  static SMALL_PANEL_SHARE = 0.01;
+
+  static SMALL_PANEL_EVERY = 3;
+
+  // ...and only while the eye has moved less than this since that render
+  // (world units; running covers ~0.27 in two frames): a crossing's jump
+  // re-renders at once
+  static SMALL_PANEL_DRIFT = 0.5;
+
+  /**
+   * May `view` sit this pass out (see SMALL_PANEL_SHARE)? Only while what
+   * it shows was drawn for this same `writer` — the eye of an exterior pass,
+   * or MIRROR_WRITER — within the last SMALL_PANEL_EVERY frames, from
+   * within SMALL_PANEL_DRIFT of `eye`: a picture another pass drew (a
+   * warm-up, the rotor, another eye's view), an old one, or one drawn from
+   * elsewhere is replaced at once — and never while the panel has outgrown
+   * its picture or a creature shows through it. A footprint-less pass (no
+   * pose to measure it by) never rests.
+   */
+  _restsThisFrame(view, footprint, writer, eye, renderer) {
+    if (!footprint || footprint.screenShare >= PortalManager.SMALL_PANEL_SHARE) return false;
+    // Its picture must be this writer's, and recent: a panel back on
+    // screen after a while away re-renders at once
+    if (view._writer !== writer) return false;
+    if (this._frameId - view._freshFrame >= PortalManager.SMALL_PANEL_EVERY) return false;
+    const from = view._writtenFrom;
+    const drift = Math.abs(eye.x - from.x) + Math.abs(eye.y - from.y) + Math.abs(eye.z - from.z);
+    if (drift >= PortalManager.SMALL_PANEL_DRIFT) return false;
+    // Grown past its picture (approaching): re-render bigger, never soft
+    if (!view.covers(footprint, renderer)) return false;
+    // A creature in view always moves at full frame rate, however small
+    if (view.showsCreature(eye)) return false;
+    if (view._beat === undefined) {
+      view._beat = this._nextBeat;
+      this._nextBeat = (this._nextBeat + 1) % PortalManager.SMALL_PANEL_EVERY;
+    }
+    return (this._frameId + view._beat) % PortalManager.SMALL_PANEL_EVERY !== 0;
+  }
+
+  /** Record a pass that drew `view` for `writer` from `eye` (_restsThisFrame). */
+  _wrote(view, writer, eye) {
+    view._freshFrame = this._frameId;
+    view._writer = writer;
+    if (!view._writtenFrom) view._writtenFrom = { x: 0, y: 0, z: 0 };
+    view._writtenFrom.x = eye.x;
+    view._writtenFrom.y = eye.y;
+    view._writtenFrom.z = eye.z;
   }
 
   /**
@@ -548,6 +616,7 @@ class PortalManager {
       pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
     });
     view._freshFrame = this._frameId;
+    view._writer = null;
   }
 
   /**
@@ -680,9 +749,11 @@ class PortalManager {
     // deepest-first so each level samples fresh content
     ranked.sort((a, b) => a[1].depth - b[1].depth || b[1].share - a[1].share);
     const kept = ranked.slice(0, PortalManager.MIRROR_MAX_PASSES).reverse();
-    for (const [view, { eye, footprint }] of kept) {
+    for (const [view, { eye, footprint, share }] of kept) {
+      const seen = footprint && { ...footprint, screenShare: share };
+      if (this._restsThisFrame(view, seen, MIRROR_WRITER, eye, renderer)) continue; // eslint-disable-line no-continue
       if (view.render(renderer, { position: eye }, { footprint })) {
-        view._freshFrame = this._frameId;
+        this._wrote(view, MIRROR_WRITER, eye);
       }
     }
   }

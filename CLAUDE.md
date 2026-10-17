@@ -203,7 +203,10 @@ instead of "fixing" it.
   `PortalView._fitTarget`: power-of-two per axis, 32 px floor, half-res cap —
   a door filling the screen keeps half-res; grows at once, shrinks after 30
   passes asking less). Mirror and warm-up eyes borrow the player's look and
-  lens (`eye.pose`)
+  lens (`eye.pose`). A panel under `SMALL_PANEL_SHARE` (1%) of the screen
+  re-renders one frame in three (`_restsThisFrame`) — never while a
+  creature shows through it, after an eye jump, or when its picture is
+  another eye's, old, or outgrown
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS

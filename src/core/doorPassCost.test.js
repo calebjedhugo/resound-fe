@@ -1,7 +1,8 @@
 /**
  * What each door pass costs (core/PortalManager + core/PortalView): a pass
- * draws at the size its panel shows on screen, and the mirror sweep spends
- * its passes on what the screen can show.
+ * draws at the size its panel shows on screen, a small panel re-renders one
+ * frame in three — never while a creature shows through it — and the mirror
+ * sweep spends its passes on what the screen can show.
  *
  * Rendering is mocked: a recording renderer stands in for three's, logging
  * every pass (frame, target, size) and the panel it drew. Eyes carry a pose
@@ -12,6 +13,7 @@ import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
 import { WORLD_SCALE } from 'core/constants';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
+import portalLiveB from '../__tests__/fixtures/puzzles/portal-live-b.json';
 
 /** Serve /puzzles/<id>.json from the fixtures the tests link to. */
 function installFetchMock(puzzles) {
@@ -37,6 +39,7 @@ const FOV = 75;
 const FOCAL = SCREEN.height / 2 / Math.tan((FOV / 2) * (Math.PI / 180));
 
 const LOOK_NORTH = { x: 0, y: 0, z: 0, w: 1 }; // three cameras look down -z
+const LOOK_SOUTH = { x: 0, y: 1, z: 0, w: 0 };
 
 /** A posed eye, like the player camera. */
 const eyeAt = (x, z, quaternion = LOOK_NORTH) => ({
@@ -186,6 +189,98 @@ describe('A door pass draws at the size its panel shows on screen', () => {
 
     for (let i = 0; i < 120; i += 1) drawFrame(renderer, far);
     expect(renderer.shownBy(panel).height).toBeLessThan(CAP.height);
+  });
+});
+
+describe('A small panel re-renders one frame in three', () => {
+  it('draws on one frame in three, showing a picture at most two frames old', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const far = eyeAt(DOOR.x, 9 * WORLD_SCALE); // well under 1% of the screen
+    drawFrame(renderer, far); // the door's first frame writes every face
+    const panel = panelOf(door, 'south');
+
+    const drawnOn = [];
+    for (let i = 0; i < 9; i += 1) {
+      drawFrame(renderer, far);
+      if (renderer.writesOf(panel).length > 0) drawnOn.push(renderer.frame);
+      expect(renderer.frame - renderer.shownBy(panel).frame).toBeLessThanOrEqual(2);
+    }
+    expect(drawnOn).toHaveLength(3);
+    expect(drawnOn[1] - drawnOn[0]).toBe(3);
+  });
+
+  it('a creature showing through it keeps it at full frame rate', async () => {
+    // portal-live-b has a creature just beyond its door, in the view from
+    // the south of portal-live-a's door
+    const door = await openPortalA({ 'portal-live-b': portalLiveB }, 'portal-live-a');
+    const renderer = createRecordingRenderer();
+    const far = eyeAt(DOOR.x, 9 * WORLD_SCALE);
+    drawFrame(renderer, far);
+    const panel = panelOf(door, 'south');
+
+    let framesDrawn = 0;
+    for (let i = 0; i < 9; i += 1) {
+      drawFrame(renderer, far);
+      if (renderer.writesOf(panel).length > 0) framesDrawn += 1;
+    }
+    expect(framesDrawn).toBe(9);
+  });
+
+  it('a jump of the eye (a crossing) redraws it at once', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE); // ONE camera, like the player's
+    drawFrame(renderer, eye);
+    const panel = panelOf(door, 'south');
+
+    // Hop one unit sideways every frame: never the picture from the last spot
+    for (let i = 1; i <= 6; i += 1) {
+      eye.position.x = DOOR.x + (i % 2);
+      drawFrame(renderer, eye);
+      expect(renderer.writesOf(panel)).toHaveLength(1);
+    }
+  });
+
+  it('outgrowing its picture between draws, it redraws at once', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    // Just short of where the panel needs more than 64 texels
+    const crossing = SOUTH_PANEL_Z + (WORLD_SCALE * FOCAL) / 64;
+    const eye = eyeAt(DOOR.x, crossing + 0.05);
+    drawFrame(renderer, eye);
+    const panel = panelOf(door, 'south');
+    // Settle into its rhythm: a frame it rests, then the frame it draws
+    do drawFrame(renderer, eye);
+    while (renderer.writesOf(panel).length > 0);
+    do drawFrame(renderer, eye);
+    while (renderer.writesOf(panel).length === 0);
+
+    // The very next frame — a resting one — a small step closer
+    eye.position.z = crossing - 0.1;
+    drawFrame(renderer, eye);
+
+    expect(renderer.writesOf(panel)).toHaveLength(1);
+    expect(renderer.shownBy(panel).height).toBeGreaterThanOrEqual(
+      panelPixels(crossing - 0.1 - SOUTH_PANEL_Z)
+    );
+  });
+
+  it('back on screen after a look away, it redraws on the first frame', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    const panel = panelOf(door, 'south');
+
+    // Away for 3, 4 and 5 frames: whatever its beat, back means drawn
+    for (let away = 3; away <= 5; away += 1) {
+      eye.quaternion = LOOK_SOUTH;
+      for (let i = 0; i < away; i += 1) drawFrame(renderer, eye);
+      eye.quaternion = LOOK_NORTH;
+      drawFrame(renderer, eye);
+      expect(renderer.writesOf(panel)).toHaveLength(1);
+    }
   });
 });
 
