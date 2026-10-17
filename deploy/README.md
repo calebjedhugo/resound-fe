@@ -25,8 +25,11 @@ Which does:
    its editor-only assets if a full build has them, prunes `puzzles/` to the
    `poc-*` files, and writes a manifest filtered to those entries (order
    preserved, so the game boots into `poc-threshold` and Esc's menu lists only
-   the POC set). Every text file gets a level-9 `.gz` beside it (for nginx
-   `gzip_static`), and `.deploy-assets` lists the hashed assets.
+   the POC set). `index.html` gets `<link rel="preload" as="fetch">` for the
+   JSON the boot fetches (manifest, first level, its linked neighbors: three
+   serial round trips otherwise, after the scripts run). Every text file gets
+   a level-9 `.gz` beside it (for nginx `gzip_static`), and `.deploy-assets`
+   lists the hashed assets.
 3. `deploy/upload.sh deploy/dist-poc chugo@hugopi:/var/www/resound.calebhugo.com/`
    — plain rsync passes, ordered so no page ever 404s a chunk: new hashed
    assets first, then the puzzles, then `index.html` (and only then are stale

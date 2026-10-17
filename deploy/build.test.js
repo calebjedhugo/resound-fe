@@ -9,7 +9,8 @@
  *
  * The deploy builds the game alone (RESOUND_BUILD=game, as deploy.sh runs
  * it), and the POC stage (build-poc.mjs) ships it precompressed for nginx's
- * gzip_static, with the asset list deploy/upload.sh prunes by.
+ * gzip_static, its page preloading the boot's JSON, with the asset list
+ * deploy/upload.sh prunes by.
  *
  * Runs three real Vite builds (deploy/__tests__/viteBuild.mjs).
  */
@@ -18,6 +19,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import zlib from 'zlib';
+import PortalManager from 'core/PortalManager';
+import PuzzleLoader from 'core/PuzzleLoader';
 
 const ROOT = path.resolve(__dirname, '..');
 const BUILD_TIMEOUT_MS = 120000;
@@ -206,6 +209,26 @@ describe('The POC stage', () => {
 
     expect(gzipped.length).toBeGreaterThan(0);
     expect(gzipped.filter(unzipsWrong)).toEqual([]);
+  });
+
+  it('preloads exactly the JSON the game fetches as it boots', async () => {
+    const fetched = [];
+    global.fetch = jest.fn(async (url) => {
+      fetched.push(url);
+      return { ok: true, json: async () => JSON.parse(fs.readFileSync(poc(url), 'utf8')) };
+    });
+    // main.js's boot: the manifest, its first level, then into the world
+    const [first] = await PuzzleLoader.loadPuzzleList();
+    PortalManager.enterWorld(await PuzzleLoader.load(first.id));
+    await jest.runAllTimersAsync();
+    PortalManager.reset();
+    delete global.fetch;
+
+    const html = fs.readFileSync(poc('index.html'), 'utf8');
+    const preloaded = [
+      ...html.matchAll(/<link rel="preload" href="([^"]+)" as="fetch" crossorigin>/g),
+    ];
+    expect(preloaded.map(([, href]) => href).sort()).toEqual([...new Set(fetched)].sort());
   });
 
   it('lists exactly the assets it ships, for the upload to keep next time', () => {

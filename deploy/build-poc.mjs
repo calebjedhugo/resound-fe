@@ -12,9 +12,10 @@
  *   - public/puzzles is pruned to the `poc-*` files plus a manifest filtered to
  *     those entries, in their original order (so the game boots into
  *     `poc-threshold` — puzzles[0] — and Esc's menu lists only the POC set).
- *   - every text file gets a level-9 `.gz` beside it for nginx's gzip_static
- *     (deploy/nginx-resound.conf), and `.deploy-assets` lists the hashed
- *     assets for deploy/upload.sh's prune.
+ *   - index.html preloads the JSON the boot fetches (manifest, first level,
+ *     its neighbors); every text file gets a level-9 `.gz` beside it for
+ *     nginx's gzip_static (deploy/nginx-resound.conf); `.deploy-assets` lists
+ *     the hashed assets for deploy/upload.sh's prune.
  *
  * The POC files only ever portal-link to each other, so the pruned set is
  * self-contained. Run after `vite build`; see deploy/deploy.sh.
@@ -71,7 +72,29 @@ fs.writeFileSync(
   `${JSON.stringify({ puzzles: pocEntries }, null, 2)}\n`
 );
 
-// 3. Precompress once at level 9, so nginx never compresses at the origin
+// 3. Preload the JSON the game fetches as it boots: the manifest, then the
+//    first level, then that level's linked neighbors (PortalManager loads
+//    them live at once). Three revalidations in a row once the scripts have
+//    run; from the page, one round trip alongside the scripts. crossorigin
+//    (anonymous) matches fetch()'s defaults, so the game's own requests take
+//    the preloaded responses.
+const [firstLevel] = pocEntries;
+const { entities } = JSON.parse(
+  fs.readFileSync(path.join(puzzlesDir, `${firstLevel.id}.json`), 'utf8')
+);
+const neighbors = entities
+  .filter((e) => e.type === 'gate' && e.link && keep.has(`${e.link.puzzleId}.json`))
+  .map((e) => e.link.puzzleId);
+const preloads = [...new Set(['manifest', firstLevel.id, ...neighbors])].map(
+  (id) => `    <link rel="preload" href="/puzzles/${id}.json" as="fetch" crossorigin>\n`
+);
+const indexPath = path.join(OUT, 'index.html');
+fs.writeFileSync(
+  indexPath,
+  fs.readFileSync(indexPath, 'utf8').replace('  </head>', `${preloads.join('')}  </head>`)
+);
+
+// 4. Precompress once at level 9, so nginx never compresses at the origin
 //    (gzip_static serves the .gz to clients that accept gzip). A file gzip
 //    wouldn't shrink keeps no .gz.
 for (const f of fs.readdirSync(OUT, { recursive: true })) {
@@ -83,7 +106,7 @@ for (const f of fs.readdirSync(OUT, { recursive: true })) {
   }
 }
 
-// 4. List the hashed assets (precompressed copies included). upload.sh
+// 5. List the hashed assets (precompressed copies included). upload.sh
 //    records the list on the server, and the NEXT deploy keeps every file in
 //    it: a page loaded just before that deploy still finds its chunks.
 fs.writeFileSync(
