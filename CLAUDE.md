@@ -329,7 +329,13 @@ instead of "fixing" it.
   `public/puzzles` to the `poc-*` set + a filtered manifest), and rsyncs to the
   Pi web root. See `deploy/README.md`.
 - Puzzle JSON changes require manual refresh (no HMR)
+- **The page can boot at 0x0** (a hidden in-app browser pane): view math
+  treats a zero screen as no mouse offset, camera/canvas/screen center refit
+  on `resize`, and `GameLoop` logs a throwing frame instead of dying (its
+  first frame runs inside game init). A NaN view surfaces in three as
+  `firstElem.toArray is not a function` (the clip-plane upload). The in-app
+  browser console persists across reloads — log a marker before reloading
 
 ---
 
-*Last Updated: 2026-10-16 — one pass context: 2 clip planes everywhere, portal targets render sRGB (isXRRenderTarget), per-area wall materials*
+*Last Updated: 2026-10-17 — survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame*

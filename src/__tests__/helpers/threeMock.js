@@ -371,9 +371,19 @@ class WebGLRenderer {
       addEventListener: () => {},
       removeEventListener: () => {},
     };
+    this.width = 0;
+    this.height = 0;
   }
 
-  setSize() {}
+  setSize(width, height) {
+    this.width = width;
+    this.height = height;
+  }
+
+  getSize(target) {
+    return target.set(this.width, this.height);
+  }
+
   render() {}
   dispose() {}
 }

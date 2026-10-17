@@ -8,6 +8,11 @@ const KEYBOARD_LOOK_SPEED = 0.025; // Radians per frame (~86°/sec at 60fps)
 const KEYBOARD_LOOK_STEP = Math.PI / 24; // Guaranteed tap rotation (7.5°), tap-impulse only
 const MAX_PITCH = Math.PI / 2;
 
+// A page can boot before its window has a size (a hidden pane is 0x0): a zero
+// range is no mouse offset, not 0/0 — a NaN view poisons the camera matrices
+// and three throws uploading the clip planes on the very first frame
+const offsetPerc = (offset, range) => (range > 0 ? clamp(offset / range, -1, 1) : 0);
+
 class CameraController {
   static getXFixedRange(screenCenter) {
     return screenCenter[0] * CENTER_RANGE_PERC_X;
@@ -58,12 +63,9 @@ class CameraController {
     const [mousePositionX, mousePositionY] = mousePosition;
     const [nextViewCenterX, nextViewCenterY] = nextViewCenter;
 
-    const percX = (screenCenterX - mousePositionX) / xFixedRange;
-    const percY = (screenCenterY - mousePositionY) / yFixedRange;
-
     return [
-      nextViewCenterX + (Math.PI / 2) * clamp(percX, -1, 1),
-      nextViewCenterY + (Math.PI / 2) * clamp(percY, -1, 1),
+      nextViewCenterX + (Math.PI / 2) * offsetPerc(screenCenterX - mousePositionX, xFixedRange),
+      nextViewCenterY + (Math.PI / 2) * offsetPerc(screenCenterY - mousePositionY, yFixedRange),
     ];
   }
 

@@ -7,12 +7,23 @@ import { PLAYER_COLLISION_RADIUS } from 'core/constants';
 import { renderMainView } from 'core/passContext';
 
 const fixedYPosition = 1.8; // Player height in meters
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
+const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
 camera.position.y = fixedYPosition;
 
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+
+// Size the view to the window — at load AND on every resize: a page can boot
+// before its window has a size (a hidden pane is 0x0), and a 0/0 aspect is a
+// NaN projection that never heals on its own
+const fitToWindow = () => {
+  const { innerWidth: width, innerHeight: height } = window;
+  camera.aspect = height > 0 ? width / height : 1;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
+};
+fitToWindow();
+window.addEventListener('resize', fitToWindow);
 
 const baseSpeed = 0.067; // 4 units/sec ÷ 60 fps = 0.067 units/frame
 const runMultiplier = 2; // Running is 2x walk speed (8 units/sec)

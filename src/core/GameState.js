@@ -147,7 +147,17 @@ class GameState {
   }
 
   updateScreenCenter() {
-    this.input.mouse.screenCenter = [window.innerWidth / 2, window.innerHeight / 2];
+    const { mouse } = this.input;
+    const center = [window.innerWidth / 2, window.innerHeight / 2];
+    // A mouse that never left the old center (no mousemove yet, e.g. the page
+    // booted at 0x0) keeps zero look offset instead of aiming at a corner
+    if (
+      mouse.position[0] === mouse.screenCenter[0] &&
+      mouse.position[1] === mouse.screenCenter[1]
+    ) {
+      mouse.position = center;
+    }
+    mouse.screenCenter = center;
   }
 }
 

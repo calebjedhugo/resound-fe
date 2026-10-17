@@ -159,6 +159,7 @@ const createEventListeners = () => {
   window.addEventListener('keydown', dispatchKeyboardActions);
   window.addEventListener('keyup', dispatchKeyboardActions);
   window.addEventListener('mousemove', dispatchMouseActions);
+  window.addEventListener('resize', () => gameState.updateScreenCenter());
 };
 
 // Export the instrument instance so other modules can control playback
