@@ -43,6 +43,7 @@ class CleansingTile extends Entity {
     this._pulse = 0;
     this._flash = 0;
     this._wasPlayerInside = false;
+    this._paintedActive = null; // gold/cyan as last painted (_applyLook)
     this.createMesh();
   }
 
@@ -110,8 +111,11 @@ class CleansingTile extends Entity {
     this.mesh.material.emissiveIntensity = breathe + flash;
     // Re-checked every frame (not just on claim) so the PREVIOUS active tile
     // reverts to cyan on its own, and a rebuilt area's tile picks its gold
-    // back up — no registry to keep in sync.
+    // back up — no registry to keep in sync. Painted only when it changes
+    // (each setHex converts sRGB to linear: three Math.pow calls).
     const active = this.isActiveCleanser();
+    if (active === this._paintedActive) return;
+    this._paintedActive = active;
     this.mesh.material.color.setHex(active ? CleansingTile.ACTIVE_COLOR : CleansingTile.BASE_COLOR);
     this.mesh.material.emissive.setHex(
       active ? CleansingTile.ACTIVE_EMISSIVE : CleansingTile.BASE_EMISSIVE
