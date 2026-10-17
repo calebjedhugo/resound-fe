@@ -193,8 +193,10 @@ instead of "fixing" it.
   (`_refreshStaleFaces`, ≤ `STALE_MAX_FRAMES` old, oldest-first, bounded
   per frame) so nothing ever freezes in time. Keyed off `_playerFresh`
   (a face that was ELIGIBLE but frustum-culled still needs a mirror
-  render). The cleanser gate's pad panels age via the rotor
-  (DeployManager.renderPortal).
+  render). Freshness ages in REAL frames: the cleanser gate's mapped-eye
+  door pass (`renderPortalsFor`) counts none. Its pad panels age via their
+  own rotor (DeployManager.renderPortal), and a frame with no pad pass to
+  run (gate off screen) skips that door pre-pass too.
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS
@@ -324,7 +326,7 @@ instead of "fixing" it.
   cell's tile to a crescent — same fix as door tile mirrors), and doors
   seen through the gate are themselves see-through: the pad pre-pass
   renders door views for its MAPPED eye (active-area doors via
-  renderPortals re-run, a neighbor destination's own doors via
+  `renderPortalsFor`, a neighbor destination's own doors via
   `renderAreaPortals`, hidden again after sampling). Its area is
   RETAINED (`PortalManager.retainArea`) while the gate exists; views
   retarget when a new cleanser is claimed. One-way, one use; arrival

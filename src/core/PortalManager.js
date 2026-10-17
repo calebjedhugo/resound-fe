@@ -96,8 +96,13 @@ class PortalManager {
     // Faces created this pass, pending their first write (_flushWarmUps)
     this._newViews = [];
     // Frame counter for face freshness: a face nobody's eye renders still
-    // shows in other portals' mirrors, and must not freeze in time
+    // shows in other portals' mirrors, and must not freeze in time. One per
+    // REAL frame (renderPortals) — the cleanser gate's mapped-eye pre-pass
+    // runs inside the frame and never counts one.
     this._frameId = 0;
+    // One per run of door passes (an eye's player faces + its mirror sweep):
+    // which faces THIS eye already drew (view._playerFresh)
+    this._passId = 0;
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
@@ -272,8 +277,22 @@ class PortalManager {
     this._refreshStaleFaces(renderer);
   }
 
+  /**
+   * The same door passes for ANOTHER eye inside the current frame — the
+   * deployed cleanser gate's mapped eye (DeployManager.renderPortal), so a
+   * door seen through the gate is see-through too. Counts no frame (face
+   * freshness ages in real frames) and runs no stale rotor (renderPortals
+   * runs it, once a frame); the player's renderPortals re-renders the faces
+   * the real eye looks into afterwards.
+   * @param {{position: {x, y, z}}} eye
+   */
+  renderPortalsFor(renderer, eye) {
+    this._renderDoorPasses(renderer, eye);
+  }
+
   /** One eye's door passes: the faces it looks into, then its mirror sweep. */
   _renderDoorPasses(renderer, camera) {
+    this._passId += 1;
     const doors = this._drawingDoors;
     doors.length = 0;
     for (const gate of this._linkedGates) {
@@ -350,6 +369,7 @@ class PortalManager {
    * for this eye only — never smear into other sightlines.
    */
   renderAreaPortals(area, renderer, camera) {
+    this._passId += 1;
     const doors = this._drawingDoors;
     doors.length = 0;
     for (const gate of area.entityManager.getByType('gate')) {
@@ -485,7 +505,7 @@ class PortalManager {
       // mirror render); _freshFrame drives the stale rotor.
       if (view.render(renderer, camera, sharedClip, sharedWalls)) {
         view._freshFrame = this._frameId;
-        view._playerFresh = this._frameId;
+        view._playerFresh = this._passId;
       }
     }
   }
@@ -571,7 +591,7 @@ class PortalManager {
       if (!this._isSameAreaDoor(gate)) continue; // eslint-disable-line no-continue
       const faces = this._views.get(gate);
       if (!faces || faces.size === 0) continue; // eslint-disable-line no-continue
-      const drewThisFrame = [...faces.values()].some((v) => v._playerFresh === this._frameId);
+      const drewThisFrame = [...faces.values()].some((v) => v._playerFresh === this._passId);
       if (drewThisFrame) frontier.push({ gate, eye: camera.position });
     }
 
@@ -596,7 +616,7 @@ class PortalManager {
           for (const f of eligible) {
             const view = faces.get(f);
             if (!view || !view.surface.visible) continue; // eslint-disable-line no-continue
-            if (view._playerFresh === this._frameId) continue; // eslint-disable-line no-continue
+            if (view._playerFresh === this._passId) continue; // eslint-disable-line no-continue
             if (!scheduled.has(view)) scheduled.set(view, { eye: mapped, depth });
           }
           // The chain continues through this door's view — but only

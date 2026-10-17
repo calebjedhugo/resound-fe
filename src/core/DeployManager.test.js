@@ -15,6 +15,7 @@ import { CLIP_PLANE_COUNT } from 'core/passContext';
 import { WORLD_SCALE } from 'core/constants';
 import portalA from '../__tests__/fixtures/puzzles/portal-a.json';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
+import deployBasic from '../__tests__/fixtures/puzzles/deploy-basic.json';
 
 const take = (pitch) => ({ id: `take_${pitch}`, data: [{ pitch, length: '1/1' }] });
 
@@ -289,7 +290,7 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     DeployManager.toggle();
     DeployManager.update();
 
-    const spy = jest.spyOn(PortalManager, 'renderPortals');
+    const spy = jest.spyOn(PortalManager, 'renderPortalsFor');
     DeployManager.renderPortal(fakeRenderer(), { position: { x: 30, y: 1.8, z: 39 } });
     expect(spy).toHaveBeenCalledTimes(1);
     const eye = spy.mock.calls[0][1];
@@ -463,7 +464,56 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
   });
 });
 
-describe('The deployed gate never shows a blank panel', () => {
+describe('The deployed gate draws only what can show, and never shows a blank panel', () => {
+  // portal-a: its door (world 15, 0, 6) leads into portal-b. The gate goes
+  // two tiles south of a player standing north of the door; the cleanser it
+  // leads to sits one cell east of the gate, so its mapped eye stays north
+  // of the door like the player's (that door's south face is in nobody's
+  // sightline: only the stale rotor ever refreshes it).
+  const LOOK_NORTH = { x: 0, y: 0, z: 0, w: 1 }; // away from door and gate
+  const LOOK_SOUTH = { x: 0, y: 1, z: 0, w: 0 };
+  const posedEye = (quaternion) => ({
+    position: { x: 15, y: 1.8, z: 3 },
+    quaternion,
+    fov: 75,
+    aspect: 1,
+  });
+
+  function serveFixtures(puzzles) {
+    global.fetch = jest.fn((url) => {
+      const match = url.match(/^\/puzzles\/([a-zA-Z0-9_-]+)\.json$/);
+      const data = match && puzzles[match[1]];
+      if (data) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(JSON.parse(JSON.stringify(data))),
+        });
+      }
+      return Promise.resolve({ ok: false, statusText: 'Not Found' });
+    });
+  }
+
+  /** Deploy south of the player in portal-a, leading to `target`. */
+  async function deployInPortalA(target) {
+    serveFixtures({ 'portal-b': portalB, 'deploy-basic': deployBasic });
+    ctx.loadPuzzle('portal-a');
+    gameState.mode = 'PLAYING';
+    DeployManager.reset();
+    gameState.activeCleanser = target;
+    standAt(15, 3, Math.PI); // facing +z: the gate lands at (15, 0, 9)
+    DeployManager.toggle();
+    DeployManager.toggle();
+    await jest.runAllTimersAsync(); // neighbors (and a retained destination) load
+    DeployManager.update();
+    const [door] = ctx.getGates();
+    door.open();
+    return door;
+  }
+
+  afterEach(() => {
+    delete global.fetch;
+  });
+
   it('a fresh gate never shows a panel before a pass has written it', async () => {
     await activateCleanser();
     standAt(30, 39);
@@ -496,5 +546,66 @@ describe('The deployed gate never shows a blank panel', () => {
 
     expect(written.size).toBe(4);
     expect(unwrittenSamples).toBe(0);
+  });
+
+  it('with the gate out of view it costs no pass — not even the doors seen through it', async () => {
+    await deployInPortalA({ puzzleId: 'portal-a', position: { x: 18, y: 0, z: 9 } });
+    const renderer = fakeRenderer();
+    DeployManager.renderPortal(renderer, posedEye(LOOK_NORTH)); // first frame: writes all four
+    const doorPass = jest.spyOn(PortalManager, 'renderPortalsFor');
+    renderer.renderCalls.length = 0;
+
+    for (let i = 0; i < 10; i += 1) DeployManager.renderPortal(renderer, posedEye(LOOK_NORTH));
+
+    expect(renderer.renderCalls).toHaveLength(0);
+    expect(doorPass).not.toHaveBeenCalled();
+
+    // Turning to it: the doors seen through it and its panels draw THIS frame
+    DeployManager.renderPortal(renderer, posedEye(LOOK_SOUTH));
+    expect(doorPass).toHaveBeenCalledTimes(1);
+    expect(renderer.renderCalls.length).toBeGreaterThan(0);
+    doorPass.mockRestore();
+  });
+
+  it('a face out of every sightline still refreshes once its window passes', async () => {
+    await deployInPortalA({ puzzleId: 'portal-a', position: { x: 18, y: 0, z: 9 } });
+    const renderer = fakeRenderer();
+    const [pad] = padsInActiveArea();
+    const panels = pad.mesh.children.filter((child) => child._isPortalSurface);
+    DeployManager.renderPortal(renderer, posedEye(LOOK_NORTH));
+    const shown = panels.map((panel) => panel.material.map);
+
+    for (let i = 0; i < 20; i += 1) DeployManager.renderPortal(renderer, posedEye(LOOK_NORTH));
+
+    // One face a frame, after 15 frames unseen: every face moved on
+    expect(panels.filter((panel, i) => panel.material.map !== shown[i]).length).toBeGreaterThan(0);
+  });
+
+  it("freshness ages in REAL frames: the gate's mapped-eye door pass counts none", async () => {
+    const door = await deployInPortalA({ puzzleId: 'portal-a', position: { x: 18, y: 0, z: 9 } });
+    const renderer = fakeRenderer();
+    const eye = { position: { x: 15, y: 1.8, z: 3 } };
+    // The door's panel for a SOUTH approach sits on its north plane
+    const farPanel = () =>
+      door.mesh.children.find((child) => child._isPortalSurface && child.position.z < -1);
+
+    const refreshedOn = [];
+    let shown = null;
+    for (let frame = 1; frame <= 48; frame += 1) {
+      DeployManager.renderPortal(renderer, eye); // the gate's pre-pass, then...
+      PortalManager.renderPortals(renderer, eye); // ...the player's door pass
+      const { map } = farPanel().material;
+      if (shown && map !== shown) refreshedOn.push(frame);
+      shown = map;
+    }
+
+    // Nobody looks into that face: the stale rotor refreshes it once every
+    // STALE_MAX_FRAMES + 1 frames — counting one per frame, pre-pass or not
+    expect(refreshedOn.length).toBeGreaterThan(1);
+    for (let i = 1; i < refreshedOn.length; i += 1) {
+      expect(refreshedOn[i] - refreshedOn[i - 1]).toBe(
+        PortalManager.constructor.STALE_MAX_FRAMES + 1
+      );
+    }
   });
 });

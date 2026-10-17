@@ -39,6 +39,10 @@ import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 // Two tiles ahead of the player.
 const DEPLOY_DISTANCE = 2 * WORLD_SCALE;
 
+// A gate face no pass has drawn for this many frames refreshes, one a frame
+// (the doors' PortalManager.STALE_MAX_FRAMES).
+const PAD_STALE_FRAMES = 15;
+
 // Ghost + invalid-spot looks for the aiming phantom.
 const PHANTOM_OPACITY = 0.45;
 const INVALID_COLOR = 0xff5544;
@@ -117,15 +121,38 @@ class DeployManager {
    * looks at faces the player camera may never see. So door views render
    * an extra pass here for the MAPPED eye (the pad->cleanser mapping is a
    * pure translation, shared by all four faces) before the panels sample
-   * them. A destination in the ACTIVE area reuses the regular door pass
-   * (re-run afterwards for the player's real eye — each surface shows its
-   * last completed write); a NEIGHBOR destination gets its own doors
-   * rendered via renderAreaPortals and hidden again after sampling, so
-   * their mapped-eye textures never smear into other sightlines.
+   * them. A destination in the ACTIVE area reuses the regular door passes
+   * (renderPortalsFor; re-run afterwards for the player's real eye — each
+   * surface shows its last completed write); a NEIGHBOR destination gets
+   * its own doors rendered via renderAreaPortals and hidden again after
+   * sampling, so their mapped-eye textures never smear into other
+   * sightlines.
+   *
+   * A frame with no pad pass to run — every panel off screen or behind the
+   * eye, none unwritten, none stale — skips the door pre-pass too: it is
+   * drawn for those passes, and costs more than all of them together.
    */
   renderPortal(renderer, camera) {
     if (this._views.length === 0 || !this._pad) return;
     if (this._pad.area !== gameState.activeArea) return;
+    // This frame's pad passes: every panel the eye can see; every panel no
+    // pass has written yet (a fresh deploy or retarget — hidden until then,
+    // never sampled black); and the stalest face once it ages past the
+    // window — a face the eye never renders still shows in door mirrors and
+    // must not freeze in time (same doctrine as PortalManager's door faces).
+    this._padFrame = (this._padFrame || 0) + 1;
+    let due = false;
+    let stalest = null;
+    for (const view of this._views) {
+      const age = this._padFrame - (view._padFresh || 0);
+      if (view.inView(camera) || !view.written) {
+        due = true;
+      } else if (age > PAD_STALE_FRAMES && (!stalest || view._padFresh < stalest._padFresh)) {
+        stalest = view;
+      }
+    }
+    if (!due && !stalest) return;
+
     let neighborDest = null;
     if (this._viewTarget) {
       const padPos = this._pad.entity.position;
@@ -142,16 +169,9 @@ class DeployManager {
         neighborDest = destArea;
         PortalManager.renderAreaPortals(destArea, renderer, eye);
       } else {
-        PortalManager.renderPortals(renderer, eye);
+        PortalManager.renderPortalsFor(renderer, eye);
       }
     }
-    // Track which faces actually drew; a face the eye never renders still
-    // shows in door mirrors and must not freeze in time — refresh the
-    // stalest one per frame (same doctrine as PortalManager's door faces).
-    // A panel no pass has written yet (a fresh deploy or retarget) stays
-    // hidden until its first write — never sampled black — so it warms up
-    // at once.
-    this._padFrame = (this._padFrame || 0) + 1;
     for (const view of this._views) {
       if (view.render(renderer, camera)) view._padFresh = this._padFrame;
     }
@@ -161,12 +181,9 @@ class DeployManager {
         view._padFresh = this._padFrame;
       }
     }
-    const stale = this._views
-      .filter((v) => this._padFrame - (v._padFresh || 0) > 15)
-      .sort((a, b) => (a._padFresh || 0) - (b._padFresh || 0));
-    if (stale.length > 0) {
-      PortalManager.warmView(stale[0], renderer);
-      stale[0]._padFresh = this._padFrame;
+    if (stalest) {
+      PortalManager.warmView(stalest, renderer);
+      stalest._padFresh = this._padFrame;
     }
     if (neighborDest) PortalManager.hideAreaPortals(neighborDest);
   }

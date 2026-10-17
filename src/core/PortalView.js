@@ -290,6 +290,19 @@ class PortalView {
   }
 
   /**
+   * Can this panel show for `camera` this frame — the eye on its outward
+   * side, the doorway quad inside the view frustum? The same tests render()
+   * skips a pass on; bare {position} eyes have no pose, so no cull.
+   */
+  inView(camera) {
+    const eye = camera.position;
+    const { center } = this._corners;
+    const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
+    if (eyeDistance < MIN_EYE_DISTANCE) return false;
+    return !(camera.quaternion && camera.fov && !sphereInView(camera, center, PANEL_CULL_RADIUS));
+  }
+
+  /**
    * This panel's own doorway clip plane (neighbor-world space). PortalManager
    * shares the PRIMARY approach panel's plane across every panel of a door so
    * the side windows clip along the SAME axis as the approach — otherwise a
@@ -346,23 +359,18 @@ class PortalView {
    *   clip's overreach never leaks a wall sliver into any panel.
    */
   render(renderer, camera, clipOverride = null, extraWallsBehind = null) {
+    // The eye must be on the outward side of this face, and the doorway quad
+    // inside the player's view: an off-screen panel keeps last frame's
+    // texture, and passes run BEFORE the main render, so it re-renders the
+    // same frame it comes back on screen — never a stale visible frame.
+    // (Sole tradeoff: a panel watched only through ANOTHER door's view while
+    // off the player's own frustum shows frozen content — the mirror view
+    // hugs the player's sightlines, so that is a sub-degree edge case.) Test
+    // cameras are bare {position} objects: no pose, no cull.
+    if (!this.inView(camera)) return false;
     const eye = camera.position;
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
-    // The eye must be on the outward side of this face
-    if (eyeDistance < MIN_EYE_DISTANCE) return false;
-
-    // Skip the pass while the doorway quad is outside the player's view:
-    // the panel keeps last frame's texture, and passes run BEFORE the main
-    // render, so it re-renders the same frame it comes back on screen —
-    // never a stale visible frame. (Sole tradeoff: a panel watched only
-    // through ANOTHER door's view while off the player's own frustum shows
-    // frozen content — the mirror view hugs the player's sightlines, so
-    // that is a sub-degree edge case.) Test cameras are bare {position}
-    // objects: no pose, no cull.
-    if (camera.quaternion && camera.fov && !sphereInView(camera, center, PANEL_CULL_RADIUS)) {
-      return false;
-    }
 
     // Half-resolution target: every visible face of an open door re-renders
     // the whole neighbor scene each frame, and full-res targets made open
