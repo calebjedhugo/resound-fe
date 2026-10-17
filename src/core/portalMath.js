@@ -349,6 +349,22 @@ export function pyramidPlanes(apex, corners, rect, out, index = 0) {
   return index + rim.length;
 }
 
+/**
+ * Could a sphere reach into the region the first `count` planes of
+ * `planes` bound? False only when it lies wholly outside one of them (a
+ * cheap, conservative test: a sphere near a corner of the region can pass
+ * and still miss it).
+ */
+export function sphereInPlanes(planes, count, center, radius) {
+  for (let k = 0; k < count; k += 1) {
+    const o = k * PLANE_STRIDE;
+    const d =
+      planes[o] * center.x + planes[o + 1] * center.y + planes[o + 2] * center.z + planes[o + 3];
+    if (d < -radius) return false;
+  }
+  return true;
+}
+
 // Scratch polygons for clipQuad, (u, v) pairs: a convex quad clipped by k
 // planes has at most 4 + k corners
 const clipFrom = new Float64Array(64);

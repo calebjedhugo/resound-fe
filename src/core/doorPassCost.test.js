@@ -510,6 +510,17 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     expect(steadyWrites(renderer, panelOf(door('d1'), 'south'))).toBeGreaterThan(0);
   });
 
+  it('a door at the edge of a view is swept: its cell may lie outside, a panel reaching in', () => {
+    // From far off, A2's view narrows to a sliver: D1's cell center lies
+    // beyond its edge, the west end of D1's south panel within it. (The
+    // screen's edge at A1's east edge: no side panel of A1 on screen)
+    const door = enter(...DOOR_A, ...D);
+    const renderer = createRecordingRenderer();
+    drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 25 * WORLD_SCALE, cutting(panelDistance(10), 1)));
+
+    expect(steadyWrites(renderer, panelOf(door('d1'), 'south'))).toBeGreaterThan(0);
+  });
+
   it('a door that shows itself in its own view keeps that whole view in sight', () => {
     // Looking north into P1 shows the view north out of P2 — P1 itself, far
     // down the line: P1's picture repeats inside P1, the part off screen

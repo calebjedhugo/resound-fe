@@ -55,6 +55,7 @@ import {
   DOORWAY_OFFSET,
   PANEL_EPSILON,
   clipQuad,
+  sphereInPlanes,
   viewPlanes,
 } from 'core/portalMath';
 import { getDistance } from 'core/utils';
@@ -87,6 +88,9 @@ const SIGHT_PLANES = 6;
 
 // A sight through all of a panel (quad coordinates)
 const WHOLE_PANEL = Object.freeze({ u0: 0, u1: 1, v0: 0, v1: 1 });
+
+// Every panel of a door lies within this distance of its cell's center
+const CELL_REACH = (WORLD_SCALE * Math.sqrt(3)) / 2;
 
 // Who drew what a face shows, when it was not an exterior pass's own eye
 // (that eye object itself is recorded): see _restsThisFrame
@@ -155,6 +159,7 @@ class PortalManager {
     this._sightRect = { u0: 0, u1: 1, v0: 0, v1: 1 };
     this._sightPart = { u0: 0, u1: 1, v0: 0, v1: 1 };
     this._screenPlanes = new Float64Array(4 * 4);
+    this._cellCenter = { x: 0, y: 0, z: 0 };
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
@@ -789,6 +794,8 @@ class PortalManager {
           if (!gate.isOpen && !(gate._fade > 0)) continue; // eslint-disable-line no-continue
           const faces = this._views.get(gate);
           if (!faces) continue; // eslint-disable-line no-continue
+          // Out of every sight, cell and all: none of its panels to clip
+          if (!this._cellInSight(gate, sights)) continue; // eslint-disable-line no-continue
           let seen = null;
           for (const f of FACINGS) {
             const view = faces.get(f);
@@ -880,6 +887,18 @@ class PortalManager {
       }
     }
     view.sightPlanes(apex, rect, planes);
+  }
+
+  /** Could any of `sights` reach into `gate`'s cell (its bounding sphere)? */
+  _cellInSight(gate, sights) {
+    const center = this._cellCenter;
+    center.x = gate.position.x;
+    center.y = gate.position.y + WORLD_SCALE / 2;
+    center.z = gate.position.z;
+    for (const sight of sights) {
+      if (sphereInPlanes(sight.planes, SIGHT_PLANES, center, CELL_REACH)) return true;
+    }
+    return false;
   }
 
   /**
