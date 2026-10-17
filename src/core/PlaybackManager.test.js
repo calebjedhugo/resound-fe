@@ -10,6 +10,7 @@
  * Note: Tests are async because tick() uses jest.runAllTimersAsync()
  * to properly handle async instrument playback.
  */
+import PlaybackManager from 'core/PlaybackManager';
 
 describe('Playing recorded songs', () => {
   describe('playing from inventory slots', () => {
@@ -261,6 +262,99 @@ describe('Playing recorded songs', () => {
       const emitted = ctx.getEmittedNotes();
       expect(emitted.length).toBeGreaterThanOrEqual(1);
       expect(emitted[0].pitch).toBe('C4');
+    });
+  });
+
+  describe('resetting (leaving the world)', () => {
+    // ctx.tick() ends by running EVERY pending timer, which would play the
+    // whole tape before the reset; these tests step the timers directly to
+    // reset partway through a performance.
+    const THREE_QUARTERS = [
+      { pitch: 'C4', length: '1/4' },
+      { pitch: 'E4', length: '1/4' },
+      { pitch: 'G4', length: '1/4' },
+    ];
+
+    async function startOnTheBeat(song) {
+      ctx.loadPuzzle('playback-basic');
+      ctx.setInventorySlot(0, song);
+      ctx.setActiveSlot(0);
+      await ctx.advanceBeats(1);
+      ctx.clearEmittedNotes();
+      ctx.pressKey('space');
+      await jest.advanceTimersByTimeAsync(100); // the first note sounds
+    }
+
+    it('cancels a performance still waiting for its beat', async () => {
+      ctx.loadPuzzle('playback-basic');
+      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
+      ctx.setActiveSlot(0);
+      await ctx.advanceMs(250); // mid-beat: the performance waits for the next
+      ctx.clearEmittedNotes();
+
+      ctx.pressKey('space');
+      PlaybackManager.reset();
+      await ctx.advanceBeats(2);
+
+      expect(ctx.getEmittedNotes()).toHaveLength(0);
+      expect(PlaybackManager.getIsPlaying()).toBe(false);
+    });
+
+    it('stops a performance under way: no later note is heard, and the one it was waiting on is silent', async () => {
+      await startOnTheBeat(THREE_QUARTERS);
+      expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4']);
+
+      const piano = PlaybackManager.getPlayerInstrument();
+      const startedAtVolume = [];
+      const startNote = piano.startNote.bind(piano);
+      jest.spyOn(piano, 'startNote').mockImplementation((...args) => {
+        startedAtVolume.push(piano.volumeMultiplier);
+        startNote(...args);
+      });
+
+      PlaybackManager.reset();
+      await ctx.advanceBeats(4);
+
+      expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4']);
+      // resound-sound's stop() still lets out the note the play loop was
+      // sleeping on (E4): it starts muted
+      expect(startedAtVolume).toEqual([0]);
+    });
+
+    it('plays the next performance at full volume', async () => {
+      await startOnTheBeat(THREE_QUARTERS);
+      PlaybackManager.reset();
+      await ctx.advanceBeats(4);
+      ctx.clearEmittedNotes();
+
+      ctx.pressKey('space');
+      await ctx.advanceBeats(4);
+
+      expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4', 'E4', 'G4']);
+      expect(PlaybackManager.getPlayerInstrument().volumeMultiplier).toBe(1);
+    });
+
+    it("never lets an old performance's end cut the next one short", async () => {
+      await startOnTheBeat([{ pitch: 'C4', length: '1/1' }]); // 2 s at 120 BPM
+      await jest.advanceTimersByTimeAsync(500);
+      PlaybackManager.reset();
+
+      ctx.pressKey('space'); // a new performance, 2 s from now
+      await jest.advanceTimersByTimeAsync(1500); // past the old one's end
+
+      expect(PlaybackManager.getIsPlaying()).toBe(true);
+      ctx.pressKey('space'); // still one performance at a time
+      await ctx.advanceBeats(6);
+      expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4', 'C4']);
+    });
+
+    it('stops the tape when a new world is entered', async () => {
+      await startOnTheBeat(THREE_QUARTERS);
+
+      ctx.loadPuzzle('playback-basic');
+      await ctx.advanceBeats(4);
+
+      expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4']);
     });
   });
 

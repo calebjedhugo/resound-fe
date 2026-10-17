@@ -22,9 +22,18 @@ class PlaybackManager {
   static lastPlaybackStartMs = 0;
   static lastPlaybackEndMs = 0;
 
+  // The performance in flight's start and end timers (reset cancels them)
+  static startTimer = null;
+  static endTimer = null;
+
   // Set up note callback to emit to ListeningManager and track current note
   static {
     this.playerInstrument.noteCallback = (noteEvent) => {
+      // A stopped performance still sounds the one note it was waiting on
+      // (resound-sound's stop() lets it out); reset muted it, and it must
+      // not reach the next world's listeners either
+      if (!this.playerInstrument.playbackState.isPlaying) return;
+
       // Track current note for harmony analysis
       this.playerInstrument.currentNote = noteEvent;
 
@@ -91,9 +100,19 @@ class PlaybackManager {
   }
 
   /**
-   * Reset playback state (level change / reset).
+   * Reset playback state (level change / reset): a performance under way, or
+   * still waiting for its beat, stops here instead of playing on into the
+   * next world.
    */
   static reset() {
+    clearTimeout(this.startTimer);
+    clearTimeout(this.endTimer);
+    this.startTimer = null;
+    this.endTimer = null;
+    this.playerInstrument.stop();
+    // Silences the note stop() still lets out; the next performance turns
+    // it back up as it starts
+    this.playerInstrument.updateVolume(0);
     this.isPlaying = false;
   }
 
@@ -140,7 +159,9 @@ class PlaybackManager {
     this.lastPlaybackStartMs = Date.now() + startDelay;
 
     // Wait for startDelay, then begin playback
-    setTimeout(() => {
+    this.startTimer = setTimeout(() => {
+      this.startTimer = null;
+      this.playerInstrument.updateVolume(1); // a reset muted it
       // Play the song (offsets already injected into songData)
       this.playerInstrument.play({
         data: songData,
@@ -153,7 +174,8 @@ class PlaybackManager {
     const totalDuration = this.calculateSongDuration(songData, tempo);
     const pos = { ...gameState.player.position };
     const range = this.playbackSourceRange;
-    setTimeout(() => {
+    this.endTimer = setTimeout(() => {
+      this.endTimer = null;
       this.isPlaying = false;
       this.lastPlaybackEndMs = Date.now();
 

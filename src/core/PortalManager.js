@@ -125,6 +125,8 @@ class PortalManager {
 
   /** Tear the whole world down (leaving for the menu). */
   reset() {
+    // A tape still playing must not play on into the next world
+    PlaybackManager.reset();
     this._generation += 1;
     this._disposeViews();
     this._setActiveArea(null);
