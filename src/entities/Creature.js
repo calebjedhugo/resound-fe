@@ -5,6 +5,7 @@ import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import PlaybackManager from 'core/PlaybackManager';
 import SongMatcher from 'core/SongMatcher';
 import resolveSlide from 'core/SlideResolver';
+import memoizeOnEntityList from 'core/entityListMemo';
 import { messiaenColourCached, midiOf, registerLuminosity } from 'core/messiaenColour';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
@@ -27,36 +28,14 @@ import CreatureLook from 'entities/CreatureLook';
 // instrument runs on timers, the clock on frames) never reads as silence.
 const NOTE_END_GRACE_BEATS = 0.08;
 
-// Per entity list (an area's), the entities in it that can ever sound: the
-// ones with an instrument, which only their constructor gives them
-// (creatures, fountains). Walls and gates are most of a list and never
-// sound, and forEachSoundSource runs several times per frame per singing
-// creature, so it walks this instead. Kept in list order (the order sources
-// are visited in) and rebuilt whenever the list's contents change, checked
-// entry by entry by identity — far cheaper than reading every entity.
-const soundCapableByList = new WeakMap(); // entity list -> { snapshot, sources }
-
-function soundCapable(entities) {
-  let entry = soundCapableByList.get(entities);
-  if (!entry) {
-    entry = { snapshot: [], sources: [] };
-    soundCapableByList.set(entities, entry);
-  }
-  const { snapshot, sources } = entry;
-  let unchanged = snapshot.length === entities.length;
-  for (let i = 0; unchanged && i < entities.length; i += 1) {
-    unchanged = snapshot[i] === entities[i];
-  }
-  if (!unchanged) {
-    snapshot.length = 0;
-    sources.length = 0;
-    for (let i = 0; i < entities.length; i += 1) {
-      snapshot.push(entities[i]);
-      if (entities[i].instrument) sources.push(entities[i]);
-    }
-  }
-  return sources;
-}
+// The entities of a list (an area's) that can ever sound: the ones with an
+// instrument, which only their constructor gives them (creatures,
+// fountains). Walls and gates are most of a list and never sound, and
+// forEachSoundSource runs several times per frame per singing creature, so
+// it walks this instead — in list order, the order sources are visited in.
+const soundCapable = memoizeOnEntityList((entities) =>
+  entities.filter((entity) => entity.instrument)
+);
 
 class Creature extends Entity {
   constructor(position, data = {}) {

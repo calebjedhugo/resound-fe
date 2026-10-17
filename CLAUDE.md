@@ -78,6 +78,11 @@ AudioContexts and two instrument registries.
 - **`Entity.dispose` frees the WHOLE mesh tree** (Group roots, child meshes).
   A geometry/material shared across instances (module-level statics, e.g.
   `Wall`'s box) MUST set `userData.shared = true` or the first unload frees it
+- **Per-frame paths memoize what they pick out of an area's entity list**
+  (`core/entityListMemo`: collision's blockers, a creature's possible sound
+  sources), re-derived whenever the list's contents change. So walls, gates
+  and fountains NEVER move once placed (collision keeps their positions),
+  and only a constructor gives an entity an `instrument`
 
 ---
 

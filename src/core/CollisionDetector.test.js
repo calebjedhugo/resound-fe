@@ -173,3 +173,63 @@ describe('Elevation-aware collision', () => {
     expect(CollisionDetector.checkCollision(creatureA.position, 0.9, creatureA.id)).toBe(true);
   });
 });
+
+/**
+ * Collision queries keep what they can about an area's entities between
+ * calls (which ones can block, and where the immovable ones stand).
+ * Whatever does change must count from the very next query.
+ */
+describe('Collision in a changing world', () => {
+  const song = [{ pitch: 'C4', length: '1/4' }];
+  // Open ground in elevation-basic, west of the platform: grid (2,10) and (2,12)
+  const here = { x: 2 * WORLD_SCALE, y: 0, z: 10 * WORLD_SCALE };
+  const there = { x: 2 * WORLD_SCALE, y: 0, z: 12 * WORLD_SCALE };
+
+  it('a creature blocks where it is now, not where it was', () => {
+    ctx.loadPuzzle('elevation-basic');
+    const creature = ctx.addCreature({ position: { ...here }, song });
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    creature.position.z = there.z;
+
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+    expect(CollisionDetector.checkCollision(there, 0.4)).toBe(true);
+  });
+
+  it('a blocker added, or swapped for another, blocks from the next query', () => {
+    ctx.loadPuzzle('elevation-basic');
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+
+    const gate = ctx.addGate({ position: { ...here }, song });
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    // The same number of entities, a different crowd
+    ctx.getEntityManager().remove(gate.id);
+    ctx.addFountain({ position: { ...there }, song });
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+    expect(CollisionDetector.checkCollision(there, 0.4)).toBe(true);
+  });
+
+  it("a gate's open state counts at every query", () => {
+    ctx.loadPuzzle('elevation-basic');
+    const gate = ctx.addGate({ position: { ...here }, song });
+    gate.open();
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+
+    gate.close();
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    gate.open();
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+  });
+
+  it('a wide mover touches a wall from farther away than a narrow one', () => {
+    ctx.loadPuzzle('elevation-basic');
+    // 6 units west of the wall at grid (4,4), at its elevation: the wall's
+    // box edge is 4.5 away
+    const besideWall = { x: 4 * WORLD_SCALE - 6, y: ELEVATION_HEIGHT, z: 4 * WORLD_SCALE };
+
+    expect(CollisionDetector.checkCollision(besideWall, 0.9)).toBe(false);
+    expect(CollisionDetector.checkCollision(besideWall, 5)).toBe(true);
+  });
+});

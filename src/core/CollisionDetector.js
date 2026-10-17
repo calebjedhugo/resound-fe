@@ -1,4 +1,5 @@
 import gameState from 'core/GameState';
+import memoizeOnEntityList from 'core/entityListMemo';
 import {
   ELEVATION_HEIGHT,
   ELEVATION_COLLISION_THRESHOLD,
@@ -7,6 +8,34 @@ import {
 
 // Fountain collision radius — matches the radius-1.5 cylinder in Fountain.createMesh
 const FOUNTAIN_COLLISION_RADIUS = 1.5;
+
+// Wall and gate boxes are 3x3 (they fill their cell)
+const BOX_HALF_SIZE = 1.5;
+
+// How far a static blocker's footprint reaches from its centre, and the
+// margin on the cheap reject in checkCollision (so float rounding in the
+// exact tests is never what decides)
+const STATIC_REACH = Math.max(BOX_HALF_SIZE, FOUNTAIN_COLLISION_RADIUS);
+const REJECT_SLACK = 0.5;
+
+// Per entity list, what a collision query walks: the STATIC blockers
+// (walls, gates, fountains — nothing ever moves one; a gate's open state is
+// still read per query) with their centres packed flat for a cheap reject,
+// and the creatures, which move, as they are. Everything else never blocks.
+const blockersOf = memoizeOnEntityList((entities) => {
+  const statics = [];
+  const centres = [];
+  const creatures = [];
+  for (const entity of entities) {
+    if (entity.type === 'creature') {
+      creatures.push(entity);
+    } else if (entity.type === 'wall' || entity.type === 'gate' || entity.type === 'fountain') {
+      statics.push(entity);
+      centres.push(entity.position.x, entity.position.z);
+    }
+  }
+  return { statics, centres: Float64Array.from(centres), creatures };
+});
 
 /**
  * CollisionDetector - Handles collision detection between entities
@@ -49,13 +78,6 @@ class CollisionDetector {
   static checkCollision(position, radius, ignoreId = null, area = null, fromPosition = null) {
     const entities = area ? area.entities : gameState.entities;
 
-    // A blocker must overlap the mover AND share its layer. Both tests are
-    // pure, so the cheap overlap runs first and layers (a grid + ramp lookup
-    // each — once per entity per query, they were most of a query's cost)
-    // are derived only for an entity that actually overlaps: the same
-    // verdict. The mover's own layer is derived on first need.
-    let positionElevation = null;
-
     // Creatures collide with the PLAYER's body (symmetric with the player
     // colliding with creatures): a lured creature parks at contact distance
     // instead of entering the player's space — overlapping bodies wedge the
@@ -72,32 +94,54 @@ class CollisionDetector {
         PLAYER_COLLISION_RADIUS
       )
     ) {
-      positionElevation = this.getElevationForPosition(position, area);
       const sameLevel =
-        Math.abs(positionElevation - (gameState.player.elevation || 0)) <=
-        ELEVATION_COLLISION_THRESHOLD;
+        Math.abs(
+          this.getElevationForPosition(position, area) - (gameState.player.elevation || 0)
+        ) <= ELEVATION_COLLISION_THRESHOLD;
       if (sameLevel) return true;
     }
 
-    // Check against all entities (an indexed loop: this runs for every
-    // candidate move of every mover, every frame)
-    for (let i = 0; i < entities.length; i += 1) {
-      const entity = entities[i];
-      // Skip self, and anything the mover's body doesn't overlap
-      if (entity.id === ignoreId) continue;
-      if (!this.overlapsBlocker(entity, position, radius, ignoreId, fromPosition)) continue;
-
-      // Skip entities at different elevations
-      if (positionElevation === null) {
-        positionElevation = this.getElevationForPosition(position, area);
+    // Check against the blocking entities (indexed loops: this runs for
+    // every candidate move of every mover, every frame). A static blocker
+    // whose centre is beyond its reach on either axis cannot touch the mover,
+    // so most of the list costs two subtractions.
+    const { statics, centres, creatures } = blockersOf(entities);
+    const reach = STATIC_REACH + Math.abs(radius) + REJECT_SLACK;
+    for (let i = 0; i < statics.length; i += 1) {
+      if (
+        Math.abs(position.x - centres[2 * i]) < reach &&
+        Math.abs(position.z - centres[2 * i + 1]) < reach &&
+        this.blocksOnLayer(statics[i], position, radius, ignoreId, area, fromPosition)
+      ) {
+        return true;
       }
-      const entityElevation = this.getElevationForPosition(entity.position, area);
-      if (Math.abs(positionElevation - entityElevation) > ELEVATION_COLLISION_THRESHOLD) continue;
-
-      return true;
+    }
+    for (let i = 0; i < creatures.length; i += 1) {
+      if (this.blocksOnLayer(creatures[i], position, radius, ignoreId, area, fromPosition)) {
+        return true;
+      }
     }
 
     return false;
+  }
+
+  /**
+   * Does `entity` block the mover? Arguments as in checkCollision.
+   * @returns {boolean}
+   */
+  static blocksOnLayer(entity, position, radius, ignoreId, area, fromPosition) {
+    // Skip self, and anything the mover's body doesn't overlap
+    if (entity.id === ignoreId) return false;
+    if (!this.overlapsBlocker(entity, position, radius, ignoreId, fromPosition)) return false;
+
+    // Skip entities at different elevations. Both tests are pure, so the
+    // cheap overlap runs first and layers (a grid + ramp lookup each) are
+    // derived only for an entity that actually overlaps: the same verdict.
+    const positionElevation = this.getElevationForPosition(position, area);
+    const entityElevation = this.getElevationForPosition(entity.position, area);
+    if (Math.abs(positionElevation - entityElevation) > ELEVATION_COLLISION_THRESHOLD) return false;
+
+    return true;
   }
 
   /**
@@ -109,7 +153,7 @@ class CollisionDetector {
   static overlapsBlocker(entity, position, radius, ignoreId, fromPosition) {
     // Check collision based on entity type
     if (entity.type === 'wall') {
-      return this.checkCircleBoxCollision(position, radius, entity.position, 1.5);
+      return this.checkCircleBoxCollision(position, radius, entity.position, BOX_HALF_SIZE);
     }
     if (entity.type === 'gate') {
       // Only collide with closed gates — except around the PLAYER while
@@ -124,9 +168,10 @@ class CollisionDetector {
       const occupantEscaping =
         ignoreId === null &&
         fromPosition !== null &&
-        this.checkCircleBoxCollision(fromPosition, radius, entity.position, 1.5);
+        this.checkCircleBoxCollision(fromPosition, radius, entity.position, BOX_HALF_SIZE);
       return (
-        !occupantEscaping && this.checkCircleBoxCollision(position, radius, entity.position, 1.5)
+        !occupantEscaping &&
+        this.checkCircleBoxCollision(position, radius, entity.position, BOX_HALF_SIZE)
       );
     }
     if (entity.type === 'creature') {
