@@ -75,6 +75,9 @@ AudioContexts and two instrument registries.
 - All entities extend `Entity.js` base class
 - Implement `update(deltaTime)` and `render()` methods
 - EntityManager handles lifecycle (add/remove/update/render)
+- **`Entity.dispose` frees the WHOLE mesh tree** (Group roots, child meshes).
+  A geometry/material shared across instances (module-level statics, e.g.
+  `Wall`'s box) MUST set `userData.shared = true` or the first unload frees it
 
 ---
 
@@ -127,6 +130,15 @@ instead of "fixing" it.
 - **`interval` = beats between song STARTS**, not the rest gap — it must
   exceed the song's length or the creature sings continuously (and never
   moves, and clean recording takes become nearly impossible)
+- **Look = ball lightning, visual only** (`entities/CreatureLook.js`, DESIGN.md
+  "Creature look"): floats (mesh placed only via `placeMesh`); colour from the harmony
+  it hears via `forEachSoundSource` — the forces' source model; never add a second one
+- **Creature materials are SHARED** (one body + one halo `ShaderMaterial`,
+  `userData.shared`): per-creature state lives in `look._uniforms` and is
+  copied in by each mesh's `onBeforeRender` — never write a uniform on the
+  material itself. Shader programs compile behind the StartGate
+  (`core/ShaderPrewarm`); a new material config that first draws mid-game
+  (or in a portal pass) hitches unless it is drawn there too
 
 ### Gates & elevation
 - **Gates LATCH**: they open on the COMPLETED song, stay open with NO timer,
@@ -224,6 +236,22 @@ instead of "fixing" it.
   portal pass). **A batched wall entity has `mesh: null`** — never assume a
   wall has a mesh (collision/elevation/editor use entity data and don't
   care); `Area.staticWalls` holds the batch.
+- **ONE pass context for every scene draw** (`core/passContext.js`; ruled
+  2026-10-16). three keys a material's shader program by clip-plane COUNT,
+  output colour space, instancing and the scene's lights; a material drawn
+  under two contexts re-derives its program at EVERY pass switch (~200/frame
+  in The Star ≈ 4 ms/frame at 4x CPU, measured 2026-10-12). So: every pass
+  binds exactly `CLIP_PLANE_COUNT` (2) planes — the main view no-op planes
+  (`renderMainView`), a PortalView `[shared, own]` (approach panel: own
+  twice); every target that draws world scenes is a `createSceneTarget`
+  (three's internal `isXRRenderTarget` flag + sRGB + RGBA8: it renders in
+  the CANVAS colour space, so doors blend/quantize like the main view) and a
+  material showing one uses `showStoredTexels` (no second encode);
+  ShaderPrewarm warms that single context; walls get per-AREA materials
+  (`Wall.createMaterials`, freed by `Area.dispose`), batch apart from single
+  walls. **three is pinned to 0.153.x for this** (`^0.153.0`): re-verify
+  passContext before any upgrade. Check: `__resoundDebug.countProgramDerivations()`
+  ≈ 0/frame
 
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +
@@ -238,8 +266,9 @@ instead of "fixing" it.
 - `ui/StartGate.js` freezes the world per level start until a key/click
 - Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
   `syncCameraToPlayer` for scripted browser verification (reposition +
-  screenshot), and `setTapImpulse(true)` to re-enable the tap-impulse
-  affordance
+  screenshot), `setTapImpulse(true)` to re-enable the tap-impulse
+  affordance, and `countProgramDerivations(frames)` (shader-program
+  re-derivations per frame; see "ONE pass context")
 
 ### Notation Coordinate System
 - All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model
@@ -303,4 +332,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-07-17 — static wall batching (per-area InstancedMesh; portal-jamb walls stay individual)*
+*Last Updated: 2026-10-16 — one pass context: 2 clip planes everywhere, portal targets render sRGB (isXRRenderTarget), per-area wall materials*

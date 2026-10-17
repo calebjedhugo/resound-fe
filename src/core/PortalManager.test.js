@@ -11,6 +11,7 @@
  */
 import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
+import { CLIP_PLANE_COUNT } from 'core/passContext';
 import CollisionDetector from 'core/CollisionDetector';
 import { WORLD_SCALE, CLOSED_DOOR_LEAK_DISTANCE } from 'core/constants';
 import { getDistance } from 'core/utils';
@@ -327,7 +328,10 @@ describe('PortalManager see-through rendering', () => {
 
     PortalManager.renderPortals(renderer, camera);
 
-    expect(renderer.renderCalls[0].clipping).toHaveLength(1);
+    // A pass with no shared plane (the first frame's warm-ups) clips along
+    // its own doorway plane alone — bound in both slots, like every pass
+    const [shared, own] = renderer.renderCalls[0].clipping;
+    expect(shared).toBe(own);
     expect(renderer.clippingPlanes).toHaveLength(0); // restored after the pass
   });
 
@@ -549,6 +553,52 @@ describe('Recursive mirrors render frame-fresh (the tunnel is never laggy)', () 
   });
 });
 
+describe('Every portal pass binds the same NUMBER of clip planes (2026-10-12)', () => {
+  // three keys a material's shader program by its clip-plane COUNT: a
+  // material drawn under one plane in one pass and two in the next
+  // re-derived its program at every switch (~100 times a frame in The Star).
+  // Player panels, side panels, warm-ups, the mirror sweep and the stale
+  // rotor must all bind CLIP_PLANE_COUNT planes.
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it('single-plane and shared+own passes alike, on every path, bind CLIP_PLANE_COUNT planes', () => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-two-pairs');
+    for (const g of ctx.getGates()) g.open();
+    const counts = new Set();
+    const kinds = new Set();
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render() {
+        const planes = this.clippingPlanes;
+        counts.add(planes.length);
+        kinds.add(planes[0] === planes[1] ? 'own plane only' : 'shared + own');
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    // Due south of pair1-a (its view shows pair2-a: the mirror sweep runs),
+    // then SE of it (the east side panel adds its own plane to the shared
+    // one); enough frames at each for the stale rotor to refresh faces
+    const eyes = [
+      { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE },
+      { x: 5 * WORLD_SCALE + 3.1, y: 1.8, z: 7 * WORLD_SCALE },
+    ];
+    for (const position of eyes) {
+      for (let i = 0; i < PortalManager.constructor.STALE_MAX_FRAMES + 2; i += 1) {
+        PortalManager.renderPortals(renderer, { position });
+      }
+    }
+
+    expect(kinds).toEqual(new Set(['own plane only', 'shared + own']));
+    expect([...counts]).toEqual([CLIP_PLANE_COUNT]);
+    expect(renderer.clippingPlanes).toHaveLength(0); // restored after the passes
+  });
+});
+
 describe('Cleanser under a door mirrors to the partner face (one door, one tile)', () => {
   // portal-b with a cleanser sitting ON its south-door cell (5, 7) — the
   // portal panel can only paint beyond the window plane, so without a
@@ -653,11 +703,12 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
       setRenderTarget() {},
       render() {
         seen.push({
-          // The approach pass carries ONE clip plane (shared == own); side
-          // panels carry two. Side panels legitimately show almost nothing
-          // of walls near the doorway (back-culled or clipped to slivers),
-          // so per-wall visibility is asserted on the approach pass.
-          isApproach: this.clippingPlanes.length === 1,
+          // The approach pass clips along ONE plane (shared == own, bound
+          // in both slots); side panels add their own. Side panels
+          // legitimately show almost nothing of walls near the doorway
+          // (back-culled or clipped to slivers), so per-wall visibility is
+          // asserted on the approach pass.
+          isApproach: this.clippingPlanes[0] === this.clippingPlanes[1],
           behind: walls.behind.mesh.visible,
           frame: walls.frame.mesh.visible,
           interior: walls.interior.mesh.visible,
@@ -866,7 +917,7 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
       setRenderTarget() {},
       render() {
         seen.push({
-          isApproach: this.clippingPlanes.length === 1, // shared == own
+          isApproach: this.clippingPlanes[0] === this.clippingPlanes[1], // shared == own
           far: farWall.mesh.visible,
           diag: diagWall.mesh.visible,
         });
@@ -919,8 +970,8 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
 
     PortalManager.renderPortals(renderer, camera);
 
-    const approach = renderer.renderCalls.filter((c) => c.clipping.length === 1);
-    const sides = renderer.renderCalls.filter((c) => c.clipping.length === 2);
+    const approach = renderer.renderCalls.filter((c) => c.clipping[0] === c.clipping[1]);
+    const sides = renderer.renderCalls.filter((c) => c.clipping[0] !== c.clipping[1]);
     expect(approach.length).toBeGreaterThan(0);
     expect(sides.length).toBeGreaterThan(0);
     const [sharedPlane] = approach[0].clipping;
@@ -1068,6 +1119,23 @@ describe('PortalManager live neighbor (stage 3)', () => {
     expect(viaDoor.extraDistance).toBeCloseTo(
       getDistance(creature.position, partnerGate.position) + CLOSED_DOOR_LEAK_DISTANCE
     );
+  });
+
+  it('cross-seam sources follow the far side from one frame to the next', () => {
+    // Seam sources are gathered once per frame (every singing creature asks
+    // several times a frame); a new frame starts with the world clock's tick
+    creature.sing();
+    const pitchD4 = (s) => s.note.pitch === 'D4';
+    const before = PortalManager.seamSourcesFor(gameState.activeArea).find(pitchD4).extraDistance;
+
+    creature.position.x += WORLD_SCALE;
+    gameState.musicalClock.update(1 / 60);
+
+    const after = PortalManager.seamSourcesFor(gameState.activeArea).find(pitchD4).extraDistance;
+    expect(after).toBeCloseTo(
+      getDistance(creature.position, partnerGate.position) + CLOSED_DOOR_LEAK_DISTANCE
+    );
+    expect(after).not.toBeCloseTo(before);
   });
 
   it('one clock: tempo blends toward a mismatched neighbor near its door', async () => {
@@ -1432,7 +1500,7 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
         // primed frame 2 is what the assertions read anyway).
         if (!farPanelSurface) return;
         snaps.push({
-          isApproach: this.clippingPlanes.length === 1, // shared == own plane
+          isApproach: this.clippingPlanes[0] === this.clippingPlanes[1], // shared == own plane
           farPanel: farPanelSurface.visible,
           ownSides: own.filter((c) => c.position.x !== 0).map((c) => c.visible),
           partnerVisible: doorOut.mesh.children.filter((c) => c._isPortalSurface && c.visible)

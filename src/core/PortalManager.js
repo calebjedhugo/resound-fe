@@ -709,11 +709,33 @@ class PortalManager {
    * doorway: the returned position is the door on `area`'s side (harmony
    * forces pull/push toward the door — that's where the sound comes from)
    * and extraDistance carries the far-side leg (+ closed-door leak).
+   *
+   * Asked several times per frame per singing creature (every physics pass
+   * plus the look's hearing), so the answer is built ONCE per area per
+   * simulation frame and reused. The frame token is the world clock's beat:
+   * it advances once per frame before any area updates (main.js and the
+   * test harness alike) and is identical for every call within the frame —
+   * at worst a far-side creature that moved earlier this frame is seen at
+   * its start-of-frame spot. The list and its entries are recycled: read
+   * them right away, never keep them.
    * @returns {Array<{note, doorPosition, size, extraDistance}>}
    */
   seamSourcesFor(area) {
     if (this._doors.length === 0) return NO_SOURCES;
-    const sources = [];
+    const clock = gameState.musicalClock;
+    if (!this._seamCache) this._seamCache = new WeakMap(); // area -> entry
+    let entry = this._seamCache.get(area);
+    if (!entry) {
+      entry = { clock: null, beat: NaN, sources: [], pool: [] };
+      this._seamCache.set(area, entry);
+    }
+    if (clock && entry.clock === clock && entry.beat === clock.getCurrentBeat()) {
+      return entry.sources;
+    }
+    entry.clock = clock || null;
+    entry.beat = clock ? clock.getCurrentBeat() : NaN;
+    const { sources, pool } = entry;
+    sources.length = 0;
     for (const door of this._doors) {
       let localGate;
       let remoteGate;
@@ -737,24 +759,30 @@ class PortalManager {
       for (const entity of remoteArea.entities) {
         if (!entity.instrument || !entity.instrument.playbackState.isPlaying) continue;
         if (!entity.currentNote) continue;
-        sources.push({
-          note: entity.currentNote,
-          doorPosition: localGate.position,
-          size: entity.size || DEFAULT_CREATURE_SIZE,
-          extraDistance: getDistance(entity.position, remoteGate.position) + leak,
-        });
+        if (pool.length === sources.length) {
+          pool.push({ note: null, doorPosition: null, size: 0, extraDistance: 0 });
+        }
+        const source = pool[sources.length];
+        source.note = entity.currentNote;
+        source.doorPosition = localGate.position;
+        source.size = entity.size || DEFAULT_CREATURE_SIZE;
+        source.extraDistance = getDistance(entity.position, remoteGate.position) + leak;
+        sources.push(source);
       }
 
       // The player counts as a source in whichever area they stand in
       if (remoteArea === this._activeArea) {
         const playerInstrument = PlaybackManager.getPlayerInstrument();
         if (playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
-          sources.push({
-            note: playerInstrument.currentNote,
-            doorPosition: localGate.position,
-            size: PLAYER_SIZE,
-            extraDistance: getDistance(gameState.player.position, remoteGate.position) + leak,
-          });
+          if (pool.length === sources.length) {
+            pool.push({ note: null, doorPosition: null, size: 0, extraDistance: 0 });
+          }
+          const source = pool[sources.length];
+          source.note = playerInstrument.currentNote;
+          source.doorPosition = localGate.position;
+          source.size = PLAYER_SIZE;
+          source.extraDistance = getDistance(gameState.player.position, remoteGate.position) + leak;
+          sources.push(source);
         }
       }
     }

@@ -226,3 +226,63 @@ describe('EntityManager', () => {
     });
   });
 });
+
+/*
+ * Leaving an area frees every GPU resource its entities own — the whole mesh
+ * tree, not just the root (a Group root or child meshes used to leak on every
+ * area unload: Floor's planes/slabs, Ramp's marker posts) — and never the
+ * module-wide resources shared across instances.
+ */
+/* eslint-disable import/first -- section header for the suite below; imports
+   are hoisted by babel-jest so the placement is cosmetic */
+import Wall from 'entities/Wall';
+/* eslint-enable import/first */
+
+describe('Freeing GPU resources when entities go away', () => {
+  // Every geometry/material in an entity's mesh tree, each paired with a
+  // dispose spy
+  const resourcesOf = (entity) => {
+    const found = [];
+    const visit = (object) => {
+      [object.geometry, object.material].forEach((resource) => {
+        if (resource && !found.some((f) => f.resource === resource)) {
+          found.push({ resource, dispose: jest.spyOn(resource, 'dispose') });
+        }
+      });
+      (object.children || []).forEach(visit);
+    };
+    visit(entity.mesh);
+    return found;
+  };
+
+  it('frees raised floors and ramp marker posts when the world moves on', () => {
+    ctx.loadPuzzle('elevation-ramp');
+    const floor = ctx.getEntityManager().getByType('floor')[0];
+    const ramp = ctx.getEntityManager().getByType('ramp')[0];
+    const floorResources = resourcesOf(floor);
+    const rampResources = resourcesOf(ramp);
+    // Ground plane + one raised slab, each with geometry + material; the
+    // ramp's wedge plus its (shared-between-posts) post geometry + material
+    expect(floorResources).toHaveLength(4);
+    expect(rampResources).toHaveLength(4);
+
+    ctx.loadPuzzle('recording-basic'); // tears the old world down
+
+    [...floorResources, ...rampResources].forEach(({ dispose }) => {
+      expect(dispose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('never frees the wall box every wall shares', () => {
+    ctx.loadPuzzle('recording-basic');
+    const geometryDispose = jest.spyOn(Wall.GEOMETRY, 'dispose');
+    const wall = new Wall({ x: 3, y: 0, z: 3 });
+    ctx.getEntityManager().add(wall);
+    const materialDispose = jest.spyOn(wall.mesh.material, 'dispose');
+
+    ctx.getEntityManager().remove(wall.id);
+
+    expect(geometryDispose).not.toHaveBeenCalled();
+    expect(materialDispose).not.toHaveBeenCalled();
+  });
+});

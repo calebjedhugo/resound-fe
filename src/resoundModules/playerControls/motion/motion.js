@@ -4,6 +4,7 @@ import CameraController from 'core/CameraController';
 import resolveSlide from 'core/SlideResolver';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import { PLAYER_COLLISION_RADIUS } from 'core/constants';
+import { renderMainView } from 'core/passContext';
 
 const fixedYPosition = 1.8; // Player height in meters
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -181,7 +182,9 @@ const motion = (scene, beforeRender) => {
   // frame.
   if (beforeRender) beforeRender(renderer, camera);
 
-  renderer.render(scene, camera);
+  // Same clip-plane count and colour space as every other scene pass, so
+  // no material re-derives its shader program between passes
+  renderMainView(renderer, scene, camera);
 };
 
 const syncCameraToPlayer = (position) => {

@@ -27,6 +27,7 @@ import PlaybackManager from 'core/PlaybackManager';
 import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
 import DeployManager from 'core/DeployManager';
+import ShaderPrewarm from 'core/ShaderPrewarm';
 import HintMemory from 'core/HintMemory';
 import MenuState from 'states/MenuState';
 import PlayingState from 'states/PlayingState';
@@ -175,6 +176,20 @@ function update(deltaTime) {
   cameraModeBadge.update(gameState);
 }
 
+// The scenes the first portal passes will draw: the main scene (same-area
+// doors show it) and each loaded linked neighbor's own scene
+function portalScenes() {
+  const active = PortalManager.getActiveArea();
+  if (!active) return [];
+  const scenes = [{ key: active, scene }];
+  for (const entity of active.entities) {
+    const neighbor =
+      entity.type === 'gate' && entity.link && PortalManager.getArea(entity.link.puzzleId);
+    if (neighbor && neighbor !== active) scenes.push({ key: neighbor, scene: neighbor.scene });
+  }
+  return scenes;
+}
+
 function render() {
   stateMachine.render();
   // Open linked gates draw their see-through neighbor view before the main
@@ -183,6 +198,10 @@ function render() {
   // see-through), then the regular door pass re-renders them for the
   // player's real eye — each surface shows its last completed write.
   motion(scene, (webglRenderer, playerCamera) => {
+    // While the start gate holds the world still, compile the shader
+    // programs the first note / first open door would otherwise compile
+    // mid-game (neighbors are warmed as they finish loading)
+    if (startGate.visible) ShaderPrewarm.run(webglRenderer, scene, portalScenes());
     DeployManager.renderPortal(webglRenderer, playerCamera);
     PortalManager.renderPortals(webglRenderer, playerCamera);
   });
@@ -271,6 +290,44 @@ if (import.meta.env.DEV) {
     setTapImpulse(enabled = true) {
       gameState.input.tapImpulseEnabled = !!enabled;
       return gameState.input.tapImpulseEnabled;
+    },
+    // Shader-program re-derivations per frame, by material type: three
+    // re-runs getParameters + the program cache key (which calls
+    // customProgramCacheKey once) whenever a material draws in a different
+    // pass context than last time (core/passContext). Expect ~0 in steady
+    // state. Usage: await window.__resoundDebug.countProgramDerivations(120)
+    async countProgramDerivations(frames = 60) {
+      const proto = THREE.Material.prototype;
+      const original = proto.customProgramCacheKey;
+      const byType = {};
+      proto.customProgramCacheKey = function counted() {
+        byType[this.type] = (byType[this.type] || 0) + 1;
+        return original.call(this);
+      };
+      try {
+        await new Promise((resolve) => {
+          let left = frames;
+          const tick = () => {
+            left -= 1;
+            if (left <= 0) resolve();
+            else requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+      } finally {
+        proto.customProgramCacheKey = original;
+      }
+      const perFrame = {};
+      let total = 0;
+      for (const [type, count] of Object.entries(byType)) {
+        perFrame[type] = count / frames;
+        total += count;
+      }
+      return {
+        perFrame: total / frames,
+        byType: perFrame,
+        programs: renderer.info.programs.length,
+      };
     },
   };
 }

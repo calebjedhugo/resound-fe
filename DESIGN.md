@@ -9,7 +9,7 @@ them, the correct action is to document, not change code.
 **Any design that requires words to be comprehensible is not a good design.**
 Communicate through placement, color, iconography, and animation — not toasts
 and labels. Examples of the pattern: the mismatch red flash on a gate/fountain
-that heard a wrong phrase, the slot "pop" when a recording lands, the pulse of
+that heard a wrong phrase, the slot "pop" when a recording lands, the glow of
 a singing creature, floating target notation above gates/fountains. Prefer
 adding/refining a visual channel over adding text. (The debug panel, F3, is a
 dev tool and exempt — it also mirrors transient animations in text so
@@ -241,6 +241,46 @@ automated playtesters can observe them.)
   mulling a possible refinement: gradual turn slow-down after the mouse
   stops moving. Idea only; ask before building.) Keyboard look (M + IJKL)
   remains the alternative.
+
+## Creature look (ruled 2026-10-02)
+
+Creatures are **ball lightning**, after Cixin Liu's *Ball Lightning*
+(`entities/CreatureLook.js`). Visual only — physics, collision radius,
+forces, recording, matching and audio are untouched.
+
+- **Silent = a subtle bubble** (Liu's unexcited macro-electron): mostly
+  transparent, Fresnel rim, faint thin-film shimmer, slow surface wobble.
+  Still findable in lit rooms (creatures are always visible — plinth pens
+  depend on it), but quiet.
+- **Lit while ANY of its notes sounds**: a glowing core with swirling
+  internal filaments + a soft additive halo. Each note ONSET flares, the
+  glow settles to a sustain while the note holds, and it fades back to the
+  bubble when the creature goes silent (rests inside a song included). The
+  clap flashes it white. Onset = the instrument's note callback; end = onset
+  beat + notated length on the musical clock (or the instrument stopping).
+- **It floats**: the rendered body hovers `CREATURE_HOVER_HEIGHT` above its
+  floor with a gentle bob; the physics position stays on the floor.
+- **Colour is Messiaen's, from the harmony AROUND it** — Messiaen coloured
+  chords, not notes (`core/messiaenColour.js`, table + source cited there).
+  The sounding set = the creature's own sounding notes + every note audible
+  TO IT by the harmony-force rule (its OWN `audibleRange`, doorways
+  included). Main colour = the major/minor triad covering the most notes;
+  ties → rooted on a SOUNDING note (A+C is A minor, never a rootless F
+  major), then rooted on the BASS (A2 under C-E-G is Am7), then major. The
+  colour belongs to the CHORD: a creature's own note never outranks it, so
+  every voice in one chord glows alike (D against C-E-G = white with a green
+  reflection — ruled 2026-10-02). A lone note is its own major triad. Pitch classes outside the triad are
+  dissonant added notes → REFLECTIONS in their own major-key colour, riding
+  the filaments and halo. Colour changes lerp briefly, never snap mid-glow.
+- No per-creature lights and no bloom/post-processing: areas re-render
+  through portal passes, so the glow is shaders + an additive billboard
+  that honour portal clipping planes. Every creature draws with ONE shared
+  body and ONE shared halo material (each mesh's onBeforeRender writes its
+  creature's uniforms in); the silent bubble skips the lightning shader
+  outright (half the GPU cost close up). Their programs — and the portal-pass
+  variants of each loaded scene's materials — compile while the StartGate
+  is up (`core/ShaderPrewarm`), so the first note and the first open door
+  no longer stall on shader compiles (perf pass 2026-10-12).
 
 ## World / editor (settled)
 

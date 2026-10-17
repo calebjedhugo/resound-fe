@@ -23,6 +23,7 @@ import * as THREE from 'three';
 // eslint-disable-next-line import/extensions
 import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
+import { createSceneTarget, showStoredTexels } from 'core/passContext';
 import {
   FACING_VECTORS,
   DOORWAY_OFFSET,
@@ -225,7 +226,10 @@ class PortalView {
     // their own views (recursive doorways, ruled 2026-07-14), one frame
     // staler per level, without ever sampling the texture being written
     // (a GL feedback loop). The buffers swap at the end of the pass.
-    this._targets = [new THREE.WebGLRenderTarget(1, 1), new THREE.WebGLRenderTarget(1, 1)];
+    // Scene targets render in the canvas's colour space (core/passContext):
+    // a pass compiles the main view's programs and stores what the main
+    // view would show.
+    this._targets = [createSceneTarget(1, 1), createSceneTarget(1, 1)];
     this._writeIndex = 0;
 
     this._buildDoorwaySurface();
@@ -238,7 +242,11 @@ class PortalView {
     // semi-transparent walls on ordinary sightlines and sort-order flicker
     // (QA, 2026-07-16). A doorway wall is never translucent; near-plane
     // coherence is the render camera's job (MIN_RENDER_EYE_DISTANCE).
-    const material = new THREE.MeshBasicMaterial({ map: this._targets[1].texture });
+    // The buffer already holds canvas-space colour: shown as stored, never
+    // encoded a second time (core/passContext).
+    const material = showStoredTexels(
+      new THREE.MeshBasicMaterial({ map: this._targets[1].texture })
+    );
     this.surface = new THREE.Mesh(geometry, material);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
     // OPPOSITE panel, facing back at the viewer
@@ -440,12 +448,13 @@ class PortalView {
 
     const previousPlanes = renderer.clippingPlanes;
     // Shared doorway-axis plane (seam consistency) AND this panel's own
-    // plane (eye-side junk cut). For the approach panel they are the same
-    // plane object; apply it once.
-    renderer.clippingPlanes =
-      clipOverride && clipOverride !== this._clipPlane
-        ? [clipOverride, this._clipPlane]
-        : [this._clipPlane];
+    // plane (eye-side junk cut). For the approach panel — and for passes
+    // with no shared plane (warm-ups, mirror sweep) — they are the same
+    // plane, bound twice: clipping by one plane twice clips exactly as
+    // once, and every pass binds passContext.CLIP_PLANE_COUNT planes like
+    // every other scene draw (three keys a material's shader program by the
+    // plane COUNT: a mismatch re-derives it at every pass switch).
+    renderer.clippingPlanes = [clipOverride || this._clipPlane, this._clipPlane];
     renderer.setRenderTarget(writeTarget);
     renderer.render(this._scene, this._camera);
     renderer.setRenderTarget(null);

@@ -177,6 +177,42 @@ describe('PuzzleLoader', () => {
       expect(area.staticWalls.count).toBe(batchedCount);
     });
 
+    it('each area draws its walls with its OWN materials (batch apart from single walls), identical in look', () => {
+      // three keys a material's shader program by the scene's lights state
+      // and by "drawn instanced": one wall material drawn in two scenes (the
+      // main view and a neighbour's Area.scene), or both as the batch and as
+      // a jamb wall, re-derived its program at every switch between them
+      ctx.loadPuzzle('portal-walls-b');
+      const first = gameState.activeArea;
+      const firstSingle = first.entities.find((e) => e.type === 'wall' && e.mesh).mesh.material;
+      const firstBatch = first.staticWalls.material;
+      ctx.loadPuzzle('portal-walls-b');
+      const second = gameState.activeArea;
+      const secondSingle = second.entities.find((e) => e.type === 'wall' && e.mesh).mesh.material;
+
+      expect(firstBatch).not.toBe(firstSingle);
+      expect(secondSingle).not.toBe(firstSingle);
+      expect(second.staticWalls.material).not.toBe(firstBatch);
+      for (const material of [firstBatch, secondSingle, second.staticWalls.material]) {
+        expect(material.color.getHex()).toBe(firstSingle.color.getHex());
+        expect(material.roughness).toBe(firstSingle.roughness);
+        expect(material.metalness).toBe(firstSingle.metalness);
+        expect(material.userData.shared).toBe(true); // no single wall frees it
+      }
+    });
+
+    it("frees the area's wall materials with the area", () => {
+      ctx.loadPuzzle('portal-walls-b');
+      const area = gameState.activeArea;
+      const single = area.entities.find((e) => e.type === 'wall' && e.mesh).mesh.material;
+      const batch = area.staticWalls.material;
+      const disposed = [jest.spyOn(single, 'dispose'), jest.spyOn(batch, 'dispose')];
+
+      area.dispose();
+
+      for (const dispose of disposed) expect(dispose).toHaveBeenCalledTimes(1);
+    });
+
     it('disposes the wall batch with the area', () => {
       ctx.loadPuzzle('parse-wall-basic');
 

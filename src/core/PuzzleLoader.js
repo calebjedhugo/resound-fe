@@ -98,9 +98,13 @@ class PuzzleLoader {
       .filter((e) => e.type === 'gate' && e.link && e.link.puzzleId)
       .map((e) => ({ x: e.position.x * WORLD_SCALE, z: e.position.z * WORLD_SCALE }));
     const batchedWallPositions = [];
+    // This area's own wall materials (see Wall.js: a material drawn in two
+    // scenes re-derives its shader program at every pass switch)
+    const wallMaterials = Wall.createMaterials();
+    area.ownedMaterials.push(wallMaterials.single, wallMaterials.batch);
     const addWall = (position) => {
       if (doorPositions.some((g) => inPortalHideBand(position, g))) {
-        entityManager.add(new Wall(position));
+        entityManager.add(new Wall(position, {}, wallMaterials.single));
       } else {
         entityManager.add(new Wall(position, { batched: true }));
         batchedWallPositions.push(position);
@@ -179,7 +183,7 @@ class PuzzleLoader {
     if (batchedWallPositions.length > 0) {
       const batch = new THREE.InstancedMesh(
         Wall.GEOMETRY,
-        Wall.MATERIAL,
+        wallMaterials.batch, // never the single walls' material: see Wall.js
         batchedWallPositions.length
       );
       const matrix = new THREE.Matrix4();

@@ -54,6 +54,10 @@ class Area {
     // ONE InstancedMesh holding every batched wall (PuzzleLoader.buildArea):
     // static scenery drawn in a single call instead of one per wall
     this.staticWalls = null;
+
+    // Materials many of this area's meshes share (its walls': flagged
+    // userData.shared, so no single entity frees them) — freed with the area
+    this.ownedMaterials = [];
   }
 
   /** Install the area's static-wall batch mesh (PuzzleLoader.buildArea). */
@@ -72,11 +76,13 @@ class Area {
     this.entityManager.clear();
     if (this.staticWalls) {
       this.group.remove(this.staticWalls);
-      // Frees the instance buffers only — the geometry/material are Wall's
-      // shared statics, still in use by every other area's walls
+      // Frees the instance buffers only — the geometry is Wall's shared
+      // static; the material is in ownedMaterials (freed below)
       this.staticWalls.dispose();
       this.staticWalls = null;
     }
+    for (const material of this.ownedMaterials) material.dispose();
+    this.ownedMaterials = [];
   }
 }
 

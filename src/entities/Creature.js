@@ -1,10 +1,11 @@
-import * as THREE from 'three';
 import { Random } from 'resound-sound';
 import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import PlaybackManager from 'core/PlaybackManager';
+import SongMatcher from 'core/SongMatcher';
 import resolveSlide from 'core/SlideResolver';
+import { messiaenColourCached, midiOf } from 'core/messiaenColour';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
   RECORDING_RANGE_PERCENTAGE,
@@ -19,6 +20,12 @@ import {
 } from 'core/constants';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import Entity from 'entities/Entity';
+import CreatureLook from 'entities/CreatureLook';
+
+// A note counts as sounding this long (beats) past its notated end, so the
+// frame or two between one note's end and the next onset's callback (the
+// instrument runs on timers, the clock on frames) never reads as silence.
+const NOTE_END_GRACE_BEATS = 0.08;
 
 class Creature extends Entity {
   constructor(position, data = {}) {
@@ -49,6 +56,21 @@ class Creature extends Entity {
     // Track current note being sung (for harmony analysis)
     this.currentNote = null;
 
+    // Own notes sounding right now, for the look: {midi, endBeat}
+    // (musical-clock beats). Onset = the instrument's noteCallback; end =
+    // onset beat + notated length, or the instrument stopping.
+    this.soundingNotes = [];
+
+    // Per-frame scratch for the look's harmony (reused — the look runs every
+    // frame for every creature): own sounding MIDI notes then heard ones, and
+    // the one heard-note visitor (bound once, not a closure per frame)
+    this._chord = [];
+    this._hearInto = null;
+    this._hearVisitor = (note, sourcePosition, sourceSize, extraDistance = 0) => {
+      if (extraDistance + getDistance(this.position, sourcePosition) > this.audibleRange) return;
+      this._hearInto.push(midiOf(note.pitch));
+    };
+
     // Create unique instrument for this creature
     this.instrument = new Random(this.id);
     this.instrument.sourcePosition = this.position; // Set source position for listening
@@ -57,6 +79,9 @@ class Creature extends Entity {
     this.instrument.noteCallback = (noteEvent) => {
       // Track current note for harmony analysis
       this.currentNote = noteEvent;
+
+      // The look lights up (and flares) on every onset
+      this.noteOn(noteEvent);
 
       // Sound carries as far as its source's audible range
       noteEvent.sourceRange = this.audibleRange;
@@ -83,27 +108,31 @@ class Creature extends Entity {
   }
 
   /**
-   * Mesh-only creature look (no entity, no instrument, no listeners).
+   * Mesh-only creature look (no entity, no instrument, no listeners): the
+   * silent ball-lightning bubble, floating over `position`.
    * @param {{x:number, y:number, z:number}} position - base world position
    * @param {number} size - radius in world units
+   * @returns {object} the look's root THREE.Group
    */
   static buildBodyMesh(position, size) {
-    // Simple sphere creature
-    const geometry = new THREE.SphereGeometry(size, 16, 16);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x00ff00,
-      roughness: 0.5,
-      metalness: 0.2,
-      emissive: 0x003300, // Slight glow
-      emissiveIntensity: 0.2,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(position.x, position.y + size, position.z);
-    return mesh;
+    const look = new CreatureLook(size);
+    look.place(position);
+    return look.object;
   }
 
   createMesh() {
-    this.mesh = Creature.buildBodyMesh(this.position, this.size);
+    this.look = new CreatureLook(this.size);
+    this.mesh = this.look.object;
+    this.placeMesh();
+  }
+
+  /**
+   * Put the rendered creature over its physics position. The visual FLOATS
+   * (CreatureLook adds the hover + bob); physics, collision and elevation
+   * never see the offset. Every mesh placement goes through here.
+   */
+  placeMesh() {
+    if (this.look) this.look.place(this.position);
   }
 
   update(deltaTime) {
@@ -150,7 +179,7 @@ class Creature extends Entity {
     this.updateRecordingState();
 
     // Visual "now singing" cue (audio has no visual equivalent otherwise)
-    this.updateSingingVisual(deltaTime);
+    this.updateLook(deltaTime);
 
     // Force-based movement: CREATURE_PHYSICS_PASSES full-deltaTime passes,
     // recomputing forces between passes (a source's pull changes as the
@@ -163,24 +192,77 @@ class Creature extends Entity {
   }
 
   /**
-   * Pulse glow + scale while the creature is singing so the melody
-   * is noticeable without sound.
+   * A note of ours began (instrument noteCallback): remember when it ends in
+   * musical-clock beats, and flare the look.
+   * @param {{pitch:string, length:string}} noteEvent
    */
-  updateSingingVisual(deltaTime) {
-    if (!this.mesh || !this.mesh.material) return;
+  noteOn(noteEvent) {
+    const beat = gameState.musicalClock ? gameState.musicalClock.getCurrentBeat() : 0;
+    this.soundingNotes.push({
+      midi: midiOf(noteEvent.pitch),
+      endBeat: beat + SongMatcher.lengthToBeats(noteEvent.length),
+    });
+    if (this.look) this.look.noteOn();
+  }
 
-    const singing = this.instrument.playbackState.isPlaying;
-    if (singing) {
-      this.singingPhase = (this.singingPhase || 0) + deltaTime * 12;
-      const pulse = 0.5 + 0.5 * Math.sin(this.singingPhase);
-      this.mesh.material.emissiveIntensity = 0.2 + pulse * 1.0;
-      const scale = 1 + 0.08 * pulse;
-      this.mesh.scale.set(scale, scale, scale);
-    } else if (this.singingPhase) {
-      this.singingPhase = 0;
-      this.mesh.material.emissiveIntensity = 0.2;
-      this.mesh.scale.set(1, 1, 1);
+  /**
+   * MIDI numbers of every OTHER note this creature can hear right now —
+   * the harmony-force audibility rule exactly (forEachSoundSource: same
+   * sources, doorway routing included, within the creature's OWN
+   * audibleRange). No contact-distance cut: that is a force-stability rule,
+   * not hearing.
+   * @returns {number[]}
+   */
+  heardNotes() {
+    return this._collectHeardNotes([]);
+  }
+
+  /** heardNotes, appended to `out` (no garbage on the per-frame path). */
+  _collectHeardNotes(out) {
+    this._hearInto = out;
+    this.forEachSoundSource(this._hearVisitor);
+    this._hearInto = null;
+    return out;
+  }
+
+  /**
+   * Ball-lightning look: lit while any of our notes sounds (flaring on each
+   * onset), a bubble when silent, coloured by the harmony around us
+   * (Messiaen — core/messiaenColour). Visual only. Runs every frame for
+   * every creature, so it reuses its arrays instead of allocating.
+   */
+  updateLook(deltaTime) {
+    if (!this.look) return;
+
+    // Drop notes that have ended (musical clock), or all of them once the
+    // instrument has stopped (song over, clap, dispose) — filtered in place
+    const notes = this.soundingNotes;
+    if (!this.instrument.playbackState.isPlaying) {
+      notes.length = 0;
+    } else if (notes.length > 0) {
+      const beat = gameState.musicalClock.getCurrentBeat();
+      let kept = 0;
+      for (let i = 0; i < notes.length; i += 1) {
+        if (beat < notes[i].endBeat + NOTE_END_GRACE_BEATS) {
+          notes[kept] = notes[i];
+          kept += 1;
+        }
+      }
+      notes.length = kept;
     }
+
+    const sounding = notes.length > 0;
+    let harmony = null;
+    if (sounding) {
+      // Own notes first, then heard: the order messiaenColour ranks
+      // reflections in (memoized — the same harmony is a cache hit)
+      const chord = this._chord;
+      chord.length = 0;
+      for (let i = 0; i < notes.length; i += 1) chord.push(notes[i].midi);
+      this._collectHeardNotes(chord);
+      harmony = messiaenColourCached(chord);
+    }
+    this.look.update(deltaTime, sounding, harmony);
   }
 
   /**
@@ -210,26 +292,17 @@ class Creature extends Entity {
    * @param {number} displacement - Displacement as fraction of whole note (e.g., 0.0625 = 1/16)
    */
   handleClap(displacement) {
-    // Stop current song immediately
+    // Stop current song immediately (its notes stop sounding with it)
     this.stopSong();
+    this.soundingNotes.length = 0;
 
     // Convert displacement from whole-note fraction to quarter-note beats
     // (MusicalClock counts in quarter notes, so multiply by 4)
     const displacementInBeats = displacement * 4;
     this.nextSingBeat += displacementInBeats;
 
-    // Visual feedback - make creature flash or glow
-    if (this.mesh && this.mesh.material) {
-      const originalEmissive = this.mesh.material.emissive.getHex();
-      this.mesh.material.emissive.setHex(0xffffff); // Flash white
-
-      // Fade back to original after 100ms
-      setTimeout(() => {
-        if (this.mesh && this.mesh.material) {
-          this.mesh.material.emissive.setHex(originalEmissive);
-        }
-      }, 100);
-    }
+    // Visual feedback - a brief white flash
+    if (this.look) this.look.flash();
   }
 
   /**
@@ -355,22 +428,36 @@ class Creature extends Entity {
       // 'perfect' = no force added
     };
 
-    // Check our own area's entities for active sound sources
+    this.forEachSoundSource(addForceFromSource);
+  }
+
+  /**
+   * Visit every OTHER sound source sounding right now, as it reaches this
+   * creature — the ONE source model shared by harmony forces and the look's
+   * colour. Range is NOT checked here (callers apply this.audibleRange).
+   * visit(note, sourcePosition, sourceSize, extraDistance): for a source in
+   * ANOTHER area, sourcePosition is the doorway on OUR side (sound comes
+   * through it) and extraDistance carries the source->partner-gate leg
+   * (+ closed-door leak); same-area sources pass no extraDistance.
+   * @param {function} visit
+   */
+  forEachSoundSource(visit) {
+    // Check our own area's entities for active sound sources (an indexed
+    // loop: this runs several times per frame per singing creature)
     const localEntities = this.area ? this.area.entities : gameState.entities;
-    localEntities.forEach((entity) => {
-      // Skip self
-      if (entity.id === this.id) return;
-
-      // Skip if entity doesn't have an instrument or isn't playing
-      if (!entity.instrument || !entity.instrument.playbackState.isPlaying) return;
-
-      // Skip if no current note
-      if (!entity.currentNote) return;
-
-      // Use entity's size if available, otherwise use default
-      const entitySize = entity.size || DEFAULT_CREATURE_SIZE;
-      addForceFromSource(entity.currentNote, entity.position, entitySize);
-    });
+    for (let i = 0; i < localEntities.length; i += 1) {
+      const entity = localEntities[i];
+      // Skip self; skip anything without a playing instrument and a current
+      // note. Use the entity's size if available, otherwise the default.
+      if (
+        entity.id !== this.id &&
+        entity.instrument &&
+        entity.instrument.playbackState.isPlaying &&
+        entity.currentNote
+      ) {
+        visit(entity.currentNote, entity.position, entity.size || DEFAULT_CREATURE_SIZE);
+      }
+    }
 
     // Also check player's playback — direct only when the player is in OUR
     // area; otherwise the player is heard through a doorway (below)
@@ -378,7 +465,7 @@ class Creature extends Entity {
     const playerHere = !this.area || this.area === gameState.activeArea;
 
     if (playerHere && playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
-      addForceFromSource(playerInstrument.currentNote, gameState.player.position, PLAYER_SIZE);
+      visit(playerInstrument.currentNote, gameState.player.position, PLAYER_SIZE);
     }
 
     // Sources sounding in ADJACENT areas pull/push through the doorway: the
@@ -386,12 +473,7 @@ class Creature extends Entity {
     // closed) attenuates eligibility via extraDistance.
     if (this.area && gameState.world) {
       for (const seamSource of gameState.world.seamSourcesFor(this.area)) {
-        addForceFromSource(
-          seamSource.note,
-          seamSource.doorPosition,
-          seamSource.size,
-          seamSource.extraDistance
-        );
+        visit(seamSource.note, seamSource.doorPosition, seamSource.size, seamSource.extraDistance);
       }
     }
   }
@@ -471,8 +553,8 @@ class Creature extends Entity {
       );
     }
 
-    // Update mesh position
-    this.mesh.position.set(this.position.x, this.position.y + this.size, this.position.z);
+    // Update mesh position (the visual floats above this — see placeMesh)
+    this.placeMesh();
 
     // Update instrument source position for audio
     this.instrument.sourcePosition = this.position;
@@ -495,6 +577,9 @@ class Creature extends Entity {
     // Unregister from listening manager
     ListeningManager.unregisterListener(this);
 
+    // The look's geometry and materials are shared (userData.shared), so
+    // Entity.dispose skips them; this only unhooks its uniform binding
+    if (this.look) this.look.dispose();
     super.dispose();
   }
 }

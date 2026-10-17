@@ -7,9 +7,11 @@
  * on), consumes the pad, and the arrival fires the cleanser as usual
  * (tape wipe). One way, one use; world state does not reset.
  */
+import * as THREE from 'three';
 import gameState from 'core/GameState';
 import DeployManager from 'core/DeployManager';
 import PortalManager from 'core/PortalManager';
+import { CLIP_PLANE_COUNT } from 'core/passContext';
 import { WORLD_SCALE } from 'core/constants';
 import portalA from '../__tests__/fixtures/puzzles/portal-a.json';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
@@ -206,6 +208,43 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     renderer.renderCalls.length = 0;
     DeployManager.renderPortal(renderer, { position: { x: 36, y: 1.8, z: 39 } });
     expect(renderer.renderCalls).toHaveLength(2);
+  });
+
+  it('every pad pass draws in the pass context every scene draw shares', async () => {
+    // three keys shader programs by clip-plane COUNT and output colour
+    // space: a pad pass in any other context than the door passes and the
+    // main view around it would re-derive the program of every material
+    // they share, at every switch (core/passContext)
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+
+    const passes = [];
+    let target = null;
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget(next) {
+        target = next;
+      },
+      render() {
+        passes.push({ planes: this.clippingPlanes.length, target });
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    DeployManager.renderPortal(renderer, { position: { x: 30, y: 1.8, z: 39 } }); // approach
+    DeployManager.renderPortal(renderer, { position: { x: 36, y: 1.8, z: 39 } }); // corner
+
+    expect(passes.length).toBeGreaterThan(0);
+    for (const pass of passes) {
+      expect(pass.planes).toBe(CLIP_PLANE_COUNT);
+      // a scene target: renders in the canvas colour space (passContext)
+      expect(pass.target.isXRRenderTarget).toBe(true);
+      expect(pass.target.texture.colorSpace).toBe(THREE.SRGBColorSpace);
+    }
+    expect(renderer.clippingPlanes).toHaveLength(0); // restored after the passes
+    expect(target).toBeNull();
   });
 
   it('shows the destination cleanser AT the gate (mirror tile, shared material)', async () => {

@@ -529,7 +529,7 @@ describe('Creature audible range', () => {
  */
 /* eslint-disable import/first -- section header for the suite below; imports
    are hoisted by babel-jest so the placement is cosmetic */
-import { ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
+import { ELEVATION_HEIGHT, WORLD_SCALE, CREATURE_HOVER_HEIGHT } from 'core/constants';
 import { getDistance, getDistanceVolume } from 'core/utils';
 /* eslint-enable import/first */
 
@@ -544,12 +544,23 @@ describe('Creature elevation behavior', () => {
       expect(creature.elevation).toBe(1);
     });
 
-    it('creature mesh Y reflects elevation', () => {
+    it('creature visual floats above the floor of its elevation', () => {
       ctx.loadPuzzle('elevation-basic');
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
-      // mesh.position.y = position.y + size = 3.0 + 0.9 = 3.9
-      expect(creature.mesh.position.y).toBeCloseTo(ELEVATION_HEIGHT + creature.size, 1);
+      // Resting on the E1 floor would put the body's centre at 3.0 + 0.9; the
+      // ball-lightning visual hovers CREATURE_HOVER_HEIGHT above that
+      expect(creature.mesh.position.y).toBeCloseTo(
+        ELEVATION_HEIGHT + creature.size + CREATURE_HOVER_HEIGHT,
+        5
+      );
+    });
+
+    it('the hover is visual only — the physics position stays on the floor', () => {
+      ctx.loadPuzzle('elevation-basic');
+      const creature = ctx.getCreatures()[0];
+      expect(creature.position.y).toBe(ELEVATION_HEIGHT);
+      expect(creature.mesh.position.y - creature.size).toBeGreaterThan(creature.position.y);
     });
   });
 
@@ -603,6 +614,21 @@ describe('Creature elevation behavior', () => {
       expect(creature.position.y).toBeGreaterThan(0);
       expect(creature.position.z).toBeLessThan(27); // Moved north from ramp center
     }, 15000);
+
+    it('the floating visual follows the creature as it moves', async () => {
+      ctx.loadPuzzle('creature-elevation-ramp');
+      const creature = ctx.getCreatures()[0];
+
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 400);
+
+      expect(creature.mesh.position.x).toBe(creature.position.x);
+      expect(creature.mesh.position.z).toBe(creature.position.z);
+      expect(creature.mesh.position.y).toBeCloseTo(
+        creature.position.y + creature.size + CREATURE_HOVER_HEIGHT,
+        5
+      );
+    }, 10000);
 
     it('creature Y position updates as it moves along a ramp', async () => {
       ctx.loadPuzzle('creature-elevation-ramp');
@@ -707,5 +733,176 @@ describe('Creature elevation behavior', () => {
       // Creature should not be recordable (too far in 3D)
       expect(creature.isRecordable).toBe(false);
     });
+  });
+});
+
+/**
+ * Creature look: ball lightning (DESIGN.md "Creature look"). A silent
+ * creature is a subtle bubble; while any of its notes sounds it is lit,
+ * brightest at each onset; its colour is Messiaen's colour of the harmony
+ * around it, heard by the harmony-force rule (its OWN audibleRange).
+ */
+/* eslint-disable import/first -- section header for the suite below; imports
+   are hoisted by babel-jest so the placement is cosmetic */
+import { triadColour, majorKeyColour } from 'core/messiaenColour';
+/* eslint-enable import/first */
+
+describe('Creature look (ball lightning)', () => {
+  const C = 0;
+  const D = 2;
+  const E = 4;
+
+  // Real timers: the look follows notes that are SOUNDING, which needs the
+  // instrument's own timers to run between game-loop updates (see the
+  // movement suites above)
+  const realTimeUpdate = async (testCtx, durationMs, stepMs = 16) => {
+    const steps = Math.ceil(durationMs / stepMs);
+    const entityManager = testCtx.getEntityManager();
+    for (let i = 0; i < steps; i += 1) {
+      const dt = stepMs / 1000;
+      const clock = testCtx.getMusicalClock();
+      if (clock) clock.update(dt);
+      entityManager.update(dt);
+      // eslint-disable-next-line no-promise-executor-return
+      await new Promise((resolve) => setTimeout(resolve, stepMs));
+    }
+  };
+
+  beforeEach(() => {
+    jest.useRealTimers();
+    ctx.resetPlaybackState();
+  });
+
+  afterEach(() => {
+    ctx.stopPlayerPlayback();
+    jest.useFakeTimers();
+  });
+
+  it('is an unlit bubble before it has sung', () => {
+    ctx.loadPuzzle('creature-singing-timing');
+    const creature = ctx.getCreatures()[0];
+    expect(creature.look.glow).toBe(0);
+  });
+
+  it('lights up while its note sounds', async () => {
+    // D4 quarter note (125ms at 480 BPM), sung at beat 0
+    ctx.loadPuzzle('creature-singing-timing');
+    const creature = ctx.getCreatures()[0];
+
+    await realTimeUpdate(ctx, 48);
+
+    expect(creature.look.glow).toBeGreaterThan(0.5);
+  }, 10000);
+
+  it('fades back toward the bubble once it falls silent', async () => {
+    // The quarter note ends at ~125ms; the next song is not until beat 8
+    // (1000ms), so by ~800ms the creature has been silent a long while
+    ctx.loadPuzzle('creature-singing-timing');
+    const creature = ctx.getCreatures()[0];
+
+    await realTimeUpdate(ctx, 48);
+    const lit = creature.look.glow;
+    await realTimeUpdate(ctx, 750);
+
+    expect(creature.look.glow).toBeLessThan(0.1);
+    expect(creature.look.glow).toBeLessThan(lit / 5);
+  }, 10000);
+
+  it('flares at the onset of a note, then settles while the note holds', async () => {
+    // C4 whole note (500ms at 480 BPM)
+    ctx.loadPuzzle('creature-consonance');
+    const creature = ctx.getCreatures()[0];
+
+    await realTimeUpdate(ctx, 32);
+    const atOnset = creature.look.glow;
+    await realTimeUpdate(ctx, 176);
+    const holding = creature.look.glow;
+
+    expect(holding).toBeGreaterThan(0.5); // still lit: the note holds
+    expect(atOnset).toBeGreaterThan(holding + 0.1);
+  }, 10000);
+
+  it('takes its colour from the harmony around it, not just its own note', async () => {
+    // E4 alone would glow E major red; sung against a C4 neighbour (within
+    // its own range) the harmony is C major — white
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const eCreature = ctx.getCreatures().find((c) => c.song[0].pitch === 'E4');
+
+    await realTimeUpdate(ctx, 48);
+
+    expect(eCreature.look.harmonyColour.main).toBe(triadColour(C, 'major'));
+    expect(eCreature.look.harmonyColour.main).not.toBe(triadColour(E, 'major'));
+  }, 10000);
+
+  it('shows a dissonant added note as a reflection colour', async () => {
+    // The creature sings C4; the player plays D4 nearby: C stays the tonal
+    // core (white) and D reflects in D major's green
+    ctx.loadPuzzle('creature-consonance');
+    const creature = ctx.getCreatures()[0];
+    ctx.startPlayerPlayback([{ pitch: 'D4', length: '1/1' }], 480);
+
+    await realTimeUpdate(ctx, 48);
+
+    expect(creature.look.harmonyColour.main).toBe(triadColour(C, 'major'));
+    expect(creature.look.harmonyColour.reflections).toEqual([majorKeyColour(D)]);
+  }, 10000);
+
+  it('ignores sounds beyond its own audible range', async () => {
+    // Same D4 from the player, but the player stands beyond the creature's
+    // range (30): the creature hears only itself — a lone C, no reflection
+    ctx.loadPuzzle('creature-consonance');
+    const creature = ctx.getCreatures()[0];
+    ctx.setPlayerPosition({ x: creature.position.x + 40, y: 0, z: creature.position.z });
+    ctx.startPlayerPlayback([{ pitch: 'D4', length: '1/1' }], 480);
+
+    await realTimeUpdate(ctx, 48);
+
+    expect(creature.look.harmonyColour.main).toBe(triadColour(C, 'major'));
+    expect(creature.look.harmonyColour.reflections).toEqual([]);
+  }, 10000);
+
+  // Rendering: ONE body and ONE halo material serve every creature (portal
+  // passes re-derive a material's program at each pass switch, so per-
+  // creature materials multiplied that work); each mesh writes its own
+  // creature's values into the shared material just before three draws it.
+  it('every creature draws with the same body and halo materials', () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const [a, b] = ctx.getCreatures();
+    expect(a.look.body.material).toBe(b.look.body.material);
+    expect(a.look.halo.material).toBe(b.look.halo.material);
+    expect(a.look.body.material).not.toBe(a.look.halo.material);
+  });
+
+  it('each creature still draws in its own state through the shared material', () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const [lit, silent] = ctx.getCreatures();
+    lit.look.noteOn();
+    lit.look.update(0.016, true, { main: triadColour(E, 'major'), reflections: [] });
+    silent.look.update(0.016, false, null);
+    const { uniforms } = lit.look.body.material;
+
+    // three calls each mesh's onBeforeRender right before drawing it
+    lit.look.body.onBeforeRender();
+    const litDraw = { excite: uniforms.uExcite.value, main: uniforms.uMain.value.clone() };
+    silent.look.body.onBeforeRender();
+    const silentDraw = { excite: uniforms.uExcite.value, main: uniforms.uMain.value.clone() };
+
+    expect(litDraw.excite).toBe(1);
+    expect(litDraw.main.x).toBeGreaterThan(litDraw.main.y); // E major is red
+    expect(silentDraw.excite).toBe(0);
+    expect(silentDraw.main.x).toBe(silentDraw.main.y); // never coloured: white
+  });
+
+  it('removing one creature leaves the shared look intact for the rest', () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const [gone, stays] = ctx.getCreatures();
+    const { body, halo } = stays.look;
+    const freed = [body.material, halo.material, body.geometry, halo.geometry].map((resource) =>
+      jest.spyOn(resource, 'dispose')
+    );
+
+    gone.dispose();
+
+    freed.forEach((spy) => expect(spy).not.toHaveBeenCalled());
   });
 });

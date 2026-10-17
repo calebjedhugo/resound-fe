@@ -25,6 +25,11 @@ export const DEFAULT_CREATURE_MAX_SPEED = 8.0;
 // Default creature size (radius in world units)
 export const DEFAULT_CREATURE_SIZE = 0.9;
 
+// The creature's ball-lightning VISUAL floats this far above resting on its
+// floor (world units; entities/CreatureLook adds a gentle bob on top).
+// Visual only: physics position, collision and elevation never see it.
+export const CREATURE_HOVER_HEIGHT = 0.35;
+
 // Player size (radius in world units, for force calculations)
 export const PLAYER_SIZE = 0.5;
 

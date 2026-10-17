@@ -6,6 +6,11 @@
 const FrontSide = 0;
 const BackSide = 1;
 const DoubleSide = 2;
+// three's blending constants (three/src/constants.js)
+const NormalBlending = 1;
+const AdditiveBlending = 2;
+// Colour-space names (three's values): the pass context tags scene targets
+const SRGBColorSpace = 'srgb';
 
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) {
@@ -130,9 +135,10 @@ class Matrix4 {
 }
 
 class Plane {
-  constructor() {
-    this.normal = new Vector3();
-    this.constant = 0;
+  // Like three: normal·p + constant is the signed distance (default normal +x)
+  constructor(normal = new Vector3(1, 0, 0), constant = 0) {
+    this.normal = normal;
+    this.constant = constant;
   }
 
   setFromNormalAndCoplanarPoint(normal, point) {
@@ -188,12 +194,30 @@ class Material {
     this.emissiveIntensity = 0;
     this.roughness = 0.5;
     this.metalness = 0.5;
+    this.userData = {}; // like three: Entity.dispose reads userData.shared
   }
 
   dispose() {}
 }
 
+// Custom-shader material: keeps its uniforms (per-material, like three) so
+// shader-driven looks can run their per-frame uniform writes under test
+class ShaderMaterial extends Material {
+  constructor(opts = {}) {
+    super(opts);
+    this.uniforms = opts.uniforms || {};
+    this.vertexShader = opts.vertexShader || '';
+    this.fragmentShader = opts.fragmentShader || '';
+    this.blending = opts.blending !== undefined ? opts.blending : NormalBlending;
+    this.clipping = opts.clipping || false;
+  }
+}
+
 class Geometry {
+  constructor() {
+    this.userData = {}; // like three: Entity.dispose reads userData.shared
+  }
+
   dispose() {}
 }
 
@@ -201,6 +225,7 @@ class BufferGeometry {
   constructor() {
     this.attributes = {};
     this.index = null;
+    this.userData = {};
   }
 
   setAttribute(name, attribute) {
@@ -329,6 +354,16 @@ class PerspectiveCamera extends Mesh {
   updateProjectionMatrix() {}
 }
 
+class OrthographicCamera extends Mesh {
+  constructor(left = -1, right = 1, top = 1, bottom = -1, near = 0.1, far = 2000) {
+    super();
+    Object.assign(this, { left, right, top, bottom, near, far });
+    this.isOrthographicCamera = true;
+  }
+
+  updateProjectionMatrix() {}
+}
+
 class WebGLRenderer {
   constructor() {
     this.domElement = {
@@ -395,6 +430,7 @@ module.exports = {
   Mesh,
   InstancedMesh,
   PerspectiveCamera,
+  OrthographicCamera,
   WebGLRenderer,
   WebGLRenderTarget,
   MathUtils,
@@ -407,6 +443,10 @@ module.exports = {
   Float32BufferAttribute,
   MeshStandardMaterial: Material,
   MeshBasicMaterial: Material,
+  ShaderMaterial,
+  NormalBlending,
+  AdditiveBlending,
+  SRGBColorSpace,
   CanvasTexture,
   FrontSide,
   BackSide,
