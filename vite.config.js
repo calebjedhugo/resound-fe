@@ -374,6 +374,20 @@ export default defineConfig({
         main: 'index.html',
         editor: 'editor.html',
       },
+      output: {
+        // Each dependency gets a chunk of its own, so its hashed file name
+        // changes only when that package does: a game edit (a constants.js
+        // tuning, say) no longer renames the chunk three lives in, and a
+        // returning player keeps three cached. three's core only — addons
+        // ride with the entry that uses them (OrbitControls is editor-only).
+        // The resound packages are matched by name: today they are file:
+        // links that resolve outside node_modules.
+        manualChunks(id) {
+          if (id.includes('/node_modules/three/build/')) return 'three';
+          const [, resoundPackage] = id.match(/\/(resound-(?:notation|sound))\//) || [];
+          return resoundPackage;
+        },
+      },
     },
   },
 });

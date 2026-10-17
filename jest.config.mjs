@@ -27,8 +27,8 @@ export default {
   setupFiles: ['<rootDir>/setupMocks.js'],
   setupFilesAfterEnv: ['<rootDir>/setupTests.js'],
 
-  // Test file patterns - colocated with source code
-  testMatch: ['**/src/**/*.test.js'],
+  // Test file patterns - colocated with source code (deploy/: the build + deploy scripts)
+  testMatch: ['**/src/**/*.test.js', '**/deploy/**/*.test.js'],
 
   // Ignore patterns
   testPathIgnorePatterns: ['/node_modules/'],
