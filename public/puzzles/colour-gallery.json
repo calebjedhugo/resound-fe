@@ -1,0 +1,1180 @@
+{
+  "id": "colour-gallery",
+  "name": "Colour Gallery (dev)",
+  "difficulty": 1,
+  "gridSize": 16,
+  "tempo": 60,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "teaches": [],
+  "playerStart": {
+    "x": 7,
+    "y": 2,
+    "z": 12
+  },
+  "floors": [
+    {
+      "elevation": 2,
+      "x1": 0,
+      "z1": 11,
+      "x2": 15,
+      "z2": 15
+    }
+  ],
+  "entities": [
+    {
+      "type": "creature",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "C4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "G4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "C4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "G4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "C#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Ab4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "C#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Ab4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "A4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "A4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "G4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Bb4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Bb4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Ab4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "B4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "G4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "B4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "A4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C5",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Ab4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C5",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Bb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C#5",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "A4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C#5",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "G3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "B3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "G3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Bb3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Ab3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Ab3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "B3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "A3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "A3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Bb3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Bb3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 3
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "B3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 6
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "B3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 8
+      },
+      "data": {
+        "song": [
+          {
+            "pitch": "C4",
+            "length": "1/16"
+          }
+        ],
+        "interval": 64,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 1,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 14,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "wall",
+      "position": {
+        "x": 15,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 2,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "B3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 3,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Bb3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "G4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "B4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Bb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C#5",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 6,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "A4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 7,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Ab4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C5",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "C4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "G4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 9,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "C4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "Eb4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "G4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 10,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "Bb3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 11,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "B3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "D4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "F#4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 12,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "A3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C#4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    },
+    {
+      "type": "creature",
+      "position": {
+        "x": 13,
+        "y": 0,
+        "z": 9
+      },
+      "data": {
+        "song": [
+          [
+            {
+              "pitch": "A3",
+              "length": "1/1"
+            },
+            {
+              "pitch": "C4",
+              "length": "1/1"
+            },
+            {
+              "pitch": "E4",
+              "length": "1/1"
+            }
+          ]
+        ],
+        "interval": 4,
+        "audibleRange": 2
+      }
+    }
+  ]
+}

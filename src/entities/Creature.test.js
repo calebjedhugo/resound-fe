@@ -744,7 +744,7 @@ describe('Creature elevation behavior', () => {
  */
 /* eslint-disable import/first -- section header for the suite below; imports
    are hoisted by babel-jest so the placement is cosmetic */
-import { triadColour, majorKeyColour } from 'core/messiaenColour';
+import { messiaenColour, triadColour, triadLight } from 'core/messiaenColour';
 /* eslint-enable import/first */
 
 describe('Creature look (ball lightning)', () => {
@@ -836,7 +836,8 @@ describe('Creature look (ball lightning)', () => {
 
   it('shows a dissonant added note as a reflection colour', async () => {
     // The creature sings C4; the player plays D4 nearby: C stays the tonal
-    // core (white) and D reflects in D major's green
+    // core (white); D, with no partner in the chord, reflects its own
+    // resonance (D major's green) and the dissonance flickers
     ctx.loadPuzzle('creature-consonance');
     const creature = ctx.getCreatures()[0];
     ctx.startPlayerPlayback([{ pitch: 'D4', length: '1/1' }], 480);
@@ -844,7 +845,8 @@ describe('Creature look (ball lightning)', () => {
     await realTimeUpdate(ctx, 48);
 
     expect(creature.look.harmonyColour.main).toBe(triadColour(C, 'major'));
-    expect(creature.look.harmonyColour.reflections).toEqual([majorKeyColour(D)]);
+    expect(creature.look.harmonyColour.reflections).toEqual([triadLight(D, 'major')]);
+    expect(creature.look.harmonyColour.dissonance).toBeGreaterThan(0);
   }, 10000);
 
   it('ignores sounds beyond its own audible range', async () => {
@@ -860,6 +862,79 @@ describe('Creature look (ball lightning)', () => {
     expect(creature.look.harmonyColour.main).toBe(triadColour(C, 'major'));
     expect(creature.look.harmonyColour.reflections).toEqual([]);
   }, 10000);
+
+  // What one creature's look draws (its values, as bound into the shared
+  // body material just before its draw)
+  const drawn = (creature) => {
+    creature.look.body.onBeforeRender();
+    const { uniforms } = creature.look.body.material;
+    return {
+      main: uniforms.uMain.value.clone(),
+      lum: uniforms.uLum.value,
+      flicker: uniforms.uFlicker.value,
+      fleck: uniforms.uFleckW.value,
+      rainbow: uniforms.uRainbow.value,
+    };
+  };
+  const saturation = (v) => Math.max(v.x, v.y, v.z) - Math.min(v.x, v.y, v.z);
+
+  it('a lone note glows paler than the same colour inside a chord', () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const [lone, chord] = ctx.getCreatures();
+    lone.look.noteOn();
+    lone.look.update(0.016, true, messiaenColour({ ownNotes: [64] })); // E alone
+    chord.look.noteOn();
+    chord.look.update(0.016, true, messiaenColour({ ownNotes: [64, 68, 71] })); // E major
+
+    expect(lone.look.harmonyColour.main).toBe(chord.look.harmonyColour.main); // E major red
+    expect(saturation(drawn(lone).main)).toBeLessThan(saturation(drawn(chord).main));
+  });
+
+  it('blooms into its flecks and sparkle only in harmony: a lone F# barely sparkles', () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const [lone, chord] = ctx.getCreatures();
+    lone.look.noteOn();
+    lone.look.update(0.016, true, messiaenColour({ ownNotes: [66] })); // F# alone
+    chord.look.noteOn();
+    chord.look.update(0.016, true, messiaenColour({ ownNotes: [66, 70, 73] })); // F# major
+
+    expect(drawn(chord).rainbow).toBe(1);
+    expect(drawn(lone).rainbow).toBeLessThan(0.2);
+    expect(drawn(lone).fleck).toBeLessThan(drawn(chord).fleck);
+  });
+
+  it('flares the complementary fringe only while the harmony is dissonant', () => {
+    ctx.loadPuzzle('creature-consonance');
+    const creature = ctx.getCreatures()[0];
+    const dissonant = messiaenColour({ ownNotes: [64, 68, 71, 74] }); // E7
+    const consonant = messiaenColour({ ownNotes: [64, 68, 71] }); // E major
+    creature.look.noteOn();
+    // It bursts out and goes out: over a few seconds it must burst
+    let brightest = 0;
+    for (let i = 0; i < 300; i += 1) {
+      creature.look.update(0.016, true, dissonant);
+      brightest = Math.max(brightest, drawn(creature).flicker);
+    }
+    expect(brightest).toBeGreaterThan(0);
+
+    for (let i = 0; i < 120; i += 1) creature.look.update(0.016, true, consonant);
+    // Exactly 0, not merely small: the shader skips the fringe at 0
+    expect(drawn(creature).flicker).toBe(0);
+  });
+
+  it('takes a first light at its register, then eases with it', () => {
+    ctx.loadPuzzle('creature-consonance');
+    const creature = ctx.getCreatures()[0];
+    const harmony = messiaenColour({ ownNotes: [72, 76, 79] });
+    creature.look.noteOn();
+    creature.look.update(0.016, true, harmony, 1.2);
+    expect(drawn(creature).lum).toBeCloseTo(1.2, 5); // high voice: lighter at once
+
+    creature.look.update(0.016, true, harmony, 0.8);
+    const easing = drawn(creature).lum;
+    expect(easing).toBeLessThan(1.2);
+    expect(easing).toBeGreaterThan(0.8);
+  });
 
   // Rendering: ONE body and ONE halo material serve every creature (portal
   // passes re-derive a material's program at each pass switch, so per-
@@ -882,15 +957,17 @@ describe('Creature look (ball lightning)', () => {
     const { uniforms } = lit.look.body.material;
 
     // three calls each mesh's onBeforeRender right before drawing it
+    silent.look.body.onBeforeRender();
+    const silentDraw = { excite: uniforms.uExcite.value };
     lit.look.body.onBeforeRender();
     const litDraw = { excite: uniforms.uExcite.value, main: uniforms.uMain.value.clone() };
     silent.look.body.onBeforeRender();
-    const silentDraw = { excite: uniforms.uExcite.value, main: uniforms.uMain.value.clone() };
+    const silentAgain = { excite: uniforms.uExcite.value };
 
+    expect(silentDraw.excite).toBe(0); // a bubble (it reads no colour)
     expect(litDraw.excite).toBe(1);
     expect(litDraw.main.x).toBeGreaterThan(litDraw.main.y); // E major is red
-    expect(silentDraw.excite).toBe(0);
-    expect(silentDraw.main.x).toBe(silentDraw.main.y); // never coloured: white
+    expect(silentAgain.excite).toBe(0);
   });
 
   it('removing one creature leaves the shared look intact for the rest', () => {

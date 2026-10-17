@@ -47,6 +47,7 @@ const COLOUR_TAU = 0.12; // harmony colour transition
 const FLASH_HOLD = 0.1; // clap flash: full white this long...
 const FLASH_TAU = 0.05; // ...then a quick fade
 const LIGHT_FROM_DARK = 0.05; // below this a fresh onset snaps (no colour lerp)
+const SWIRL_ONSET_RUSH = 2.5; // swirl speed-up at an onset (x1 + this), decaying with the flare
 
 // Halo radius as a multiple of the body radius (sustain → peak of the flare)
 const HALO_RADIUS = 2.3;
@@ -112,7 +113,17 @@ const BODY_FRAGMENT = /* glsl */ `
   uniform float uFlare;
   uniform float uFlash;
   uniform float uSeed;
+  uniform float uLum;
+  uniform float uFlicker;
+  uniform float uFleckW;
+  uniform float uRainbow;
+  uniform float uOpal;
+  uniform float uDensity;
+  uniform vec3 uFleck;
   uniform vec3 uMain;
+  uniform vec3 uAccent;
+  uniform vec3 uGlow;
+  uniform vec3 uComp;
   uniform vec3 uRefl0;
   uniform vec3 uRefl1;
   uniform vec3 uRefl2;
@@ -169,7 +180,8 @@ const BODY_FRAGMENT = /* glsl */ `
       float rB = ridge(vnoise(p1 * 3.4 + warp * 1.4 + 3.0));
       float filB = pow(rB, 9.0);
       float depth = ndv * ndv; // path length through the ball
-      float plasma = depth * (0.55 + 0.45 * vnoise(p1 * 4.0 + warp + t));
+      float pn = vnoise(p1 * 4.0 + warp + t);
+      float plasma = depth * (0.55 + 0.45 * pn);
 
       // Dissonant added notes: each reflection colour owns drifting regions
       // of the ball — it tints the plasma there and rides wider strands.
@@ -183,19 +195,73 @@ const BODY_FRAGMENT = /* glsl */ `
         float m2 = smoothstep(0.35, 0.7, vnoise(p0 * 1.5 + 53.0)) * uReflW.z;
         float mSum = m0 + m1 + m2;
         reflCol = (uRefl0 * m0 + uRefl1 * m1 + uRefl2 * m2) / max(mSum, 1e-4);
-        reflAmt = clamp(mSum, 0.0, 1.0);
+        // Capped: however many notes are added, the triad's own colour
+        // stays dominant (Messiaen's "a little gold")
+        reflAmt = clamp(mSum, 0.0, 0.6);
       }
       vec3 plasmaCol = mix(uMain, reflCol, reflAmt * 0.45);
       float reflFil = pow(rB, 4.0) * reflAmt;
 
-      // Kept under 1.0 at sustain so the swirl stays readable; the onset
-      // flare pushes it into a white-hot blaze
-      vec3 litCol = plasmaCol * (0.16 + 0.5 * plasma) + uMain * filA * 0.9
-                  + uMain * filB * 1.3 * (1.0 - reflAmt) + reflCol * reflFil * 1.6;
-      litCol += vec3(pow(ndv, 6.0) * (0.04 + 0.55 * uFlare)); // white-hot heart, hottest at onset
-      litCol += uMain * fres * 0.6; // corona at the limb
+      // The plasma is the colour's ground (uMain), the filaments its light
+      // (uAccent), the corona and halo its glow (uGlow) — one hue, lifted,
+      // unless Messiaen named two colours: "black-gold" is a black body
+      // with gold filaments and only a dim gold glow. Kept under 1.0 at
+      // sustain so the swirl stays readable.
+      vec3 litCol = plasmaCol * (0.16 + 0.5 * plasma) + uAccent * filA * 0.9
+                  + uAccent * filB * 1.3 * (1.0 - 0.5 * reflAmt) + reflCol * reflFil * 1.6;
+      litCol += uGlow * fres * 0.6; // corona at the limb
+      // Flecks: the sparse second colour of Messiaen's chord descriptions
+      // ("brown with gold stars"), as glints riding the swirl — rainbow for
+      // F# major, "a sparkling of all possible colours"
+      if (uFleckW > 0.0) {
+        float glint = pow(ridge(vnoise(p0 * 7.0 + warp * 2.0 + t * 0.7)), 10.0);
+        // A second colour is a scatter of stars, never a web: the triad
+        // keeps one dominant hue. F#'s sparkle of all colours stays dense.
+        float stars = uRainbow < 1.0 ? smoothstep(0.62, 0.82, vnoise(p1 * 3.0 + 41.0 + t * 0.25)) : 1.0;
+        glint *= mix(stars, 1.0, uRainbow);
+        vec3 fleckCol = uFleck;
+        if (uRainbow > 0.0) {
+          // Hue phase from the plasma noise already at hand
+          vec3 rainbow = 0.5 + 0.5 * cos(6.28318 * (pn * 2.0 + warp.y + vec3(0.0, 0.33, 0.67)));
+          fleckCol = mix(uFleck, rainbow, uRainbow);
+        }
+        litCol += fleckCol * glint * 1.4 * uFleckW;
+        // ...and F#'s whole surface shimmers with every colour, not only
+        // its glints: unmistakable at any distance
+        litCol = mix(litCol, litCol * (0.55 + 0.9 * irid), 0.45 * uRainbow * uFleckW);
+      }
+      // A lone note is all but uncoloured: a milky, opaline light (only a
+      // faint play of the bubble's film) over the faint tint of its
+      // resonance — never a rainbow, which is F# major's alone
+      if (uOpal > 0.0) {
+        vec3 opalCol = mix(vec3(0.82), irid, 0.15);
+        float level = max(max(max(litCol.r, litCol.g), litCol.b), 0.5);
+        litCol = mix(litCol, opalCol * level, uOpal * 0.5);
+      }
+      // Dissonance: the painter's complement of the light flares in a
+      // fringe at the limb, pale and intermittent — it bursts out, goes
+      // out, bursts out again (Messiaen's red-on-white afterimage). The
+      // bursts are timed on the CPU (uFlicker); 0 between them and when
+      // consonant, which skips this.
+      if (uFlicker > 0.0) {
+        litCol = mix(litCol, uComp, clamp(pow(rim, 3.0) * uFlicker * 1.6, 0.0, 0.85));
+      }
+      // The onset flare brightens the COLOUR. A channel pushed over 1.0
+      // pulls the whole colour back by its peak, so orange blazes as orange
+      // instead of clipping toward yellow-white
       litCol *= 0.85 + 0.75 * uFlare;
-      float litA = clamp(0.45 + 0.55 * depth + filA + filB, 0.0, 1.0);
+      litCol /= max(max(max(litCol.r, litCol.g), litCol.b), 1.0);
+      // Register (uLum): higher is graded toward white, lower is pulled
+      // down by black — lightness only, the hue stays
+      litCol = uLum >= 1.0 ? mix(litCol, vec3(1.0), uLum - 1.0) : litCol * uLum;
+      // A small hot heart, hottest at the onset — heated toward the
+      // creature's own light, not white: black-gold flares gold, dark red
+      // red (and a dense body bleaches least)
+      vec3 heat = mix(uAccent / max(max(max(uAccent.r, uAccent.g), uAccent.b), 1e-3), vec3(1.0), 0.35);
+      litCol = mix(litCol, heat, pow(ndv, 8.0) * (0.04 + 0.4 * uFlare) * (1.0 - 0.6 * uDensity));
+      // Dark and grey bodies are dense (uDensity, from the table colour):
+      // smoke and pewter, not the floor showing through glass
+      float litA = clamp(0.45 + 0.55 * depth + filA + filB + uDensity, 0.0, 1.0);
 
       col = mix(bubbleCol, litCol, uExcite);
       a = mix(bubbleA, litA, uExcite);
@@ -244,7 +310,8 @@ const HALO_FRAGMENT = /* glsl */ `
   uniform float uTime;
   uniform float uIntensity;
   uniform float uFloorY;
-  uniform vec3 uMain;
+  uniform float uLum;
+  uniform vec3 uGlow;
   uniform vec3 uRefl0;
   uniform vec3 uRefl1;
   uniform vec3 uRefl2;
@@ -259,7 +326,9 @@ const HALO_FRAGMENT = /* glsl */ `
     vec2 q = vUv * 2.0 - 1.0;
     float r = length(q);
     if (r >= 1.0) discard;
-    float glow = exp(-r * r * 4.0) * (1.0 - r);
+    // Strongest around the body, weaker across its face: the aura must not
+    // wash out the body's own colour (a dark red stays dark)
+    float glow = exp(-r * r * 4.0) * (1.0 - r) * mix(0.3, 1.0, smoothstep(0.25, 0.5, r));
     // Reflections orbit the halo as coloured arcs
     float ang = atan(q.y, q.x) + uTime * 0.9;
     float a0 = uReflW.x * smoothstep(0.1, 0.9, sin(ang));
@@ -268,9 +337,9 @@ const HALO_FRAGMENT = /* glsl */ `
     float aSum = a0 + a1 + a2;
     vec3 tint = (uRefl0 * a0 + uRefl1 * a1 + uRefl2 * a2) / max(aSum, 1e-4);
     float ring = smoothstep(0.15, 0.5, r);
-    vec3 col = mix(uMain, tint, clamp(aSum * ring, 0.0, 0.9));
+    vec3 col = mix(uGlow, tint, clamp(aSum * ring, 0.0, 0.9));
     float floorFade = smoothstep(uFloorY, uFloorY + 0.6, vWorldY);
-    gl_FragColor = vec4(col, glow * uIntensity * floorFade * 1.3);
+    gl_FragColor = vec4(col, glow * uIntensity * uLum * floorFade * 1.3);
     #include <tonemapping_fragment>
     #include <encodings_fragment>
   }
@@ -280,7 +349,17 @@ const HALO_FRAGMENT = /* glsl */ `
 // here are placeholders: each mesh's onBeforeRender writes its creature's
 // values in just before the draw (bindBody / bindHalo).
 const colourUniforms = () => ({
+  uLum: { value: 1 },
+  uFlicker: { value: 0 },
+  uFleckW: { value: 0 },
+  uRainbow: { value: 0 },
+  uOpal: { value: 0 },
+  uDensity: { value: 0 },
+  uFleck: { value: new THREE.Vector3(1, 1, 1) },
   uMain: { value: new THREE.Vector3(1, 1, 1) },
+  uAccent: { value: new THREE.Vector3(1, 1, 1) },
+  uGlow: { value: new THREE.Vector3(1, 1, 1) },
+  uComp: { value: new THREE.Vector3(1, 1, 1) },
   uRefl0: { value: new THREE.Vector3(1, 1, 1) },
   uRefl1: { value: new THREE.Vector3(1, 1, 1) },
   uRefl2: { value: new THREE.Vector3(1, 1, 1) },
@@ -319,8 +398,28 @@ const HALO_MATERIAL = new THREE.ShaderMaterial({
 BODY_MATERIAL.userData.shared = true;
 HALO_MATERIAL.userData.shared = true;
 
+// The halo reads only these
+const copyHaloColours = (to, from) => {
+  to.uLum.value = from.uLum.value;
+  to.uGlow.value.copy(from.uGlow.value);
+  to.uRefl0.value.copy(from.uRefl0.value);
+  to.uRefl1.value.copy(from.uRefl1.value);
+  to.uRefl2.value.copy(from.uRefl2.value);
+  to.uReflW.value.copy(from.uReflW.value);
+};
+
 const copyColours = (to, from) => {
+  to.uLum.value = from.uLum.value;
+  to.uFlicker.value = from.uFlicker.value;
+  to.uFleckW.value = from.uFleckW.value;
+  to.uRainbow.value = from.uRainbow.value;
+  to.uOpal.value = from.uOpal.value;
+  to.uDensity.value = from.uDensity.value;
+  to.uFleck.value.copy(from.uFleck.value);
   to.uMain.value.copy(from.uMain.value);
+  to.uAccent.value.copy(from.uAccent.value);
+  to.uGlow.value.copy(from.uGlow.value);
+  to.uComp.value.copy(from.uComp.value);
   to.uRefl0.value.copy(from.uRefl0.value);
   to.uRefl1.value.copy(from.uRefl1.value);
   to.uRefl2.value.copy(from.uRefl2.value);
@@ -337,10 +436,14 @@ function bindBody(look) {
   const from = look._uniforms;
   to.uTime.value = from.uTime.value;
   to.uExcite.value = from.uExcite.value;
-  to.uFlare.value = from.uFlare.value;
   to.uFlash.value = from.uFlash.value;
   to.uSeed.value = from.uSeed.value;
-  copyColours(to, from);
+  // The rest is read only by the lit branch (uExcite > 0): a silent bubble
+  // leaves the last lit creature's values in place, so three uploads none
+  if (from.uExcite.value > 0) {
+    to.uFlare.value = from.uFlare.value;
+    copyColours(to, from);
+  }
   BODY_MATERIAL.uniformsNeedUpdate = true;
 }
 
@@ -351,11 +454,28 @@ function bindHalo(look) {
   to.uIntensity.value = from.uIntensity.value;
   to.uFloorY.value = from.uFloorY.value;
   to.uPull.value = from.uPull.value;
-  copyColours(to, from);
+  copyHaloColours(to, from);
   HALO_MATERIAL.uniformsNeedUpdate = true;
 }
 
 const NOOP = () => {};
+
+// The dissonance fringe's bursts: smooth 1D value noise over time, the same
+// for every pixel of a draw — so worked out here, once per creature per
+// frame, not per fragment
+const hash1 = (n) => {
+  const x = Math.sin(n * 127.1) * 43758.5453;
+  return x - Math.floor(x);
+};
+function noise1(x) {
+  const i = Math.floor(x);
+  const f = x - i;
+  return hash1(i) + (hash1(i + 1) - hash1(i)) * f * f * (3 - 2 * f);
+}
+function flickerBurst(time, seed) {
+  const k = Math.min(1, Math.max(0, (noise1(time * 2.7 + seed * 13.1) - 0.45) / 0.25));
+  return k * k * (3 - 2 * k);
+}
 
 const srgbToLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
@@ -375,10 +495,86 @@ const lerp3 = (from, to, a) => {
   for (let i = 0; i < 3; i += 1) from[i] += (to[i] - from[i]) * a;
 };
 
+/**
+ * Ease a weight toward its target; one fading to 0 lands on EXACTLY 0 (an
+ * exponential never would), so the shader skips that layer's work outright.
+ */
+const easeToZero = (value, target, a) => {
+  const next = value + (target - value) * a;
+  return target === 0 && next < 1e-3 ? 0 : next;
+};
+
+/**
+ * Scale a linear colour's chroma in place, in OKLab: lightness and hue are
+ * held, only colourfulness changes — < 1 for a lone note or an interval
+ * (never a muddy grey drift in RGB), > 1 for the added sixth's deeper
+ * colour (clamped to the displayable range).
+ */
+function saturate3(c, chroma) {
+  if (chroma === 1) return c;
+  const l = Math.cbrt(0.4122214708 * c[0] + 0.5363325363 * c[1] + 0.0514459929 * c[2]);
+  const m = Math.cbrt(0.2119034982 * c[0] + 0.6806995451 * c[1] + 0.1073969566 * c[2]);
+  const s = Math.cbrt(0.0883024619 * c[0] + 0.2817188376 * c[1] + 0.6299787005 * c[2]);
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  const A = (1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s) * chroma;
+  const B = (0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s) * chroma;
+  const l3 = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m3 = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s3 = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  const clamp01 = (v) => Math.min(1, Math.max(0, v));
+  c[0] = clamp01(4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3);
+  c[1] = clamp01(-1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3);
+  c[2] = clamp01(-0.0041960863 * l3 - 0.7034186147 * m3 + 1.707614701 * s3);
+  return c;
+}
+
+// A lone note's LIGHT (filaments, glow) lifts toward a pale pearly light by
+// this much at full opal; its body keeps its own lightness — Messiaen's
+// uncoloured is luminous, never a muddy grey
+const PEARL = 0.8;
+const PEARL_LIFT = 0.35;
+const liftToPearl = (c, amount) => {
+  for (let i = 0; i < 3; i += 1) c[i] += (PEARL - c[i]) * amount;
+  return c;
+};
+
+/**
+ * How dense a body colour is, from the TABLE colour (before any fade): a
+ * dark body is smoke, not glass (black-gold must read black over a bright
+ * floor), and a named grey reads as pewter, not a clear bubble.
+ */
+const scratchLinear = [0, 0, 0];
+function densityOf(hex) {
+  const c = hexToLinearInto(hex, scratchLinear);
+  const lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const darkness = 1 - Math.min(1, lum * 4);
+  const max = Math.max(c[0], c[1], c[2]);
+  const saturation = max > 0 ? (max - Math.min(c[0], c[1], c[2])) / max : 0;
+  const greyness = Math.min(1, Math.max(0, (0.3 - saturation) / 0.2));
+  return 0.4 * darkness + 0.25 * greyness;
+}
+
+const accentOf = (harmony) => (harmony.accent === undefined ? harmony.main : harmony.accent);
+const glowOf = (harmony) => (harmony.glow === undefined ? accentOf(harmony) : harmony.glow);
+const chromaOf = (harmony) => (harmony.chroma === undefined ? 1 : harmony.chroma);
+const fleckOf = (harmony) => (harmony.fleck === undefined ? null : harmony.fleck);
+const rainbowOf = (harmony) => (harmony.rainbow === undefined ? 0 : harmony.rainbow);
+// How opaline (uncoloured) a faded light is: a lone note's chroma is fully
+// so; an interval (0.85) and a chord are not at all
+const OPAL_FROM = 0.85;
+const OPAL_SPAN = 0.4;
+const opalOf = (chroma) => Math.min(1, Math.max(0, (OPAL_FROM - chroma) / OPAL_SPAN));
+const dissonanceOf = (harmony) =>
+  harmony.dissonance === undefined || harmony.complement == null ? 0 : harmony.dissonance;
+
 /** Same colour target? (Cached harmonies are shared objects: usually `a === b`.) */
 function sameHarmony(a, b) {
   if (a === b) return true;
-  if (a.main !== b.main || a.reflections.length !== b.reflections.length) return false;
+  if (a.main !== b.main || accentOf(a) !== accentOf(b) || glowOf(a) !== glowOf(b)) return false;
+  if (chromaOf(a) !== chromaOf(b)) return false;
+  if (a.complement !== b.complement || dissonanceOf(a) !== dissonanceOf(b)) return false;
+  if (fleckOf(a) !== fleckOf(b) || rainbowOf(a) !== rainbowOf(b)) return false;
+  if (a.reflections.length !== b.reflections.length) return false;
   for (let i = 0; i < a.reflections.length; i += 1) {
     if (a.reflections[i] !== b.reflections[i]) return false;
   }
@@ -404,13 +600,33 @@ class CreatureLook {
     // Colour state (linear RGB) — current values lerp toward targets
     this._main = [1, 1, 1];
     this._mainTarget = [1, 1, 1];
+    this._accent = [1, 1, 1];
+    this._accentTarget = [1, 1, 1];
+    this._glow = [1, 1, 1];
+    this._glowTarget = [1, 1, 1];
+    this._comp = [1, 1, 1]; // complementary flicker colour...
+    this._compTarget = [1, 1, 1];
+    this._flicker = 0; // ...and its strength (the chord's dissonance)
+    this._flickerTarget = 0;
+    this._fleck = [1, 1, 1]; // fleck colour...
+    this._fleckTarget = [1, 1, 1];
+    this._fleckW = 0; // ...its weight (0 = none)...
+    this._fleckWTarget = 0;
+    this._rainbow = 0; // ...and how rainbow it is (F# major)
+    this._rainbowTarget = 0;
+    this._opal = 0; // opaline, uncoloured light (a lone note)
+    this._opalTarget = 0;
+    this._density = 0; // body opacity boost (densityOf)...
+    this._densityTarget = 0;
+    this._lum = 1; // register luminosity (see update)...
+    this._lumTarget = 1; // ...and where it is heading
     this._reflections = Array.from({ length: MAX_REFLECTIONS }, () => ({
       colour: [1, 1, 1],
       target: [1, 1, 1],
       weight: 0,
       weightTarget: 0,
     }));
-    this._harmony = null; // last {main, reflections} hex target
+    this._harmony = null; // last core/messiaenColour target
 
     // THIS creature's uniform values (body + halo). Not attached to any
     // material: bindBody/bindHalo copy them into the shared materials as
@@ -484,7 +700,7 @@ class CreatureLook {
     return this._lit * (SUSTAIN_GLOW + (1 - SUSTAIN_GLOW) * this._flare);
   }
 
-  /** The harmony colour the look is showing/moving toward ({main, reflections} hex). */
+  /** The harmony colour the look is showing/moving toward (core/messiaenColour's answer). */
   get harmonyColour() {
     return this._harmony;
   }
@@ -494,13 +710,20 @@ class CreatureLook {
    * for every creature every frame).
    * @param {number} deltaTime - seconds
    * @param {boolean} sounding - is any note of the creature sounding now?
-   * @param {?{main:number, reflections:number[]}} harmony - target colour
-   *   (core/messiaenColour); ignored when null (keeps the last colour). Only
-   *   read, never kept beyond the next change or mutated
+   * @param {?object} harmony - target colour: core/messiaenColour's answer
+   *   ({main, accent, glow, reflections, chroma, complement, dissonance,
+   *   fleck, rainbow}; only `main` and `reflections` are required); ignored
+   *   when null (keeps the last colour). Only read, never kept beyond the
+   *   next change or mutated
+   * @param {?number} [luminosity=null] - lightness of the light, by register
+   *   (null keeps the last: a fading voice holds its register)
+   *   (core/messiaenColour registerLuminosity); eased like the colour
    */
-  update(deltaTime, sounding, harmony = null) {
+  update(deltaTime, sounding, harmony = null, luminosity = null) {
     const dt = Math.max(0, Math.min(deltaTime, 0.1));
-    this._time += dt;
+    // The swirl rushes at each onset and calms as the note holds: the
+    // colours move with the sound, at its speed (Messiaen)
+    this._time += dt * (1 + SWIRL_ONSET_RUSH * this._flare);
     this._bobPhase += (dt * Math.PI * 2) / BOB_PERIOD;
 
     if (sounding) {
@@ -517,8 +740,12 @@ class CreatureLook {
       if (this._flash < 1e-3) this._flash = 0;
     }
 
-    if (harmony && harmony.main !== null) this._setHarmony(harmony);
-    this._advanceColour(dt);
+    const coloured = harmony !== null && harmony.main !== null;
+    // A first light takes its luminosity outright, like its colour
+    const snapLum = coloured && this._snapColour;
+    if (coloured) this._setHarmony(harmony);
+    if (luminosity !== null) this._lumTarget = luminosity;
+    this._advanceColour(dt, snapLum);
     this._applyBob();
     this._writeUniforms();
   }
@@ -529,8 +756,44 @@ class CreatureLook {
     this._harmony = harmony;
     const snap = this._snapColour;
     this._snapColour = false;
-    hexToLinearInto(harmony.main, this._mainTarget);
-    if (snap) copy3(this._main, this._mainTarget);
+    const chroma = chromaOf(harmony);
+    const opal = opalOf(chroma);
+    saturate3(hexToLinearInto(harmony.main, this._mainTarget), chroma);
+    liftToPearl(
+      saturate3(hexToLinearInto(accentOf(harmony), this._accentTarget), chroma),
+      PEARL_LIFT * opal
+    );
+    liftToPearl(
+      saturate3(hexToLinearInto(glowOf(harmony), this._glowTarget), chroma),
+      PEARL_LIFT * opal
+    );
+    this._densityTarget = densityOf(harmony.main);
+    this._flickerTarget = dissonanceOf(harmony);
+    const fleck = fleckOf(harmony);
+    // Flecks and F#'s rainbow bloom with the harmony: a lone note's are faint
+    this._fleckWTarget = fleck === null ? 0 : 1 - opal;
+    if (fleck !== null) {
+      saturate3(hexToLinearInto(fleck, this._fleckTarget), chroma);
+      if (this._fleckW < 0.05) copy3(this._fleck, this._fleckTarget);
+    }
+    this._rainbowTarget = rainbowOf(harmony) * (1 - opal);
+    this._opalTarget = opal;
+    if (this._flickerTarget > 0) {
+      saturate3(hexToLinearInto(harmony.complement, this._compTarget), chroma);
+      if (this._flicker < 0.05) copy3(this._comp, this._compTarget);
+    }
+    if (snap) {
+      copy3(this._main, this._mainTarget);
+      copy3(this._accent, this._accentTarget);
+      copy3(this._glow, this._glowTarget);
+      copy3(this._comp, this._compTarget);
+      this._flicker = this._flickerTarget;
+      copy3(this._fleck, this._fleckTarget);
+      this._fleckW = this._fleckWTarget;
+      this._rainbow = this._rainbowTarget;
+      this._opal = this._opalTarget;
+      this._density = this._densityTarget;
+    }
     for (let i = 0; i < MAX_REFLECTIONS; i += 1) {
       const slot = this._reflections[i];
       const hex = harmony.reflections[i];
@@ -538,7 +801,7 @@ class CreatureLook {
         slot.weightTarget = 0;
         if (snap) slot.weight = 0;
       } else {
-        hexToLinearInto(hex, slot.target);
+        saturate3(hexToLinearInto(hex, slot.target), chroma);
         slot.weightTarget = 1;
         // A slot lighting up from nothing takes its colour outright
         if (snap || slot.weight < 0.05) copy3(slot.colour, slot.target);
@@ -547,9 +810,19 @@ class CreatureLook {
     }
   }
 
-  _advanceColour(dt) {
+  _advanceColour(dt, snapLum) {
     const a = 1 - Math.exp(-dt / COLOUR_TAU);
     lerp3(this._main, this._mainTarget, a);
+    lerp3(this._accent, this._accentTarget, a);
+    lerp3(this._glow, this._glowTarget, a);
+    lerp3(this._comp, this._compTarget, a);
+    lerp3(this._fleck, this._fleckTarget, a);
+    this._fleckW = easeToZero(this._fleckW, this._fleckWTarget, a);
+    this._rainbow = easeToZero(this._rainbow, this._rainbowTarget, a);
+    this._opal = easeToZero(this._opal, this._opalTarget, a);
+    this._density += (this._densityTarget - this._density) * a;
+    this._flicker = easeToZero(this._flicker, this._flickerTarget, a);
+    this._lum = snapLum ? this._lumTarget : this._lum + (this._lumTarget - this._lum) * a;
     for (let i = 0; i < MAX_REFLECTIONS; i += 1) {
       const slot = this._reflections[i];
       lerp3(slot.colour, slot.target, a);
@@ -573,7 +846,18 @@ class CreatureLook {
     u.uFlare.value = this._flare;
     u.uFlash.value = this._flash;
     u.uIntensity.value = glow;
+    u.uLum.value = this._lum;
+    u.uFlicker.value =
+      this._flicker > 0 ? this._flicker * flickerBurst(this._time, u.uSeed.value) : 0;
+    u.uFleckW.value = this._fleckW;
+    u.uRainbow.value = this._rainbow;
+    u.uOpal.value = this._opal;
+    u.uDensity.value = this._density;
+    u.uFleck.value.set(this._fleck[0], this._fleck[1], this._fleck[2]);
+    u.uComp.value.set(this._comp[0], this._comp[1], this._comp[2]);
     u.uMain.value.set(this._main[0], this._main[1], this._main[2]);
+    u.uAccent.value.set(this._accent[0], this._accent[1], this._accent[2]);
+    u.uGlow.value.set(this._glow[0], this._glow[1], this._glow[2]);
     // Indexed, not destructured: no iterator per creature per frame
     const refl = this._reflections;
     const c0 = refl[0].colour;

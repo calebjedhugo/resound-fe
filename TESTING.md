@@ -136,8 +136,8 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/RecordingManager.test.js` | Capturing creature notes into inventory |
 | `src/core/PlaybackManager.test.js` | Playing recorded songs, note emission timing |
 | `src/core/ListeningManager.test.js` | Gates/Fountains recognizing correct songs |
-| `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, shared materials) |
-| `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections; memoized path = reference) |
+| `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials) |
+| `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections by triad, added sixth, lone-note paleness, painter's complement + dissonance, register lightness; memoized path = reference) |
 | `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share |
 | `src/core/passContext.test.js` | Main view binds no-op clip planes; door targets render in the canvas colour space; panels never encode twice |
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |

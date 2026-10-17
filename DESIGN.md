@@ -242,7 +242,7 @@ automated playtesters can observe them.)
   stops moving. Idea only; ask before building.) Keyboard look (M + IJKL)
   remains the alternative.
 
-## Creature look (ruled 2026-10-02)
+## Creature look (ruled 2026-10-02; colour reworked 2026-10-17)
 
 Creatures are **ball lightning**, after Cixin Liu's *Ball Lightning*
 (`entities/CreatureLook.js`). Visual only — physics, collision radius,
@@ -261,17 +261,65 @@ forces, recording, matching and audio are untouched.
 - **It floats**: the rendered body hovers `CREATURE_HOVER_HEIGHT` above its
   floor with a gentle bob; the physics position stays on the floor.
 - **Colour is Messiaen's, from the harmony AROUND it** — Messiaen coloured
-  chords, not notes (`core/messiaenColour.js`, table + source cited there).
-  The sounding set = the creature's own sounding notes + every note audible
-  TO IT by the harmony-force rule (its OWN `audibleRange`, doorways
-  included). Main colour = the major/minor triad covering the most notes;
-  ties → rooted on a SOUNDING note (A+C is A minor, never a rootless F
-  major), then rooted on the BASS (A2 under C-E-G is Am7), then major. The
-  colour belongs to the CHORD: a creature's own note never outranks it, so
-  every voice in one chord glows alike (D against C-E-G = white with a green
-  reflection — ruled 2026-10-02). A lone note is its own major triad. Pitch classes outside the triad are
-  dissonant added notes → REFLECTIONS in their own major-key colour, riding
-  the filaments and halo. Colour changes lerp briefly, never snap mid-glow.
+  chords, never single notes (`core/messiaenColour.js`: table, rules and
+  sources cited there; reworked from the sources 2026-10-17 — the designer
+  delegated the colour scheme). The sounding set = the creature's own
+  sounding notes + every note audible TO IT by the harmony-force rule (its
+  OWN `audibleRange`, doorways included).
+  - **Main** = the major/minor triad covering the most notes; ties → rooted
+    on a SOUNDING note (A+C is A minor, never a rootless F major), then on
+    the BASS (A2 under C-E-G is Am7), then major. The colour belongs to the
+    CHORD: a creature's own note never outranks it, so every voice in one
+    chord glows alike (ruled 2026-10-02).
+  - **Reflections**: each dissonant added note shows the light of the OTHER
+    triad it forms inside the chord — of the triads holding it, the one
+    sharing most of the chord's own tones, then the one rooted on the added
+    note, then the main ranking. This reproduces both of Messiaen's own
+    examples over A major (Traité V/1 p. 354): G# "adds a little gold"
+    (C# minor, black-gold) and a high F "adds pale green" (F major). D
+    against C-E-G is white with G major's yellow reflecting. The 2026-10-02
+    rule (each leftover note's own major colour) had no source and
+    contradicted those examples. Reflections stay subordinate (capped) —
+    the triad keeps one dominant hue.
+  - **Dissonance flickers**: added notes also flare the painter's complement
+    (red/green, yellow/violet, blue/orange — Messiaen's pairs) as a pale,
+    intermittent fringe at the limb — his afterimage. Stronger with more
+    added notes; a consonant triad has none. On a hueless light (C major's
+    white, a grey) it is the complement of the added colour (red on white
+    flares green). The added SIXTH on a major triad is no dissonance: it
+    deepens the triad's own colour.
+  - **A lone note is all but uncoloured** (Messiaen: single notes have no
+    colour; colour is the chord's): a milky, opaline glow with only a faint
+    tint of its own major triad — that tint is a GAME CONVENTION (the note's
+    overtones) so a lone singer still hints at its pitch. An interval is
+    nearly full colour. So a creature singing alone glows pearl and BLOOMS
+    into its colour (flecks, F#'s sparkle) when another note — another
+    creature, the player's playback — joins it. Colours fade in OKLab
+    (lightness held), never toward a muddy grey.
+  - **Register = lightness, never hue**: an octave up is graded toward
+    white, an octave down pulled toward black (Messiaen) — neutral at E4,
+    the middle of where creatures sing.
+  - **Rendering the names**: two-colour names render as two colours
+    ("black-gold": a dense black body, gold filaments, a dim gold glow;
+    "grey with red"); dark and grey bodies are dense (smoke, pewter — not
+    glass) with their light lifted so they still read as lit; the onset's
+    hot heart heats toward the creature's own light, not white. Sparse
+    FLECKS carry the second colour of Messiaen's own chord descriptions
+    (C "white and gold", E red and gold, B "brown with gold stars", A
+    sapphire with violet, Ab turquoise with mauve…); F# major — his
+    "sparkling of all possible colours" — shimmers rainbow over its gold.
+    The swirl rushes at each onset (colours move with the sound). Colour
+    changes lerp briefly, never snap mid-glow.
+  - **The table is Håkon Austbø's** reconstruction, corrected where
+    Messiaen's own chord descriptions (Traité VII) disagree: SAPPHIRE is
+    A major's and Ab major is TURQUOISE blue (Austbø's table swaps them);
+    Eb leads with rose. Messiaen himself named only C white, E red, G
+    yellow, A blue, F# all colours; the minor column is Austbø's alone.
+    Disputed entries are marked in the module. Dev puzzles `colour-gallery`
+    (all 24 triads, voiced at neutral register, plus the closest pairs side
+    by side) and `colour-harmony` (added notes, Austbø's chord examples,
+    register, lone notes and duets on the dark keys, a lone scale, a
+    cadence) are the visual check for any change here.
 - No per-creature lights and no bloom/post-processing: areas re-render
   through portal passes, so the glow is shaders + an additive billboard
   that honour portal clipping planes. Every creature draws with ONE shared

@@ -133,6 +133,9 @@ instead of "fixing" it.
 - **Look = ball lightning, visual only** (`entities/CreatureLook.js`, DESIGN.md
   "Creature look"): floats (mesh placed only via `placeMesh`); colour from the harmony
   it hears via `forEachSoundSource` — the forces' source model; never add a second one
+- **Creature colour rules are sourced** (`core/messiaenColour.js` header cites
+  each): don't "simplify" the table or rules without a source. Check any
+  change in the dev puzzles `colour-gallery` and `colour-harmony`
 - **Creature materials are SHARED** (one body + one halo `ShaderMaterial`,
   `userData.shared`): per-creature state lives in `look._uniforms` and is
   copied in by each mesh's `onBeforeRender` — never write a uniform on the
@@ -338,4 +341,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-17 — survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame*
+*Last Updated: 2026-10-17 — survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

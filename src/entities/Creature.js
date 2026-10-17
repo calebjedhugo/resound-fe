@@ -5,7 +5,7 @@ import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import PlaybackManager from 'core/PlaybackManager';
 import SongMatcher from 'core/SongMatcher';
 import resolveSlide from 'core/SlideResolver';
-import { messiaenColourCached, midiOf } from 'core/messiaenColour';
+import { messiaenColourCached, midiOf, registerLuminosity } from 'core/messiaenColour';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
   RECORDING_RANGE_PERCENTAGE,
@@ -253,6 +253,7 @@ class Creature extends Entity {
 
     const sounding = notes.length > 0;
     let harmony = null;
+    let luminosity = null; // silent: the look keeps its last
     if (sounding) {
       // Own notes first, then heard: the order messiaenColour ranks
       // reflections in (memoized — the same harmony is a cache hit)
@@ -261,8 +262,9 @@ class Creature extends Entity {
       for (let i = 0; i < notes.length; i += 1) chord.push(notes[i].midi);
       this._collectHeardNotes(chord);
       harmony = messiaenColourCached(chord);
+      luminosity = registerLuminosity(chord);
     }
-    this.look.update(deltaTime, sounding, harmony);
+    this.look.update(deltaTime, sounding, harmony, luminosity);
   }
 
   /**
