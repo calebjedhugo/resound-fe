@@ -519,7 +519,9 @@ class PortalManager {
       // that actually ran counts as fresh. _playerFresh drives the mirror
       // sweep (an ELIGIBLE face that was frustum-culled still needs a
       // mirror render); _freshFrame drives the stale rotor.
-      const options = { clipOverride: sharedClip, extraWallsBehind: sharedWalls };
+      const footprint = view.footprint(camera, renderer);
+      view._screenShare = footprint ? footprint.screenShare : 1;
+      const options = { clipOverride: sharedClip, extraWallsBehind: sharedWalls, footprint };
       if (view.render(renderer, camera, options)) {
         view._freshFrame = this._frameId;
         view._playerFresh = this._passId;
@@ -604,16 +606,26 @@ class PortalManager {
    * limitation).
    */
   _mirrorSweep(renderer, camera) {
-    const scheduled = new Map(); // view -> { eye, depth }
-    // Seeds: doors whose views the player is actually looking into
+    const scheduled = new Map(); // view -> { eye, depth, bound }
+    // Seeds: doors whose views the player is actually looking into. Each
+    // chain carries a BOUND on how much of the screen anything seen through
+    // it can cover: the seed door's own share (a mirror face can be no
+    // bigger on screen than the panel it is seen through)
     let frontier = [];
     for (const gate of this._linkedGates) {
       if (!this._isSameAreaDoor(gate)) continue; // eslint-disable-line no-continue
       const faces = this._views.get(gate);
       if (!faces || faces.size === 0) continue; // eslint-disable-line no-continue
-      const drewThisFrame = [...faces.values()].some((v) => v._playerFresh === this._passId);
-      if (drewThisFrame) frontier.push({ gate, eye: camera.position });
+      let bound = -1;
+      for (const v of faces.values()) {
+        if (v._playerFresh === this._passId) bound = Math.max(bound, v._screenShare);
+      }
+      if (bound >= 0) frontier.push({ gate, eye: camera.position, bound });
     }
+    // Biggest door first: a face seen through several is scheduled for the
+    // one it shows biggest in (shallowest-wins, then first-found), and the
+    // frontier cap keeps the biggest chains (bounds pass down unchanged)
+    frontier.sort((a, b) => b.bound - a.bound);
 
     for (
       let depth = 1;
@@ -621,7 +633,7 @@ class PortalManager {
       depth += 1
     ) {
       const next = [];
-      for (const { gate: source, eye } of frontier) {
+      for (const { gate: source, eye, bound } of frontier) {
         const sourceFaces = this._views.get(source);
         if (!sourceFaces || sourceFaces.size === 0) continue; // eslint-disable-line no-continue
         const [anyView] = sourceFaces.values();
@@ -637,7 +649,7 @@ class PortalManager {
             const view = faces.get(f);
             if (!view || !view.surface.visible) continue; // eslint-disable-line no-continue
             if (view._playerFresh === this._passId) continue; // eslint-disable-line no-continue
-            if (!scheduled.has(view)) scheduled.set(view, { eye: mapped, depth });
+            if (!scheduled.has(view)) scheduled.set(view, { eye: mapped, depth, bound });
           }
           // The chain continues through this door's view — but only
           // same-area doors show panels to keep refreshing
@@ -646,7 +658,7 @@ class PortalManager {
             this._isSameAreaDoor(gate) &&
             next.length < PortalManager.MIRROR_MAX_FRONTIER
           ) {
-            next.push({ gate, eye: mapped });
+            next.push({ gate, eye: mapped, bound });
           }
         }
       }
@@ -654,17 +666,22 @@ class PortalManager {
     }
 
     if (scheduled.size === 0) return;
-    // Shallowest-first for the cap (keep what dominates the screen), then
-    // render the keepers deepest-first so each level samples fresh content.
-    // Mirror eyes look the way this eye does (a door's mapping is a pure
-    // translation): their targets are sized through its look and lens
+    // Each face as its mapped eye sees it, through the player's look and
+    // lens (a door's mapping is a pure translation): what its target needs,
+    // and how much of the screen it can cover through its chain
     const pose = camera.quaternion && camera.fov ? camera : camera.pose;
-    const kept = [...scheduled.entries()]
-      .sort((a, b) => a[1].depth - b[1].depth)
-      .slice(0, PortalManager.MIRROR_MAX_PASSES)
-      .reverse();
-    for (const [view, { eye }] of kept) {
-      if (view.render(renderer, { position: eye, pose })) {
+    const ranked = [...scheduled.entries()];
+    for (const [view, entry] of ranked) {
+      entry.footprint = pose ? view.footprint({ position: entry.eye, pose }, renderer) : null;
+      entry.share = entry.footprint ? Math.min(entry.footprint.screenShare, entry.bound) : 1;
+    }
+    // Shallowest-first for the cap, biggest on screen first within a level
+    // (keep what dominates the screen), then render the keepers
+    // deepest-first so each level samples fresh content
+    ranked.sort((a, b) => a[1].depth - b[1].depth || b[1].share - a[1].share);
+    const kept = ranked.slice(0, PortalManager.MIRROR_MAX_PASSES).reverse();
+    for (const [view, { eye, footprint }] of kept) {
+      if (view.render(renderer, { position: eye }, { footprint })) {
         view._freshFrame = this._frameId;
       }
     }

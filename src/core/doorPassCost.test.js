@@ -1,6 +1,7 @@
 /**
  * What each door pass costs (core/PortalManager + core/PortalView): a pass
- * draws at the size its panel shows on screen.
+ * draws at the size its panel shows on screen, and the mirror sweep spends
+ * its passes on what the screen can show.
  *
  * Rendering is mocked: a recording renderer stands in for three's, logging
  * every pass (frame, target, size) and the panel it drew. Eyes carry a pose
@@ -185,5 +186,60 @@ describe('A door pass draws at the size its panel shows on screen', () => {
 
     for (let i = 0; i < 120; i += 1) drawFrame(renderer, far);
     expect(renderer.shownBy(panel).height).toBeLessThan(CAP.height);
+  });
+});
+
+describe('The mirror sweep spends its passes on what the screen can show', () => {
+  // A same-area world built for the cap: looking north into S1 shows the
+  // room north of S2, where V1 stands straight ahead; X1's faces are also
+  // in reach of the mapped eye but far off to its side — off screen. X is
+  // listed first, so a sweep picking by discovery order would spend its one
+  // pass on X1.
+  const gate = (id, x, z, partner) => ({
+    type: 'gate',
+    id,
+    facing: 'north',
+    link: { puzzleId: 'sweep-cap', gateId: partner },
+    position: { x, y: 0, z },
+    song: [{ pitch: 'C4', length: '1/4' }],
+  });
+  const world = {
+    id: 'sweep-cap',
+    name: 'Sweep cap',
+    difficulty: 1,
+    gridSize: 15,
+    tempo: 120,
+    playerStart: { x: 3, y: 0, z: 12 },
+    entities: [
+      gate('s1', 3, 7, 's2'),
+      gate('s2', 10, 10, 's1'),
+      gate('x1', 0, 12, 'x2'),
+      gate('x2', 14, 14, 'x1'),
+      gate('v1', 10, 4, 'v2'),
+      gate('v2', 13, 13, 'v1'),
+    ],
+  };
+  const originalCap = PortalManager.constructor.MIRROR_MAX_PASSES;
+
+  afterEach(() => {
+    PortalManager.constructor.MIRROR_MAX_PASSES = originalCap;
+  });
+
+  it('a face in sight through a door wins the cap over faces off screen', () => {
+    installFetchMock({});
+    PortalManager.enterWorld(world);
+    const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of gates) g.open();
+    PortalManager.constructor.MIRROR_MAX_PASSES = 1;
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(3 * WORLD_SCALE, 9 * WORLD_SCALE); // south of S1, looking in
+
+    drawFrame(renderer, eye);
+
+    // The opening frame warms every face up once; the sweep's one pass is
+    // the only second write
+    const byId = (id) => gates.find((g) => g.gateId === id);
+    expect(renderer.writesOf(panelOf(byId('v1'), 'south'))).toHaveLength(2);
+    expect(renderer.writesOf(panelOf(byId('x1'), 'north'))).toHaveLength(1);
   });
 });

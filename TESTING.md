@@ -142,7 +142,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/FrameProfiler.test.js` | Dev profiler times each call by caller (self excludes timed children), counts draw calls and GPU time per pass, reports the worst frames first, and unwraps everything after a run |
 | `src/core/passContext.test.js` | Main view binds no-op clip planes; door targets render in the canvas colour space; panels never encode twice |
 | `src/core/doorViews.test.js` | Door views over their lifetime: the frame a door opens shows the eye's own perspective, each new face is written once, no pass samples an unwritten panel; crossings keep views (same-area teleport, round trip) and an unloading area takes its panels with it |
-| `src/core/doorPassCost.test.js` | What each door pass costs: targets sized to the panel on screen (never soft, half-res when filling the screen, grow at once, shrink lazily) |
+| `src/core/doorPassCost.test.js` | What each door pass costs: targets sized to the panel on screen (never soft, half-res when filling the screen, grow at once, shrink lazily); the mirror sweep's cap keeps faces in sight |
 | `src/core/sceneMatrices.test.js` | World matrices update once a frame per scene: every pass (door passes, main view) draws matrices already updated this frame, never re-derived inside a pass, and nothing drawn moved since — a door's panels born mid-frame included |
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
