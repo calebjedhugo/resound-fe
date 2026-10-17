@@ -1,7 +1,7 @@
 /**
  * Door views over their lifetime (core/PortalManager + core/PortalView):
- * the frame a door opens, and the guarantee that no pass ever samples a
- * panel nothing has drawn yet (it would read BLACK).
+ * the frame a door opens, crossings, and — under both — the guarantee that
+ * no pass ever samples a panel nothing has drawn yet (it would read BLACK).
  *
  * Rendering is mocked: a recording renderer stands in for three's, logging
  * every pass (its target and eye) and, at each pass, every doorway panel the
@@ -10,7 +10,9 @@
 import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
 import { WORLD_SCALE } from 'core/constants';
+import portalA from '../__tests__/fixtures/puzzles/portal-a.json';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
+import deployBasic from '../__tests__/fixtures/puzzles/deploy-basic.json';
 
 /** Serve /puzzles/<id>.json from the fixtures the tests link to. */
 function installFetchMock(puzzles) {
@@ -80,6 +82,14 @@ function drawFrame(renderer, camera) {
   PortalManager.renderPortals(renderer, camera);
   renderer.setRenderTarget(null);
   renderer.render({ children: [gameState.activeArea.group] }, camera); // the main view
+}
+
+/** Put the player at a world spot and let PortalManager react (crossing). */
+async function stepTo(x, z) {
+  gameState.player.position = { x, y: 1.8, z };
+  gameState.player.elevation = 0;
+  PortalManager.update();
+  await jest.runAllTimersAsync();
 }
 
 afterEach(() => {
@@ -169,5 +179,89 @@ describe('The frame a door opens', () => {
     const targets = renderer.passes.map((pass) => pass.target);
     expect(new Set(targets).size).toBe(4); // no face drawn twice
     expect(panelsOf(door).every((panel) => panel.visible)).toBe(true);
+  });
+});
+
+describe('A crossing never rebuilds a door', () => {
+  it('an in-area teleport keeps every view: same panels, no warm-ups', async () => {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-two-pairs');
+    const gates = ctx.getGates();
+    for (const gate of gates) gate.open();
+    const renderer = createRecordingRenderer();
+    drawFrame(renderer, { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE } });
+    const panelsBefore = gates.map((gate) => panelsOf(gate));
+
+    await stepTo(5 * WORLD_SCALE, 5 * WORLD_SCALE + 1); // into pair1-a: lands in pair1-b
+    const arrivalEye = { position: { ...gameState.player.position } };
+    let start = renderer.passes.length;
+    drawFrame(renderer, arrivalEye);
+    const crossingFrame = renderer.passes.length - start;
+    start = renderer.passes.length;
+    drawFrame(renderer, arrivalEye);
+    const nextFrame = renderer.passes.length - start;
+
+    expect(gates.map((gate) => panelsOf(gate))).toEqual(panelsBefore);
+    expect(crossingFrame).toBe(nextFrame); // an ordinary frame: nothing to warm up
+    expect(renderer.unwrittenSamples).toEqual([]);
+  });
+
+  it('a round trip finds the old area’s door as it left it, hidden while away', async () => {
+    installFetchMock({ 'portal-a': portalA, 'portal-b': portalB });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+    const areaA = gameState.activeArea;
+    const [door] = ctx.getGates();
+    door.open();
+    const renderer = createRecordingRenderer();
+    const eyeNorth = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
+    drawFrame(renderer, eyeNorth);
+    const panels = panelsOf(door);
+
+    // Away in the neighbor: nothing draws the old area's door there, so a
+    // pass through the neighbor's own door must never show it (frozen)
+    await PortalManager.teleportToCleanser({
+      puzzleId: 'portal-b',
+      position: { x: 6, y: 0, z: 6 },
+    });
+    drawFrame(renderer, { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 9 * WORLD_SCALE } });
+    expect(visiblePanels(areaA.scene)).toEqual([]);
+
+    // Back home: the same panels, shown again, and no warm-up to pay
+    await PortalManager.teleportToCleanser({
+      puzzleId: 'portal-a',
+      position: { x: 15, y: 0, z: 3 },
+    });
+    let start = renderer.passes.length;
+    drawFrame(renderer, eyeNorth);
+    const returnFrame = renderer.passes.length - start;
+    start = renderer.passes.length;
+    drawFrame(renderer, eyeNorth);
+
+    expect(panelsOf(door)).toEqual(panels);
+    expect(panels.every((panel) => panel.visible)).toBe(true);
+    expect(returnFrame).toBe(renderer.passes.length - start);
+    expect(renderer.unwrittenSamples).toEqual([]);
+  });
+
+  it('a door whose area unloads loses its panels with it', async () => {
+    installFetchMock({ 'portal-b': portalB, 'deploy-basic': deployBasic });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+    const [door] = ctx.getGates();
+    door.open();
+    drawFrame(createRecordingRenderer(), {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE },
+    });
+    expect(panelsOf(door)).toHaveLength(4);
+
+    // Far from both portal areas: they unload, and every view goes first
+    await PortalManager.teleportToCleanser({
+      puzzleId: 'deploy-basic',
+      position: { x: 7 * WORLD_SCALE, y: 0, z: 11 * WORLD_SCALE },
+    });
+
+    expect(PortalManager.getArea('portal-a')).toBeNull();
+    expect(panelsOf(door)).toEqual([]);
   });
 });

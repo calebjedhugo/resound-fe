@@ -86,11 +86,13 @@ class PortalManager {
     // has a live scene to render (core/DeployManager).
     this._retained = new Set();
     // gate -> Map<facing, PortalView> (all four faces of an open door) or
-    // null once the link proves dangling (the gate stays an ordinary gate)
+    // null once the link proves dangling (the gate stays an ordinary gate).
+    // A view lives as long as BOTH its areas stay loaded: a crossing hides
+    // and retargets views, it never rebuilds them (_retargetViews)
     this._views = new Map();
     // gate -> facings whose adjacent cell holds no wall (static per area,
     // computed lazily; drives the shared-clip approach axis)
-    this._openFacingsByGate = new Map();
+    this._openFacingsByGate = new WeakMap();
     // Faces created this pass, pending their first write (_flushWarmUps)
     this._newViews = [];
     // Frame counter for face freshness: a face nobody's eye renders still
@@ -258,9 +260,9 @@ class PortalManager {
    * are omnidirectional: EVERY face the eye is on the outward side of gets a
    * live view (two at a corner — both visible sides see through; a working
    * door never shows a green shell). A door's faces are built once its
-   * neighbor area is loaded and kept until the active area changes; while
-   * every linked gate is closed this is a no-op, so the see-through pass
-   * costs nothing.
+   * neighbor area is loaded and kept for as long as both areas stay loaded
+   * (crossings included); while every linked gate is closed this is a
+   * no-op, so the see-through pass costs nothing.
    * @param {THREE.WebGLRenderer} renderer
    * @param {THREE.Camera} camera - the player camera
    */
@@ -343,7 +345,7 @@ class PortalManager {
    * itself see-through even when the destination isn't the active area.
    * Only doors whose partner area is loaded render (a partner at
    * link-depth 2 isn't live). Views land in the same per-gate registry as
-   * the active area's (disposed together on active change); callers hide
+   * the active area's (kept while both areas stay loaded); callers hide
    * them again after sampling (hideAreaPortals) so their textures — valid
    * for this eye only — never smear into other sightlines.
    */
@@ -697,7 +699,7 @@ class PortalManager {
   /**
    * Facings of `gate` whose adjacent cell holds no wall (in the gate's own
    * area, at the gate's storey). Gates and walls never move, so the answer
-   * is cached until the views are torn down.
+   * is cached for the gate's lifetime.
    */
   _openFacings(gate) {
     let open = this._openFacingsByGate.get(gate);
@@ -992,10 +994,10 @@ class PortalManager {
   /**
    * After the active area changes (world entry or crossing): rescan its
    * linked gates, load missing neighbors as LIVE areas, prune areas no
-   * longer adjacent, and rebuild the door/view sets.
+   * longer adjacent, and rebuild the door set; doorway views carry over
+   * (_retargetViews).
    */
   _afterActiveChange() {
-    this._disposeViews();
     this._transitioning = false;
     this._linkedGates = this._activeArea
       ? this._activeArea.entityManager.getByType('gate').filter((g) => g.link && g.link.puzzleId)
@@ -1004,15 +1006,19 @@ class PortalManager {
     // Prune areas that are neither active nor adjacent to it (their state
     // resets on the next visit — streaming beyond depth 1 is a later stage).
     // Retained areas (the deployable gate's destination) are kept live too.
+    // Views hanging on (or looking into) a pruned area go first: the area's
+    // teardown frees the gate meshes their panels hang on.
     const wanted = new Set(this._retained);
     if (this._activeArea) wanted.add(this._activeArea.id);
     for (const gate of this._linkedGates) wanted.add(gate.link.puzzleId);
     for (const [id, area] of [...this._areas]) {
       if (!wanted.has(id)) {
+        this._disposeViews(area);
         area.dispose();
         this._areas.delete(id);
       }
     }
+    this._retargetViews();
 
     for (const gate of this._linkedGates) {
       this._loadNeighbor(gate.link.puzzleId);
@@ -1159,13 +1165,45 @@ class PortalManager {
     this._tileMirrors.push({ mesh: mirror, group: toArea.group });
   }
 
-  _disposeViews() {
-    for (const faces of this._views.values()) {
-      if (!faces) continue; // eslint-disable-line no-continue -- null = dangling marker
-      for (const view of faces.values()) view.dispose();
+  /**
+   * Free doorway views: those hanging on or looking into `area`, or every
+   * view when no area is given (world teardown).
+   */
+  _disposeViews(area = null) {
+    for (const [gate, faces] of [...this._views]) {
+      const [anyView] = faces ? faces.values() : [];
+      const involved =
+        !area || gate.area === area || Boolean(anyView && anyView.neighborArea === area);
+      if (involved) {
+        if (faces) for (const view of faces.values()) view.dispose();
+        this._views.delete(gate);
+      }
     }
-    this._views.clear();
-    this._openFacingsByGate.clear();
+  }
+
+  /**
+   * A crossing swaps areas, never rebuilds them — and never rebuilds a door
+   * either (an in-area teleport changes nothing a view depends on; a round
+   * trip finds the old area's doors as it left them). Every surviving view
+   * follows its neighbor area's content into whichever scene now holds it
+   * (the main scene for the active area), and a door no longer in play —
+   * the old area's, now a neighbor's — hides: nothing renders it there, so
+   * a cross-area pass into that area would show it frozen. Dangling markers
+   * clear, to be re-detected.
+   */
+  _retargetViews() {
+    const inPlay = new Set(this._linkedGates);
+    for (const [gate, faces] of [...this._views]) {
+      if (!faces) {
+        this._views.delete(gate);
+        continue; // eslint-disable-line no-continue
+      }
+      for (const view of faces.values()) {
+        const area = view.neighborArea;
+        view.setScene(area === this._activeArea ? this._mainScene : area.scene);
+        if (!inPlay.has(gate)) view.setVisible(false);
+      }
+    }
   }
 
   /**

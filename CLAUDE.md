@@ -176,7 +176,11 @@ instead of "fixing" it.
   hides them from behind) — a panel is sampled by OTHER portals' passes
   (mirror sightlines, the cleanser gate's mapped eye), and a lazily-created
   or hidden face used to sample as a BLACK hole until the player looked at
-  it directly (the teleport stress test, fixed 2026-07-18). Freshness is
+  it directly (the teleport stress test, fixed 2026-07-18). **Views OUTLIVE
+  crossings**: kept while both their areas stay loaded (`_retargetViews`
+  moves each between the main scene and `Area.scene` and hides doors out of
+  play), freed when either area prunes — a same-area teleport changes
+  nothing, a round trip finds the old doors as it left them. Freshness is
   three-tier: player-eligible faces render fresh each frame (level 0); the
   recursive MIRROR SWEEP (`_mirrorSweep`) does a budgeted BFS of the
   portal graph from every same-area door that ACTUALLY DREW this frame,

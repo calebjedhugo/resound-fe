@@ -280,6 +280,16 @@ class PortalView {
   }
 
   /**
+   * Point the view at the scene that now holds the neighbor area's content:
+   * the main render scene while that area is ACTIVE (a same-area door; its
+   * own Area.scene is empty then), its Area.scene otherwise. A crossing moves
+   * areas between the two, never rebuilds them, so the view survives it.
+   */
+  setScene(scene) {
+    this._scene = scene;
+  }
+
+  /**
    * This panel's own doorway clip plane (neighbor-world space). PortalManager
    * shares the PRIMARY approach panel's plane across every panel of a door so
    * the side windows clip along the SAME axis as the approach — otherwise a
