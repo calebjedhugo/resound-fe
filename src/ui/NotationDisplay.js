@@ -177,12 +177,14 @@ function acquireEngraving(staff) {
   const width = renderWidth(staff);
   const key = JSON.stringify([width, input]);
   let engraving = engravings.get(key);
-  if (!engraving) {
-    engraving = { key, users: 0, texture: null, aspect: 0, waiting: new Set() };
+  if (engraving) {
+    engraving.users += 1;
+  } else {
+    // Counted before engraving starts: its image may load at once
+    engraving = { key, users: 1, texture: null, aspect: 0, waiting: new Set() };
     engravings.set(key, engraving);
     engrave(engraving, input, width);
   }
-  engraving.users += 1;
   return engraving;
 }
 

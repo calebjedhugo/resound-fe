@@ -291,6 +291,15 @@ describe('NotationDisplay on Gates and Fountains', () => {
     let renderSpy;
     let drawn;
     const originalImage = global.Image;
+    // Every gate/fountain a test builds is disposed after it, so no staff
+    // outlives its test (staves are shared by whatever still shows them)
+    const built = [];
+    const track = (entity) => {
+      built.push(entity);
+      return entity;
+    };
+    const gateWith = (data) => track(new Gate({ x: 0, y: 0, z: 0 }, data));
+    const fountainWith = (data) => track(new Fountain({ x: 0, y: 0, z: 0 }, data));
 
     beforeEach(() => {
       renderSpy = jest.spyOn(NotationRenderer.prototype, 'render');
@@ -312,6 +321,7 @@ describe('NotationDisplay on Gates and Fountains', () => {
 
     afterEach(() => {
       jest.runAllTimers(); // pending image loads land on the stand-ins
+      for (const entity of built.splice(0)) entity.dispose();
       jest.restoreAllMocks();
       global.Image = originalImage;
       delete URL.createObjectURL;
@@ -324,8 +334,8 @@ describe('NotationDisplay on Gates and Fountains', () => {
 
     it('gates showing the same song engrave it ONCE', () => {
       // Separate arrays with equal content: the staff is the song, not the object
-      const gates = [1, 2, 3].map(
-        () => new Gate({ x: 0, y: 0, z: 0 }, { song: song('D4', 'F4'), timeSignature: [4, 4] })
+      const gates = [1, 2, 3].map(() =>
+        gateWith({ song: song('D4', 'F4'), timeSignature: [4, 4] })
       );
 
       expect(gates).toHaveLength(3);
@@ -333,8 +343,8 @@ describe('NotationDisplay on Gates and Fountains', () => {
     });
 
     it('a gate and a fountain with the same staff share it', () => {
-      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: song('D4', 'G4') });
-      const fountain = new Fountain({ x: 0, y: 0, z: 0 }, { song: song('D4', 'G4') });
+      const gate = gateWith({ song: song('D4', 'G4') });
+      const fountain = fountainWith({ song: song('D4', 'G4') });
       jest.runAllTimers();
 
       expect(renderSpy).toHaveBeenCalledTimes(1);
@@ -343,10 +353,10 @@ describe('NotationDisplay on Gates and Fountains', () => {
 
     it('a different song, meter or key is a different staff', () => {
       const tune = song('E4', 'A4');
-      new Gate({ x: 0, y: 0, z: 0 }, { song: tune }); // eslint-disable-line no-new
-      new Gate({ x: 0, y: 0, z: 0 }, { song: song('E4', 'B4') }); // eslint-disable-line no-new
-      new Gate({ x: 0, y: 0, z: 0 }, { song: tune, timeSignature: [3, 4] }); // eslint-disable-line no-new
-      new Gate({ x: 0, y: 0, z: 0 }, { song: tune, keySignature: 'G' }); // eslint-disable-line no-new
+      gateWith({ song: tune });
+      gateWith({ song: song('E4', 'B4') });
+      gateWith({ song: tune, timeSignature: [3, 4] });
+      gateWith({ song: tune, keySignature: 'G' });
       jest.runAllTimers();
 
       expect(renderSpy).toHaveBeenCalledTimes(4);
@@ -362,13 +372,13 @@ describe('NotationDisplay on Gates and Fountains', () => {
     });
 
     it('every display of a staff shows the same texture, fitted the same way', () => {
-      const first = new Gate({ x: 0, y: 0, z: 0 }, { song: song('F4', 'A4', 'C5') });
-      const second = new Gate({ x: 0, y: 0, z: 0 }, { song: song('F4', 'A4', 'C5') });
+      const first = gateWith({ song: song('F4', 'A4', 'C5') });
+      const second = gateWith({ song: song('F4', 'A4', 'C5') });
       expect(shownTexture(first)).toBeFalsy(); // nothing until the image loads
 
       jest.runAllTimers();
       // A gate built once the staff exists shows it at once, without engraving
-      const late = new Gate({ x: 0, y: 0, z: 0 }, { song: song('F4', 'A4', 'C5') });
+      const late = gateWith({ song: song('F4', 'A4', 'C5') });
 
       expect(drawn).toHaveLength(1);
       const texture = shownTexture(first);
@@ -388,8 +398,8 @@ describe('NotationDisplay on Gates and Fountains', () => {
     });
 
     it('disposing a gate keeps the texture other gates show; the last one frees it', () => {
-      const keep = new Gate({ x: 0, y: 0, z: 0 }, { song: song('G4', 'B4') });
-      const drop = new Gate({ x: 0, y: 0, z: 0 }, { song: song('G4', 'B4') });
+      const keep = gateWith({ song: song('G4', 'B4') });
+      const drop = gateWith({ song: song('G4', 'B4') });
       jest.runAllTimers();
       const texture = shownTexture(keep);
       const freed = jest.spyOn(texture, 'dispose');
@@ -403,12 +413,12 @@ describe('NotationDisplay on Gates and Fountains', () => {
     });
 
     it('a staff nobody shows any more is engraved afresh for the next gate', () => {
-      const gone = new Gate({ x: 0, y: 0, z: 0 }, { song: song('A4', 'C5') });
+      const gone = gateWith({ song: song('A4', 'C5') });
       jest.runAllTimers();
       const oldTexture = shownTexture(gone);
       gone.dispose();
 
-      const next = new Gate({ x: 0, y: 0, z: 0 }, { song: song('A4', 'C5') });
+      const next = gateWith({ song: song('A4', 'C5') });
       jest.runAllTimers();
 
       expect(renderSpy).toHaveBeenCalledTimes(2);
@@ -417,7 +427,7 @@ describe('NotationDisplay on Gates and Fountains', () => {
     });
 
     it('a staff whose every gate is gone before its image loads is never drawn', () => {
-      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: song('B4', 'D5') });
+      const gate = gateWith({ song: song('B4', 'D5') });
       gate.dispose();
       jest.runAllTimers();
 
@@ -430,7 +440,7 @@ describe('NotationDisplay on Gates and Fountains', () => {
       // request (warning that it does) and widens the SVG to fit; the canvas
       // must follow it
       jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: song('D4', 'A4', 'D4', 'A4') });
+      const gate = gateWith({ song: song('D4', 'A4', 'D4', 'A4') });
       jest.runAllTimers();
 
       const svg = renderSpy.mock.results[0].value;
@@ -446,23 +456,35 @@ describe('NotationDisplay on Gates and Fountains', () => {
       // As each gate used to engrave its own: a failure is never shared
       const { createObjectURL } = URL;
       delete URL.createObjectURL; // the image can't be made
-      const failed = new Gate({ x: 0, y: 0, z: 0 }, { song: song('E5', 'G5') });
+      const failed = gateWith({ song: song('E5', 'G5') });
       URL.createObjectURL = createObjectURL;
 
-      const next = new Gate({ x: 0, y: 0, z: 0 }, { song: song('E5', 'G5') });
+      const next = gateWith({ song: song('E5', 'G5') });
       jest.runAllTimers();
 
       expect(renderSpy).toHaveBeenCalledTimes(2);
       expect(shownTexture(next)).toBeInstanceOf(THREE.CanvasTexture);
       expect(shownTexture(failed)).toBeFalsy();
       failed.dispose(); // releasing the failed one leaves the good one alone
-      const after = new Gate({ x: 0, y: 0, z: 0 }, { song: song('E5', 'G5') });
+      const after = gateWith({ song: song('E5', 'G5') });
       expect(shownTexture(after)).toBe(shownTexture(next));
+    });
+
+    it('a staff whose image loads at once is shown all the same', () => {
+      global.Image = class {
+        set src(url) {
+          this.onload(); // no wait at all
+        }
+      };
+
+      const gate = gateWith({ song: song('F5', 'A5') });
+
+      expect(shownTexture(gate)).toBeInstanceOf(THREE.CanvasTexture);
     });
 
     it('a staff prepared ahead is not engraved again by the gate built from it', () => {
       const release = NotationDisplay.prepare({ song: song('C5', 'E5') });
-      const gate = new Gate({ x: 0, y: 0, z: 0 }, { song: song('C5', 'E5') });
+      const gate = gateWith({ song: song('C5', 'E5') });
       release();
       jest.runAllTimers();
 
