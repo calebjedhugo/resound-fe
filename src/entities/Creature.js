@@ -74,6 +74,9 @@ class Creature extends Entity {
       if (extraDistance + getDistance(this.position, sourcePosition) > this.audibleRange) return;
       this._hearInto.push(midiOf(note.pitch));
     };
+    // ...and the forces' visitor, likewise bound once (calculateForces runs
+    // every physics pass)
+    this._forceVisitor = this._addForceFromSource.bind(this);
 
     // Create unique instrument for this creature
     this.instrument = new Random(this.id);
@@ -376,65 +379,65 @@ class Creature extends Entity {
    * Called every frame to continuously apply forces while harmonies exist
    */
   calculateForces() {
-    // Clear forces from previous frame
-    this.forces = [];
+    // Clear forces from previous frame (in place: this runs every physics
+    // pass for every creature)
+    this.forces.length = 0;
 
     // Only react if we're currently singing
     if (!this.currentNote || !this.instrument.playbackState.isPlaying) {
       return;
     }
 
-    // Helper to add force from a source. For a source in ANOTHER area,
-    // sourcePosition is the doorway on OUR side (the pull/push aims at the
-    // door — sound comes through it) and extraDistance carries the
-    // source->partner-gate leg (+ closed-door leak) for the range check.
-    const addForceFromSource = (sourceNote, sourcePosition, sourceSize, extraDistance = 0) => {
-      // Check if within audible range
-      const distance = extraDistance + getDistance(this.position, sourcePosition);
-      if (distance > this.audibleRange) return;
+    this.forEachSoundSource(this._forceVisitor);
+  }
 
-      // Skip if too close (prevents numerical instability and represents physical contact)
-      const minDistance = this.size + sourceSize;
-      if (distance < minDistance) return;
+  /**
+   * Add the force one source puts on us (calculateForces' visitor, bound
+   * once as this._forceVisitor). For a source in ANOTHER area,
+   * sourcePosition is the doorway on OUR side (the pull/push aims at the
+   * door — sound comes through it) and extraDistance carries the
+   * source->partner-gate leg (+ closed-door leak) for the range check.
+   */
+  _addForceFromSource(sourceNote, sourcePosition, sourceSize, extraDistance = 0) {
+    // Check if within audible range
+    const distance = extraDistance + getDistance(this.position, sourcePosition);
+    if (distance > this.audibleRange) return;
 
-      // Calculate harmony
-      const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, sourceNote.pitch);
-      const harmony = HarmonyAnalyzer.classifyInterval(interval);
+    // Skip if too close (prevents numerical instability and represents physical contact)
+    const minDistance = this.size + sourceSize;
+    if (distance < minDistance) return;
 
-      // Add force based on harmony
-      if (harmony === 'consonant') {
-        // Attraction force toward the sound source
-        const direction = {
-          x: sourcePosition.x - this.position.x,
-          z: sourcePosition.z - this.position.z,
-        };
-        const magnitude = Math.sqrt(direction.x ** 2 + direction.z ** 2);
+    // Calculate harmony
+    const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, sourceNote.pitch);
+    const harmony = HarmonyAnalyzer.classifyInterval(interval);
 
-        if (magnitude > 0) {
-          this.forces.push({
-            x: (direction.x / magnitude) * ATTRACTION_FORCE_STRENGTH,
-            z: (direction.z / magnitude) * ATTRACTION_FORCE_STRENGTH,
-          });
-        }
-      } else if (harmony === 'dissonant') {
-        // Repulsion force away from the sound source
-        const direction = {
-          x: this.position.x - sourcePosition.x,
-          z: this.position.z - sourcePosition.z,
-        };
-        const magnitude = Math.sqrt(direction.x ** 2 + direction.z ** 2);
+    // Add force based on harmony
+    if (harmony === 'consonant') {
+      // Attraction force toward the sound source
+      const directionX = sourcePosition.x - this.position.x;
+      const directionZ = sourcePosition.z - this.position.z;
+      const magnitude = Math.sqrt(directionX ** 2 + directionZ ** 2);
 
-        if (magnitude > 0) {
-          this.forces.push({
-            x: (direction.x / magnitude) * REPULSION_FORCE_STRENGTH,
-            z: (direction.z / magnitude) * REPULSION_FORCE_STRENGTH,
-          });
-        }
+      if (magnitude > 0) {
+        this.forces.push({
+          x: (directionX / magnitude) * ATTRACTION_FORCE_STRENGTH,
+          z: (directionZ / magnitude) * ATTRACTION_FORCE_STRENGTH,
+        });
       }
-      // 'perfect' = no force added
-    };
+    } else if (harmony === 'dissonant') {
+      // Repulsion force away from the sound source
+      const directionX = this.position.x - sourcePosition.x;
+      const directionZ = this.position.z - sourcePosition.z;
+      const magnitude = Math.sqrt(directionX ** 2 + directionZ ** 2);
 
-    this.forEachSoundSource(addForceFromSource);
+      if (magnitude > 0) {
+        this.forces.push({
+          x: (directionX / magnitude) * REPULSION_FORCE_STRENGTH,
+          z: (directionZ / magnitude) * REPULSION_FORCE_STRENGTH,
+        });
+      }
+    }
+    // 'perfect' = no force added
   }
 
   /**
@@ -508,18 +511,17 @@ class Creature extends Entity {
       return;
     }
 
-    // Sum all forces
-    const totalForce = this.forces.reduce(
-      (sum, force) => ({
-        x: sum.x + force.x,
-        z: sum.z + force.z,
-      }),
-      { x: 0, z: 0 }
-    );
+    // Sum all forces (in order from zero, as a reduce would)
+    let totalForceX = 0;
+    let totalForceZ = 0;
+    for (let i = 0; i < this.forces.length; i += 1) {
+      totalForceX += this.forces[i].x;
+      totalForceZ += this.forces[i].z;
+    }
 
     // Apply force to velocity
-    this.velocity.x += totalForce.x * deltaTime;
-    this.velocity.z += totalForce.z * deltaTime;
+    this.velocity.x += totalForceX * deltaTime;
+    this.velocity.z += totalForceZ * deltaTime;
 
     // Apply deceleration
     this.velocity.x *= CREATURE_DECELERATION;

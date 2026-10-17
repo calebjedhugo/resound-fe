@@ -263,6 +263,20 @@ describe('Creature movement from consonance/dissonance', () => {
 
       expect(creature.position.x).toBeGreaterThan(originalX);
     }, 10000);
+
+    it('feels only the forces of the current pass: none once the harmony stops', async () => {
+      ctx.loadPuzzle('creature-consonance');
+      const creature = ctx.getCreatures()[0];
+      const originalX = creature.position.x;
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 800);
+      expect(creature.position.x).toBeLessThan(originalX); // it was pulled
+
+      ctx.stopPlayerPlayback();
+      creature.calculateForces();
+
+      expect(creature.forces).toEqual([]);
+    }, 10000);
   });
 });
 
