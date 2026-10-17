@@ -9,6 +9,10 @@
  * overlays on the rendered SVG using the stable `data-voice-id` /
  * `data-note-index` hooks the renderer stamps on its output.
  *
+ * Keyboard input renders at most once per animation frame, and only what
+ * changed: an edit re-renders the score, a selection/cursor/voice move only
+ * redraws the overlay, any other key draws nothing.
+ *
  * Consumers hand over a container and a song, and receive edited songs back
  * through `onChange`. They never touch notation internals.
  *
@@ -120,7 +124,17 @@ export default class NotationEditor {
     this._player = player;
     this._playing = false;
     this._rafId = null;
+    this._playbackAt = null; // { beat, voiceId } the playback cursor last showed
     this._onChange = onChange;
+
+    // What the staff on screen shows, so a frame can skip what didn't change.
+    this._revision = 0; // bumped by every edit to the notes
+    this._renderedRevision = -1;
+    this._decoratedSvg = null; // the renderer output the overlay was drawn on
+    this._entries = {}; // voice id -> that SVG's note/rest elements
+    this._shownView = null; // the selection/cursor/voice the overlay shows
+    this._cursorLine = null;
+    this._renderFrameId = null; // pending keyboard render
 
     this._isGrandStaff = staffGroups.length > 0 && staffGroups.some((g) => g.type === 'brace');
 
@@ -214,6 +228,7 @@ export default class NotationEditor {
   }
 
   _emitChange() {
+    this._revision += 1;
     this._onChange(JSON.parse(JSON.stringify(this._buildOutputSong())));
   }
 
@@ -281,10 +296,62 @@ export default class NotationEditor {
     this._renderStaff();
   }
 
+  /** Engrave the score now (and drop any pending keyboard render). */
   _renderStaff() {
+    this._cancelRenderFrame();
     this._renderer.render(this._buildRenderJSON());
+    this._renderedRevision = this._revision;
     const svg = this._renderer.getSvgElement();
-    if (svg) this._decorate(svg);
+    this._decoratedSvg = svg;
+    if (!svg) return;
+    this._decorate(svg);
+    // A fresh SVG has no playback highlight; until the next playback frame
+    // re-lights it, show the note it was on.
+    if (this._playing && this._playbackAt) {
+      const { beat, voiceId } = this._playbackAt;
+      this._renderer.setPlaybackPosition(beat, { voiceId });
+    }
+  }
+
+  /** Bring the staff up to date on the next animation frame (keyboard input). */
+  _requestRender() {
+    if (this._renderFrameId != null) return;
+    if (typeof requestAnimationFrame !== 'function') {
+      this._flushRender();
+      return;
+    }
+    this._renderFrameId = requestAnimationFrame(() => {
+      this._renderFrameId = null;
+      this._flushRender();
+    });
+  }
+
+  /**
+   * Bring the staff up to date now, doing only what changed: re-engrave after
+   * an edit (or when the renderer replaced its own SVG, e.g. on a container
+   * resize, which drops the overlay), redraw the overlay after a
+   * selection/cursor/voice move, nothing otherwise.
+   */
+  _flushRender() {
+    this._cancelRenderFrame();
+    const svg = this._renderer.getSvgElement();
+    if (!svg || svg !== this._decoratedSvg || this._revision !== this._renderedRevision) {
+      this._renderStaff();
+    } else if (this._viewKey() !== this._shownView) {
+      this._drawSelection();
+    }
+  }
+
+  _cancelRenderFrame() {
+    if (this._renderFrameId == null) return;
+    cancelAnimationFrame(this._renderFrameId);
+    this._renderFrameId = null;
+  }
+
+  /** The overlay's inputs: active voice, its selection and its cursor. */
+  _viewKey() {
+    const model = this._activeModel();
+    return `${this._activeVoiceIndex}:${model._selectedIndex}:${model._cursorPosition}`;
   }
 
   // ── Interaction overlay ────────────────────────────────────────────
@@ -313,15 +380,12 @@ export default class NotationEditor {
   }
 
   _decorate(svg) {
-    const activeId = this._activeVoiceId();
-    const model = this._activeModel();
-
     // Stamp a document-order index and wire click-to-select on every voice's
     // notes/chords/rests, so selection maps back to the exact model position.
-    const voiceEntries = {};
+    this._entries = {};
     this._voiceIds().forEach((vid) => {
       const entries = this._voiceEntries(svg, vid);
-      voiceEntries[vid] = entries;
+      this._entries[vid] = entries;
       entries.forEach(({ el }, idx) => {
         el.setAttribute('data-note-index', String(idx));
         el.style.cursor = 'pointer';
@@ -332,12 +396,29 @@ export default class NotationEditor {
           const m = this._activeModel();
           m._selectedIndex = idx;
           m._cursorPosition = idx;
-          this._renderStaff();
+          this._flushRender();
         });
       });
     });
 
-    const entries = voiceEntries[activeId] || [];
+    this._cursorLine = null;
+    this._drawSelection();
+  }
+
+  /**
+   * The selection highlight and edit cursor of the active voice, replacing
+   * the ones drawn before — so a move redraws them without re-engraving, and
+   * the result is the same DOM a full render would leave.
+   */
+  _drawSelection() {
+    const svg = this._decoratedSvg;
+    svg.querySelectorAll('.note-selected').forEach((el) => el.classList.remove('note-selected'));
+    if (this._cursorLine) this._cursorLine.remove();
+    this._cursorLine = null;
+
+    const activeId = this._activeVoiceId();
+    const model = this._activeModel();
+    const entries = this._entries[activeId] || [];
 
     // Selection highlight.
     if (model._selectedIndex !== null && entries[model._selectedIndex]) {
@@ -358,7 +439,9 @@ export default class NotationEditor {
       cursor.setAttribute('stroke-width', '2');
       cursor.setAttribute('opacity', '0.6');
       group.appendChild(cursor);
+      this._cursorLine = cursor;
     }
+    this._shownView = this._viewKey();
   }
 
   /**
@@ -539,7 +622,7 @@ export default class NotationEditor {
       }
     }
 
-    this._renderStaff();
+    this._requestRender();
   }
 
   _selectedPitch(model) {
@@ -576,6 +659,7 @@ export default class NotationEditor {
   /** Stop audio and the playback cursor. */
   stop() {
     this._playing = false;
+    this._playbackAt = null;
     if (this._rafId != null && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(this._rafId);
     }
@@ -610,6 +694,7 @@ export default class NotationEditor {
         this.stop();
         return;
       }
+      this._playbackAt = { beat, voiceId: activeId };
       if (this._renderer) this._renderer.setPlaybackPosition(beat, { voiceId: activeId });
       this._rafId = raf(step);
     };
@@ -627,6 +712,7 @@ export default class NotationEditor {
 
   dispose() {
     this.stop();
+    this._cancelRenderFrame();
     if (this._renderer) this._renderer.clear();
     if (this._container) this._container.innerHTML = '';
   }

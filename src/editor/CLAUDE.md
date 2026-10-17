@@ -11,7 +11,10 @@ the renderer + `components/*` + `lib/*`).
 Files (`ui/` + `model/`):
 - **NotationEditor.js** — the editor: builds song JSON, calls `NotationRenderer.render()`,
   and overlays interaction (selection, edit cursor, click-to-place, keyboard, Play/Stop).
-  Container + song JSON in, edited song out via `onChange`.
+  Container + song JSON in, edited song out via `onChange`. Keyboard input
+  draws once per animation frame and only what changed (`_flushRender`): an
+  edit re-engraves, a selection/cursor/voice move redraws only the overlay
+  (`_drawSelection`), any other key draws nothing.
 - **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
 - **RhythmPalette.js** — duration selector (renders note icons via `resound-notation/components/Note`).
 - **staffCoords.js** — reverse pitch mapping (click Y → pitch) via `resound-notation/lib/notePositions`.
