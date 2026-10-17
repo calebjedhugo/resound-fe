@@ -53,6 +53,10 @@ class Creature extends Entity {
     this.velocity = { x: 0, z: 0 };
     this.forces = []; // Accumulated forces from sound sources
 
+    // What the last full movement pass left (updateMovement's at-rest
+    // shortcut); not valid until there has been one
+    this._rest = { valid: false, x: 0, y: 0, z: 0, elevation: 0, grid: null };
+
     // Track current note being sung (for harmony analysis)
     this.currentNote = null;
 
@@ -485,6 +489,25 @@ class Creature extends Entity {
    * @param {number} deltaTime - Time elapsed in seconds
    */
   updateMovement(deltaTime) {
+    const elevationGrid = this.area ? this.area.elevationGrid : gameState.elevationGrid;
+
+    // At rest, a pass changes nothing: with no force and no velocity the
+    // move is zero, so collision can only zero a velocity that is already
+    // zero, and the floor height and layer it re-derives at an unchanged spot
+    // are exactly the ones the last pass derived there (a fixed point). So
+    // skip the collision and floor work and keep only the writes (see
+    // _isAtRest for "unchanged"). Every creature rests until something first
+    // moves it; one that has COASTED never does again (its decaying velocity
+    // sticks at ~1.5e-323 instead of reaching 0) unless a block zeroes it.
+    if (this._isAtRest(elevationGrid)) {
+      // A full pass leaves +0 even from a -0
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+      this.placeMesh();
+      this.instrument.sourcePosition = this.position;
+      return;
+    }
+
     // Sum all forces
     const totalForce = this.forces.reduce(
       (sum, force) => ({
@@ -523,7 +546,6 @@ class Creature extends Entity {
     // ALONG it instead of stopping dead. See core/SlideResolver. Collision is
     // strictly area-local: this creature moves against ITS OWN area's grid
     // and entities (a neighbor's walls can never block it).
-    const elevationGrid = this.area ? this.area.elevationGrid : gameState.elevationGrid;
     const resolved = resolveSlide(
       { x: oldX, z: oldZ },
       { x: newX, z: newZ },
@@ -561,7 +583,47 @@ class Creature extends Entity {
     // Update instrument source position for audio
     this.instrument.sourcePosition = this.position;
 
+    this._rememberRest(elevationGrid);
+
     // Forces are cleared at the start of calculateForces(), not here
+  }
+
+  /**
+   * Would a movement pass now change nothing? True with no force, no
+   * velocity, and the position, floor height, layer and grid all EXACTLY
+   * (bit for bit) as the last full pass left them — so anything else that
+   * moved or re-layered the creature since (a teleport, a test) gets a full
+   * pass that re-floors it.
+   * @param {?ElevationGrid} elevationGrid - the grid this pass would use
+   * @returns {boolean}
+   */
+  _isAtRest(elevationGrid) {
+    const rest = this._rest;
+    return (
+      rest.valid &&
+      this.forces.length === 0 &&
+      this.velocity.x === 0 &&
+      this.velocity.z === 0 &&
+      Object.is(this.position.x, rest.x) &&
+      Object.is(this.position.z, rest.z) &&
+      Object.is(this.position.y, rest.y) &&
+      Object.is(this.elevation, rest.elevation) &&
+      elevationGrid === rest.grid
+    );
+  }
+
+  /** Record what this full movement pass left, for _isAtRest. */
+  _rememberRest(elevationGrid) {
+    const rest = this._rest;
+    const { x, y, z } = this.position;
+    // A -0 coordinate is the one thing a zero move can still rewrite (to
+    // +0, whenever nothing blocks it), so it never counts as rest
+    rest.valid = !Object.is(x, -0) && !Object.is(z, -0);
+    rest.x = x;
+    rest.y = y;
+    rest.z = z;
+    rest.elevation = this.elevation;
+    rest.grid = elevationGrid;
   }
 
   dispose() {
