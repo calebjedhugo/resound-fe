@@ -756,6 +756,42 @@ describe('Creature elevation behavior', () => {
 });
 
 /**
+ * What a creature hears (forEachSoundSource: the ONE source model behind
+ * both its forces and its colour). sing() sounds a song's first note at
+ * once, so these need no timers.
+ */
+describe('What a creature hears', () => {
+  const sing = (creature) => {
+    creature.sing();
+    return creature;
+  };
+  const addSinger = (pitch, x) =>
+    ctx.addCreature({
+      position: { x, y: 0, z: 5 * WORLD_SCALE },
+      song: [{ pitch, length: '1/1' }],
+    });
+
+  it("hears its area's sounding creatures in the area's order, as they come and go", () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony'); // C4 and E4, in range of each other
+    const [c4, e4] = ctx.getCreatures();
+    expect(c4.heardNotes()).toEqual([]);
+
+    sing(e4);
+    expect(c4.heardNotes()).toEqual([64]);
+
+    // One joins mid-game
+    sing(addSinger('G4', 10 * WORLD_SCALE));
+    expect(c4.heardNotes()).toEqual([64, 67]);
+
+    // One leaves and another arrives between two listens: the same head
+    // count, a different crowd
+    ctx.getEntityManager().remove(e4.id);
+    sing(addSinger('A4', 12 * WORLD_SCALE));
+    expect(c4.heardNotes()).toEqual([67, 69]);
+  });
+});
+
+/**
  * A creature AT REST (no force, no velocity) skips its movement pass as a
  * no-op (Creature.updateMovement). The skip must be EXACT: a resting
  * creature ends every frame bit for bit where a full pass would, anything
