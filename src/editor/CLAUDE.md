@@ -71,6 +71,10 @@ edits show up in the game on a manual reload.
   middleware in `vite.config.js` (dev-only; validates the id, matches body id,
   writes pretty-printed JSON). Browsers can't write repo files, so this bridge
   is required. **Changing `vite.config.js` requires a dev-server restart.**
+  Writes run one at a time in arrival order (a save still waiting its turn
+  takes a newer save of the same puzzle); a file whose formatted bytes would
+  not change is not rewritten (so an edit leaves `manifest.json` alone unless
+  the puzzle's name/difficulty changed).
 - **Git controls** (`ui/GitPanel.js` + `io/gitControls.js`) — dev-only
   Commit / Pull / Push / Revert in the sidebar, over `/api/git/*` (a second
   `configureServer` middleware, `gitPlugin`, that shells out via `execFile`).

@@ -6,7 +6,6 @@ import { execFile } from 'child_process';
 import prettier from 'prettier';
 
 const PUZZLES_DIR = path.resolve(__dirname, 'public/puzzles');
-const MANIFEST_PATH = path.join(PUZZLES_DIR, 'manifest.json');
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 // git actions are scoped to the puzzle files. Commit/revert only touch this
@@ -24,63 +23,149 @@ function readBody(req) {
   });
 }
 
-/**
- * Write an object to a JSON file formatted exactly as the repo's Prettier
- * config would, so editor-written files match `prettier --write` and pass
- * the lint-staged check on commit (no formatting churn).
- */
-async function writeJsonFile(filePath, obj) {
-  const config = await prettier.resolveConfig(filePath);
-  const formatted = await prettier.format(JSON.stringify(obj), {
+// Prettier costs ~1 ms to resolve a file's config and 10-20 ms to format a
+// puzzle (measured 2026-10-17), on EVERY autosave. Prettier is deterministic,
+// so each file's config is resolved once (prettier itself caches it for the
+// process anyway) and an input identical to that file's last one reuses the
+// last output: the manifest, whose text rarely changes, formats once.
+const prettierConfigs = new Map(); // file path -> Promise<prettier config>
+const lastFormatted = new Map(); // file path -> { source, formatted }
+
+function prettierConfigFor(filePath) {
+  if (!prettierConfigs.has(filePath)) {
+    const config = prettier.resolveConfig(filePath);
+    config.catch(() => prettierConfigs.delete(filePath)); // retry on the next save
+    prettierConfigs.set(filePath, config);
+  }
+  return prettierConfigs.get(filePath);
+}
+
+async function formatJson(filePath, obj) {
+  const source = JSON.stringify(obj);
+  const last = lastFormatted.get(filePath);
+  if (last && last.source === source) return last.formatted;
+  const config = await prettierConfigFor(filePath);
+  const formatted = await prettier.format(source, {
     ...config,
     filepath: filePath,
     parser: 'json',
   });
-  fs.writeFileSync(filePath, formatted);
+  lastFormatted.set(filePath, { source, formatted });
+  return formatted;
 }
 
 /**
- * Upsert a puzzle's summary into manifest.json, preserving order.
- * Updates an existing entry by id, or appends a new one.
+ * Write an object to a JSON file formatted exactly as the repo's Prettier
+ * config would, so editor-written files match `prettier --write` and pass
+ * the lint-staged check on commit (no formatting churn). A file that already
+ * holds exactly those bytes is not rewritten.
  */
-async function upsertManifest(puzzle) {
-  let manifest = { puzzles: [] };
+async function writeJsonFile(filePath, obj) {
+  const formatted = await formatJson(filePath, obj);
+  let current = null;
   try {
-    manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+    current = fs.readFileSync(filePath, 'utf8');
   } catch {
-    // No manifest yet; start fresh.
+    // No file yet.
   }
-  const entry = { id: puzzle.id, name: puzzle.name, difficulty: puzzle.difficulty };
-  const idx = manifest.puzzles.findIndex((p) => p.id === puzzle.id);
-  if (idx >= 0) {
-    manifest.puzzles[idx] = entry;
-  } else {
-    manifest.puzzles.push(entry);
-  }
-  await writeJsonFile(MANIFEST_PATH, manifest);
+  if (current !== formatted) fs.writeFileSync(filePath, formatted);
 }
 
 /**
- * Remove a puzzle's entry from manifest.json by id, preserving order.
+ * The puzzle files of one directory (public/puzzles/ in dev). Writes run ONE
+ * AT A TIME in arrival order: two saves interleaving the manifest's
+ * read-modify-write could drop an entry, and a slow format could land an
+ * older save after a newer one. A save still waiting its turn takes on any
+ * newer save of the same puzzle, so a burst formats and writes once.
  */
-async function removeFromManifest(id) {
-  let manifest = { puzzles: [] };
-  try {
-    manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
-  } catch {
-    return;
+function createPuzzleFiles(dir) {
+  const manifestPath = path.join(dir, 'manifest.json');
+  const waiting = new Map(); // puzzle id -> queued save that has not started
+  let tail = Promise.resolve();
+
+  function enqueue(task) {
+    const run = tail.then(task);
+    tail = run.catch(() => {}); // a failed write must not block the next
+    return run;
   }
-  manifest.puzzles = manifest.puzzles.filter((p) => p.id !== id);
-  await writeJsonFile(MANIFEST_PATH, manifest);
+
+  function readManifest() {
+    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  }
+
+  /**
+   * Upsert a puzzle's summary into manifest.json, preserving order.
+   * Updates an existing entry by id, or appends a new one.
+   */
+  async function upsertManifest(puzzle) {
+    let manifest = { puzzles: [] };
+    try {
+      manifest = readManifest();
+    } catch {
+      // No manifest yet; start fresh.
+    }
+    const entry = { id: puzzle.id, name: puzzle.name, difficulty: puzzle.difficulty };
+    const idx = manifest.puzzles.findIndex((p) => p.id === puzzle.id);
+    if (idx >= 0) {
+      manifest.puzzles[idx] = entry;
+    } else {
+      manifest.puzzles.push(entry);
+    }
+    await writeJsonFile(manifestPath, manifest);
+  }
+
+  /**
+   * Remove a puzzle's entry from manifest.json by id, preserving order.
+   */
+  async function removeFromManifest(id) {
+    let manifest;
+    try {
+      manifest = readManifest();
+    } catch {
+      return;
+    }
+    manifest.puzzles = manifest.puzzles.filter((p) => p.id !== id);
+    await writeJsonFile(manifestPath, manifest);
+  }
+
+  return {
+    /** Write <id>.json and its manifest entry; resolves once they are on disk. */
+    save(puzzle) {
+      const queued = waiting.get(puzzle.id);
+      if (queued) {
+        queued.puzzle = puzzle; // latest content wins; both callers settle on its write
+        return queued.run;
+      }
+      const save = { puzzle };
+      waiting.set(puzzle.id, save);
+      save.run = enqueue(async () => {
+        waiting.delete(puzzle.id); // from here on, a newer save queues behind this one
+        await writeJsonFile(path.join(dir, `${puzzle.id}.json`), save.puzzle);
+        await upsertManifest(save.puzzle);
+      });
+      return save.run;
+    },
+
+    /** Remove <id>.json and its manifest entry. */
+    delete(id) {
+      waiting.delete(id); // a save arriving after the delete must land after it
+      return enqueue(async () => {
+        const filePath = path.join(dir, `${id}.json`);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        await removeFromManifest(id);
+      });
+    },
+  };
 }
 
 /**
  * Dev-only endpoint that writes edited puzzle JSON straight into
  * public/puzzles/<id>.json (and keeps manifest.json in sync) so the
  * editor round-trips into the repo's real files during development.
- * DELETE removes the file and its manifest entry.
+ * DELETE removes the file and its manifest entry. `dir` exists for tests.
  */
-function puzzleWriterPlugin() {
+export function puzzleWriterPlugin({ dir = PUZZLES_DIR } = {}) {
+  const files = createPuzzleFiles(dir);
   return {
     name: 'resound-puzzle-writer',
     configureServer(server) {
@@ -94,9 +179,7 @@ function puzzleWriterPlugin() {
             return;
           }
           try {
-            const filePath = path.join(PUZZLES_DIR, `${id}.json`);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-            await removeFromManifest(id);
+            await files.delete(id);
             res.statusCode = 200;
             res.end(JSON.stringify({ ok: true, id }));
           } catch (err) {
@@ -122,8 +205,7 @@ function puzzleWriterPlugin() {
             res.end(JSON.stringify({ error: 'Body id does not match URL id' }));
             return;
           }
-          await writeJsonFile(path.join(PUZZLES_DIR, `${id}.json`), puzzle);
-          await upsertManifest(puzzle);
+          await files.save(puzzle);
           res.statusCode = 200;
           res.end(JSON.stringify({ ok: true, id }));
         } catch (err) {
