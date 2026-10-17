@@ -8,6 +8,7 @@ import Floor from 'entities/Floor';
 import CleansingTile from 'entities/CleansingTile';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Area from 'core/Area';
+import AudioPrewarm from 'core/AudioPrewarm';
 import ElevationGrid from 'core/ElevationGrid';
 import { inPortalHideBand } from 'core/portalMath';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
@@ -195,6 +196,9 @@ class PuzzleLoader {
       batch.computeBoundingSphere();
       area.setStaticWalls(batch);
     }
+
+    // Its creatures' voices and the tape's piano notes, built in idle time
+    AudioPrewarm.warmArea(area);
 
     return area;
   }

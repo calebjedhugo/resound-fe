@@ -6,8 +6,11 @@
  * is up the game loop holds the world still — creatures don't sing and the
  * musical clock doesn't advance — so a self-solving layout can't complete
  * before the player sees it, and the waking gesture satisfies the browser's
- * user-interaction requirement before any audio plays.
+ * user-interaction requirement before any audio plays. With nothing moving,
+ * it is also when the world's audio is built ahead (core/AudioPrewarm).
  */
+import AudioPrewarm from 'core/AudioPrewarm';
+
 class StartGate {
   constructor() {
     this.element = null;
@@ -50,6 +53,7 @@ class StartGate {
 
     document.body.appendChild(this.element);
     this.visible = true;
+    AudioPrewarm.hold(true);
 
     // Capture-phase so the waking keypress never reaches the game
     this.dismissHandler = (event) => {
@@ -67,6 +71,7 @@ class StartGate {
     window.removeEventListener('keyup', this.dismissHandler, true);
     this.dismissHandler = null;
     this.visible = false;
+    AudioPrewarm.hold(false);
     const el = this.element;
     this.element = null;
     el.style.opacity = '0';

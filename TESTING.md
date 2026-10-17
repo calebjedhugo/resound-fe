@@ -139,6 +139,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/entities/Fountain.test.js` | An activated fountain's song plays alone: its area's creatures stay hushed for the song (and until the last of overlapping songs ends), other fountains get their volume back |
 | `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials) |
 | `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections by triad, added sixth, lone-note paleness, painter's complement + dissonance, register lightness; memoized path = reference) |
+| `src/core/AudioPrewarm.test.js` | Each built area's creature pitches are pre-rendered for the tape's piano (first strike plays from a buffer) and creature voices are built before their first note; renders wait for an idle period with room, except behind the StartGate |
 | `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share |
 | `src/core/FrameProfiler.test.js` | Dev profiler times each call by caller (self excludes timed children), counts draw calls and GPU time per pass, reports the worst frames first, and unwraps everything after a run |
 | `src/core/passContext.test.js` | Main view binds no-op clip planes; door targets render in the canvas colour space; panels never encode twice |

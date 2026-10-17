@@ -12,7 +12,10 @@ const DEFAULT_PLAYBACK_RANGE = 15;
  * PlaybackManager - Handles playback of recorded songs from inventory
  */
 class PlaybackManager {
-  static playerInstrument = new Piano('player');
+  // The tape replays creature notes, which carry no velocity, so the piano
+  // strikes them all at its default 0.7: the one velocity layer to render.
+  // warm() (core/AudioPrewarm) renders every layer, and the default is four.
+  static playerInstrument = new Piano('player', { layers: [0.7] });
   static isPlaying = false;
   static playbackSourceRange = DEFAULT_PLAYBACK_RANGE;
 
