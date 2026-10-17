@@ -145,6 +145,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
 | `src/editor/io/devServer.test.js` | Dev puzzle writer (vite.config.js): prettier-formatted writes, unchanged files left alone, one write at a time in arrival order (a waiting save takes the newer content); git status from one spawn (branch, ahead/behind, upstream gone, detached) in real temp repos |
+| `src/editor/ui/FloorRegionPanel.test.js` | Floor slabs follow the floor list through undo/redo; a refresh that changes no floor keeps the meshes |
 | `src/editor/ui/GitPanel.test.js` | Editor git status: one read at a time (mid-read refreshes fold into one trailing read); buttons follow the last status after an action |
 
 ---

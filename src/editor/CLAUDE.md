@@ -52,7 +52,9 @@ edits show up in the game on a manual reload.
   level (reusing `io/importPuzzle`); a `+ New puzzle` item makes a fresh model.
   A not-yet-saved puzzle shows a transient `(unsaved)` entry.
 - **Toolbar** (`ui/EditorToolbar.js`) — undo/redo buttons (mirror
-  `UndoManager.canUndo/canRedo`; undo/redo is centralized in `EditorApp._undo/_redo`),
+  `UndoManager.canUndo/canRedo`; undo/redo is centralized in `EditorApp._undo/_redo`,
+  which refits meshes in place: `EntityPlacer.rebuildFromModel` keeps a mesh
+  whose entity kept its id + type and builds/frees only the rest),
   a live save-status line driven by the autosave flow, a "Test in game" deep
   link (`/?puzzle=<id>`, handled in `src/main.js`), and a keyboard-shortcut popover.
 - **Puzzle id is derived, not typed** — `MetadataPanel` has no ID field. The id
