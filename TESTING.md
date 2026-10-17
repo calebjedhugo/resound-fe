@@ -136,6 +136,9 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/RecordingManager.test.js` | Capturing creature notes into inventory |
 | `src/core/PlaybackManager.test.js` | Playing recorded songs, note emission timing |
 | `src/core/ListeningManager.test.js` | Gates/Fountains recognizing correct songs |
+| `src/core/NeighborLoading.test.js` | Neighbor areas build in idle slices (≤1 staff per slice with no idle time to spare), assemble + go live in ONE slice (never partially built; ONE world clock), stand down when the world moves on or a crossing builds them first; timer slices without requestIdleCallback |
+| `src/ui/StartGate.test.js` | The scrim goes up while the world loads (input swallowed, nothing wakes it) and is wakeable by any key/click once the world is built — one overlay throughout |
+| `src/ui/NotationDisplay.test.js` | Gate/fountain staff planes (layout, one-sided, disposal); engravings SHARED per distinct staff (song + meter + key), reference-counted across gates and areas |
 | `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials) |
 | `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections by triad, added sixth, lone-note paleness, painter's complement + dissonance, register lightness; memoized path = reference) |
 | `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share |
@@ -144,9 +147,6 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
-| `src/core/NeighborLoading.test.js` | Neighbor areas build in idle slices (≤1 staff per slice with no idle time to spare), assemble + go live in ONE slice (never partially built; ONE world clock), stand down when the world moves on or a crossing builds them first; timer slices without requestIdleCallback |
-| `src/ui/StartGate.test.js` | The scrim goes up while the world loads (input swallowed, nothing wakes it) and is wakeable by any key/click once the world is built — one overlay throughout |
-| `src/ui/NotationDisplay.test.js` | Gate/fountain staff planes (layout, one-sided, disposal); engravings SHARED per distinct staff (song + meter + key), reference-counted across gates and areas |
 
 ---
 
