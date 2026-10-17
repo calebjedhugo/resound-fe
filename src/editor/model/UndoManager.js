@@ -9,6 +9,13 @@
  * is small and snapshot/restore is simpler and more reliable.
  */
 
+// History depth. A snapshot copies every entity: 14 KB for the largest
+// puzzle (poc-two-keys, 104 entities; measured 2026-10-17), so the unbounded
+// history grew ~1 MB per 70 edits for the whole session. 500 steps is far
+// more than anyone undoes through (a song note is 1-3 edits) and caps undo +
+// redo together at ~7 MB. The oldest step goes first.
+export const MAX_UNDO_STEPS = 500;
+
 const MUTATION_METHODS = [
   'setMetadata',
   'setPlayerSpawn',
@@ -44,6 +51,7 @@ export default class UndoManager {
     for (const method of MUTATION_METHODS) {
       this[method] = (...args) => {
         this._undoStack.push(this._saveState());
+        if (this._undoStack.length > MAX_UNDO_STEPS) this._undoStack.shift();
         this._redoStack.length = 0;
         const result = this._model[method](...args);
         this._emitChange();
