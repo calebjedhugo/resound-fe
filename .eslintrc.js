@@ -90,5 +90,7 @@ module.exports = {
       },
     ],
   },
+  // The staged POC build (deploy/build-poc.mjs) is minified output, like dist/
+  ignorePatterns: ['deploy/dist-poc/'],
   root: true,
 };
