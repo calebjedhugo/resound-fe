@@ -120,6 +120,33 @@ describe('Elevation-aware collision', () => {
     expect(CollisionDetector.checkCollision(pos, 0.9)).toBe(false);
   });
 
+  it("an overlap on another layer never hides a blocker on the mover's own layer", () => {
+    ctx.loadPuzzle('elevation-basic');
+    // Wall at grid (4,4) is up on elevation 1 (box x 10.5..13.5); a closed
+    // gate on the ground just west of it at grid (3,4) (box x 7.5..10.5)
+    ctx.addGate({
+      position: { x: 3 * WORLD_SCALE, y: 0, z: 4 * WORLD_SCALE },
+      song: [{ pitch: 'C4', length: '1/4' }],
+    });
+
+    // A ground-level mover on the seam overlaps BOTH boxes: the gate blocks it
+    const pos = { x: 10.5, y: 0, z: 4 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(pos, 0.4)).toBe(true);
+  });
+
+  it('a creature bumps into the player only on the same layer', () => {
+    ctx.loadPuzzle('elevation-basic');
+    // Player up on the elevation-1 platform at grid (6,6)
+    ctx.setPlayerPosition({ x: 6 * WORLD_SCALE, y: ELEVATION_HEIGHT + 1.8, z: 6 * WORLD_SCALE });
+
+    // A creature-sized mover overlapping the player's body: beside them on the
+    // platform, or under it on the ground (the cell is walkable at 0 and 1)
+    const beside = { x: 6 * WORLD_SCALE + 1, y: ELEVATION_HEIGHT, z: 6 * WORLD_SCALE };
+    const beneath = { x: 6 * WORLD_SCALE + 1, y: 0, z: 6 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(beside, 0.9, 'a-creature')).toBe(true);
+    expect(CollisionDetector.checkCollision(beneath, 0.9, 'a-creature')).toBe(false);
+  });
+
   it('two creatures on the same ramp at different progress points still collide', () => {
     ctx.loadPuzzle('elevation-ramp');
 
