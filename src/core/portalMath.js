@@ -257,6 +257,173 @@ export function panelFootprint(eye, pose, corners, screenWidth, screenHeight) {
   return { texelsAcross, texelsUp, screenShare: (width * height) / (screenWidth * screenHeight) };
 }
 
+// --- Sightlines through doorways (the mirror sweep's cull) ---------------
+//
+// A plane list is a flat Float64Array of [nx, ny, nz, w] runs, unit normals
+// pointing inward: a point p is inside the plane when n·p + w >= 0, inside
+// a region when it is inside every plane of the list.
+
+const PLANE_STRIDE = 4;
+
+/** Write the plane with normal n through point p as plane `index` of `out`. */
+function setPlane(out, index, nx, ny, nz, p) {
+  const length = Math.hypot(nx, ny, nz) || 1;
+  const o = index * PLANE_STRIDE;
+  out[o] = nx / length;
+  out[o + 1] = ny / length;
+  out[o + 2] = nz / length;
+  out[o + 3] = -(out[o] * p.x + out[o + 1] * p.y + out[o + 2] * p.z);
+}
+
+/**
+ * The four side planes of a camera's view (as sphereInView builds them),
+ * through the eye, as planes `index`..`index + 3` of `out`.
+ * @param {{x, y, z}} eye
+ * @param {{quaternion, fov, aspect}} pose
+ * @param {number} [slack] - radians to widen the view by on every side
+ * @returns {number} the index after the last plane written
+ */
+export function viewPlanes(eye, pose, out, index = 0, slack = 0) {
+  const q = pose.quaternion;
+  const forward = rotate(q, { x: 0, y: 0, z: -1 });
+  const right = rotate(q, { x: 1, y: 0, z: 0 });
+  const up = rotate(q, { x: 0, y: 1, z: 0 });
+  const halfV = Math.min(Math.PI / 2, (pose.fov / 2) * (Math.PI / 180) + slack);
+  const halfH = Math.min(
+    Math.PI / 2,
+    Math.atan(Math.tan((pose.fov / 2) * (Math.PI / 180)) * pose.aspect) + slack
+  );
+  const sides = [
+    [right, halfH, 1],
+    [right, halfH, -1],
+    [up, halfV, 1],
+    [up, halfV, -1],
+  ];
+  sides.forEach(([axis, half, sign], i) => {
+    const s = Math.sin(half);
+    const c = Math.cos(half) * sign;
+    setPlane(
+      out,
+      index + i,
+      forward.x * s + axis.x * c,
+      forward.y * s + axis.y * c,
+      forward.z * s + axis.z * c,
+      eye
+    );
+  });
+  return index + sides.length;
+}
+
+/**
+ * The four side planes of the pyramid from `apex` through the part
+ * [u0, u1] x [v0, v1] of a quad (bottomLeft + u·across + v·up, u and v in
+ * 0..1), as planes `index`..`index + 3` of `out`.
+ * @param {{x, y, z}} apex - off the quad's plane
+ * @param {{bottomLeft, bottomRight, topLeft}} corners
+ * @param {{u0, u1, v0, v1}} rect
+ * @returns {number} the index after the last plane written
+ */
+export function pyramidPlanes(apex, corners, rect, out, index = 0) {
+  const { bottomLeft: bl, bottomRight: br, topLeft: tl } = corners;
+  const at = (u, v) => ({
+    x: bl.x + u * (br.x - bl.x) + v * (tl.x - bl.x) - apex.x,
+    y: bl.y + u * (br.y - bl.y) + v * (tl.y - bl.y) - apex.y,
+    z: bl.z + u * (br.z - bl.z) + v * (tl.z - bl.z) - apex.z,
+  });
+  // The rim in order, apex-relative, and its middle (inside every plane)
+  const rim = [
+    at(rect.u0, rect.v0),
+    at(rect.u1, rect.v0),
+    at(rect.u1, rect.v1),
+    at(rect.u0, rect.v1),
+  ];
+  const mid = at((rect.u0 + rect.u1) / 2, (rect.v0 + rect.v1) / 2);
+  rim.forEach((a, i) => {
+    const b = rim[(i + 1) % rim.length];
+    const nx = a.y * b.z - a.z * b.y;
+    const ny = a.z * b.x - a.x * b.z;
+    const nz = a.x * b.y - a.y * b.x;
+    const sign = nx * mid.x + ny * mid.y + nz * mid.z < 0 ? -1 : 1;
+    setPlane(out, index + i, nx * sign, ny * sign, nz * sign, apex);
+  });
+  return index + rim.length;
+}
+
+// Scratch polygons for clipQuad, (u, v) pairs: a convex quad clipped by k
+// planes has at most 4 + k corners
+const clipFrom = new Float64Array(64);
+const clipTo = new Float64Array(64);
+
+/**
+ * The part of a quad inside every plane of a region (clipping is exact for
+ * a convex region): its bounding rectangle in quad coordinates (u across, v
+ * up, both 0..1) into `out`.
+ * @param {{bottomLeft, bottomRight, topLeft}} corners
+ * @param {Float64Array} planes - see the plane layout above
+ * @param {number} count - how many planes of `planes` bound the region
+ * @param {{u0, u1, v0, v1}} out
+ * @returns {boolean} false when no part of the quad is inside
+ */
+export function clipQuad(corners, planes, count, out) {
+  const { bottomLeft: bl, bottomRight: br, topLeft: tl } = corners;
+  let from = clipFrom;
+  let to = clipTo;
+  // The whole quad: (0, 0), (1, 0), (1, 1), (0, 1)
+  from.fill(0, 0, 8);
+  from[2] = 1;
+  from[4] = 1;
+  from[5] = 1;
+  from[7] = 1;
+  let size = 4;
+  for (let k = 0; k < count && size > 0; k += 1) {
+    const o = k * PLANE_STRIDE;
+    const nx = planes[o];
+    const ny = planes[o + 1];
+    const nz = planes[o + 2];
+    // The plane's signed distance, linear in (u, v) across the quad
+    const d0 = nx * bl.x + ny * bl.y + nz * bl.z + planes[o + 3];
+    const du = nx * (br.x - bl.x) + ny * (br.y - bl.y) + nz * (br.z - bl.z);
+    const dv = nx * (tl.x - bl.x) + ny * (tl.y - bl.y) + nz * (tl.z - bl.z);
+    let kept = 0;
+    for (let i = 0; i < size; i += 1) {
+      const u = from[2 * i];
+      const v = from[2 * i + 1];
+      const j = (i + 1) % size;
+      const nu = from[2 * j];
+      const nv = from[2 * j + 1];
+      const d = d0 + du * u + dv * v;
+      const nd = d0 + du * nu + dv * nv;
+      if (d >= 0) {
+        to[2 * kept] = u;
+        to[2 * kept + 1] = v;
+        kept += 1;
+      }
+      if (d >= 0 !== nd >= 0) {
+        const t = d / (d - nd);
+        to[2 * kept] = u + t * (nu - u);
+        to[2 * kept + 1] = v + t * (nv - v);
+        kept += 1;
+      }
+    }
+    const clipped = to;
+    to = from;
+    from = clipped;
+    size = kept;
+  }
+  if (size === 0) return false;
+  out.u0 = Infinity;
+  out.u1 = -Infinity;
+  out.v0 = Infinity;
+  out.v1 = -Infinity;
+  for (let i = 0; i < size; i += 1) {
+    out.u0 = Math.min(out.u0, from[2 * i]);
+    out.u1 = Math.max(out.u1, from[2 * i]);
+    out.v0 = Math.min(out.v0, from[2 * i + 1]);
+    out.v1 = Math.max(out.v1, from[2 * i + 1]);
+  }
+  return true;
+}
+
 /**
  * Rigid mapping from source-puzzle world space to neighbor-puzzle world
  * space for a linked gate pair: a rotation about Y carrying the walk-through

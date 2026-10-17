@@ -186,7 +186,11 @@ instead of "fixing" it.
   portal graph from every same-area door that ACTUALLY DREW this frame,
   composing mapped eyes hop by hop and re-rendering — deepest level first
   — each mirror-only face a chain shows that the player pass didn't draw,
-  so a creature seen N portals deep updates at full frame rate (caps:
+  so a creature seen N portals deep updates at full frame rate. A chain
+  shows only its SIGHT: the pyramid through the part of each panel on
+  screen (+ `SIGHT_MARGIN`/`_SLACK` for last frame's sweep; a panel under
+  1% or showing its own door: all of it), narrowing hop by hop — a face
+  outside every sight is the rotor's (caps:
   `MIRROR_MAX_DEPTH`/`_PASSES`/`_FRONTIER`, spent shallowest-first then
   biggest-on-screen-first, so the cap keeps what is in sight; self/partner
   recursion still rides the double-buffered cascade; cross-area door

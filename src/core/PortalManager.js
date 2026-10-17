@@ -49,7 +49,14 @@ import {
   DOORWAY_COMMIT_DEPTH,
   PLAYER_COLLISION_RADIUS,
 } from 'core/constants';
-import { FACING_VECTORS, OPPOSITE_FACING, DOORWAY_OFFSET, PANEL_EPSILON } from 'core/portalMath';
+import {
+  FACING_VECTORS,
+  OPPOSITE_FACING,
+  DOORWAY_OFFSET,
+  PANEL_EPSILON,
+  clipQuad,
+  viewPlanes,
+} from 'core/portalMath';
 import { getDistance } from 'core/utils';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
@@ -69,6 +76,17 @@ const WARM_UP_TURN = Object.freeze(
     })
   )
 );
+
+// A face's panel plane, out from the gate center (the cell's far face for
+// that approach)
+const PANEL_PLANE = DOORWAY_OFFSET - PANEL_EPSILON;
+
+// A mirror-sweep sight's region: its pyramid's four sides, the pass
+// camera's near plane and the doorway clip (PortalView.sightPlanes)
+const SIGHT_PLANES = 6;
+
+// A sight through all of a panel (quad coordinates)
+const WHOLE_PANEL = Object.freeze({ u0: 0, u1: 1, v0: 0, v1: 1 });
 
 // Who drew what a face shows, when it was not an exterior pass's own eye
 // (that eye object itself is recorded): see _restsThisFrame
@@ -129,6 +147,14 @@ class PortalManager {
     // Faces the last mirror sweep reached but its cap left out -> their
     // share of the screen (the stale rotor serves them first)
     this._sweepOverflow = new Map();
+    // Mirror-sweep scratch, reused every sweep: the faces it schedules, its
+    // sights (_takeSight) and the screen's edges (viewPlanes)
+    this._sweepScheduled = new Map();
+    this._sightPool = [];
+    this._sightsTaken = 0;
+    this._sightRect = { u0: 0, u1: 1, v0: 0, v1: 1 };
+    this._sightPart = { u0: 0, u1: 1, v0: 0, v1: 1 };
+    this._screenPlanes = new Float64Array(4 * 4);
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
@@ -641,18 +667,14 @@ class PortalManager {
   }
 
   /**
-   * Faces of `gate` whose panel plane the eye at `eyePos` is past — the
-   * faces that eye can look into (same math the player-eligibility uses).
+   * Is the eye at `eyePos` past the panel plane of `gate`'s `facing` face —
+   * can that eye look into it (same math the player-eligibility uses)?
    */
   // eslint-disable-next-line class-methods-use-this
-  _eligibleFaces(gate, eyePos) {
-    const panelPlane = DOORWAY_OFFSET - PANEL_EPSILON;
-    return Object.keys(FACING_VECTORS).filter(
-      (f) =>
-        FACING_VECTORS[f].x * (eyePos.x - gate.position.x) +
-          FACING_VECTORS[f].z * (eyePos.z - gate.position.z) +
-          panelPlane >
-        0.05
+  _canLookInto(gate, facing, eyePos) {
+    const v = FACING_VECTORS[facing];
+    return (
+      v.x * (eyePos.x - gate.position.x) + v.z * (eyePos.z - gate.position.z) + PANEL_PLANE > 0.05
     );
   }
 
@@ -664,13 +686,26 @@ class PortalManager {
   }
 
   // Mirror-sweep budget: recursion depth of the portal-graph walk, total
-  // extra half-res passes per frame, and frontier width per level. Deep
-  // levels are the smallest on screen, so the cap drops them first.
+  // extra passes per frame, and frontier width per level. Deep levels are
+  // the smallest on screen, so the cap drops them first.
   static MIRROR_MAX_DEPTH = 4;
 
   static MIRROR_MAX_PASSES = 12;
 
   static MIRROR_MAX_FRONTIER = 16;
+
+  // How far a chain's sight reaches past the part of a panel it can see, in
+  // panel widths. What a door's panel shows now was decided by the sights
+  // of the frame before (the panel samples last frame's sweep), so a sight
+  // covers two frames of the eye moving on: 0.3 units, two frames of
+  // running (any sight edge, however deep, moves no further than the eye
+  // does). It also covers the texel a screen pixel samples past the part it
+  // sees (bilinear; a target is at least 32 texels across).
+  static SIGHT_MARGIN = 0.1;
+
+  // ...and past the screen's edges, in radians on every side: two frames of
+  // keyboard turning (CameraController's 0.025 a frame)
+  static SIGHT_SLACK = 0.05;
 
   /**
    * Recursive mirror sweep: BFS the portal graph from every SAME-AREA
@@ -679,6 +714,16 @@ class PortalManager {
    * face's map applies), and render every face a chain shows that the
    * player pass did NOT draw — deepest level first, so a shallow mirror
    * face samples this-frame-fresh deeper content the moment it renders.
+   *
+   * A chain shows only what lies in its SIGHT: the part of each panel it
+   * passes through that the screen (and every panel before it) can show,
+   * carried from hop to hop as a pyramid from the eye that panel's picture
+   * is drawn from (PortalView.sightPlanes) — narrowing at every hop. A face
+   * outside every sight is never drawn where anyone can see it, and is left
+   * to the stale rotor: with every door of The Star open, the faces merely
+   * past a mapped eye's panel planes once filled the cap every frame while
+   * almost none of them showed on screen.
+   *
    * Faces are deduped shallowest-wins (the biggest on screen); a face the
    * player pass drew is skipped (its texture is already this-frame fresh;
    * self/partner recursion rides the double-buffered cascade). Chains
@@ -688,21 +733,39 @@ class PortalManager {
    */
   _mirrorSweep(renderer, camera) {
     this._sweepOverflow.clear();
-    const scheduled = new Map(); // view -> { eye, depth, bound }
-    // Seeds: doors whose views the player is actually looking into. Each
-    // chain carries a BOUND on how much of the screen anything seen through
-    // it can cover: the seed door's own share (a mirror face can be no
-    // bigger on screen than the panel it is seen through)
+    this._sightsTaken = 0;
+    const scheduled = this._sweepScheduled; // view -> { eye, depth, bound, footprint, share }
+    scheduled.clear();
+    // A posed eye sees a seed panel only within the screen's edges
+    const posed = Boolean(camera.quaternion && camera.fov);
+    if (posed) {
+      viewPlanes(camera.position, camera, this._screenPlanes, 0, PortalManager.SIGHT_SLACK);
+    }
+    // Each face as its mapped eye sees it, through the player's look and
+    // lens (a door's mapping is a pure translation): what its target needs,
+    // and how much of the screen it can cover through its chain
+    const pose = posed ? camera : camera.pose;
+    // Seeds: doors whose views the player is actually looking into, each
+    // through the part of its drawn panels on screen. Each chain also
+    // carries a BOUND on how much of the screen anything seen through it
+    // can cover: the seed door's own share (a mirror face can be no bigger
+    // on screen than the panel it is seen through)
     let frontier = [];
     for (const gate of this._linkedGates) {
       if (!this._isSameAreaDoor(gate)) continue; // eslint-disable-line no-continue
       const faces = this._views.get(gate);
       if (!faces || faces.size === 0) continue; // eslint-disable-line no-continue
       let bound = -1;
+      let sights = null;
       for (const v of faces.values()) {
-        if (v._playerFresh === this._passId) bound = Math.max(bound, v._screenShare);
+        if (v._playerFresh !== this._passId) continue; // eslint-disable-line no-continue
+        bound = Math.max(bound, v._screenShare);
+        const rect = this._sightRect;
+        if (posed && !clipQuad(v.corners, this._screenPlanes, 4, rect)) continue; // eslint-disable-line no-continue
+        sights = sights || [];
+        sights.push(this._takeSight(v, posed ? rect : WHOLE_PANEL, v.drawnFrom, v._screenShare));
       }
-      if (bound >= 0) frontier.push({ gate, eye: camera.position, bound });
+      if (sights) frontier.push({ gate, eye: camera.position, bound, sights });
     }
     // Biggest door first: a face seen through several is scheduled for the
     // one it shows biggest in (shallowest-wins, then first-found), and the
@@ -715,48 +778,67 @@ class PortalManager {
       depth += 1
     ) {
       const next = [];
-      for (const { gate: source, eye, bound } of frontier) {
+      for (const { gate: source, eye, bound, sights } of frontier) {
         const sourceFaces = this._views.get(source);
-        if (!sourceFaces || sourceFaces.size === 0) continue; // eslint-disable-line no-continue
         const [anyView] = sourceFaces.values();
-        const mapped = anyView._map({ x: eye.x, y: eye.y, z: eye.z });
+        const mapped = anyView._map(eye);
         const partner = this._partnerGate(source);
+        for (const sight of sights) this._aimSight(sight, sourceFaces);
         for (const gate of this._linkedGates) {
           if (gate === source || gate === partner) continue; // eslint-disable-line no-continue
           if (!gate.isOpen && !(gate._fade > 0)) continue; // eslint-disable-line no-continue
           const faces = this._views.get(gate);
           if (!faces) continue; // eslint-disable-line no-continue
-          const eligible = this._eligibleFaces(gate, mapped);
-          for (const f of eligible) {
+          let seen = null;
+          for (const f of FACINGS) {
             const view = faces.get(f);
-            if (!view || !view.surface.visible) continue; // eslint-disable-line no-continue
-            if (view._playerFresh === this._passId) continue; // eslint-disable-line no-continue
-            if (!scheduled.has(view)) scheduled.set(view, { eye: mapped, depth, bound });
+            if (!view || !view.surface.visible || !this._canLookInto(gate, f, mapped)) continue; // eslint-disable-line no-continue
+            const rect = this._sightRect;
+            if (!this._inSight(view, sights, rect)) continue; // eslint-disable-line no-continue
+            // Seen from here: its picture is the player's own, or the one
+            // this sweep draws for the eye it was scheduled with
+            let apex = view.drawnFrom;
+            let share = view._screenShare;
+            if (view._playerFresh !== this._passId) {
+              let entry = scheduled.get(view);
+              if (!entry) {
+                const footprint = pose
+                  ? view.footprint({ position: mapped, pose }, renderer)
+                  : null;
+                entry = {
+                  eye: mapped,
+                  depth,
+                  bound,
+                  footprint,
+                  share: footprint ? Math.min(footprint.screenShare, bound) : 1,
+                };
+                scheduled.set(view, entry);
+              }
+              apex = view.renderEye(entry.eye);
+              share = entry.share;
+            }
+            seen = seen || [];
+            seen.push(this._takeSight(view, rect, apex, share));
           }
-          // The chain continues through this door's view — but only
-          // same-area doors show panels to keep refreshing
+          // The chain continues through what it sees of this door's view —
+          // but only same-area doors show panels to keep refreshing
           if (
-            eligible.length > 0 &&
+            seen &&
             this._isSameAreaDoor(gate) &&
             next.length < PortalManager.MIRROR_MAX_FRONTIER
           ) {
-            next.push({ gate, eye: mapped, bound });
+            next.push({ gate, eye: mapped, bound, sights: seen });
           }
         }
       }
       frontier = next;
+      // Deeper faces rank after every face already scheduled: once the cap
+      // is full, none of them could make it
+      if (scheduled.size >= PortalManager.MIRROR_MAX_PASSES) break;
     }
 
     if (scheduled.size === 0) return;
-    // Each face as its mapped eye sees it, through the player's look and
-    // lens (a door's mapping is a pure translation): what its target needs,
-    // and how much of the screen it can cover through its chain
-    const pose = camera.quaternion && camera.fov ? camera : camera.pose;
     const ranked = [...scheduled.entries()];
-    for (const [view, entry] of ranked) {
-      entry.footprint = pose ? view.footprint({ position: entry.eye, pose }, renderer) : null;
-      entry.share = entry.footprint ? Math.min(entry.footprint.screenShare, entry.bound) : 1;
-    }
     // Shallowest-first for the cap, biggest on screen first within a level
     // (keep what dominates the screen), then render the keepers
     // deepest-first so each level samples fresh content
@@ -773,6 +855,85 @@ class PortalManager {
         this._wrote(view, MIRROR_WRITER, eye);
       }
     }
+  }
+
+  /**
+   * Point `sight`'s pyramid (sight.planes) through what it shows. A panel
+   * whose picture shows a panel of its OWN door repeats its whole last
+   * picture there, shrunk (that recursion rides the double-buffered
+   * cascade), so any part of it can reach the screen: such a sight takes
+   * the whole panel.
+   * @param {Map<string, PortalView>} ownFaces - the faces of the sight's door
+   */
+  _aimSight(sight, ownFaces) {
+    const { view, apex, rect, planes } = sight;
+    view.sightPlanes(apex, WHOLE_PANEL, planes);
+    if (rect.u0 === 0 && rect.u1 === 1 && rect.v0 === 0 && rect.v1 === 1) return;
+    for (const own of ownFaces.values()) {
+      if (
+        own.surface.visible &&
+        own.facesToward(apex) &&
+        clipQuad(own.corners, planes, SIGHT_PLANES, this._sightPart)
+      ) {
+        Object.assign(rect, WHOLE_PANEL);
+        return;
+      }
+    }
+    view.sightPlanes(apex, rect, planes);
+  }
+
+  /**
+   * Does any of `sights` show part of `view`'s panel? Its picture must face
+   * the panel, and the panel reach into its pyramid. The bounds of what they
+   * show, in quad coordinates (portalMath.clipQuad), go to `out`.
+   */
+  _inSight(view, sights, out) {
+    const part = this._sightPart;
+    let seen = false;
+    for (const sight of sights) {
+      if (!view.facesToward(sight.apex)) continue; // eslint-disable-line no-continue
+      if (!clipQuad(view.corners, sight.planes, SIGHT_PLANES, part)) continue; // eslint-disable-line no-continue
+      if (seen) {
+        out.u0 = Math.min(out.u0, part.u0);
+        out.u1 = Math.max(out.u1, part.u1);
+        out.v0 = Math.min(out.v0, part.v0);
+        out.v1 = Math.max(out.v1, part.v1);
+      } else {
+        Object.assign(out, part);
+        seen = true;
+      }
+    }
+    return seen;
+  }
+
+  /**
+   * A sight through `view`: the part `rect` of its panel (grown by
+   * SIGHT_MARGIN, within the panel), seen in a picture drawn from `apex`.
+   * A panel under SMALL_PANEL_SHARE of the screen (`share`) may keep its
+   * picture two more frames while the eye moves on (_restsThisFrame): its
+   * sight is the whole panel. Recycled every sweep — never keep one.
+   */
+  _takeSight(view, rect, apex, share) {
+    if (this._sightsTaken === this._sightPool.length) {
+      this._sightPool.push({
+        view: null,
+        rect: { u0: 0, u1: 1, v0: 0, v1: 1 },
+        apex: { x: 0, y: 0, z: 0 },
+        planes: new Float64Array(SIGHT_PLANES * 4),
+      });
+    }
+    const sight = this._sightPool[this._sightsTaken];
+    this._sightsTaken += 1;
+    const margin = share < PortalManager.SMALL_PANEL_SHARE ? 1 : PortalManager.SIGHT_MARGIN;
+    sight.view = view;
+    sight.rect.u0 = Math.max(0, rect.u0 - margin);
+    sight.rect.u1 = Math.min(1, rect.u1 + margin);
+    sight.rect.v0 = Math.max(0, rect.v0 - margin);
+    sight.rect.v1 = Math.min(1, rect.v1 + margin);
+    sight.apex.x = apex.x;
+    sight.apex.y = apex.y;
+    sight.apex.z = apex.z;
+    return sight;
   }
 
   /** Is this linked gate an in-area teleport door (both ends live here)? */

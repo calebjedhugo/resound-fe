@@ -12,6 +12,9 @@ import {
   sphereInView,
   panelFootprint,
   inPortalHideBand,
+  viewPlanes,
+  pyramidPlanes,
+  clipQuad,
   DOORWAY_OFFSET,
   OPPOSITE_FACING,
 } from 'core/portalMath';
@@ -250,5 +253,75 @@ describe('inPortalHideBand (static-wall batching split)', () => {
 
   it('ignores elevation, matching the hide-sets', () => {
     expect(inPortalHideBand({ x: gate.x, y: 99, z: gate.z - 5 * WORLD_SCALE }, gate)).toBe(true);
+  });
+});
+
+describe('sightlines (the mirror sweep cull)', () => {
+  // A 3x3 quad standing in the z = 0 plane: across runs +x, up runs +y
+  const QUAD = {
+    bottomLeft: { x: -1.5, y: 0, z: 0 },
+    bottomRight: { x: 1.5, y: 0, z: 0 },
+    topLeft: { x: -1.5, y: 3, z: 0 },
+  };
+  const WHOLE = { u0: 0, u1: 1, v0: 0, v1: 1 };
+  const plane = (...runs) => Float64Array.from(runs.flat());
+  const inside = (planes, count, p) => {
+    for (let k = 0; k < count; k += 1) {
+      const o = k * 4;
+      if (planes[o] * p.x + planes[o + 1] * p.y + planes[o + 2] * p.z + planes[o + 3] < 0) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  it('clipQuad keeps a quad inside every plane whole', () => {
+    const rect = {};
+    expect(clipQuad(QUAD, plane([0, 0, 1, 1]), 1, rect)).toBe(true); // z >= -1
+    expect(rect).toEqual(WHOLE);
+  });
+
+  it('clipQuad finds nothing of a quad outside any one plane', () => {
+    // z >= -1 holds, x >= 2 does not
+    expect(clipQuad(QUAD, plane([0, 0, 1, 1], [1, 0, 0, -2]), 2, {})).toBe(false);
+  });
+
+  it('clipQuad bounds the part inside: planes through the middle keep a corner', () => {
+    const rect = {};
+    // x >= 0 (the right half) and y <= 1 (the bottom third)
+    expect(clipQuad(QUAD, plane([1, 0, 0, 0], [0, -1, 0, 1]), 2, rect)).toBe(true);
+    expect(rect.u0).toBeCloseTo(0.5);
+    expect(rect.u1).toBeCloseTo(1);
+    expect(rect.v0).toBeCloseTo(0);
+    expect(rect.v1).toBeCloseTo(1 / 3);
+  });
+
+  it('pyramidPlanes hold what shows through part of a quad, and nothing else', () => {
+    // From 5 units in front of the quad, through its right half
+    const apex = { x: 0, y: 1.5, z: -5 };
+    const planes = new Float64Array(16);
+    expect(pyramidPlanes(apex, QUAD, { u0: 0.5, u1: 1, v0: 0, v1: 1 }, planes)).toBe(4);
+    // 5 units beyond the quad it is twice the part's size: x in [0, 3],
+    // y in [-1.5, 4.5]
+    expect(inside(planes, 4, { x: 2.9, y: 1.5, z: 5 })).toBe(true);
+    expect(inside(planes, 4, { x: 3.1, y: 1.5, z: 5 })).toBe(false);
+    expect(inside(planes, 4, { x: -0.1, y: 1.5, z: 5 })).toBe(false);
+    expect(inside(planes, 4, { x: 1, y: 4.4, z: 5 })).toBe(true);
+    expect(inside(planes, 4, { x: 1, y: 4.6, z: 5 })).toBe(false);
+  });
+
+  it('viewPlanes bound what a camera sees; slack widens every side', () => {
+    // Looking north (-z), 90° vertical fov, square screen: the edges run at 45°
+    const camera = { quaternion: { x: 0, y: 0, z: 0, w: 1 }, fov: 90, aspect: 1 };
+    const eye = { x: 0, y: 0, z: 0 };
+    const planes = new Float64Array(16);
+    expect(viewPlanes(eye, camera, planes)).toBe(4);
+    expect(inside(planes, 4, { x: 0, y: 0, z: -10 })).toBe(true);
+    expect(inside(planes, 4, { x: 10.5, y: 0, z: -10 })).toBe(false);
+    expect(inside(planes, 4, { x: 0, y: -10.5, z: -10 })).toBe(false);
+    expect(inside(planes, 4, { x: 0, y: 0, z: 10 })).toBe(false); // behind
+    viewPlanes(eye, camera, planes, 0, 0.1);
+    expect(inside(planes, 4, { x: 10.5, y: 0, z: -10 })).toBe(true);
+    expect(inside(planes, 4, { x: 0, y: -10.5, z: -10 })).toBe(true);
   });
 });

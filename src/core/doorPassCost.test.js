@@ -323,10 +323,10 @@ describe('The stale rotor works only while a door panel is drawn', () => {
 
 describe('The mirror sweep spends its passes on what the screen can show', () => {
   // A same-area world built for the cap: looking north into S1 shows the
-  // room north of S2, where V1 stands straight ahead; X1's faces are also
-  // in reach of the mapped eye but far off to its side — off screen. X is
-  // listed first, so a sweep picking by discovery order would spend its one
-  // pass on X1.
+  // room north of S2, where V1 stands straight ahead and W1 further off
+  // (smaller on screen); X1's faces are also in reach of the mapped eye but
+  // far off to its side — off screen. X and W are listed first, so a sweep
+  // picking by discovery order would spend its one pass on one of them.
   const gate = (id, x, z, partner) => ({
     type: 'gate',
     id,
@@ -347,6 +347,8 @@ describe('The mirror sweep spends its passes on what the screen can show', () =>
       gate('s2', 10, 10, 's1'),
       gate('x1', 0, 12, 'x2'),
       gate('x2', 14, 14, 'x1'),
+      gate('w1', 12, 3, 'w2'),
+      gate('w2', 0, 14, 'w1'),
       gate('v1', 10, 4, 'v2'),
       gate('v2', 13, 13, 'v1'),
     ],
@@ -357,7 +359,7 @@ describe('The mirror sweep spends its passes on what the screen can show', () =>
     PortalManager.constructor.MIRROR_MAX_PASSES = originalCap;
   });
 
-  it('a face in sight through a door wins the cap over faces off screen', () => {
+  it('the cap keeps the face biggest on screen, wherever the walk found it', () => {
     installFetchMock({});
     PortalManager.enterWorld(world);
     const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
@@ -372,6 +374,7 @@ describe('The mirror sweep spends its passes on what the screen can show', () =>
     // the only second write
     const byId = (id) => gates.find((g) => g.gateId === id);
     expect(renderer.writesOf(panelOf(byId('v1'), 'south'))).toHaveLength(2);
+    expect(renderer.writesOf(panelOf(byId('w1'), 'south'))).toHaveLength(1);
     expect(renderer.writesOf(panelOf(byId('x1'), 'north'))).toHaveLength(1);
   });
 
@@ -393,14 +396,133 @@ describe('The mirror sweep spends its passes on what the screen can show', () =>
     eye.quaternion = LOOK_NORTH;
     drawFrame(renderer, eye);
 
-    // Every face is equally stale. The sweep's one pass went to V1's south
-    // face; of the faces it reached but had no room for, X2's south face
-    // (two doors deep) and V1's east side (an edge-on sliver) show biggest,
-    // and take the rotor's two refreshes — not S1's north face, first in
-    // line by age alone
+    // Every face is equally stale. The player's eye redraws S1's faces and
+    // the sweep's one pass goes to V1's south face. Of the faces the sweep
+    // could see but had no room for (W1's, and V1's edge-on sides), W1's
+    // south face shows biggest: the rotor's two refreshes go to those —
+    // not to S1's north face, first in line by age alone
     const byId = (id) => gates.find((g) => g.gateId === id);
-    expect(renderer.writesOf(panelOf(byId('x2'), 'south'))).toHaveLength(1);
-    expect(renderer.writesOf(panelOf(byId('v1'), 'east'))).toHaveLength(1);
+    const drawn = gates.flatMap((g) =>
+      ['north', 'south', 'east', 'west']
+        .filter((f) => renderer.writesOf(panelOf(g, f)).length > 0)
+        .map((f) => `${g.gateId}.${f}`)
+    );
+    const rotor = drawn.filter((face) => !face.startsWith('s1.') && face !== 'v1.south');
+    expect(drawn).toContain('v1.south');
+    expect(rotor).toHaveLength(2);
+    expect(rotor).toContain('w1.south');
+    for (const face of rotor) expect(['w1', 'v1']).toContain(face.split('.')[0]);
     expect(renderer.writesOf(panelOf(byId('s1'), 'north'))).toHaveLength(0);
+  });
+});
+
+describe('The mirror sweep draws only what a chain can show on screen', () => {
+  // Same-area doors, every gate facing north: looking north into A1 shows
+  // the view north out of A2 (and P1's north out of P2). Grid coordinates.
+  const gate = (id, x, z, partner) => ({
+    type: 'gate',
+    id,
+    facing: 'north',
+    link: { puzzleId: 'sight-lines', gateId: partner },
+    position: { x, y: 0, z },
+    song: [{ pitch: 'C4', length: '1/4' }],
+  });
+  const enter = (...gates) => {
+    installFetchMock({});
+    PortalManager.enterWorld({
+      id: 'sight-lines',
+      name: 'Sight lines',
+      difficulty: 1,
+      gridSize: 30,
+      tempo: 120,
+      playerStart: { x: 5, y: 0, z: 29 },
+      entities: gates,
+    });
+    const entities = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of entities) g.open();
+    return (id) => entities.find((g) => g.gateId === id);
+  };
+  // A1 -> A2 (straight ahead of A2: B1; off to its north-east: D1)
+  const DOOR_A = [gate('a1', 5, 15, 'a2'), gate('a2', 15, 5, 'a1')];
+  const B = [gate('b1', 15, 2, 'b2'), gate('b2', 19, 19, 'b1')];
+  const D = [gate('d1', 16, 1, 'd2'), gate('d2', 19, 10, 'd1')];
+  // An eye on A1's (or P1's) axis, `cells` south of the door, sees its
+  // panel this far ahead (the panel hugs the far side of the cell)
+  const panelDistance = (cells) => cells * WORLD_SCALE + (WORLD_SCALE / 2 - 0.01);
+  // Turned left (west) until the screen's right edge cuts a panel straight
+  // ahead, `distance` away, at `u` of the way across: what lies behind the
+  // rest of the panel is off screen
+  const HALF_ACROSS = Math.atan(
+    Math.tan((FOV / 2) * (Math.PI / 180)) * (SCREEN.width / SCREEN.height)
+  );
+  const cutting = (distance, u) => {
+    const yaw = HALF_ACROSS - Math.atan((WORLD_SCALE * (u - 0.5)) / distance);
+    return { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+  };
+  /** Steady frames after a door's opening frame (before any face goes stale) */
+  const steadyWrites = (renderer, panel) =>
+    renderer.passes.filter((pass) => pass.frame > 1 && pass.panel === panel).length;
+  const drawSteady = (renderer, eye) => {
+    for (let i = 0; i < 10; i += 1) drawFrame(renderer, eye);
+  };
+
+  it('a face no door shows on screen is never swept, however near a mapped eye it stands', () => {
+    // A2's mapped eye stands past two faces each of C1 and C2 — behind it,
+    // out of every sightline (and behind the player): such faces once
+    // filled the cap every frame
+    const door = enter(...DOOR_A, ...B, gate('c1', 10, 20, 'c2'), gate('c2', 20, 25, 'c1'));
+    const renderer = createRecordingRenderer();
+    drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE));
+
+    expect(steadyWrites(renderer, panelOf(door('b1'), 'south'))).toBeGreaterThan(0);
+    for (const [id, facing] of [
+      ['c1', 'north'],
+      ['c1', 'east'],
+      ['c2', 'north'],
+      ['c2', 'west'],
+    ]) {
+      expect(steadyWrites(renderer, panelOf(door(id), facing))).toBe(0);
+    }
+  });
+
+  it("a big panel's part off screen shows nothing: what lies behind it is not swept", () => {
+    // D1 shows through the east side of A1's panel
+    const sweptWith = (u) => {
+      const door = enter(...DOOR_A, ...D);
+      const renderer = createRecordingRenderer();
+      drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE, cutting(panelDistance(2), u)));
+      return steadyWrites(renderer, panelOf(door('d1'), 'south'));
+    };
+
+    expect(sweptWith(1)).toBeGreaterThan(0); // the whole panel on screen
+    expect(sweptWith(0.25)).toBe(0); // its west quarter only
+  });
+
+  it("a small panel keeps its whole picture in sight: it outlives the eye's turn", () => {
+    // From far off, its west edge alone on screen: A1's panel is under
+    // SMALL_PANEL_SHARE of the screen, and keeps a picture two more frames
+    // while the eye turns. D1 shows through its east side
+    const door = enter(...DOOR_A, ...D);
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(5 * WORLD_SCALE, 25 * WORLD_SCALE, cutting(panelDistance(10), 0.05));
+    drawSteady(renderer, eye);
+
+    expect(steadyWrites(renderer, panelOf(door('d1'), 'south'))).toBeGreaterThan(0);
+  });
+
+  it('a door that shows itself in its own view keeps that whole view in sight', () => {
+    // Looking north into P1 shows the view north out of P2 — P1 itself, far
+    // down the line: P1's picture repeats inside P1, the part off screen
+    // included. K1 shows only in that part
+    const door = enter(
+      gate('p1', 5, 5, 'p2'),
+      gate('p2', 5, 15, 'p1'),
+      gate('k1', 6, 4, 'k2'),
+      gate('k2', 20, 20, 'k1')
+    );
+    const renderer = createRecordingRenderer();
+    drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 7 * WORLD_SCALE, cutting(panelDistance(2), 0.25)));
+
+    expect(steadyWrites(renderer, panelOf(door('k1'), 'south'))).toBeGreaterThan(0);
   });
 });

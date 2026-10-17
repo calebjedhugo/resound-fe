@@ -32,6 +32,7 @@ import {
   doorwayCorners,
   panelFootprint,
   portalMapping,
+  pyramidPlanes,
   sphereInView,
 } from 'core/portalMath';
 
@@ -152,6 +153,11 @@ class PortalView {
     this._mappedBottomLeft = new THREE.Vector3(bl.x, bl.y, bl.z);
     this._mappedBottomRight = new THREE.Vector3(br.x, br.y, br.z);
     this._mappedTopLeft = new THREE.Vector3(tl.x, tl.y, tl.z);
+    this._mappedCorners = {
+      bottomLeft: this._mappedBottomLeft,
+      bottomRight: this._mappedBottomRight,
+      topLeft: this._mappedTopLeft,
+    };
 
     // Clip ONE CELL behind the window plane, so the partner's OWN doorway
     // cell paints into the view: its floor, the walls framing it, and its
@@ -403,6 +409,70 @@ class PortalView {
   }
 
   /**
+   * Where a pass for an eye at `eye` renders FROM: the mapped eye, held at
+   * least MIN_RENDER_EYE_DISTANCE back from the window plane (see that
+   * constant) — pulled straight back along the view axis. The eye's
+   * distance to the window is the same in source and neighbor space (the
+   * mapping is rigid).
+   * @param {{x, y, z}} eye - world position, this panel's side
+   * @returns {{x, y, z}} neighbor-space position
+   */
+  renderEye(eye) {
+    const mapped = this._map(eye);
+    const { center } = this._corners;
+    const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
+    if (eyeDistance < MIN_RENDER_EYE_DISTANCE) {
+      const pullBack = MIN_RENDER_EYE_DISTANCE - eyeDistance;
+      mapped.x -= this._outwardMapped.x * pullBack;
+      mapped.z -= this._outwardMapped.z * pullBack;
+    }
+    return mapped;
+  }
+
+  /** Where the picture this panel shows was drawn from (neighbor space). */
+  get drawnFrom() {
+    return this._camera.position;
+  }
+
+  /** The doorway surface's quad, world space (on the cell's far plane). */
+  get corners() {
+    return this._corners;
+  }
+
+  /** Is the surface's front toward `point` (world space), so it can show? */
+  facesToward(point) {
+    const { center } = this._corners;
+    return this._outward.x * (point.x - center.x) + this._outward.z * (point.z - center.z) > 0;
+  }
+
+  /**
+   * What this panel's picture can show through the part `rect` of its
+   * doorway (quad coordinates, as portalMath.clipQuad gives them), for a
+   * picture drawn from `apex`: the pyramid from the apex through that part
+   * of the mapped doorway, past the pass camera's near plane and this
+   * panel's own doorway clip. Neighbor space; planes `index`..`index + 5`
+   * of `out` (portalMath's plane layout).
+   * @returns {number} the index after the last plane written
+   */
+  sightPlanes(apex, rect, out, index = 0) {
+    let next = pyramidPlanes(apex, this._mappedCorners, rect, out, index);
+    // Near plane: the pass looks along the mapped outward, square to the
+    // doorway (frameCorners)
+    const o = this._outwardMapped;
+    out[next * 4] = o.x;
+    out[next * 4 + 1] = o.y;
+    out[next * 4 + 2] = o.z;
+    out[next * 4 + 3] = -(o.x * apex.x + o.y * apex.y + o.z * apex.z) - this._camera.near;
+    next += 1;
+    const { normal, constant } = this._clipPlane;
+    out[next * 4] = normal.x;
+    out[next * 4 + 1] = normal.y;
+    out[next * 4 + 2] = normal.z;
+    out[next * 4 + 3] = constant;
+    return next + 1;
+  }
+
+  /**
    * This panel's own doorway clip plane (neighbor-world space). PortalManager
    * shares the PRIMARY approach panel's plane across every panel of a door so
    * the side windows clip along the SAME axis as the approach — otherwise a
@@ -475,24 +545,13 @@ class PortalView {
     // cameras are bare {position} objects: no pose, no cull.
     if (!this.inView(camera)) return false;
     const eye = camera.position;
-    const { center } = this._corners;
-    const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
 
     const writeTarget = this._fitTarget(
       renderer,
       options.footprint === undefined ? this.footprint(camera, renderer) : options.footprint
     );
 
-    const mappedEye = this._map({ x: eye.x, y: eye.y, z: eye.z });
-    // Never render from closer than MIN_RENDER_EYE_DISTANCE to the window
-    // plane (see constant above): pull the render eye straight back along
-    // the view axis. eyeDistance is the same in source and neighbor space —
-    // the mapping is rigid.
-    if (eyeDistance < MIN_RENDER_EYE_DISTANCE) {
-      const pullBack = MIN_RENDER_EYE_DISTANCE - eyeDistance;
-      mappedEye.x -= this._outwardMapped.x * pullBack;
-      mappedEye.z -= this._outwardMapped.z * pullBack;
-    }
+    const mappedEye = this.renderEye(eye);
     this._camera.position.set(mappedEye.x, mappedEye.y, mappedEye.z);
     frameCorners(
       this._camera,
