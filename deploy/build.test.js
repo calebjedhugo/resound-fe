@@ -31,6 +31,8 @@ function viteBuild(outDir, { tune = false, gameOnly = false } = {}) {
   const helper = path.join(__dirname, '__tests__/viteBuild.mjs');
   const args = [helper, outDir, ...(tune ? ['--tune'] : [])];
   const env = { ...process.env, ...(gameOnly ? { RESOUND_BUILD: 'game' } : {}) };
+  // As from a shell: Jest's NODE_ENV=test would make Vite build the DEV flavour
+  delete env.NODE_ENV;
   return JSON.parse(execFileSync(process.execPath, args, { cwd: ROOT, env }));
 }
 
@@ -127,6 +129,15 @@ describe('The deploy build', () => {
 
     expect(modules.filter((id) => /^src\/editor\//.test(id))).toEqual([]);
     expect(fs.existsSync(path.join(tmp, 'game/editor.html'))).toBe(false);
+  });
+
+  it('has no dynamic import, so it needs no modulepreload polyfill (and ships none)', () => {
+    const chunks = Object.values(game);
+
+    expect(chunks.flatMap((chunk) => chunk.dynamicImports)).toEqual([]);
+    expect(
+      chunks.flatMap((chunk) => chunk.modules).filter((id) => /modulepreload/.test(id))
+    ).toEqual([]);
   });
 
   it.each([

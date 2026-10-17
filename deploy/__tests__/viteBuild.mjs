@@ -2,8 +2,8 @@
 /**
  * Test helper: run the production build (the repo's own vite.config.js) into
  * <outDir> and print what it emitted as JSON: for every chunk, its static
- * imports and the modules inside it (ids relative to the repo, packages as
- * `pkg:<name>/<path>`). Vite and Rollup are ESM-only, so the Jest suite runs
+ * and dynamic imports, its CSS and the modules inside it (ids relative to the
+ * repo, packages as `pkg:<name>/<path>`). Vite and Rollup are ESM-only, so the Jest suite runs
  * this as a child process.
  *
  * `--tune` first changes one game constant, as a tuning edit would.
@@ -48,6 +48,7 @@ await build({
           .forEach((chunk) => {
             chunks[chunk.fileName] = {
               imports: chunk.imports,
+              dynamicImports: chunk.dynamicImports,
               css: [...(chunk.viteMetadata?.importedCss || [])],
               modules: Object.keys(chunk.modules).map(moduleName),
             };

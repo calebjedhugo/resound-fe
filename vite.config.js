@@ -373,6 +373,11 @@ export default defineConfig({
     // (rgba(255, 255, 255, 0.5) -> #ffffff80 is alpha 0.502, not 0.5) for
     // under 0.2 kB gzip saved
     cssMinify: false,
+    // The <link rel="modulepreload"> tags stay; the polyfill for browsers
+    // without them goes. It runs only once the whole static graph has loaded
+    // (it is part of it), so with no dynamic import in production it could
+    // only re-fetch chunks already fetched (and watch every DOM mutation)
+    modulePreload: { polyfill: false },
     rollupOptions: {
       // RESOUND_BUILD=game (deploy/deploy.sh) builds the game alone: the POC
       // ships no editor, and with none in the build the game's chunks carry
