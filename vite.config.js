@@ -369,6 +369,10 @@ export default defineConfig({
     },
   },
   build: {
+    // Ship stylesheets byte-for-byte: esbuild's CSS minifier rewrites colours
+    // (rgba(255, 255, 255, 0.5) -> #ffffff80 is alpha 0.502, not 0.5) for
+    // under 0.2 kB gzip saved
+    cssMinify: false,
     rollupOptions: {
       input: {
         main: 'index.html',

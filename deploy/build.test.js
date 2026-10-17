@@ -3,7 +3,9 @@
  * resound packages each get a chunk of their own, so a returning player keeps
  * them cached across game edits (a tuning edit to constants.js used to rename
  * the one chunk three shared with it: ~180 kB gzip re-downloaded). The game
- * page loads no editor code and one copy of each package.
+ * page loads no editor code and one copy of each package, and its stylesheet
+ * is a hashed asset too (it was an unhashed public/ file, revalidated before
+ * the game script could run).
  *
  * Runs two real Vite builds (deploy/__tests__/viteBuild.mjs).
  */
@@ -98,5 +100,26 @@ describe('The game page', () => {
     expect(
       modules.filter((id) => /resound-notation\/dist\/NotationRenderer\.js$/.test(id))
     ).toHaveLength(1);
+  });
+});
+
+describe("The game page's stylesheet", () => {
+  const stylesheets = () =>
+    [
+      ...fs
+        .readFileSync(path.join(tmp, 'base/index.html'), 'utf8')
+        .matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
+    ].map(([, href]) => href);
+
+  it('is a hashed asset', () => {
+    expect(stylesheets()).toEqual([expect.stringMatching(/^\/assets\/index-[0-9a-f]{8}\.css$/)]);
+  });
+
+  it('ships the menu styles byte-for-byte', () => {
+    const [href] = stylesheets();
+
+    expect(fs.readFileSync(path.join(tmp, 'base', href))).toEqual(
+      fs.readFileSync(path.join(ROOT, 'src/ui/menu.css'))
+    );
   });
 });
