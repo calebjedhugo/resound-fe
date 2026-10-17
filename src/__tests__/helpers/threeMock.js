@@ -241,6 +241,13 @@ class Geometry {
   dispose() {}
 }
 
+class RingGeometry extends Geometry {
+  constructor(innerRadius = 0.5, outerRadius = 1, thetaSegments = 32) {
+    super();
+    this.parameters = { innerRadius, outerRadius, thetaSegments };
+  }
+}
+
 class BufferGeometry {
   constructor() {
     this.attributes = {};
@@ -469,6 +476,7 @@ module.exports = {
   PlaneGeometry: Geometry,
   CylinderGeometry: Geometry,
   ConeGeometry: Geometry,
+  RingGeometry,
   BufferGeometry,
   Float32BufferAttribute,
   Material,

@@ -143,6 +143,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/FrameProfiler.test.js` | Dev profiler times each call by caller (self excludes timed children), counts draw calls and GPU time per pass, reports the worst frames first, and unwraps everything after a run |
 | `src/core/passContext.test.js` | Main view binds no-op clip planes; door targets render in the canvas colour space; panels never encode twice |
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |
+| `src/ui/ClapVisual.test.js` | Clap ring look and fade; faded rings are recycled (nothing freed, so the ring's shader program stays compiled) and look exactly like fresh ones |
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
 
