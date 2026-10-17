@@ -28,16 +28,23 @@ export default class RangeIndicator {
   constructor(scene) {
     this._scene = scene;
     this._group = null;
+    this._range = null; // audibleRange the shown spheres were built for
   }
 
   /**
    * Show the audible + recordable spheres for `entity`, centred at `center`
    * (a world-space {x, y, z}, typically the creature mesh position). Replaces
-   * any spheres already shown.
+   * any spheres already shown. EditorApp calls this on every model change
+   * while a creature is selected (each song edit), so spheres of the same
+   * range are only moved, not rebuilt.
    */
   show(entity, center) {
-    this.hide();
     const range = entity?.data?.audibleRange ?? 15;
+    if (this._group && range === this._range && center) {
+      this._group.position.set(center.x, center.y, center.z);
+      return;
+    }
+    this.hide();
     if (!(range > 0) || !center) return;
 
     this._group = new THREE.Group();
@@ -45,6 +52,7 @@ export default class RangeIndicator {
     this._group.add(this._sphere(range, AUDIBLE_COLOR, AUDIBLE_OPACITY));
     this._group.add(this._sphere(range * RECORDING_RANGE_PERCENTAGE, RECORD_COLOR, RECORD_OPACITY));
     this._scene.add(this._group);
+    this._range = range;
   }
 
   /** Remove the spheres (and free their GPU resources). */
