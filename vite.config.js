@@ -374,10 +374,14 @@ export default defineConfig({
     // under 0.2 kB gzip saved
     cssMinify: false,
     rollupOptions: {
-      input: {
-        main: 'index.html',
-        editor: 'editor.html',
-      },
+      // RESOUND_BUILD=game (deploy/deploy.sh) builds the game alone: the POC
+      // ships no editor, and with none in the build the game's chunks carry
+      // nothing only the editor uses (2.8 kB gzip, mostly three) and an
+      // editor edit can't rename them
+      input:
+        process.env.RESOUND_BUILD === 'game'
+          ? { main: 'index.html' }
+          : { main: 'index.html', editor: 'editor.html' },
       output: {
         // Each dependency gets a chunk of its own, so its hashed file name
         // changes only when that package does: a game edit (a constants.js

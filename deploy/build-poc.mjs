@@ -2,11 +2,13 @@
 /**
  * Stage a POC-only production build for resound.calebhugo.com.
  *
- * Takes the full Vite build in `dist/` and produces `deploy/dist-poc/` — a
- * public artifact that ships ONLY the nine POC levels and the game itself:
+ * Takes the Vite build in `dist/` and produces `deploy/dist-poc/` — a public
+ * artifact that ships ONLY the nine POC levels and the game itself:
  *
- *   - editor.html + its editor-only assets are dropped (the editor's write/git
- *     APIs are dev-server middleware that don't exist in production anyway).
+ *   - editor.html + its editor-only assets are dropped from a full build
+ *     (deploy.sh builds the game alone, RESOUND_BUILD=game; the editor's
+ *     write/git APIs are dev-server middleware that don't exist in production
+ *     anyway).
  *   - public/puzzles is pruned to the `poc-*` files plus a manifest filtered to
  *     those entries, in their original order (so the game boots into
  *     `poc-threshold` — puzzles[0] — and Esc's menu lists only the POC set).

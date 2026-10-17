@@ -335,8 +335,8 @@ instead of "fixing" it.
 - **Deployment:** **POC build is LIVE at https://resound.calebhugo.com** (Pi
   static hosting, nginx `127.0.0.1:8100` behind the `calebhugo` Cloudflare
   Tunnel — same house pattern as the other `*.calebhugo.com` apps). Deploy with
-  `./deploy/deploy.sh`: it builds, stages a **POC-only** artifact
-  (`deploy/build-poc.mjs` drops `editor.html` + editor assets, prunes
+  `./deploy/deploy.sh`: it builds the game alone (`RESOUND_BUILD=game`),
+  stages a **POC-only** artifact (`deploy/build-poc.mjs` prunes
   `public/puzzles` to the `poc-*` set + a filtered manifest, precompresses),
   and uploads with `deploy/upload.sh` (assets first, `index.html` last, the
   previous deploy's assets kept). Hashed `/assets/` cache immutably (three +

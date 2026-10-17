@@ -7,10 +7,11 @@
  * is a hashed asset too (it was an unhashed public/ file, revalidated before
  * the game script could run).
  *
- * The POC stage (build-poc.mjs) then ships the game alone, precompressed for
- * nginx's gzip_static, with the asset list deploy/upload.sh prunes by.
+ * The deploy builds the game alone (RESOUND_BUILD=game, as deploy.sh runs
+ * it), and the POC stage (build-poc.mjs) ships it precompressed for nginx's
+ * gzip_static, with the asset list deploy/upload.sh prunes by.
  *
- * Runs two real Vite builds (deploy/__tests__/viteBuild.mjs).
+ * Runs three real Vite builds (deploy/__tests__/viteBuild.mjs).
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -22,13 +23,23 @@ const ROOT = path.resolve(__dirname, '..');
 const BUILD_TIMEOUT_MS = 120000;
 
 let tmp;
-let base;
-let tuned;
+let full; // npm run build: game + editor
+let tuned; // the same after a tuning edit
+let game; // the deploy's build
 
-function viteBuild(outDir, ...flags) {
+function viteBuild(outDir, { tune = false, gameOnly = false } = {}) {
   const helper = path.join(__dirname, '__tests__/viteBuild.mjs');
-  return JSON.parse(execFileSync(process.execPath, [helper, outDir, ...flags], { cwd: ROOT }));
+  const args = [helper, outDir, ...(tune ? ['--tune'] : [])];
+  const env = { ...process.env, ...(gameOnly ? { RESOUND_BUILD: 'game' } : {}) };
+  return JSON.parse(execFileSync(process.execPath, args, { cwd: ROOT, env }));
 }
+
+const stagePoc = (build, out) =>
+  execFileSync(process.execPath, [
+    path.join(__dirname, 'build-poc.mjs'),
+    path.join(tmp, build),
+    path.join(tmp, out),
+  ]);
 
 /** Every chunk file the game page (index.html) loads, its CSS included. */
 function gamePageFiles(chunks) {
@@ -49,13 +60,11 @@ const chunkNamed = (chunks, name) =>
 
 beforeAll(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'resound-build-'));
-  base = viteBuild(path.join(tmp, 'base'));
-  tuned = viteBuild(path.join(tmp, 'tuned'), '--tune');
-  execFileSync(process.execPath, [
-    path.join(__dirname, 'build-poc.mjs'),
-    path.join(tmp, 'base'),
-    path.join(tmp, 'poc'),
-  ]);
+  full = viteBuild(path.join(tmp, 'full'));
+  tuned = viteBuild(path.join(tmp, 'tuned'), { tune: true });
+  game = viteBuild(path.join(tmp, 'game'), { gameOnly: true });
+  stagePoc('game', 'poc');
+  stagePoc('full', 'poc-from-full');
 }, BUILD_TIMEOUT_MS);
 
 afterAll(() => {
@@ -67,12 +76,12 @@ describe('A tuning edit to the game constants', () => {
     const holder = (chunks) =>
       Object.keys(chunks).find((file) => chunks[file].modules.includes('src/core/constants.js'));
 
-    expect(holder(tuned)).not.toBe(holder(base));
+    expect(holder(tuned)).not.toBe(holder(full));
   });
 
   it.each(['three', 'resound-notation', 'resound-sound'])('keeps the %s chunk name', (name) => {
-    expect(chunkNamed(base, name)).toBeDefined();
-    expect(chunkNamed(tuned, name)).toBe(chunkNamed(base, name));
+    expect(chunkNamed(full, name)).toBeDefined();
+    expect(chunkNamed(tuned, name)).toBe(chunkNamed(full, name));
   });
 });
 
@@ -82,7 +91,7 @@ describe('The vendor chunks', () => {
     ['resound-notation', /^pkg:resound-notation\//],
     ['resound-sound', /^pkg:resound-sound\//],
   ])('%s holds only that package and imports nothing', (name, pkg) => {
-    const chunk = base[chunkNamed(base, name)];
+    const chunk = full[chunkNamed(full, name)];
 
     expect(chunk.modules.every((id) => pkg.test(id))).toBe(true);
     expect(chunk.imports).toEqual([]);
@@ -91,7 +100,7 @@ describe('The vendor chunks', () => {
 
 describe('The game page', () => {
   it('loads no editor code', () => {
-    const modules = [...gamePageFiles(base)].flatMap((file) => base[file]?.modules || []);
+    const modules = [...gamePageFiles(full)].flatMap((file) => full[file]?.modules || []);
 
     expect(
       modules.filter((id) => /^src\/editor\/|^pkg:three\/examples\/jsm\/controls\//.test(id))
@@ -99,7 +108,7 @@ describe('The game page', () => {
   });
 
   it('loads one copy of three and of each resound package', () => {
-    const modules = [...gamePageFiles(base)].flatMap((file) => base[file]?.modules || []);
+    const modules = [...gamePageFiles(full)].flatMap((file) => full[file]?.modules || []);
 
     expect(modules.filter((id) => /three\.module\.js$/.test(id))).toEqual([
       'pkg:three/build/three.module.js',
@@ -112,11 +121,30 @@ describe('The game page', () => {
   });
 });
 
+describe('The deploy build', () => {
+  it('holds the game alone', () => {
+    const modules = Object.values(game).flatMap((chunk) => chunk.modules);
+
+    expect(modules.filter((id) => /^src\/editor\//.test(id))).toEqual([]);
+    expect(fs.existsSync(path.join(tmp, 'game/editor.html'))).toBe(false);
+  });
+
+  it.each([
+    ['three', /^pkg:three\/build\//],
+    ['resound-notation', /^pkg:resound-notation\//],
+    ['resound-sound', /^pkg:resound-sound\//],
+  ])('gives %s a chunk of its own', (name, pkg) => {
+    const chunk = game[chunkNamed(game, name)];
+
+    expect(chunk.modules.every((id) => pkg.test(id))).toBe(true);
+  });
+});
+
 describe("The game page's stylesheet", () => {
   const stylesheets = () =>
     [
       ...fs
-        .readFileSync(path.join(tmp, 'base/index.html'), 'utf8')
+        .readFileSync(path.join(tmp, 'full/index.html'), 'utf8')
         .matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
     ].map(([, href]) => href);
 
@@ -127,7 +155,7 @@ describe("The game page's stylesheet", () => {
   it('ships the menu styles byte-for-byte', () => {
     const [href] = stylesheets();
 
-    expect(fs.readFileSync(path.join(tmp, 'base', href))).toEqual(
+    expect(fs.readFileSync(path.join(tmp, 'full', href))).toEqual(
       fs.readFileSync(path.join(ROOT, 'src/ui/menu.css'))
     );
   });
@@ -138,8 +166,10 @@ describe('The POC stage', () => {
   const stagedFiles = () =>
     fs.readdirSync(poc(), { recursive: true }).filter((f) => fs.statSync(poc(f)).isFile());
 
-  it('drops the editor', () => {
-    expect(stagedFiles().filter((f) => /editor/.test(f))).toEqual([]);
+  it('drops the editor from a full build', () => {
+    const staged = fs.readdirSync(path.join(tmp, 'poc-from-full'), { recursive: true });
+
+    expect(staged.filter((f) => /editor/.test(f))).toEqual([]);
   });
 
   it('ships only the POC levels', () => {

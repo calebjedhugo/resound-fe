@@ -18,13 +18,15 @@ puzzles.
 ```
 
 Which does:
-1. `npm run build` → `dist/` (full build, includes the editor + all puzzles).
+1. `RESOUND_BUILD=game npm run build` → `dist/` (the game alone — no editor
+   in the build, so the game's chunks carry nothing only the editor uses — plus
+   all puzzles).
 2. `node deploy/build-poc.mjs` → `deploy/dist-poc/` — strips `editor.html` and
-   its editor-only assets, prunes `puzzles/` to the `poc-*` files, and writes a
-   manifest filtered to those entries (order preserved, so the game boots into
-   `poc-threshold` and Esc's menu lists only the POC set). Every text file gets
-   a level-9 `.gz` beside it (for nginx `gzip_static`), and `.deploy-assets`
-   lists the hashed assets.
+   its editor-only assets if a full build has them, prunes `puzzles/` to the
+   `poc-*` files, and writes a manifest filtered to those entries (order
+   preserved, so the game boots into `poc-threshold` and Esc's menu lists only
+   the POC set). Every text file gets a level-9 `.gz` beside it (for nginx
+   `gzip_static`), and `.deploy-assets` lists the hashed assets.
 3. `deploy/upload.sh deploy/dist-poc chugo@hugopi:/var/www/resound.calebhugo.com/`
    — plain rsync passes, ordered so no page ever 404s a chunk: new hashed
    assets first, then the puzzles, then `index.html` (and only then are stale
