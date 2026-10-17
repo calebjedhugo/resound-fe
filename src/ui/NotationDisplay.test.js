@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
+import { drawnObjects, renderPass, updateMatrixWorld } from '../__tests__/helpers/drawList';
 
 describe('NotationDisplay on Gates and Fountains', () => {
   const singleNoteSong = [{ pitch: 'C4', length: '1/4' }];
@@ -268,5 +269,118 @@ describe('NotationDisplay on Gates and Fountains', () => {
       const notationChildren = fountain.mesh.children.filter((c) => c._isNotationMesh);
       expect(notationChildren).toHaveLength(4);
     });
+  });
+});
+
+// A staff plane fades by the eye's distance past its plane: from behind, or
+// within FADE_NEAR of it, it draws at zero opacity — and so does a plane
+// whose staff texture has not arrived. Such a plane paints nothing, so a
+// pass leaves it out entirely; every other plane draws exactly as before.
+describe('Staff planes a pass would paint invisibly are left out of it', () => {
+  const song = [{ pitch: 'C4', length: '1/4' }];
+  const GATE = { x: 30, y: 0, z: 30 };
+  const camera = (x, z) => ({ position: new THREE.Vector3(x, 1.8, z) });
+  // Around the gate: square on, at a corner (two faces), beside it (one),
+  // edge-on to its +Z staff (within FADE_NEAR of the plane), part-faded
+  // (between FADE_NEAR and FADE_FAR) and far off on a diagonal
+  const EYES = [
+    camera(30, 40),
+    camera(36, 36),
+    camera(40, 30),
+    camera(33, 31.55),
+    camera(30, 31.8),
+    camera(-20, -5),
+  ];
+  const savedImage = global.Image;
+  const savedGetContext = HTMLCanvasElement.prototype.getContext;
+
+  // The staff texture arrives as in a browser: the rendered SVG loads as an
+  // image and is drawn onto a canvas (jsdom loads no images, has no 2D
+  // canvas and no object URLs, so those browser APIs are stood in for)
+  beforeEach(() => {
+    global.Image = class {
+      set src(url) {
+        this.onload();
+      }
+    };
+    HTMLCanvasElement.prototype.getContext = () => ({ clearRect() {}, drawImage() {} });
+    URL.createObjectURL = () => 'blob:staff';
+    URL.revokeObjectURL = () => {};
+  });
+
+  afterEach(() => {
+    global.Image = savedImage;
+    HTMLCanvasElement.prototype.getContext = savedGetContext;
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+  });
+
+  /** A scene holding one gate whose staff has arrived, drawn once already. */
+  function sceneWithGate() {
+    const scene = new THREE.Scene();
+    const gate = new Gate({ ...GATE }, { song });
+    scene.add(gate.mesh);
+    updateMatrixWorld(scene);
+    renderPass(scene, EYES[0]);
+    return { scene, planes: gate.notationDisplay.meshes };
+  }
+
+  it('from every eye, a pass draws exactly the planes it paints (each at the opacity it always had)', () => {
+    const { scene, planes } = sceneWithGate();
+    expect(planes.every((plane) => plane.material.map)).toBe(true); // the staff arrived
+
+    for (const eye of EYES) {
+      // What a pass painted with every plane drawn: each one's own fade
+      const painted = new Map();
+      for (const plane of planes) {
+        plane.onBeforeRender({}, scene, eye);
+        painted.set(plane, plane.material.opacity);
+      }
+
+      const drawn = renderPass(scene, eye).filter((object) => object._isNotationMesh);
+
+      expect(drawn).toEqual(planes.filter((plane) => painted.get(plane) > 0));
+      for (const plane of drawn) expect(plane.material.opacity).toBe(painted.get(plane));
+    }
+  });
+
+  it('a gate seen from outside skips at least two of its four planes', () => {
+    const { scene } = sceneWithGate();
+    for (const eye of [EYES[0], EYES[1], EYES[2]]) {
+      const drawn = renderPass(scene, eye).filter((object) => object._isNotationMesh);
+      expect(drawn.length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('after a pass every plane is drawable again (another scene or eye decides for itself)', () => {
+    const { scene, planes } = sceneWithGate();
+
+    renderPass(scene, camera(30, 40));
+
+    expect(drawnObjects(scene)).toEqual(expect.arrayContaining(planes));
+  });
+
+  it('the first pass over a scene draws every plane, as passes always did', () => {
+    const scene = new THREE.Scene();
+    const gate = new Gate({ ...GATE }, { song });
+    scene.add(gate.mesh);
+    updateMatrixWorld(scene);
+
+    const drawn = renderPass(scene, camera(30, 40)).filter((object) => object._isNotationMesh);
+
+    expect(drawn).toEqual(gate.notationDisplay.meshes);
+  });
+
+  it('a plane whose staff has not arrived is never drawn', () => {
+    URL.createObjectURL = undefined; // the texture never arrives
+    const scene = new THREE.Scene();
+    const gate = new Gate({ ...GATE }, { song });
+    scene.add(gate.mesh);
+    updateMatrixWorld(scene);
+    renderPass(scene, camera(30, 40));
+
+    const drawn = renderPass(scene, camera(30, 40)).filter((object) => object._isNotationMesh);
+
+    expect(drawn).toEqual([]);
   });
 });

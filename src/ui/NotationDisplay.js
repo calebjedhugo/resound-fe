@@ -16,6 +16,52 @@ const scratchNormal = new THREE.Vector3();
 const scratchPosition = new THREE.Vector3();
 const scratchToCamera = new THREE.Vector3();
 
+/** A staff plane's fade as seen from `camera`: 0 (invisible) to 1. */
+function planeFade(mesh, camera) {
+  scratchNormal.set(0, 0, 1).transformDirection(mesh.matrixWorld);
+  scratchPosition.setFromMatrixPosition(mesh.matrixWorld);
+  scratchToCamera.copy(camera.position).sub(scratchPosition);
+  const planeDistance = scratchNormal.dot(scratchToCamera);
+  return Math.min(1, Math.max(0, (planeDistance - FADE_NEAR) / (FADE_FAR - FADE_NEAR)));
+}
+
+// Passes leave out the staff planes they would draw at ZERO opacity: seen
+// from behind or edge-on (within FADE_NEAR of the plane), or still waiting
+// for the staff texture. Such a plane paints nothing (it writes no depth),
+// yet its draw call cost as much as a visible one — and from any eye
+// outside a gate, at least two of its four planes face away, in every pass
+// (the main view and each door pass). A scene's first notation draw hooks
+// that scene: before each later pass over it, every live plane's material
+// is shown or hidden by the very fade its onBeforeRender would apply (so
+// exactly the invisible draws drop out), and after the pass every plane is
+// drawable again — an unhooked scene still draws them all.
+const livePlanes = new Set();
+const hookedScenes = new WeakSet();
+
+function hideFadedPlanes(camera) {
+  for (const mesh of livePlanes) {
+    mesh.material.visible = mesh._notationOpacity > 0 && planeFade(mesh, camera) > 0;
+  }
+}
+
+function showAllPlanes() {
+  for (const mesh of livePlanes) mesh.material.visible = true;
+}
+
+function hookScene(scene) {
+  if (!scene.isScene || hookedScenes.has(scene)) return;
+  hookedScenes.add(scene);
+  const { onBeforeRender, onAfterRender } = scene;
+  scene.onBeforeRender = function beforePass(renderer, passScene, camera, target) {
+    onBeforeRender.call(this, renderer, passScene, camera, target);
+    hideFadedPlanes(camera);
+  };
+  scene.onAfterRender = function afterPass(renderer, passScene, camera) {
+    onAfterRender.call(this, renderer, passScene, camera);
+    showAllPlanes();
+  };
+}
+
 /**
  * Renders musical notation as in-world textures on entity surfaces.
  *
@@ -103,14 +149,11 @@ class NotationDisplay {
       // mapped eyes and need the same treatment (see the FADE_* constants
       // above).
       mesh.onBeforeRender = (renderer, scene, camera) => {
-        scratchNormal.set(0, 0, 1).transformDirection(mesh.matrixWorld);
-        scratchPosition.setFromMatrixPosition(mesh.matrixWorld);
-        scratchToCamera.copy(camera.position).sub(scratchPosition);
-        const planeDistance = scratchNormal.dot(scratchToCamera);
-        const fade = Math.min(1, Math.max(0, (planeDistance - FADE_NEAR) / (FADE_FAR - FADE_NEAR)));
-        material.opacity = mesh._notationOpacity * fade;
+        material.opacity = mesh._notationOpacity * planeFade(mesh, camera);
+        hookScene(scene);
       };
 
+      livePlanes.add(mesh);
       this.meshes.push(mesh);
     }
   }
@@ -256,6 +299,7 @@ class NotationDisplay {
    */
   dispose() {
     for (const mesh of this.meshes) {
+      livePlanes.delete(mesh);
       if (mesh.geometry) mesh.geometry.dispose();
       if (mesh.material) {
         if (mesh.material.map) mesh.material.map.dispose();

@@ -83,6 +83,21 @@ class Vector3 {
     return this;
   }
 
+  // Like three: the matrix's rotation applied to this direction, normalized
+  transformDirection(m) {
+    const { x, y, z } = this;
+    const e = m.elements;
+    this.x = e[0] * x + e[4] * y + e[8] * z;
+    this.y = e[1] * x + e[5] * y + e[9] * z;
+    this.z = e[2] * x + e[6] * y + e[10] * z;
+    return this.normalize();
+  }
+
+  setFromMatrixPosition(m) {
+    const e = m.elements;
+    return this.set(e[12], e[13], e[14]);
+  }
+
   crossVectors(a, b) {
     this.x = a.y * b.z - a.z * b.y;
     this.y = a.z * b.x - a.x * b.z;
@@ -417,8 +432,14 @@ class DirectionalLight extends Light {}
 
 class Scene {
   constructor() {
+    this.isScene = true;
     this.children = [];
   }
+
+  // Like three: called around each render of the scene (no-ops by default)
+  onBeforeRender() {} // eslint-disable-line class-methods-use-this
+
+  onAfterRender() {} // eslint-disable-line class-methods-use-this
 
   add(obj) {
     this.children.push(obj);

@@ -256,6 +256,10 @@ instead of "fixing" it.
   walls. **three is pinned to 0.153.x for this** (`^0.153.0`): re-verify
   passContext before any upgrade. Check: `__resoundDebug.countProgramDerivations()`
   ≈ 0/frame
+- **Passes skip invisible staff planes**: a pass leaves out every notation
+  plane it would paint at opacity 0 (seen from behind/edge-on, texture
+  pending) via hooks `NotationDisplay` chains onto each scene's
+  `onBeforeRender`/`onAfterRender` — chain onto those, never assign them
 
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +

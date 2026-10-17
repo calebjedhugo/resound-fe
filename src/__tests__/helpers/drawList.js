@@ -3,6 +3,8 @@
  * tests that care about draw calls and compiles rather than scene membership.
  */
 import * as THREE from 'three';
+// Real matrix math: the three mock has none
+import { Matrix4 } from 'three/src/math/Matrix4';
 
 /**
  * The objects three would draw from `root` (WebGLRenderer.projectObject): an
@@ -15,6 +17,34 @@ export function drawnObjects(root) {
   if (root.visible === false) return [];
   const own = root.material && root.material.visible !== false ? [root] : [];
   return [...own, ...(root.children || []).flatMap(drawnObjects)];
+}
+
+/**
+ * Give every object under `root` the world matrix three would (position and
+ * Y rotation through the parent chain; the game rotates nothing else, and
+ * scale changes neither where a plane sits nor where it faces).
+ */
+export function updateMatrixWorld(root, parentWorld = new Matrix4()) {
+  const local = new Matrix4().makeRotationY(root.rotation ? root.rotation.y : 0);
+  if (root.position) local.setPosition(root.position.x, root.position.y, root.position.z);
+  root.matrixWorld = new Matrix4().multiplyMatrices(parentWorld, local);
+  for (const child of root.children || []) updateMatrixWorld(child, root.matrixWorld);
+}
+
+/**
+ * One pass over `scene` the way three renders it (WebGLRenderer.render):
+ * the scene's onBeforeRender, the draw list, each drawn object's
+ * onBeforeRender, the scene's onAfterRender.
+ * @returns {object[]} the objects the pass drew
+ */
+export function renderPass(scene, camera, renderer = {}) {
+  scene.onBeforeRender(renderer, scene, camera, null);
+  const drawn = drawnObjects(scene);
+  for (const object of drawn) {
+    if (object.onBeforeRender) object.onBeforeRender(renderer, scene, camera);
+  }
+  scene.onAfterRender(renderer, scene, camera);
+  return drawn;
 }
 
 /**
