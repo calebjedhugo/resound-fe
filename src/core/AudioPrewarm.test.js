@@ -5,7 +5,7 @@
  * The test harness has no OfflineAudioContext, so the Piano could never
  * pre-render; these tests supply one that "renders" silence instantly.
  */
-import { Random, audioContextManager } from 'resound-sound';
+import { audioContextManager } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
 import PlaybackManager from 'core/PlaybackManager';
 import PortalManager from 'core/PortalManager';
@@ -319,11 +319,9 @@ describe('What building ahead costs a frame in play', () => {
  * oscillator, onset source and envelope gain), so the moment a note starts
  * builds no audio node. A world's creatures share their onsets: built as
  * they start, The Star's 10-11 notes built 33 nodes in the one frame they
- * start in. Needs a resound-sound whose Random prepares notes; on an older
- * one notes build as they start, as they always did.
+ * start in.
  */
-const preparesNotes = typeof Random.prototype.prepare === 'function';
-(preparesNotes ? describe : describe.skip)("Building each creature's next song ahead", () => {
+describe("Building each creature's next song ahead", () => {
   const BUILT_PER_NOTE = 3; // its oscillator, onset source and envelope gain
 
   /**
