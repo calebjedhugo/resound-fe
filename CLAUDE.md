@@ -276,7 +276,9 @@ instead of "fixing" it.
   axis, 32 px floor, half-res cap — a door filling the screen keeps half-res;
   grows at once, shrinks after 30 passes asking less). Mirror and warm-up
   eyes borrow the player's look and lens (`eye.pose`); a straight-on warm-up
-  (first write, stale rotor) stands in for other passes' eyes and draws 1:1.
+  (first write, stale rotor) shows only through other doors' panels, far
+  smaller than its stand-in eye sees it: half that eye's texels
+  (`STAND_IN_SUPERSAMPLE`).
   A panel under `SMALL_PANEL_SHARE` (1%) of the screen
   re-renders one frame in three (`_restsThisFrame`) — never while a
   creature shows through it, after an eye jump, or when its picture is

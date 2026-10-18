@@ -807,15 +807,25 @@ class PortalManager {
     view._writtenFrom.z = eye.z;
   }
 
+  // A straight-on warm-up's picture shows only through other doors' panels
+  // (a first write ahead of the pass that draws it, the stale rotor), until
+  // a pass for an eye that sees it replaces it — and far smaller than its
+  // stand-in eye sees the panel: with every door of The Star open, standing,
+  // walking, turning and flicking at each door, the biggest any chain
+  // showed was 55 px, where that eye sees the panel at ~213 (bench,
+  // 2026-10-18). Half that eye's texels is twice the biggest, as any pass
+  // draws (PortalView's SUPERSAMPLE): 256x256 targets became 128x128, The
+  // Star's 80 rotor-only ones 30 MiB -> 7.5
+  static STAND_IN_SUPERSAMPLE = 0.5;
+
   /**
    * Seed or refresh a face's buffers with one straight-on render (an eye
    * 1.5 cells out from the face, at head height) so a portal pass sampling
    * it never reads an unwritten black target — or a frozen-in-time one.
    * Bare eye: no frustum cull applies. Its target is sized for what it
-   * draws — the panel as that eye sees it through the player's lens, 1:1:
-   * the eye only stands in for the passes that will see the picture
-   * through other doors' panels (it is never the player's own), so it
-   * gets none of their supersampling.
+   * draws — the panel as that eye sees it through the player's lens, at
+   * STAND_IN_SUPERSAMPLE: the eye only stands in for the passes that see
+   * the picture, through other doors' panels.
    */
   _warmUpView(view, gate, facing, renderer) {
     const v = FACING_VECTORS[facing];
@@ -830,7 +840,7 @@ class PortalManager {
         },
         pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
       },
-      { supersample: false }
+      { supersample: PortalManager.STAND_IN_SUPERSAMPLE }
     );
     view._freshFrame = this._frameId;
     view._writer = null;

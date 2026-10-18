@@ -700,10 +700,10 @@ class PortalView {
    * @param {?object} [options.footprint] - this panel's footprint on the
    *   screen the pass is for, when the caller already has it (footprint());
    *   worked out from `camera` otherwise
-   * @param {boolean} [options.supersample=true] - false for an eye that
-   *   only stands in for whoever will see the picture (a straight-on
-   *   warm-up): its target fits the panel as that eye sees it, 1:1 (see
-   *   SUPERSAMPLE)
+   * @param {number} [options.supersample=SUPERSAMPLE] - target texels per
+   *   texel the panel covers on `camera`'s screen: an eye that only stands
+   *   in for whoever will see the picture (a straight-on warm-up) asks for
+   *   what they need
    */
   render(renderer, camera, options = {}) {
     const { clipOverride = null, extraWallsBehind = null } = options;
@@ -721,7 +721,7 @@ class PortalView {
     const writeTarget = this._fitTarget(
       renderer,
       options.footprint === undefined ? this.footprint(camera, renderer) : options.footprint,
-      options.supersample === false ? 1 : SUPERSAMPLE
+      options.supersample === undefined ? SUPERSAMPLE : options.supersample
     );
 
     const mappedEye = this.renderEye(eye);

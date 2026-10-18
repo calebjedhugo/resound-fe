@@ -174,10 +174,11 @@ describe('A door pass draws at the size its panel shows on screen', () => {
     expect(shown.height).toBeLessThan(CAP.height); // not the old half-res target
   });
 
-  it("a face's straight-on warm-up draws it 1:1, as that stand-in eye sees it", async () => {
+  it("a face's straight-on warm-up draws at half the pixels that stand-in eye sees", async () => {
     // The NORTH face: from the south it is never the eye's own, so what it
     // shows is a straight-on eye's (1.5 cells north of the gate, at the
-    // player's lens), drawn for other doors' passes to sample
+    // player's lens), drawn for other doors' passes to sample — where it
+    // shows far smaller than that eye sees it
     const door = await openPortalA();
     const renderer = createRecordingRenderer();
     const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE);
@@ -185,8 +186,8 @@ describe('A door pass draws at the size its panel shows on screen', () => {
 
     const shown = renderer.shownBy(panelOf(door, 'north'));
     const northPanelZ = DOOR.z + (WORLD_SCALE / 2 - 0.01);
-    const straightOn = panelPixels(northPanelZ - (DOOR.z - 1.5 * WORLD_SCALE));
-    expect([shown.width, shown.height]).toEqual([powerOfTwo(straightOn), powerOfTwo(straightOn)]);
+    const half = panelPixels(northPanelZ - (DOOR.z - 1.5 * WORLD_SCALE)) / 2;
+    expect([shown.width, shown.height]).toEqual([powerOfTwo(half), powerOfTwo(half)]);
   });
 
   it('a panel filling the screen keeps the half-res target', async () => {
