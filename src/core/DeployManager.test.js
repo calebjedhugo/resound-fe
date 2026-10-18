@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import gameState from 'core/GameState';
 import DeployManager from 'core/DeployManager';
 import PortalManager from 'core/PortalManager';
+import CleansingTile from 'entities/CleansingTile';
 import { CLIP_PLANE_COUNT } from 'core/passContext';
 import { WORLD_SCALE } from 'core/constants';
 import portalA from '../__tests__/fixtures/puzzles/portal-a.json';
@@ -146,6 +147,78 @@ describe('Aiming answers the CAMERA, not just the body', () => {
     // The phantom left the straight-ahead spot and swung toward -x
     expect(DeployManager._phantom.position.x).toBeLessThan(27);
     expect(DeployManager._phantom.position.z).toBeGreaterThan(36);
+  });
+});
+
+describe('ONE aiming phantom for the session', () => {
+  // A phantom built for each aim (and freed on deploy) cost the frame G was
+  // pressed on a geometry upload and a shader-program derivation, every aim
+  let scene;
+  beforeEach(() => {
+    scene = new THREE.Scene();
+    DeployManager.initialize(scene);
+  });
+
+  /** Everything three draws the phantom with. */
+  const lookOf = ({ material }) => ({
+    color: material.color.getHex(),
+    emissive: material.emissive.getHex(),
+    emissiveIntensity: material.emissiveIntensity,
+    opacity: material.opacity,
+    transparent: material.transparent,
+  });
+
+  it('every aim shows the same phantom, never freed, hidden between aims', async () => {
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle(); // aim
+    expect(scene.children).toHaveLength(1); // the scene holds the phantom alone
+    const [phantom] = scene.children;
+    const { geometry, material } = phantom;
+    const freed = [jest.spyOn(geometry, 'dispose'), jest.spyOn(material, 'dispose')];
+    const { version } = material;
+
+    DeployManager.toggle(); // deploy
+    expect(phantom.visible).toBe(false); // not drawn while there is nothing to aim
+    DeployManager.toggle(); // pick the gate back up
+    standAt(24, 36);
+    DeployManager.toggle(); // aim again, from elsewhere
+
+    expect(scene.children).toEqual([phantom]);
+    expect(phantom.geometry).toBe(geometry);
+    expect(phantom.material).toBe(material);
+    expect(material.version).toBe(version); // its program is derived once
+    for (const spy of freed) expect(spy).not.toHaveBeenCalled();
+    // Shown at once at the new spot, never where the last aim left it
+    expect(phantom.visible).toBe(true);
+    expect(phantom.position.x).toBeCloseTo(24);
+    expect(phantom.position.z).toBeCloseTo(36 - 2 * WORLD_SCALE);
+
+    DeployManager.reset(); // a world entry mid-aim
+    expect(phantom.visible).toBe(false);
+  });
+
+  it('an aim after one that ended red looks exactly like a fresh aim', async () => {
+    await activateCleanser();
+    standAt(30, 39);
+    DeployManager.toggle();
+    const [phantom] = scene.children;
+    const fresh = lookOf(phantom);
+    expect(fresh).toMatchObject({
+      color: CleansingTile.BASE_COLOR,
+      emissive: CleansingTile.BASE_EMISSIVE,
+      transparent: true,
+    });
+    standAt(21, 21); // two tiles north is the wall cell: red
+    DeployManager.update();
+    expect(lookOf(phantom)).not.toEqual(fresh);
+
+    DeployManager.reset(); // the aim ends while red
+    standAt(30, 39);
+    DeployManager.toggle();
+
+    expect(scene.children).toEqual([phantom]);
+    expect(lookOf(phantom)).toEqual(fresh);
   });
 });
 
