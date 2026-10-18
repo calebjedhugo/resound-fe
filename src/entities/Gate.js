@@ -1,12 +1,19 @@
 import * as THREE from 'three';
 import ListeningManager from 'core/ListeningManager';
-import evaluatePhrases from 'core/phraseMatching';
+import { evaluatePhrasesCached } from 'core/phraseMatching';
 import SongMatcher from 'core/SongMatcher';
 import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
 import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from 'entities/Entity';
+
+// Every gate is the same box: it fills its 3x3 cell when closed. ONE
+// geometry serves every gate in every area, flagged `userData.shared` so
+// Entity.dispose leaves it alone; each gate keeps its OWN material (its
+// fade, red flash and open look are its own).
+const GATE_GEOMETRY = new THREE.BoxGeometry(3, 3, 3);
+GATE_GEOMETRY.userData.shared = true;
 
 class Gate extends Entity {
   // How long heard notes stay eligible for matching (must comfortably exceed
@@ -93,8 +100,6 @@ class Gate extends Entity {
    * @param {{x:number, y:number, z:number}} position - base world position
    */
   static buildClosedMesh(position) {
-    // Gate fills entire grid cell (3x3 world units) when closed
-    const geometry = new THREE.BoxGeometry(3, 3, 3);
     const material = new THREE.MeshStandardMaterial({
       color: 0xffaa00,
       roughness: 0.4,
@@ -102,7 +107,7 @@ class Gate extends Entity {
       emissive: 0x331100,
       emissiveIntensity: 0.3,
     });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(GATE_GEOMETRY, material);
     mesh.position.set(position.x, position.y + 1.5, position.z);
     return mesh;
   }
@@ -196,7 +201,8 @@ class Gate extends Entity {
     // Segment everything heard into silence-delimited phrases and compare
     // against the target: `true` = the whole song landed, 'in-progress' = a
     // correct performance is underway, 'mismatch' = a wrong utterance ended.
-    const result = this.capturedNotes.length > 0 ? evaluatePhrases(this) : false;
+    // (Re-judged only when the verdict could have changed.)
+    const result = this.capturedNotes.length > 0 ? evaluatePhrasesCached(this) : false;
 
     this._inProgress = result === 'in-progress';
     if (result === true) {
@@ -431,5 +437,7 @@ class Gate extends Entity {
     super.dispose();
   }
 }
+
+Gate.GEOMETRY = GATE_GEOMETRY;
 
 export default Gate;

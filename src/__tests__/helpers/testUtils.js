@@ -161,6 +161,10 @@ function createTestContext(options = {}) {
   const activeEntityManager = () =>
     gameState.activeArea ? gameState.activeArea.entityManager : null;
 
+  // What the last full collision + floor pass left: processMovement's at-rest
+  // shortcut, exactly motion.js's isAtRest
+  const playerRest = { valid: false, x: 0, y: 0, z: 0, elevation: 0, grid: null };
+
   return {
     // --- Puzzle Loading ---
 
@@ -380,9 +384,24 @@ function createTestContext(options = {}) {
       }
 
       // Resolve the move exactly as motion.js does: elevation-aware,
-      // axis-separated collision response (wall/cliff sliding). Kept in sync
-      // with src/resoundModules/playerControls/motion/motion.js.
+      // axis-separated collision response (wall/cliff sliding), skipped
+      // while the player stands exactly where the last full pass left them
+      // (its isAtRest). Kept in sync with
+      // src/resoundModules/playerControls/motion/motion.js.
       const { elevationGrid } = gameState;
+      const { position } = gameState.player;
+      if (
+        playerRest.valid &&
+        Object.is(position.x, oldX) &&
+        Object.is(position.z, oldZ) &&
+        Object.is(oldX, playerRest.x) &&
+        Object.is(oldZ, playerRest.z) &&
+        Object.is(position.y, playerRest.y) &&
+        Object.is(gameState.player.elevation, playerRest.elevation) &&
+        elevationGrid === playerRest.grid
+      ) {
+        return;
+      }
       const priorLevel = gameState.player.elevation;
       const resolved = resolveSlide(
         { x: oldX, z: oldZ },
@@ -413,6 +432,14 @@ function createTestContext(options = {}) {
         gameState.player.position.y =
           getFloorY(currentX, currentZ, elevationGrid, priorLevel) + 1.8;
       }
+      Object.assign(playerRest, {
+        valid: true,
+        x: gameState.player.position.x,
+        y: gameState.player.position.y,
+        z: gameState.player.position.z,
+        elevation: gameState.player.elevation,
+        grid: elevationGrid,
+      });
     },
 
     // --- Player State ---
@@ -678,10 +705,10 @@ function createTestContext(options = {}) {
     },
 
     /**
-     * Query the elevation grid at a grid coordinate
+     * The top walkable level of a grid cell
      */
     getElevationAt(gridX, gridZ) {
-      return gameState.elevationGrid?.getElevation(gridX, gridZ) ?? 0;
+      return gameState.elevationGrid?.nearestLevel(gridX, gridZ) ?? 0;
     },
 
     /**

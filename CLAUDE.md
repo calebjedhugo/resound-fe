@@ -78,12 +78,14 @@ AudioContexts and two instrument registries.
 - EntityManager handles lifecycle (add/remove/update/render)
 - **`Entity.dispose` frees the WHOLE mesh tree** (Group roots, child meshes).
   A geometry/material shared across instances (module-level statics, e.g.
-  `Wall`'s box) MUST set `userData.shared = true` or the first unload frees it
+  `Wall`'s and `Gate`'s boxes) MUST set `userData.shared = true` or the
+  first unload frees it
 - **Per-frame paths memoize what they pick out of an area's entity list**
   (`core/entityListMemo`: collision's blockers, a creature's possible sound
-  sources), re-derived whenever the list's contents change. So walls, gates
-  and fountains NEVER move once placed (collision keeps their positions),
-  and only a constructor gives an entity an `instrument`
+  sources), re-derived when the area's EntityManager changes the list (its
+  `version`; never write `Area.entities` directly). So walls, gates and
+  fountains NEVER move once placed (collision keeps their positions), and
+  only a constructor gives an entity an `instrument`
 
 ---
 
@@ -132,6 +134,10 @@ instead of "fixing" it.
   deaf for the window, red glow decays across it). So a gate's song must
   START clean; it can no longer ride in behind wrong notes. Fountains
   flash immediately but don't lock out. See DESIGN.md "Matching"
+- Gates/fountains judge via `evaluatePhrasesCached` (`core/phraseMatching`):
+  re-judged only when what it reads changes or the verdict's next turn
+  passes, never per frame. So a listener's `capturedNotes` is APPEND-ONLY:
+  push, or replace the array — never edit it in place
 
 ### Creatures
 - Harmony forces apply only WHILE the creature is singing and another note

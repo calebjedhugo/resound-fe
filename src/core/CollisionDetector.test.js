@@ -210,6 +210,31 @@ describe('Collision in a changing world', () => {
     expect(CollisionDetector.checkCollision(there, 0.4)).toBe(true);
   });
 
+  it('a blocker removed stops blocking from the next query', () => {
+    ctx.loadPuzzle('elevation-basic');
+    const gate = ctx.addGate({ position: { ...here }, song });
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    ctx.getEntityManager().remove(gate.id);
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+  });
+
+  it('an emptied area blocks nothing from the next query, and its next blockers do', () => {
+    ctx.loadPuzzle('elevation-basic');
+    // A wall of the puzzle's own, at its elevation
+    const besideWall = { x: 4 * WORLD_SCALE, y: ELEVATION_HEIGHT, z: 4 * WORLD_SCALE };
+    ctx.addGate({ position: { ...here }, song });
+    expect(CollisionDetector.checkCollision(besideWall, 0.4)).toBe(true);
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    ctx.getEntityManager().clear();
+    expect(CollisionDetector.checkCollision(besideWall, 0.4)).toBe(false);
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+
+    ctx.addFountain({ position: { ...there }, song });
+    expect(CollisionDetector.checkCollision(there, 0.4)).toBe(true);
+  });
+
   it("a gate's open state counts at every query", () => {
     ctx.loadPuzzle('elevation-basic');
     const gate = ctx.addGate({ position: { ...here }, song });

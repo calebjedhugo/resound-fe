@@ -3,8 +3,6 @@ import { WORLD_SCALE } from 'core/constants';
 class ElevationGrid {
   constructor(gridSize) {
     this.gridSize = gridSize;
-    // Top surface per cell (highest floor) — used for spawning/rendering
-    this.grid = Array.from({ length: gridSize }, () => new Array(gridSize).fill(0));
     // Walkable LEVELS per cell. Ground (0) is implicit everywhere, so a cell
     // under an E1 floor is [0, 1]: walkable both underneath and on top.
     this.levels = Array.from({ length: gridSize }, () =>
@@ -17,9 +15,6 @@ class ElevationGrid {
     for (const floor of floors) {
       for (let z = floor.z1; z <= floor.z2; z += 1) {
         for (let x = floor.x1; x <= floor.x2; x += 1) {
-          if (floor.elevation > this.grid[z][x]) {
-            this.grid[z][x] = floor.elevation;
-          }
           if (!this.levels[z][x].includes(floor.elevation)) {
             this.levels[z][x].push(floor.elevation);
             this.levels[z][x].sort((a, b) => a - b);
@@ -31,13 +26,6 @@ class ElevationGrid {
 
   registerRamp(gridX, gridZ, ramp) {
     this.ramps[gridZ][gridX] = ramp;
-  }
-
-  getElevation(gridX, gridZ) {
-    if (gridX < 0 || gridX >= this.gridSize || gridZ < 0 || gridZ >= this.gridSize) {
-      return 0;
-    }
-    return this.grid[gridZ][gridX];
   }
 
   /** All walkable levels at a cell (ground floor is implicit everywhere). */

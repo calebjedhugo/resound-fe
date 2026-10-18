@@ -548,6 +548,9 @@ import {
   WORLD_SCALE,
   CREATURE_HOVER_HEIGHT,
   CREATURE_DECELERATION,
+  CREATURE_REST_VELOCITY,
+  CREATURE_PHYSICS_PASSES,
+  DEFAULT_CREATURE_MAX_SPEED,
   ATTRACTION_FORCE_STRENGTH,
   REPULSION_FORCE_STRENGTH,
 } from 'core/constants';
@@ -782,14 +785,18 @@ describe('What a creature hears', () => {
     expect(c4.heardNotes()).toEqual([64]);
 
     // One joins mid-game
-    sing(addSinger('G4', 10 * WORLD_SCALE));
+    const g4 = sing(addSinger('G4', 10 * WORLD_SCALE));
     expect(c4.heardNotes()).toEqual([64, 67]);
+
+    // One leaves: gone from the very next listen
+    ctx.getEntityManager().remove(e4.id);
+    expect(c4.heardNotes()).toEqual([67]);
 
     // One leaves and another arrives between two listens: the same head
     // count, a different crowd
-    ctx.getEntityManager().remove(e4.id);
+    ctx.getEntityManager().remove(g4.id);
     sing(addSinger('A4', 12 * WORLD_SCALE));
-    expect(c4.heardNotes()).toEqual([67, 69]);
+    expect(c4.heardNotes()).toEqual([69]);
   });
 
   it("feels each heard source's own push or pull, afresh every pass", () => {
@@ -824,7 +831,8 @@ describe('What a creature hears', () => {
  * no-op (Creature.updateMovement). The skip must be EXACT: a resting
  * creature ends every frame bit for bit where a full pass would, anything
  * that moves or re-layers it is re-floored by the next frame, and its first
- * force wakes it into exactly the move a full pass makes.
+ * force wakes it into exactly the move a full pass makes. A creature that
+ * coasts rests again once its velocity is spent (CREATURE_REST_VELOCITY).
  */
 /* eslint-disable import/first -- section header for the suite below; imports
    are hoisted by babel-jest so the placement is cosmetic */
@@ -908,6 +916,64 @@ describe('Creature at rest', () => {
     expect(creature.velocity).toEqual({ x: vx, z: vz });
     expect(creature.position.x).toBe(x + vx * dt);
     expect(creature.position.z).toBe(z + vz * dt);
+  });
+
+  it('rests again once a coast is spent: velocity exactly 0, then nothing moves', async () => {
+    ctx.loadPuzzle('elevation-basic');
+    const creature = ctx.addCreature({
+      position: { x: 2 * WORLD_SCALE, y: 0, z: 12 * WORLD_SCALE },
+    });
+    await ctx.tick(48);
+    creature.velocity.x = DEFAULT_CREATURE_MAX_SPEED; // flung at full speed
+    creature.velocity.z = -5;
+
+    // Decaying from full speed, a pass's velocity is spent after this many
+    // passes; one frame more and the creature must be resting
+    const passes = Math.ceil(
+      Math.log(CREATURE_REST_VELOCITY / DEFAULT_CREATURE_MAX_SPEED) /
+        Math.log(CREATURE_DECELERATION)
+    );
+    await ctx.tick((Math.ceil(passes / CREATURE_PHYSICS_PASSES) + 1) * 16);
+    expect(creature.velocity).toEqual({ x: 0, z: 0 });
+
+    const settled = passState(creature);
+    for (let frame = 0; frame < 30; frame += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await ctx.tick(16);
+      expect(passState(creature)).toEqual(settled);
+    }
+  });
+
+  it('coasts exactly as plain decay until a velocity is spent, then zeroes it', async () => {
+    ctx.loadPuzzle('elevation-basic');
+    const creature = ctx.addCreature({
+      position: { x: 2 * WORLD_SCALE, y: 0, z: 12 * WORLD_SCALE },
+    });
+    await ctx.tick(48);
+    let { x, z } = creature.position;
+    // x coasts down from a stroll; z is nearly spent already
+    let vx = 2;
+    let vz = -3 * CREATURE_REST_VELOCITY;
+    creature.velocity.x = vx;
+    creature.velocity.z = vz;
+
+    const dt = 1 / 60;
+    const spent = (v) => (Math.abs(v) < CREATURE_REST_VELOCITY ? 0 : v);
+    for (let pass = 0; pass < 200; pass += 1) {
+      creature.updateMovement(dt);
+      // No force: decelerate, take the step, and only then is a spent
+      // velocity zeroed — any velocity still above the threshold, bit for bit
+      vx *= CREATURE_DECELERATION;
+      vz *= CREATURE_DECELERATION;
+      x += vx * dt;
+      z += vz * dt;
+      vx = spent(vx);
+      vz = spent(vz);
+      expect(creature.velocity).toEqual({ x: vx, z: vz });
+      expect(creature.position.x).toBe(x);
+      expect(creature.position.z).toBe(z);
+    }
+    expect(creature.velocity).toEqual({ x: 0, z: 0 });
   });
 
   it('treats signed zeros exactly as a full pass does', async () => {

@@ -227,14 +227,6 @@ class PlaybackManager {
   }
 
   /**
-   * Check if playback is active
-   * @returns {boolean}
-   */
-  static getIsPlaying() {
-    return this.isPlaying;
-  }
-
-  /**
    * Get the player instrument (for volume updates based on distance)
    * @returns {Piano}
    */

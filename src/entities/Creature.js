@@ -14,6 +14,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   PLAYER_SIZE,
   CREATURE_DECELERATION,
+  CREATURE_REST_VELOCITY,
   CREATURE_PHYSICS_PASSES,
   ATTRACTION_FORCE_STRENGTH,
   REPULSION_FORCE_STRENGTH,
@@ -126,19 +127,6 @@ class Creature extends Entity {
 
     // Register as listener for harmony-based movement
     ListeningManager.registerListener(this);
-  }
-
-  /**
-   * Mesh-only creature look (no entity, no instrument, no listeners): the
-   * silent ball-lightning bubble, floating over `position`.
-   * @param {{x:number, y:number, z:number}} position - base world position
-   * @param {number} size - radius in world units
-   * @returns {object} the look's root THREE.Group
-   */
-  static buildBodyMesh(position, size) {
-    const look = new CreatureLook(size);
-    look.place(position);
-    return look.object;
   }
 
   createMesh() {
@@ -517,8 +505,7 @@ class Creature extends Entity {
     // are exactly the ones the last pass derived there (a fixed point). So
     // skip the collision and floor work and keep only the writes (see
     // _isAtRest for "unchanged"). Every creature rests until something first
-    // moves it; one that has COASTED never does again (its decaying velocity
-    // sticks at ~1.5e-323 instead of reaching 0) unless a block zeroes it.
+    // moves it, and again once its coast is spent (see the end of the pass).
     if (this._isAtRest(elevationGrid)) {
       // A full pass leaves +0 even from a -0
       this.velocity.x = 0;
@@ -581,6 +568,11 @@ class Creature extends Entity {
     this.position.z = resolved.z;
     if (resolved.blockedX) this.velocity.x = 0;
     if (resolved.blockedZ) this.velocity.z = 0;
+
+    // A spent coast stops: the decay alone never reaches 0, and a creature
+    // still drifting by 1e-300 units can never rest (CREATURE_REST_VELOCITY)
+    if (Math.abs(this.velocity.x) < CREATURE_REST_VELOCITY) this.velocity.x = 0;
+    if (Math.abs(this.velocity.z) < CREATURE_REST_VELOCITY) this.velocity.z = 0;
 
     // Update Y position and elevation from elevation grid (stay on our own
     // layer in cells walkable at several levels)

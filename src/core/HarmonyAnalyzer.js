@@ -1,5 +1,3 @@
-import { HARMONY_TIMING_SUBDIVISION } from 'core/constants';
-
 /**
  * HarmonyAnalyzer - Analyzes harmonic relationships between notes
  * Used for creature behavior (follow consonant sounds, flee dissonant sounds)
@@ -79,76 +77,6 @@ class HarmonyAnalyzer {
 
     // Dissonant intervals: Minor 2nd (1), Major 2nd (2), Tritone (6), Minor 7th (10), Major 7th (11)
     return 'dissonant';
-  }
-
-  /**
-   * Check if two note events occur on the same musical subdivision
-   * @param {Object} note1 - { timestamp, ... }
-   * @param {Object} note2 - { timestamp, ... }
-   * @param {Object} musicalClock - MusicalClock instance
-   * @returns {boolean}
-   */
-  static notesOverlap(note1, note2, musicalClock) {
-    if (!musicalClock) return false;
-
-    // Calculate time difference in milliseconds
-    const timeDiff = Math.abs(note1.timestamp - note2.timestamp);
-
-    // Convert to beats
-    const beatDiff = musicalClock.msToBeats(timeDiff);
-
-    // Notes overlap if they're within the same subdivision
-    // E.g., for 16th notes, beatDiff < 0.25 (1/16th of a whole note = 1/4 beat)
-    const subdivisionThreshold = 1 / HARMONY_TIMING_SUBDIVISION;
-
-    return beatDiff < subdivisionThreshold;
-  }
-
-  /**
-   * Analyze harmonic relationship between two sound sources
-   * @param {Object|Array} source1 - Note(s) from first source { pitch, timestamp } or array
-   * @param {Object|Array} source2 - Note(s) from second source
-   * @param {Object} musicalClock - MusicalClock instance
-   * @returns {'perfect' | 'consonant' | 'dissonant' | 'none'}
-   */
-  static analyzeHarmony(source1, source2, musicalClock) {
-    // Normalize to arrays
-    const notes1 = Array.isArray(source1) ? source1 : [source1];
-    const notes2 = Array.isArray(source2) ? source2 : [source2];
-
-    // Check timing overlap - use first note of each source for timing
-    if (!this.notesOverlap(notes1[0], notes2[0], musicalClock)) {
-      return 'none'; // Notes are sequential, not simultaneous
-    }
-
-    // Count interval types (perfect intervals don't vote — see below)
-    let consonantCount = 0;
-    let dissonantCount = 0;
-
-    // Analyze all intervals between the two sources
-    notes1.forEach((note1) => {
-      notes2.forEach((note2) => {
-        const interval = this.calculateInterval(note1.pitch, note2.pitch);
-        const classification = this.classifyInterval(interval);
-
-        if (classification === 'consonant') {
-          consonantCount += 1;
-        } else if (classification === 'dissonant') {
-          dissonantCount += 1;
-        }
-      });
-    });
-
-    // Determine overall harmony based on vote
-    if (dissonantCount > consonantCount) {
-      return 'dissonant';
-    }
-    if (consonantCount > dissonantCount) {
-      return 'consonant';
-    }
-
-    // Tied or all perfect = no reaction
-    return 'perfect';
   }
 }
 

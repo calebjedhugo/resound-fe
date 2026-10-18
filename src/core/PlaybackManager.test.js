@@ -297,7 +297,7 @@ describe('Playing recorded songs', () => {
       await ctx.advanceBeats(2);
 
       expect(ctx.getEmittedNotes()).toHaveLength(0);
-      expect(PlaybackManager.getIsPlaying()).toBe(false);
+      expect(PlaybackManager.isPlaying).toBe(false);
     });
 
     it('stops a performance under way: no later note is heard, and the one it was waiting on is silent', async () => {
@@ -342,7 +342,7 @@ describe('Playing recorded songs', () => {
       ctx.pressKey('space'); // a new performance, 2 s from now
       await jest.advanceTimersByTimeAsync(1500); // past the old one's end
 
-      expect(PlaybackManager.getIsPlaying()).toBe(true);
+      expect(PlaybackManager.isPlaying).toBe(true);
       ctx.pressKey('space'); // still one performance at a time
       await ctx.advanceBeats(6);
       expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4', 'C4']);

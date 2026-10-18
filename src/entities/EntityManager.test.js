@@ -5,6 +5,7 @@
  * and how removal affects game behavior (e.g., removed creatures stop singing).
  * Uses global ctx from setupTests.js.
  */
+import gameState from 'core/GameState';
 
 describe('EntityManager', () => {
   describe('remove(entityId)', () => {
@@ -29,11 +30,11 @@ describe('EntityManager', () => {
       const creatureId = creature.id;
 
       const testEntityManager = ctx.getEntityManager();
-      expect(testEntityManager.getAll()).toContain(creature);
+      expect(gameState.entities).toContain(creature);
 
       testEntityManager.remove(creatureId);
 
-      expect(testEntityManager.getAll()).not.toContain(creature);
+      expect(gameState.entities).not.toContain(creature);
     });
 
     it('removed creature is excluded from creature queries', () => {
@@ -53,11 +54,11 @@ describe('EntityManager', () => {
     it('removing non-existent entity leaves game world unchanged', () => {
       ctx.loadPuzzle('recording-basic');
       const testEntityManager = ctx.getEntityManager();
-      const initialCount = testEntityManager.getAll().length;
+      const initialCount = gameState.entities.length;
 
       testEntityManager.remove('non-existent-id');
 
-      expect(testEntityManager.getAll().length).toBe(initialCount);
+      expect(gameState.entities.length).toBe(initialCount);
     });
   });
 
@@ -102,44 +103,36 @@ describe('EntityManager', () => {
     });
   });
 
-  describe('getAll()', () => {
+  describe('the world entity list (gameState.entities)', () => {
     it('lists all entities present in game world', () => {
       ctx.loadPuzzle('recording-two-creatures');
-      const testEntityManager = ctx.getEntityManager();
 
-      const allEntities = testEntityManager.getAll();
-
-      expect(Array.isArray(allEntities)).toBe(true);
-      expect(allEntities.length).toBeGreaterThanOrEqual(2);
+      expect(gameState.entities.length).toBeGreaterThanOrEqual(2);
     });
 
-    it('returns empty list when game world has no entities', () => {
-      const testEntityManager = ctx.getEntityManager();
-      const allEntities = testEntityManager.getAll();
-
-      expect(Array.isArray(allEntities)).toBe(true);
-      expect(allEntities.length).toBe(0);
+    it('is empty when game world has no entities', () => {
+      expect(gameState.entities).toEqual([]);
     });
 
     it('loading puzzle populates game world with entities', () => {
-      // Loading a puzzle replaces the world's active area (and its entity
-      // manager), so re-query the manager after loading
-      expect(ctx.getEntityManager().getAll().length).toBe(0);
+      // Loading a puzzle replaces the world's active area; the world's list
+      // is always the active area's
+      expect(gameState.entities.length).toBe(0);
 
       ctx.loadPuzzle('recording-two-creatures');
 
-      expect(ctx.getEntityManager().getAll().length).toBeGreaterThanOrEqual(2);
+      expect(gameState.entities.length).toBeGreaterThanOrEqual(2);
     });
 
     it('entity count decreases when creature is removed', () => {
       ctx.loadPuzzle('recording-basic');
       const testEntityManager = ctx.getEntityManager();
       const creatures = ctx.getCreatures();
-      const initialCount = testEntityManager.getAll().length;
+      const initialCount = gameState.entities.length;
 
       testEntityManager.remove(creatures[0].id);
 
-      expect(testEntityManager.getAll().length).toBe(initialCount - 1);
+      expect(gameState.entities.length).toBe(initialCount - 1);
     });
   });
 
@@ -193,11 +186,11 @@ describe('EntityManager', () => {
       ctx.loadPuzzle('recording-two-creatures');
       const testEntityManager = ctx.getEntityManager();
 
-      expect(testEntityManager.getAll().length).toBeGreaterThan(0);
+      expect(gameState.entities.length).toBeGreaterThan(0);
 
       testEntityManager.clear();
 
-      expect(testEntityManager.getAll().length).toBe(0);
+      expect(gameState.entities.length).toBe(0);
     });
 
     it('cleared entities are no longer retrievable by id', () => {
@@ -236,6 +229,7 @@ describe('EntityManager', () => {
 /* eslint-disable import/first -- section header for the suite below; imports
    are hoisted by babel-jest so the placement is cosmetic */
 import Wall from 'entities/Wall';
+import Gate from 'entities/Gate';
 /* eslint-enable import/first */
 
 describe('Freeing GPU resources when entities go away', () => {
@@ -284,5 +278,22 @@ describe('Freeing GPU resources when entities go away', () => {
 
     expect(geometryDispose).not.toHaveBeenCalled();
     expect(materialDispose).not.toHaveBeenCalled();
+  });
+
+  it('never frees the box every gate shares, but frees each gate its own material', () => {
+    ctx.loadPuzzle('recording-basic');
+    const song = [{ pitch: 'C4', length: '1/4' }];
+    const gates = [3, 6].map((x) => ctx.addGate({ position: { x, y: 0, z: 3 }, song }));
+    expect(gates[0].mesh.geometry).toBe(Gate.GEOMETRY);
+    expect(gates[1].mesh.geometry).toBe(Gate.GEOMETRY);
+    const geometryDispose = jest.spyOn(Gate.GEOMETRY, 'dispose');
+    const materialDisposes = gates.map((gate) => jest.spyOn(gate.mesh.material, 'dispose'));
+
+    ctx.getEntityManager().remove(gates[0].id);
+    expect(materialDisposes[0]).toHaveBeenCalledTimes(1);
+    ctx.loadPuzzle('listening-gate-basic'); // the rest go with the world
+
+    expect(materialDisposes[1]).toHaveBeenCalledTimes(1);
+    expect(geometryDispose).not.toHaveBeenCalled();
   });
 });

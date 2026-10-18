@@ -44,11 +44,6 @@ class ProgressManager {
     localStorage.removeItem(this.KEY);
   }
 
-  static getCompletedCount() {
-    const progress = this.load();
-    return progress.completedPuzzles.length;
-  }
-
   /**
    * Get the next unsolved puzzle from a list
    * @param {Array} puzzles - Array of puzzle objects with { id, ... }

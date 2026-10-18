@@ -1,6 +1,7 @@
 /**
  * ElevationGrid tests
  * Tests elevation data lookup, floor region application, ramp registration, and coordinate conversion
+ * (a cell's elevation is its top walkable level: nearestLevel with no reference)
  */
 
 import ElevationGrid from 'core/ElevationGrid';
@@ -11,19 +12,19 @@ describe('ElevationGrid', () => {
     it('returns elevation 0 for all cells in an empty grid', () => {
       const grid = new ElevationGrid(10);
 
-      expect(grid.getElevation(0, 0)).toBe(0);
-      expect(grid.getElevation(5, 5)).toBe(0);
-      expect(grid.getElevation(9, 9)).toBe(0);
+      expect(grid.nearestLevel(0, 0)).toBe(0);
+      expect(grid.nearestLevel(5, 5)).toBe(0);
+      expect(grid.nearestLevel(9, 9)).toBe(0);
     });
 
     it('returns elevation 0 for out-of-bounds coordinates', () => {
       const grid = new ElevationGrid(10);
 
-      expect(grid.getElevation(-1, 0)).toBe(0);
-      expect(grid.getElevation(0, -1)).toBe(0);
-      expect(grid.getElevation(10, 0)).toBe(0);
-      expect(grid.getElevation(0, 10)).toBe(0);
-      expect(grid.getElevation(100, 100)).toBe(0);
+      expect(grid.nearestLevel(-1, 0)).toBe(0);
+      expect(grid.nearestLevel(0, -1)).toBe(0);
+      expect(grid.nearestLevel(10, 0)).toBe(0);
+      expect(grid.nearestLevel(0, 10)).toBe(0);
+      expect(grid.nearestLevel(100, 100)).toBe(0);
     });
   });
 
@@ -32,19 +33,19 @@ describe('ElevationGrid', () => {
       const grid = new ElevationGrid(10);
       grid.applyFloors([{ elevation: 1, x1: 2, z1: 2, x2: 5, z2: 5 }]);
 
-      expect(grid.getElevation(2, 2)).toBe(1);
-      expect(grid.getElevation(3, 3)).toBe(1);
-      expect(grid.getElevation(5, 5)).toBe(1);
+      expect(grid.nearestLevel(2, 2)).toBe(1);
+      expect(grid.nearestLevel(3, 3)).toBe(1);
+      expect(grid.nearestLevel(5, 5)).toBe(1);
     });
 
     it('leaves cells outside floor regions at elevation 0', () => {
       const grid = new ElevationGrid(10);
       grid.applyFloors([{ elevation: 1, x1: 2, z1: 2, x2: 5, z2: 5 }]);
 
-      expect(grid.getElevation(0, 0)).toBe(0);
-      expect(grid.getElevation(1, 1)).toBe(0);
-      expect(grid.getElevation(6, 6)).toBe(0);
-      expect(grid.getElevation(9, 9)).toBe(0);
+      expect(grid.nearestLevel(0, 0)).toBe(0);
+      expect(grid.nearestLevel(1, 1)).toBe(0);
+      expect(grid.nearestLevel(6, 6)).toBe(0);
+      expect(grid.nearestLevel(9, 9)).toBe(0);
     });
 
     it('uses highest elevation when regions overlap', () => {
@@ -55,11 +56,11 @@ describe('ElevationGrid', () => {
       ]);
 
       // Overlap region should be elevation 2
-      expect(grid.getElevation(5, 5)).toBe(2);
+      expect(grid.nearestLevel(5, 5)).toBe(2);
       // Outer region should be elevation 1
-      expect(grid.getElevation(2, 2)).toBe(1);
+      expect(grid.nearestLevel(2, 2)).toBe(1);
       // Outside both should be 0
-      expect(grid.getElevation(0, 0)).toBe(0);
+      expect(grid.nearestLevel(0, 0)).toBe(0);
     });
 
     it('handles multiple non-overlapping regions at different elevations', () => {
@@ -69,9 +70,9 @@ describe('ElevationGrid', () => {
         { elevation: 2, x1: 10, z1: 10, x2: 14, z2: 14 },
       ]);
 
-      expect(grid.getElevation(1, 1)).toBe(1);
-      expect(grid.getElevation(12, 12)).toBe(2);
-      expect(grid.getElevation(7, 7)).toBe(0);
+      expect(grid.nearestLevel(1, 1)).toBe(1);
+      expect(grid.nearestLevel(12, 12)).toBe(2);
+      expect(grid.nearestLevel(7, 7)).toBe(0);
     });
   });
 

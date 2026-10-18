@@ -1,3 +1,5 @@
+import { keepEntityList } from 'core/entityListMemo';
+
 class EntityManager {
   /**
    * @param {THREE.Scene|THREE.Group} scene - container the entity meshes go in
@@ -9,6 +11,12 @@ class EntityManager {
     this.scene = scene;
     this.area = area;
     this.entities = new Map(); // id -> entity
+
+    // Counts changes to the entity set, bumped AFTER each one (add, remove,
+    // clear): per-frame paths re-derive what they memoize from the area's
+    // list only when it moves (core/entityListMemo)
+    this.version = 0;
+    if (area) keepEntityList(area.entities, this);
   }
 
   add(entity) {
@@ -23,6 +31,7 @@ class EntityManager {
     if (this.area) {
       this.area.entities.push(entity);
     }
+    this.version += 1;
 
     return entity;
   }
@@ -48,6 +57,7 @@ class EntityManager {
         this.area.entities.splice(index, 1);
       }
     }
+    this.version += 1;
   }
 
   get(entityId) {
@@ -62,10 +72,6 @@ class EntityManager {
       }
     });
     return results;
-  }
-
-  getAll() {
-    return Array.from(this.entities.values());
   }
 
   update(deltaTime) {
@@ -89,6 +95,7 @@ class EntityManager {
     if (this.area) {
       this.area.entities.length = 0;
     }
+    this.version += 1;
   }
 }
 

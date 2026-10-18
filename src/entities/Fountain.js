@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import SongMatcher from 'core/SongMatcher';
-import evaluatePhrases from 'core/phraseMatching';
+import { evaluatePhrasesCached } from 'core/phraseMatching';
 import ProgressManager from 'core/ProgressManager';
 import { Fountain as FountainInstrument } from 'resound-sound';
 import { getDistance } from 'core/utils';
@@ -133,7 +133,8 @@ class Fountain extends Entity {
     // Segment everything heard into silence-delimited phrases; a COMPLETED
     // phrase must equal the target exactly (rotated/over-long takes fail;
     // stale earlier sounds are their own phrases and don't interfere).
-    const result = evaluatePhrases(this);
+    // (Re-judged only when the verdict could have changed.)
+    const result = evaluatePhrasesCached(this);
     if (result === true) {
       this.activate();
     } else if (result === 'mismatch') {
