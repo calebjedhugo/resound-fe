@@ -181,8 +181,10 @@ instead of "fixing" it.
   entities register listeners and read the world clock in their
   constructors. Staff textures are SHARED per distinct staff (song + meter
   + key; `NotationDisplay`, ref-counted) — never dispose a notation `map`
-  directly. Puzzle JSON is cached per world (`PuzzleLoader.load`;
-  `clearCache` at every world entry, so editor saves show up)
+  directly (it may still be queued for its idle-time GPU upload,
+  `NotationDisplay.uploadInIdleTime`, which would revive it). Puzzle JSON
+  is cached per world (`PuzzleLoader.load`; `clearCache` at every world
+  entry, so editor saves show up)
 - **Open linked gates are see-through**: the `facing` face shows the LIVE
   neighbor area (`core/PortalView.js` renders the neighbor's `Area.scene`).
   The extra pass runs only while a linked gate is open; a closed linked gate

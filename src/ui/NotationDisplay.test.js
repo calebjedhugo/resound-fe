@@ -5,6 +5,7 @@ import { NotationRenderer } from 'resound-notation/NotationRenderer';
 import NotationDisplay from 'ui/NotationDisplay';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
+import ShaderPrewarm from 'core/ShaderPrewarm';
 import { drawnObjects, renderPass, updateMatrixWorld } from '../__tests__/helpers/drawList';
 
 describe('NotationDisplay on Gates and Fountains', () => {
@@ -608,5 +609,161 @@ describe('Staff planes a pass would paint invisibly are left out of it', () => {
     const drawn = renderPass(scene, camera(30, 40)).filter((object) => object._isNotationMesh);
 
     expect(drawn).toEqual([]);
+  });
+});
+
+// three uploads a texture to the GPU on the first draw that shows it; for a
+// staff an idle-built neighbour shows, that draw is a door pass mid-game.
+// Given the renderer, each new staff texture is uploaded in an idle period
+// instead (renderer.initTexture) — never one a pass drew first, never one
+// already freed.
+describe('Staff textures upload in idle time, ahead of their first draw', () => {
+  const savedImage = global.Image;
+  const savedGetContext = HTMLCanvasElement.prototype.getContext;
+  let idleQueue;
+  let renderer;
+  const built = [];
+  // Each test shows staves nothing else in this file shows (engravings are
+  // shared module-wide)
+  const gateWith = (pitch) => {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song: [{ pitch, length: '1/2' }] });
+    built.push(gate);
+    return gate;
+  };
+  const textureOf = (gate) => gate.notationDisplay.meshes[0].material.map;
+  const uploaded = () => renderer.initTexture.mock.calls.map(([texture]) => texture);
+  /** The browser runs the next idle callback, granting `timeRemaining` ms. */
+  const runIdlePeriod = (timeRemaining = 50) =>
+    idleQueue.shift()({ didTimeout: false, timeRemaining: () => timeRemaining });
+
+  // A staff's texture arrives at once (jsdom loads no images and has no 2D
+  // canvas or object URLs: stood in for); requestIdleCallback is a browser
+  // API, stood in by a queue run by hand
+  beforeEach(() => {
+    global.Image = class {
+      set src(url) {
+        this.onload();
+      }
+    };
+    HTMLCanvasElement.prototype.getContext = () => ({ clearRect() {}, drawImage() {} });
+    URL.createObjectURL = () => 'blob:staff';
+    URL.revokeObjectURL = () => {};
+    idleQueue = [];
+    global.requestIdleCallback = jest.fn((callback) => idleQueue.push(callback));
+    renderer = { initTexture: jest.fn() };
+    NotationDisplay.uploadInIdleTime(renderer);
+  });
+
+  afterEach(() => {
+    for (const gate of built.splice(0)) gate.dispose();
+    NotationDisplay.uploadInIdleTime(null);
+    while (idleQueue.length > 0) runIdlePeriod();
+    global.Image = savedImage;
+    HTMLCanvasElement.prototype.getContext = savedGetContext;
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+    delete global.requestIdleCallback;
+  });
+
+  it('a new staff texture is uploaded in the next idle period, not as it arrives', () => {
+    const gate = gateWith('C6');
+    expect(textureOf(gate)).toBeInstanceOf(THREE.CanvasTexture);
+    expect(renderer.initTexture).not.toHaveBeenCalled();
+
+    runIdlePeriod();
+
+    expect(uploaded()).toEqual([textureOf(gate)]);
+    expect(idleQueue).toHaveLength(0); // nothing left to do
+  });
+
+  it('one upload per idle period, oldest first; a staff shown twice uploads once', () => {
+    const first = gateWith('D6');
+    gateWith('D6');
+    const second = gateWith('E6');
+
+    runIdlePeriod();
+    expect(uploaded()).toEqual([textureOf(first)]);
+    runIdlePeriod();
+    expect(uploaded()).toEqual([textureOf(first), textureOf(second)]);
+    expect(idleQueue).toHaveLength(0);
+  });
+
+  it('a texture the StartGate prewarm drew first is not uploaded again', () => {
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const drawnFirst = gateWith('F6');
+    const waiting = gateWith('G6'); // in no scene the prewarm draws
+    scene.add(drawnFirst.mesh);
+    updateMatrixWorld(scene);
+    // Draws the way three does: the scene's hooks and each drawn object's
+    // onBeforeRender, in order
+    let target = null;
+    const prewarmRenderer = {
+      clippingPlanes: [],
+      getRenderTarget: () => target,
+      setRenderTarget(next) {
+        target = next;
+      },
+      render: (drawn, camera) => renderPass(drawn, camera, prewarmRenderer),
+    };
+
+    ShaderPrewarm.run(prewarmRenderer, scene, [{ key: {}, scene }]);
+    while (idleQueue.length > 0) runIdlePeriod();
+
+    expect(uploaded()).toEqual([textureOf(waiting)]);
+  });
+
+  it('a texture a pass drew first is not uploaded again', () => {
+    const scene = new THREE.Scene();
+    const gate = gateWith('A6');
+    scene.add(gate.mesh);
+    updateMatrixWorld(scene);
+
+    renderPass(scene, { position: new THREE.Vector3(30, 1.8, 40) });
+    while (idleQueue.length > 0) runIdlePeriod();
+
+    expect(renderer.initTexture).not.toHaveBeenCalled();
+  });
+
+  it('a texture freed before its idle period is never uploaded', () => {
+    const gone = gateWith('B6');
+    gone.dispose();
+    while (idleQueue.length > 0) runIdlePeriod();
+
+    expect(renderer.initTexture).not.toHaveBeenCalled();
+  });
+
+  it('without a renderer textures wait for their first draw; given one, it uploads them', () => {
+    NotationDisplay.uploadInIdleTime(null);
+    const gate = gateWith('C7');
+    expect(idleQueue).toHaveLength(0);
+
+    NotationDisplay.uploadInIdleTime(renderer);
+    runIdlePeriod();
+
+    expect(uploaded()).toEqual([textureOf(gate)]);
+  });
+
+  it('without requestIdleCallback (Safari), uploads run on timers', () => {
+    delete global.requestIdleCallback;
+    const gate = gateWith('D7');
+    expect(renderer.initTexture).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(50);
+
+    expect(uploaded()).toEqual([textureOf(gate)]);
+  });
+
+  it('an idle period too short for an upload waits for one with room', () => {
+    // An upload that took 3 ms: the next one needs a period with 3 ms left
+    renderer.initTexture.mockImplementation(() => jest.advanceTimersByTime(3));
+    gateWith('E7');
+    runIdlePeriod();
+    const next = gateWith('F7');
+
+    runIdlePeriod(2);
+    expect(uploaded()).not.toContain(textureOf(next));
+    runIdlePeriod(3);
+    expect(uploaded()).toContain(textureOf(next));
   });
 });
