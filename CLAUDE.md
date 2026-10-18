@@ -221,8 +221,11 @@ instead of "fixing" it.
   — each mirror-only face a chain shows that the player pass didn't draw,
   so a creature seen N portals deep updates at full frame rate. A chain
   shows only its SIGHT: the pyramid through the part of each panel on
-  screen (+ `SIGHT_MARGIN`/`_SLACK` for last frame's sweep; a panel under
-  1% or showing its own door: all of it), narrowing hop by hop — a face
+  screen, padded for the NEXT frame since a panel shows last frame's sweep
+  (`SIGHT_MARGIN` past the panel's edges covers the eye's step at every
+  depth; `_SLACK` past the screen's, widened by the view's real turn, and a
+  fast mouse turn takes each seed's whole panel until it settles; a panel
+  under 1% or showing its own door: all of it), narrowing hop by hop — a face
   outside every sight is the rotor's (caps:
   `MIRROR_MAX_DEPTH`/`_PASSES`/`_FRONTIER`, spent shallowest-first then
   biggest-on-screen-first, so the cap keeps what is in sight; self/partner

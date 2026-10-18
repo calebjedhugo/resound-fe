@@ -2,11 +2,15 @@
  * Door views over their lifetime (core/PortalManager + core/PortalView):
  * the frame a door opens, crossings, and — under both — the guarantee that
  * no pass ever samples a panel nothing has drawn yet (it would read BLACK).
+ * A world left behind goes with every view of it.
  *
  * Rendering is mocked: a recording renderer stands in for three's, logging
  * every pass (its target and eye) and, at each pass, every doorway panel the
  * drawn scene shows.
  */
+import { setImmediate as realSetImmediate } from 'timers';
+import v8 from 'v8';
+import vm from 'vm';
 import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
 import { WORLD_SCALE } from 'core/constants';
@@ -263,5 +267,41 @@ describe('A crossing never rebuilds a door', () => {
 
     expect(PortalManager.getArea('portal-a')).toBeNull();
     expect(panelsOf(door)).toEqual([]);
+  });
+});
+
+describe('A world left behind', () => {
+  // Node's own collector, for this file: a full collection on demand
+  v8.setFlagsFromString('--expose-gc');
+  const collectGarbage = vm.runInNewContext('gc');
+
+  /** Is `ref`'s object gone after a full collection? */
+  async function collected(ref) {
+    // A WeakRef holds on to its object until the job that made it ends
+    await new Promise((resolve) => {
+      realSetImmediate(resolve);
+    });
+    collectGarbage();
+    return ref.deref() === undefined;
+  }
+
+  /** A few frames in a world with its doors open: a weak hold on it. */
+  function visitDoors() {
+    installFetchMock({});
+    ctx.loadPuzzle('portal-two-pairs');
+    for (const gate of ctx.getGates()) gate.open();
+    const renderer = createRecordingRenderer();
+    for (let i = 0; i < 3; i += 1) {
+      drawFrame(renderer, { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE } });
+    }
+    return new WeakRef(gameState.activeArea);
+  }
+
+  it('is let go on the way out: nothing the door passes keep holds on to it', async () => {
+    const left = visitDoors();
+
+    PortalManager.reset(); // out to the menu
+
+    expect(await collected(left)).toBe(true);
   });
 });
