@@ -785,14 +785,18 @@ describe('What a creature hears', () => {
     expect(c4.heardNotes()).toEqual([64]);
 
     // One joins mid-game
-    sing(addSinger('G4', 10 * WORLD_SCALE));
+    const g4 = sing(addSinger('G4', 10 * WORLD_SCALE));
     expect(c4.heardNotes()).toEqual([64, 67]);
+
+    // One leaves: gone from the very next listen
+    ctx.getEntityManager().remove(e4.id);
+    expect(c4.heardNotes()).toEqual([67]);
 
     // One leaves and another arrives between two listens: the same head
     // count, a different crowd
-    ctx.getEntityManager().remove(e4.id);
+    ctx.getEntityManager().remove(g4.id);
     sing(addSinger('A4', 12 * WORLD_SCALE));
-    expect(c4.heardNotes()).toEqual([67, 69]);
+    expect(c4.heardNotes()).toEqual([69]);
   });
 
   it("feels each heard source's own push or pull, afresh every pass", () => {

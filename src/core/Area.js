@@ -32,7 +32,9 @@ class Area {
   constructor(puzzleData = null) {
     this.puzzle = puzzleData;
     this.id = puzzleData ? puzzleData.id : null;
-    this.entities = []; // kept in sync by this.entityManager
+    // Kept in sync by this.entityManager, its ONLY writer: per-frame memos
+    // trust its version counter (core/entityListMemo)
+    this.entities = [];
 
     // All of the area's world content. Reparented into the main scene while
     // this area is active; lives in this.scene otherwise so portal passes
