@@ -328,7 +328,13 @@ instead of "fixing" it.
   `matrixWorldAutoUpdate` off; main.js `render()` and `PortalView.render`
   update each before its first pass. **Render-time code must never MOVE
   anything** (visibility/material toggles only), and an object added
-  mid-frame computes its own `updateMatrixWorld()` (doorway surfaces do)
+  mid-frame computes its own `updateMatrixWorld()` (doorway surfaces do).
+  Door passes skip what they can't draw: `scenePieces` measures a scene's
+  pieces (topmost meshes under its groups, subtree spheres) once a frame on
+  its second pass, and `PortalView` hides those wholly outside its frustum or
+  past a clip plane — three draws the same, in the same order
+  (`doorPassDraws.test`); a piece whose child count changed mid-frame is
+  left to three
 - **Passes skip invisible staff planes**: a pass leaves out every notation
   plane it would paint at opacity 0 (seen from behind/edge-on, texture
   pending) via hooks `NotationDisplay` chains onto each scene's

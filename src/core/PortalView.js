@@ -24,7 +24,7 @@ import * as THREE from 'three';
 import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
 import { createSceneTarget, showStoredTexels } from 'core/passContext';
-import { updateSceneMatrices } from 'core/sceneMatrices';
+import { scenePieces, updateSceneMatrices } from 'core/sceneMatrices';
 import {
   FACING_VECTORS,
   DOORWAY_OFFSET,
@@ -87,6 +87,26 @@ const MIN_TARGET_SIZE = 32;
 // otherwise reallocate every frame).
 const SHRINK_AFTER_PASSES = 30;
 
+// A pass's region (_hideUndrawable): its clip planes — its own, and the
+// door's shared one when that is another — then its frustum's four sides
+// (through the whole doorway) and near plane
+const PASS_PLANES = 7;
+const WHOLE_DOORWAY = Object.freeze({ u0: 0, u1: 1, v0: 0, v1: 1 });
+
+/** Write THREE.Plane `plane` as plane `index` of `out` (portalMath's layout). */
+function writePlane(out, index, { normal, constant }) {
+  out[index * 4] = normal.x;
+  out[index * 4 + 1] = normal.y;
+  out[index * 4 + 2] = normal.z;
+  out[index * 4 + 3] = constant;
+}
+
+// A piece is left out of a pass only when it lies this far (world units)
+// past one of the pass's planes: far beyond any rounding between these
+// planes and three's own (a frustum from the projection matrix, clipping in
+// float32 view space), so what three would still draw is never hidden
+const CULL_MARGIN = 1e-3;
+
 const scratchSize = new THREE.Vector2();
 // showsCreature's four side normals, [x, y, z] each
 const scratchSides = new Float64Array(12);
@@ -96,6 +116,10 @@ const bucket = (texels, cap) =>
   Math.min(cap, Math.max(MIN_TARGET_SIZE, 2 ** Math.ceil(Math.log2(Math.max(1, texels)))));
 
 class PortalView {
+  // Passes leave out the pieces of their scene they can't draw
+  // (_hideUndrawable); off only to compare with passes that walk it all
+  static cullPieces = true;
+
   /**
    * @param {Gate} gate - the linked source gate (in the player's area)
    * @param {Gate} partnerGate - the partner gate ENTITY in the live neighbor
@@ -286,6 +310,9 @@ class PortalView {
     this._shown = false;
     // The two clip planes a pass binds (render), recycled pass to pass
     this._passPlanes = [this._clipPlane, this._clipPlane];
+    // A pass's region, and the pieces of its scene it hid (_hideUndrawable)
+    this._cullPlanes = new Float64Array(PASS_PLANES * 4);
+    this._hiddenPieces = [];
 
     this._buildDoorwaySurface();
   }
@@ -483,21 +510,27 @@ class PortalView {
    * @returns {number} the index after the last plane written
    */
   sightPlanes(apex, rect, out, index = 0) {
-    let next = pyramidPlanes(apex, this._mappedCorners, rect, out, index);
-    // Near plane: the pass looks along the mapped outward, square to the
-    // doorway (frameCorners)
-    const o = this._outwardMapped;
-    out[next * 4] = o.x;
-    out[next * 4 + 1] = o.y;
-    out[next * 4 + 2] = o.z;
-    out[next * 4 + 3] = -(o.x * apex.x + o.y * apex.y + o.z * apex.z) - this._camera.near;
-    next += 1;
-    const { normal, constant } = this._clipPlane;
-    out[next * 4] = normal.x;
-    out[next * 4 + 1] = normal.y;
-    out[next * 4 + 2] = normal.z;
-    out[next * 4 + 3] = constant;
+    const next = this._nearPlane(
+      apex,
+      out,
+      pyramidPlanes(apex, this._mappedCorners, rect, out, index)
+    );
+    writePlane(out, next, this._clipPlane);
     return next + 1;
+  }
+
+  /**
+   * The near plane of a pass drawn from `apex`: it looks along the mapped
+   * outward, square to the doorway (frameCorners). Plane `index` of `out`.
+   * @returns {number} the index after it
+   */
+  _nearPlane(apex, out, index) {
+    const o = this._outwardMapped;
+    out[index * 4] = o.x;
+    out[index * 4 + 1] = o.y;
+    out[index * 4 + 2] = o.z;
+    out[index * 4 + 3] = -(o.x * apex.x + o.y * apex.y + o.z * apex.z) - this._camera.near;
+    return index + 1;
   }
 
   /**
@@ -680,10 +713,12 @@ class PortalView {
     renderer.clippingPlanes = this._passPlanes;
     renderer.setRenderTarget(writeTarget);
     updateSceneMatrices(this._scene); // once a frame, not once a pass
+    const undrawable = this._hideUndrawable(mappedEye, this._passPlanes[0]);
     renderer.render(this._scene, this._camera);
     renderer.setRenderTarget(null);
     renderer.clippingPlanes = previousPlanes;
 
+    for (const object of undrawable) object.visible = true;
     for (const child of hiddenSurfaces) child.visible = true;
     for (const mesh of hiddenWalls) mesh.visible = true;
     for (const child of frontOnlyNotation) child.material.side = THREE.DoubleSide;
@@ -698,6 +733,69 @@ class PortalView {
       this.surface.visible = this._shown; // safe to sample from now on
     }
     return true; // a pass actually ran (callers track face freshness)
+  }
+
+  /**
+   * Hide, for this pass, each piece of its scene (sceneMatrices.scenePieces)
+   * the pass cannot draw: wholly outside its frustum (the pyramid from
+   * `apex` through the doorway that frameCorners fits), where three would
+   * cull every bit of it anyway, or wholly past one of its clip planes,
+   * where every fragment would be discarded. Each pass used to walk and
+   * frustum-test the whole scene (~270 objects in The Star, about a third of
+   * a pass's CPU in Chrome) and drew what its clip planes then threw away;
+   * without them three draws the same picture, the draws that remain in the
+   * same order.
+   * @param {{x, y, z}} apex - where the pass renders from
+   * @param {THREE.Plane} sharedClip - the door's shared clip plane
+   * @returns {THREE.Object3D[]} what it hid, for the caller to show again
+   *   after the pass (recycled by the next one)
+   */
+  _hideUndrawable(apex, sharedClip) {
+    const hidden = this._hiddenPieces;
+    hidden.length = 0;
+    if (!PortalView.cullPieces) return hidden;
+    // Clip planes first: most pieces a pass can't draw lie past its own
+    const planes = this._cullPlanes;
+    writePlane(planes, 0, this._clipPlane);
+    let clipCount = 1;
+    if (sharedClip !== this._clipPlane) {
+      writePlane(planes, 1, sharedClip);
+      clipCount = 2;
+    }
+    const count = this._nearPlane(
+      apex,
+      planes,
+      pyramidPlanes(apex, this._mappedCorners, WHOLE_DOORWAY, planes, clipCount)
+    );
+    const pieces = scenePieces(this._scene);
+    if (!pieces) return hidden;
+    const { culls, clips, spheres, objects, children } = pieces;
+    for (let i = 0; i < pieces.count; i += 1) {
+      // The planes that leave this piece out once it lies wholly past one
+      const from = clips[i] ? 0 : clipCount;
+      const to = culls[i] ? count : clipCount;
+      const at = 4 * i;
+      const x = spheres[at];
+      const y = spheres[at + 1];
+      const z = spheres[at + 2];
+      const beyond = -(spheres[at + 3] + CULL_MARGIN);
+      let k = from;
+      while (
+        k < to &&
+        planes[4 * k] * x + planes[4 * k + 1] * y + planes[4 * k + 2] * z + planes[4 * k + 3] >=
+          beyond
+      ) {
+        k += 1;
+      }
+      if (k < to) {
+        const object = objects[i];
+        if (object.visible && object.children.length === children[i]) {
+          object.visible = false;
+          hidden.push(object);
+        }
+      }
+    }
+    return hidden;
   }
 
   /**
