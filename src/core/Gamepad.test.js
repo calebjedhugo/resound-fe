@@ -28,6 +28,7 @@ const SQUARE = 2;
 const TRIANGLE = 3;
 const L1 = 4;
 const R1 = 5;
+const L2 = 6;
 const R2 = 7;
 const SHARE = 8;
 const OPTIONS = 9;
@@ -363,6 +364,22 @@ describe('The sticks', () => {
     pad.axes = [0, -1, 0, 0];
     frame();
     expect(stick.running).toBe(false);
+  });
+
+  it('L2 runs while held, and only while held', () => {
+    const pad = connectPad();
+    const { stick } = gameState.input;
+    pad.axes = [0, -1, 0, 0];
+
+    press(pad, L2);
+    expect(stick.running).toBe(true);
+    release(pad, L2);
+    expect(stick.running).toBe(false); // walking on, but no latch
+
+    press(pad, L2);
+    pad.axes = [0, 0, 0, 0]; // at rest, held: the keyboard's walk runs too
+    frame();
+    expect(stick.running).toBe(true);
   });
 });
 

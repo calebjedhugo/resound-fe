@@ -8,7 +8,8 @@ import gameState from 'core/GameState';
  * The sticks are analog: `gameState.input.stick` holds each one's tilt past
  * a radial dead zone, exactly 0 at rest, which motion.js (left: walk and
  * strafe) and CameraController (right: look) read beside the key flags.
- * Clicking L3 runs until the left stick comes back to rest.
+ * Holding L2 runs; so does clicking L3, until the left stick comes back to
+ * rest.
  *
  * The buttons stand in for keys: a press dispatches its key's keydown on
  * window and a release its keyup, so every listener (the actions, the key
@@ -33,6 +34,7 @@ BUTTON_KEYS[9] = 'Escape'; // Options: pause / resume
 BUTTON_KEYS[14] = 'ArrowLeft'; // d-pad left
 BUTTON_KEYS[15] = 'ArrowRight'; // d-pad right
 const UNBOUND_KEY = 'Unidentified';
+const L2 = 6;
 const L3 = 10;
 
 // How far a stick tilts before it counts, as a share of its throw. A
@@ -92,6 +94,9 @@ class Gamepad {
   // keyup is owed
   static _down = [];
 
+  // L3 was clicked and the left stick hasn't come back to rest since
+  static _runLatched = false;
+
   /** Listen for pads coming and going (the game page only, once). */
   static initialize() {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
@@ -135,9 +140,11 @@ class Gamepad {
     }
     readStick(axis(pad, 0), axis(pad, 1), 1, stick.walk);
     readStick(axis(pad, 2), axis(pad, 3), LOOK_CURVE, stick.look);
-    // L3 (clicked or held) runs until the left stick comes back to rest
+    // L2 runs while held; L3 (clicked or held) until the left stick comes
+    // back to rest
     const walking = stick.walk.x !== 0 || stick.walk.y !== 0;
-    stick.running = walking && (stick.running || !!this._down[L3]);
+    this._runLatched = walking && (this._runLatched || !!this._down[L3]);
+    stick.running = this._runLatched || !!this._down[L2];
   }
 
   /** After a pad leaves: if none is left, let go of everything it held. */
@@ -160,6 +167,7 @@ class Gamepad {
     stick.look.x = 0;
     stick.look.y = 0;
     stick.running = false;
+    this._runLatched = false;
   }
 }
 

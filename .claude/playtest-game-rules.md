@@ -117,6 +117,7 @@ A game controller (PS4 DualShock 4, or any pad the browser maps to the
 | Button | Action |
 |---|---|
 | Left stick | Walk / strafe (speed follows the tilt) |
+| L2 (hold) | Run |
 | L3 (click) | Run, until the left stick returns to rest |
 | Right stick | Look (fine near center) |
 | Cross | Perform the tape (Space) |
