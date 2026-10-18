@@ -620,9 +620,11 @@ class PortalManager {
    * Of the faces `due` their first write, those something may sample this
    * frame or the next: faces the eye looks into, and faces a chain's sight
    * reaches from what it looks into (were every one of them in place) —
-   * all of them when the walk is cut short (anything could show). (A
-   * straight-on warm-up seen through a chain on the frame its door opens
-   * may miss a face written after it, as it always could.)
+   * all of them when the walk is cut short (anything could show), and the
+   * faces of another area's doors (the cleanser gate's view into it: the
+   * walk follows the active area's doors only). (A straight-on warm-up seen
+   * through a chain on the frame its door opens may miss a face written
+   * after it, as it always could.)
    * @returns {Set<PortalView>}
    */
   _firstWritesNeeded(due, renderer, camera) {
@@ -630,7 +632,13 @@ class PortalManager {
     if (!this._walkSights(renderer, camera, waiting)) return waiting;
     const needed = new Set();
     for (const view of due) {
-      if (this._sightsReached.has(view) || this._eyeDraws(view, camera)) needed.add(view);
+      if (
+        view.gate.area !== this._activeArea ||
+        this._sightsReached.has(view) ||
+        this._eyeDraws(view, camera)
+      ) {
+        needed.add(view);
+      }
     }
     return needed;
   }

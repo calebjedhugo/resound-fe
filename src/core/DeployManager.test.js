@@ -515,8 +515,11 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
 
     expect(areaSpy).toHaveBeenCalledWith(areaB, renderer, expect.anything());
     expect(hideSpy).toHaveBeenCalledWith(areaB);
-    // The neighbor door got real faces built for the mapped eye
-    expect(PortalManager._views.get(doorB)).toBeTruthy();
+    // The neighbor door got real faces built for the mapped eye — every one
+    // written at once (no look-ahead into another area's doors)
+    const faces = PortalManager._views.get(doorB);
+    expect(faces).toBeTruthy();
+    expect([...faces.values()].every((view) => view.written)).toBe(true);
     areaSpy.mockRestore();
     hideSpy.mockRestore();
   });
