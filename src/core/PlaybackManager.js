@@ -33,8 +33,9 @@ class PlaybackManager {
   static {
     this.playerInstrument.noteCallback = (noteEvent) => {
       // A stopped performance still sounds the one note it was waiting on
-      // (resound-sound's stop() lets it out); reset muted it, and it must
-      // not reach the next world's listeners either
+      // (resound-sound's stop() lets it out, unless the next performance
+      // starts first and retires it); reset muted it, and it must not reach
+      // the next world's listeners either
       if (!this.playerInstrument.playbackState.isPlaying) return;
 
       // Track current note for harmony analysis
