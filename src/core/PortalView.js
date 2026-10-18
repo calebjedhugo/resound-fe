@@ -82,6 +82,19 @@ const CREATURE_GLOW_REACH = 3.2;
 // half-res target it always had.
 const MIN_TARGET_SIZE = 32;
 
+// ...at SUPERSAMPLE times the texels the panel covers, for the eye that sees
+// it. The half-res target drew a far door's room at up to ten times the
+// pixels its panel shows, which shrinks it with no mipmaps: what lies in
+// there kept its detail. Drawn 1:1, a staff beyond the door is mipmapped
+// down, faint and soft behind the main view's own copy of it (The Star's
+// entry from 7 cells: sharpness 16.2 -> 10.1). A model of both paths (the
+// staff's mips sampled trilinearly into the target, the target bilinearly
+// onto the panel) puts twice the texels at 97% of half-res's sharpness 3
+// cells off and 83-95% 7 cells off, within that path's own swing with where
+// its samples land (+-6% and +-40%); 1.5x drops to 93% 3 cells off. Near
+// the cap the factor fades to 1: the cap holds.
+const SUPERSAMPLE = 2;
+
 // Resizing reallocates the target's GPU buffers, so a target grows at once
 // but shrinks only after this many passes running have asked for a smaller
 // one (a panel near a bucket edge, or sized for two eyes in turn, would
@@ -486,14 +499,16 @@ class PortalView {
   }
 
   /**
-   * Does the picture this panel shows still sample ~1:1 at `footprint` (the
-   * target it was last drawn into is big enough)?
+   * Is the picture this panel shows still as sharp as a pass would draw it
+   * at `footprint` (the target it was last drawn into holds SUPERSAMPLE
+   * texels per pixel, short of the cap)?
    */
   covers(footprint, renderer) {
     renderer.getDrawingBufferSize(scratchSize);
     return (
-      Math.min(Math.floor(scratchSize.x / 2), footprint.texelsAcross) <= this._width &&
-      Math.min(Math.floor(scratchSize.y / 2), footprint.texelsUp) <= this._height
+      Math.min(Math.floor(scratchSize.x / 2), footprint.texelsAcross * SUPERSAMPLE) <=
+        this._width &&
+      Math.min(Math.floor(scratchSize.y / 2), footprint.texelsUp * SUPERSAMPLE) <= this._height
     );
   }
 
@@ -685,6 +700,10 @@ class PortalView {
    * @param {?object} [options.footprint] - this panel's footprint on the
    *   screen the pass is for, when the caller already has it (footprint());
    *   worked out from `camera` otherwise
+   * @param {boolean} [options.supersample=true] - false for an eye that
+   *   only stands in for whoever will see the picture (a straight-on
+   *   warm-up): its target fits the panel as that eye sees it, 1:1 (see
+   *   SUPERSAMPLE)
    */
   render(renderer, camera, options = {}) {
     const { clipOverride = null, extraWallsBehind = null } = options;
@@ -701,7 +720,8 @@ class PortalView {
 
     const writeTarget = this._fitTarget(
       renderer,
-      options.footprint === undefined ? this.footprint(camera, renderer) : options.footprint
+      options.footprint === undefined ? this.footprint(camera, renderer) : options.footprint,
+      options.supersample === false ? 1 : SUPERSAMPLE
     );
 
     const mappedEye = this.renderEye(eye);
@@ -889,14 +909,15 @@ class PortalView {
    * whole neighbor scene each frame, and full-res targets made open doors
    * cost several fullscreen renders per frame (GPU fan spin, round-4
    * playtest) — so half the drawing buffer is the ceiling; below it the
-   * target follows what the panel occupies (see MIN_TARGET_SIZE).
+   * target follows what the panel occupies (see MIN_TARGET_SIZE), times
+   * `supersample` (see SUPERSAMPLE).
    */
-  _fitTarget(renderer, footprint) {
+  _fitTarget(renderer, footprint, supersample) {
     renderer.getDrawingBufferSize(scratchSize);
     const capW = Math.max(1, Math.floor(scratchSize.x / 2));
     const capH = Math.max(1, Math.floor(scratchSize.y / 2));
-    const wantW = footprint ? bucket(footprint.texelsAcross, capW) : capW;
-    const wantH = footprint ? bucket(footprint.texelsUp, capH) : capH;
+    const wantW = footprint ? bucket(footprint.texelsAcross * supersample, capW) : capW;
+    const wantH = footprint ? bucket(footprint.texelsUp * supersample, capH) : capH;
     let width = Math.min(this._width, capW);
     let height = Math.min(this._height, capH);
     if (wantW > width || wantH > height) {

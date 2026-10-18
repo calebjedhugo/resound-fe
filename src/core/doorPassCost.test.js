@@ -148,8 +148,11 @@ afterEach(() => {
   delete global.fetch;
 });
 
+/** The power of two at or above `texels` (a target's size along an axis). */
+const powerOfTwo = (texels) => 2 ** Math.ceil(Math.log2(texels));
+
 describe('A door pass draws at the size its panel shows on screen', () => {
-  it('a distant panel gets a small target, never smaller than its pixels on screen', async () => {
+  it('a distant panel gets a small target, twice its pixels on screen (so as sharp as half-res)', async () => {
     const door = await openPortalA();
     const renderer = createRecordingRenderer();
     const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE); // 7 cells south, looking at the door
@@ -158,9 +161,25 @@ describe('A door pass draws at the size its panel shows on screen', () => {
 
     const shown = renderer.shownBy(panelOf(door, 'south'));
     const onScreen = panelPixels(eye.position.z - SOUTH_PANEL_Z);
-    expect(shown.height).toBeGreaterThanOrEqual(onScreen);
-    expect(shown.width).toBeGreaterThanOrEqual(onScreen);
+    expect(shown.height).toBeGreaterThanOrEqual(2 * onScreen);
+    expect(shown.width).toBeGreaterThanOrEqual(2 * onScreen);
+    expect(shown.height).toBe(powerOfTwo(2 * onScreen)); // no more than that
     expect(shown.height).toBeLessThan(CAP.height); // not the old half-res target
+  });
+
+  it("a face's straight-on warm-up draws it 1:1, as that stand-in eye sees it", async () => {
+    // The NORTH face: from the south it is never the eye's own, so what it
+    // shows is a straight-on eye's (1.5 cells north of the gate, at the
+    // player's lens), drawn for other doors' passes to sample
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE);
+    for (let i = 0; i < 3; i += 1) drawFrame(renderer, eye); // its first write
+
+    const shown = renderer.shownBy(panelOf(door, 'north'));
+    const northPanelZ = DOOR.z + (WORLD_SCALE / 2 - 0.01);
+    const straightOn = panelPixels(northPanelZ - (DOOR.z - 1.5 * WORLD_SCALE));
+    expect([shown.width, shown.height]).toEqual([powerOfTwo(straightOn), powerOfTwo(straightOn)]);
   });
 
   it('a panel filling the screen keeps the half-res target', async () => {
@@ -182,8 +201,8 @@ describe('A door pass draws at the size its panel shows on screen', () => {
       eye.position.z = z;
       drawFrame(renderer, eye);
       const shown = renderer.shownBy(panelOf(door, 'south'));
-      const onScreen = Math.min(CAP.height, panelPixels(z - SOUTH_PANEL_Z));
-      expect(shown.height).toBeGreaterThanOrEqual(onScreen);
+      const wanted = Math.min(CAP.height, 2 * panelPixels(z - SOUTH_PANEL_Z));
+      expect(shown.height).toBeGreaterThanOrEqual(wanted);
     }
   });
 
@@ -200,7 +219,7 @@ describe('A door pass draws at the size its panel shows on screen', () => {
     drawFrame(renderer, eye);
 
     const onScreen = 2 * panelPixels(eye.position.z - SOUTH_PANEL_Z);
-    expect(renderer.shownBy(panel).height).toBeGreaterThanOrEqual(onScreen);
+    expect(renderer.shownBy(panel).height).toBeGreaterThanOrEqual(2 * onScreen);
   });
 
   it('stepping back, a target shrinks only after a run of passes asking for less', async () => {
@@ -273,7 +292,7 @@ describe('A small panel re-renders one frame in three', () => {
   it('outgrowing its picture between draws, it redraws at once', async () => {
     const door = await openPortalA();
     const renderer = createRecordingRenderer();
-    // Just short of where the panel needs more than 64 texels
+    // Just short of where the panel needs more than 128 texels: 64 on screen
     const crossing = SOUTH_PANEL_Z + (WORLD_SCALE * FOCAL) / 64;
     const eye = eyeAt(DOOR.x, crossing + 0.05);
     drawFrame(renderer, eye);
@@ -290,7 +309,7 @@ describe('A small panel re-renders one frame in three', () => {
 
     expect(renderer.writesOf(panel)).toHaveLength(1);
     expect(renderer.shownBy(panel).height).toBeGreaterThanOrEqual(
-      panelPixels(crossing - 0.1 - SOUTH_PANEL_Z)
+      2 * panelPixels(crossing - 0.1 - SOUTH_PANEL_Z)
     );
   });
 

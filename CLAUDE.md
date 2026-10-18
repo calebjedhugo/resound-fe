@@ -268,10 +268,13 @@ instead of "fixing" it.
   off screen) skips that door pre-pass too.
 - **Door passes cost what the screen shows** (2026-10-17): each pass's
   target fits its panel's densest size ON SCREEN (`portalMath.panelFootprint`,
-  `PortalView._fitTarget`: power-of-two per axis, 32 px floor, half-res cap —
-  a door filling the screen keeps half-res; grows at once, shrinks after 30
-  passes asking less). Mirror and warm-up eyes borrow the player's look and
-  lens (`eye.pose`). A panel under `SMALL_PANEL_SHARE` (1%) of the screen
+  `PortalView._fitTarget`: twice its texels, `SUPERSAMPLE` — 1:1 drew a far
+  door's staff visibly softer than half-res did — then power-of-two per
+  axis, 32 px floor, half-res cap — a door filling the screen keeps half-res;
+  grows at once, shrinks after 30 passes asking less). Mirror and warm-up
+  eyes borrow the player's look and lens (`eye.pose`); a straight-on warm-up
+  (first write, stale rotor) stands in for other passes' eyes and draws 1:1.
+  A panel under `SMALL_PANEL_SHARE` (1%) of the screen
   re-renders one frame in three (`_restsThisFrame`) — never while a
   creature shows through it, after an eye jump, or when its picture is
   another eye's, old, or outgrown

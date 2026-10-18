@@ -774,19 +774,26 @@ class PortalManager {
    * 1.5 cells out from the face, at head height) so a portal pass sampling
    * it never reads an unwritten black target — or a frozen-in-time one.
    * Bare eye: no frustum cull applies. Its target is sized for what it
-   * draws — the panel as that eye sees it through the player's lens.
+   * draws — the panel as that eye sees it through the player's lens, 1:1:
+   * the eye only stands in for the passes that will see the picture
+   * through other doors' panels (it is never the player's own), so it
+   * gets none of their supersampling.
    */
   _warmUpView(view, gate, facing, renderer) {
     const v = FACING_VECTORS[facing];
     const lens = this._playerCamera;
-    view.render(renderer, {
-      position: {
-        x: gate.position.x + v.x * WORLD_SCALE * 1.5,
-        y: gate.position.y + 1.8,
-        z: gate.position.z + v.z * WORLD_SCALE * 1.5,
+    view.render(
+      renderer,
+      {
+        position: {
+          x: gate.position.x + v.x * WORLD_SCALE * 1.5,
+          y: gate.position.y + 1.8,
+          z: gate.position.z + v.z * WORLD_SCALE * 1.5,
+        },
+        pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
       },
-      pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
-    });
+      { supersample: false }
+    );
     view._freshFrame = this._frameId;
     view._writer = null;
   }
