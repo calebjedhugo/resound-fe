@@ -12,8 +12,9 @@
  *   - public/puzzles is pruned to the `poc-*` files plus a manifest filtered to
  *     those entries, in their original order (so the game boots into
  *     `poc-threshold` — puzzles[0] — and Esc's menu lists only the POC set).
- *   - index.html preloads the JSON the boot fetches (manifest, first level,
- *     its neighbors); every text file gets a level-9 `.gz` beside it for
+ *   - index.html preloads the JSON the boot fetches (manifest, the level it
+ *     enters, that level's neighbors: a deep link's own, through a small
+ *     script); every text file gets a level-9 `.gz` beside it for
  *     nginx's gzip_static (deploy/nginx-resound.conf); `.deploy-assets` lists
  *     the hashed assets for deploy/upload.sh's prune.
  *
@@ -22,6 +23,7 @@
  *
  * Usage: node deploy/build-poc.mjs [dist] [out]   (defaults: dist/, deploy/dist-poc/)
  */
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -73,25 +75,55 @@ fs.writeFileSync(
 );
 
 // 3. Preload the JSON the game fetches as it boots: the manifest, then the
-//    first level, then that level's linked neighbors (PortalManager loads
-//    them live at once). Three revalidations in a row once the scripts have
-//    run; from the page, one round trip alongside the scripts. crossorigin
-//    (anonymous) matches fetch()'s defaults, so the game's own requests take
-//    the preloaded responses.
-const [firstLevel] = pocEntries;
-const { entities } = JSON.parse(
-  fs.readFileSync(path.join(puzzlesDir, `${firstLevel.id}.json`), 'utf8')
-);
-const neighbors = entities
-  .filter((e) => e.type === 'gate' && e.link && keep.has(`${e.link.puzzleId}.json`))
-  .map((e) => e.link.puzzleId);
-const preloads = [...new Set(['manifest', firstLevel.id, ...neighbors])].map(
-  (id) => `    <link rel="preload" href="/puzzles/${id}.json" as="fetch" crossorigin>\n`
-);
+//    level it enters (the first, or a ?puzzle=<id> deep link's if the
+//    manifest lists it), then that level's linked neighbors (PortalManager
+//    loads them live at once). Three revalidations in a row once the scripts
+//    have run; from the page, one round trip alongside the scripts.
+//    crossorigin (anonymous) matches fetch()'s defaults, so the game's own
+//    requests take the preloaded responses. The page links the manifest
+//    (every boot fetches it); a script links the entered level's chain, read
+//    from the query string (a preload the boot never fetches is a console
+//    warning). It is a plain script, so its links are in before the game's
+//    script runs, first in the head, so no stylesheet holds it back, and a
+//    hashed asset: the CSP (nginx-resound.conf) runs same-origin scripts only.
+const chainOf = (id) => {
+  const { entities } = JSON.parse(fs.readFileSync(path.join(puzzlesDir, `${id}.json`), 'utf8'));
+  const neighbors = entities
+    .filter((e) => e.type === 'gate' && e.link && keep.has(`${e.link.puzzleId}.json`))
+    .map((e) => e.link.puzzleId);
+  return [...new Set([id, ...neighbors])];
+};
+const chains = Object.fromEntries(pocEntries.map(({ id }) => [id, chainOf(id)]));
+const preloadScript = `// The puzzle JSON this page load's boot fetches after the manifest: the
+// level it enters (a listed ?puzzle=<id> deep link's, else the first) and
+// that level's linked neighbors. Written by deploy/build-poc.mjs
+(() => {
+  const chains = new Map(Object.entries(${JSON.stringify(chains)}));
+  const requested = new URLSearchParams(window.location.search).get('puzzle');
+  const entered = chains.has(requested) ? requested : ${JSON.stringify(pocEntries[0].id)};
+  chains.get(entered).forEach((id) => {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.href = \`/puzzles/\${id}.json\`;
+    link.as = 'fetch';
+    link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+  });
+})();
+`;
+const preloadHash = crypto.createHash('sha256').update(preloadScript).digest('hex').slice(0, 8);
+const preloadAsset = `assets/preload-${preloadHash}.js`;
+fs.writeFileSync(path.join(OUT, preloadAsset), preloadScript);
 const indexPath = path.join(OUT, 'index.html');
 fs.writeFileSync(
   indexPath,
-  fs.readFileSync(indexPath, 'utf8').replace('  </head>', `${preloads.join('')}  </head>`)
+  fs
+    .readFileSync(indexPath, 'utf8')
+    .replace(/^( *)<(script|link)\b/m, `$1<script src="/${preloadAsset}"></script>\n$&`)
+    .replace(
+      '  </head>',
+      '    <link rel="preload" href="/puzzles/manifest.json" as="fetch" crossorigin>\n  </head>'
+    )
 );
 
 // 4. Precompress once at level 9, so nginx never compresses at the origin

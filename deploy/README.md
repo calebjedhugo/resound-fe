@@ -26,8 +26,11 @@ Which does:
    `poc-*` files, and writes a manifest filtered to those entries (order
    preserved, so the game boots into `poc-threshold` and Esc's menu lists only
    the POC set). `index.html` gets `<link rel="preload" as="fetch">` for the
-   JSON the boot fetches (manifest, first level, its linked neighbors: three
-   serial round trips otherwise, after the scripts run). Every text file gets
+   JSON the boot fetches (manifest, the level it enters, that level's linked
+   neighbors: three serial round trips otherwise, after the scripts run). The
+   page links the manifest; the level's chain follows a `?puzzle=<id>` deep
+   link, so a hashed plain script (`assets/preload-*.js`, first in the head;
+   the CSP runs no inline script) adds those links. Every text file gets
    a level-9 `.gz` beside it (for nginx `gzip_static`), and `.deploy-assets`
    lists the hashed assets.
 3. `deploy/upload.sh deploy/dist-poc chugo@hugopi:/var/www/resound.calebhugo.com/`
