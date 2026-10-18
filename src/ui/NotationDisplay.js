@@ -221,11 +221,24 @@ function engrave(engraving, input, width) {
   }
 }
 
-/** Take a reference to a staff's engraving, engraving it on first use. */
+/**
+ * Take a reference to a staff's engraving, engraving it on first use. A
+ * song no staff can be laid out for (hand-edited JSON: no voices, a null
+ * first voice) shows no staff, as it always did: it gets an engraving of
+ * its own that never arrives and is never shared. Never a throw — one out
+ * of a gate's or fountain's constructor fails its whole area.
+ */
 function acquireEngraving(staff) {
-  const input = renderInput(staff);
-  const width = renderWidth(staff);
-  const key = JSON.stringify([width, input]);
+  let input;
+  let width;
+  let key;
+  try {
+    input = renderInput(staff);
+    width = renderWidth(staff);
+    key = JSON.stringify([width, input]);
+  } catch (e) {
+    return { key: null, users: 1, texture: null, aspect: 0, waiting: new Set() };
+  }
   let engraving = engravings.get(key);
   if (engraving) {
     engraving.users += 1;
@@ -242,7 +255,8 @@ function acquireEngraving(staff) {
 function releaseEngraving(engraving) {
   engraving.users -= 1;
   if (engraving.users > 0) return;
-  // (a failed engraving may already be forgotten, its key engraved anew)
+  // (a failed engraving may already be forgotten, its key engraved anew,
+  // or never have been kept: a song no staff can be laid out for)
   if (engravings.get(engraving.key) === engraving) engravings.delete(engraving.key);
   if (engraving.texture) {
     pendingUploads.delete(engraving.texture);
@@ -321,8 +335,9 @@ function hookScene(scene) {
  * asynchronously the first time a staff is engraved, at once for a staff
  * some other display already shows (engravings are shared; see above).
  *
- * Graceful degradation: if document.createElementNS is unavailable (node test env without jsdom),
- * the display is created but with no meshes.
+ * Graceful degradation: without a DOM (node test env without jsdom), or for
+ * a song no staff can be laid out for or engraved from, the display is
+ * created with its meshes but no texture — notation just won't appear.
  */
 class NotationDisplay {
   /**
