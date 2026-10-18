@@ -285,6 +285,10 @@ describe('Playing recorded songs', () => {
       await jest.advanceTimersByTimeAsync(100); // the first note sounds
     }
 
+    afterEach(() => {
+      jest.restoreAllMocks(); // the player's piano outlives every test
+    });
+
     it('cancels a performance still waiting for its beat', async () => {
       ctx.loadPuzzle('playback-basic');
       ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
@@ -346,6 +350,50 @@ describe('Playing recorded songs', () => {
       ctx.pressKey('space'); // still one performance at a time
       await ctx.advanceBeats(6);
       expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4', 'C4']);
+    });
+
+    it('plays only the next performance when it starts before the stopped tape wakes', async () => {
+      // The stopped tape sleeps on E4 (2 s in) while the next one starts
+      await startOnTheBeat([
+        { pitch: 'C4', length: '1/1' },
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ]);
+      await jest.advanceTimersByTimeAsync(500);
+      PlaybackManager.reset();
+
+      const piano = PlaybackManager.getPlayerInstrument();
+      const started = jest.spyOn(piano, 'startNote');
+      ctx.setInventorySlot(0, [
+        { pitch: 'D4', length: '1/1' },
+        { pitch: 'F4', length: '1/4' },
+        { pitch: 'A4', length: '1/4' },
+      ]);
+      ctx.pressKey('space');
+      await ctx.advanceBeats(8);
+
+      expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4', 'D4', 'F4', 'A4']);
+      expect(started.mock.calls.map(([pitch]) => pitch)).toEqual(['D4', 'F4', 'A4']);
+    });
+
+    it('hears all of the next performance when it starts during the stopped tape’s last note', async () => {
+      // The stopped tape waits out its whole note (to 2.5 s) while the next one plays
+      await startOnTheBeat([
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/1' },
+      ]);
+      await jest.advanceTimersByTimeAsync(500);
+      PlaybackManager.reset();
+
+      const next = ['D4', 'F4', 'A4', 'B4', 'C5', 'D5'];
+      ctx.setInventorySlot(
+        0,
+        next.map((pitch) => ({ pitch, length: '1/4' }))
+      );
+      ctx.pressKey('space');
+      await ctx.advanceBeats(8);
+
+      expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4', 'E4', ...next]);
     });
 
     it('stops the tape when a new world is entered', async () => {

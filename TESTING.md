@@ -135,7 +135,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 |------|-----------------|
 | `src/core/MusicalClock.test.js` | Beat calculation, quantization, tempo conversions |
 | `src/core/RecordingManager.test.js` | Capturing creature notes into inventory |
-| `src/core/PlaybackManager.test.js` | Playing recorded songs, note emission timing; a reset or new world stops the tape (pending start, notes under way, the old end timer) |
+| `src/core/PlaybackManager.test.js` | Playing recorded songs, note emission timing; a reset or new world stops the tape (pending start, notes under way, the old end timer), and a performance started right after a reset plays alone and whole (nothing of the old tape, none of its own notes lost) |
 | `src/core/ListeningManager.test.js` | Gates/Fountains recognizing correct songs |
 | `src/core/phraseMatching.test.js` | Anchored rhythm matching (embedded targets, rotations, prefixes, in-window extras, rests, chords, voices, trim horizon); the cached verdict gates/fountains use equals a fresh judgment at every call — over recorded play of real levels (`fixtures/listening/heard-streams.json`, with the verdicts from before the cache) and random streams — and is re-judged only when something new is heard or a turn passes |
 | `src/entities/Fountain.test.js` | An activated fountain's song plays alone: its area's creatures stay hushed for the song (and until the last of overlapping songs ends; given back even if the song fails), while another fountain's song plays over it unsilenced; a fountain's song stops when its area goes |
