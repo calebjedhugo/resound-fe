@@ -1,4 +1,6 @@
 import gameState from 'core/GameState';
+import CameraController from 'core/CameraController';
+import Settings from 'core/Settings';
 import Menu from 'ui/Menu';
 
 class PauseMenu extends Menu {
@@ -51,6 +53,24 @@ class PauseMenu extends Menu {
       });
       buttonContainer.appendChild(nextButton);
     }
+
+    // Invert look: the right stick and the mouse look down when pushed up
+    const invertButton = document.createElement('button');
+    invertButton.className = 'menu-button';
+    const labelInvert = () => {
+      invertButton.textContent = `Invert Look: ${Settings.get('invertLookY') ? 'On' : 'Off'}`;
+    };
+    labelInvert();
+    invertButton.addEventListener('click', () => {
+      // The mouse's offset flips with it: move the view's center to match,
+      // so the view resumes where it was
+      const before = CameraController.getView(gameState)[1];
+      Settings.set('invertLookY', !Settings.get('invertLookY'));
+      const [x, y] = gameState.camera.viewCenter;
+      gameState.camera.viewCenter = [x, y + before - CameraController.getView(gameState)[1]];
+      labelInvert();
+    });
+    buttonContainer.appendChild(invertButton);
 
     // Exit button
     const exitButton = document.createElement('button');

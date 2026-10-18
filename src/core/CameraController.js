@@ -1,4 +1,5 @@
 import { MathUtils } from 'three';
+import Settings from 'core/Settings';
 
 const { clamp } = MathUtils;
 
@@ -68,10 +69,12 @@ class CameraController {
     const [screenCenterX, screenCenterY] = screenCenter;
     const [mousePositionX, mousePositionY] = mousePosition;
     const [nextViewCenterX, nextViewCenterY] = nextViewCenter;
+    const ySign = Settings.get('invertLookY') ? -1 : 1;
 
     return [
       nextViewCenterX + (Math.PI / 2) * offsetPerc(screenCenterX - mousePositionX, xFixedRange),
-      nextViewCenterY + (Math.PI / 2) * offsetPerc(screenCenterY - mousePositionY, yFixedRange),
+      nextViewCenterY +
+        ySign * (Math.PI / 2) * offsetPerc(screenCenterY - mousePositionY, yFixedRange),
     ];
   }
 
@@ -113,16 +116,18 @@ class CameraController {
   /**
    * The right stick (core/Gamepad): turns the view at its tilt's share of
    * STICK_LOOK_SPEED every frame, on top of any held look key, within the
-   * same pitch limits. At rest it leaves the view alone.
+   * same pitch limits (pushing up looks down with invertLookY). At rest it
+   * leaves the view alone.
    */
   static applyStickLook(gameState) {
     const { look } = gameState.input.stick;
     if (look.x === 0 && look.y === 0) return;
 
     const [x, y] = gameState.camera.viewCenter;
+    const ySign = Settings.get('invertLookY') ? -1 : 1;
     gameState.camera.viewCenter = [
       x - STICK_LOOK_SPEED * look.x,
-      clamp(y + STICK_LOOK_SPEED * look.y, -MAX_PITCH, MAX_PITCH),
+      clamp(y + ySign * STICK_LOOK_SPEED * look.y, -MAX_PITCH, MAX_PITCH),
     ];
   }
 
