@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import ClapVisual from 'ui/ClapVisual';
 import { CLAP_RANGE, CLAP_VISUAL_FADE_DURATION } from 'core/constants';
+import { createGLStub } from '../__tests__/helpers/glStub';
 
 const FADE_MS = CLAP_VISUAL_FADE_DURATION * 1000;
 
@@ -36,9 +37,13 @@ describe('Clap ring', () => {
       outerRadius: CLAP_RANGE,
       thetaSegments: 64,
     });
+    expect(ring.scale).toEqual(new THREE.Vector3(1, 1, 1)); // its geometry's size
     expect(ring.material.color.getHex()).toBe(0xffffff);
     expect(ring.material.side).toBe(THREE.DoubleSide);
+    expect(ring.material.forceSinglePass).toBe(true); // both sides, one pass
     expect(ring.material.transparent).toBe(true);
+    expect(ring.material.depthWrite).toBe(true);
+    expect(ring.material.blending).toBe(THREE.NormalBlending);
     expect(ring.material.opacity).toBe(0.6);
     return ring;
   }
@@ -94,5 +99,97 @@ describe('Clap ring', () => {
     expect(scene.children).toHaveLength(0);
     elapse(FADE_MS);
     expect(scene.children).toHaveLength(0);
+  });
+});
+
+/**
+ * The ring as three 0.153 draws it: its real WebGLRenderer, over a stub GL.
+ * A transparent double-sided material is two passes there (renderObject:
+ * back faces, then front, flagging the material for a new program before
+ * each); the ring's is one, which draws the same picture because the ring
+ * is flat.
+ */
+describe('Clap ring, as three draws it', () => {
+  let REAL; // the real three (the tests above run on the mock)
+  let RealClapVisual;
+
+  beforeAll(() => {
+    delete window.__THREE__; // three warns about a second copy
+    jest.isolateModules(() => {
+      jest.doMock('three', () => jest.requireActual('three/src/Three.js'));
+      /* eslint-disable global-require */
+      REAL = require('three');
+      RealClapVisual = require('ui/ClapVisual').default;
+      /* eslint-enable global-require */
+    });
+  });
+
+  // Eyes all round a ring at (3, 0.1, 4): the player's, from high above,
+  // low and far, from below (a door's mapped eye can be anywhere) and
+  // nearly edge-on
+  const EYES = [
+    [3, 1.8, 14],
+    [3, 20, 4.5],
+    [-10, 0.5, 4],
+    [3, -5, 10],
+    [12, 0.11, 4],
+  ];
+
+  function showRing() {
+    const scene = new REAL.Scene();
+    new RealClapVisual(scene).show({ x: 3, y: 1.8, z: 4 }, CLAP_RANGE);
+    scene.updateMatrixWorld();
+    return { scene, ring: scene.children[0] };
+  }
+
+  it("is flat, every triangle facing up: from any eye one side's pass would draw none of it", () => {
+    const { ring } = showRing();
+    const position = ring.geometry.getAttribute('position');
+    const index = ring.geometry.getIndex();
+    const corner = (i) =>
+      new REAL.Vector3()
+        .fromBufferAttribute(position, index.getX(i))
+        .applyMatrix4(ring.matrixWorld);
+    const up = new REAL.Vector3(0, 1, 0);
+    let offPlane = 0; // the furthest any corner is from the ring's plane
+    let offUp = 0; // the furthest any triangle's facing is from straight up
+    for (let i = 0; i < index.count; i += 3) {
+      const [a, b, c] = [corner(i), corner(i + 1), corner(i + 2)];
+      offPlane = Math.max(offPlane, ...[a, b, c].map((p) => Math.abs(p.y - 0.1)));
+      const facing = new REAL.Vector3().subVectors(b, a).cross(new REAL.Vector3().subVectors(c, a));
+      offUp = Math.max(offUp, facing.normalize().distanceTo(up));
+    }
+
+    expect(index.count).toBe(64 * 2 * 3); // two triangles a segment
+    expect(offPlane).toBeLessThan(1e-9);
+    expect(offUp).toBeLessThan(1e-9);
+  });
+
+  it('draws once a pass, both sides at once, and derives its program only the first time', () => {
+    const { scene, ring } = showRing();
+    const { canvas, gl } = createGLStub(64, 64);
+    const renderer = new REAL.WebGLRenderer({ canvas, context: gl });
+    renderer.debug.checkShaderErrors = false;
+    const camera = new REAL.PerspectiveCamera(75, 1, 0.1, 500);
+    const drawnSides = []; // the side each of this pass's draws is drawn with
+    const setMaterial = renderer.state.setMaterial.bind(renderer.state);
+    jest.spyOn(renderer.state, 'setMaterial').mockImplementation((material, ...rest) => {
+      drawnSides.push(material.side);
+      return setMaterial(material, ...rest);
+    });
+    const derivations = jest.spyOn(ring.material, 'customProgramCacheKey');
+
+    const passes = EYES.map((eye) => {
+      camera.position.set(...eye);
+      camera.lookAt(3, 0.1, 4);
+      drawnSides.length = 0;
+      derivations.mockClear();
+      renderer.render(scene, camera);
+      return { sides: [...drawnSides], derivations: derivations.mock.calls.length };
+    });
+
+    expect(passes).toEqual(
+      EYES.map((eye, i) => ({ sides: [REAL.DoubleSide], derivations: i === 0 ? 1 : 0 }))
+    );
   });
 });
