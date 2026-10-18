@@ -120,6 +120,33 @@ describe('Elevation-aware collision', () => {
     expect(CollisionDetector.checkCollision(pos, 0.9)).toBe(false);
   });
 
+  it("an overlap on another layer never hides a blocker on the mover's own layer", () => {
+    ctx.loadPuzzle('elevation-basic');
+    // Wall at grid (4,4) is up on elevation 1 (box x 10.5..13.5); a closed
+    // gate on the ground just west of it at grid (3,4) (box x 7.5..10.5)
+    ctx.addGate({
+      position: { x: 3 * WORLD_SCALE, y: 0, z: 4 * WORLD_SCALE },
+      song: [{ pitch: 'C4', length: '1/4' }],
+    });
+
+    // A ground-level mover on the seam overlaps BOTH boxes: the gate blocks it
+    const pos = { x: 10.5, y: 0, z: 4 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(pos, 0.4)).toBe(true);
+  });
+
+  it('a creature bumps into the player only on the same layer', () => {
+    ctx.loadPuzzle('elevation-basic');
+    // Player up on the elevation-1 platform at grid (6,6)
+    ctx.setPlayerPosition({ x: 6 * WORLD_SCALE, y: ELEVATION_HEIGHT + 1.8, z: 6 * WORLD_SCALE });
+
+    // A creature-sized mover overlapping the player's body: beside them on the
+    // platform, or under it on the ground (the cell is walkable at 0 and 1)
+    const beside = { x: 6 * WORLD_SCALE + 1, y: ELEVATION_HEIGHT, z: 6 * WORLD_SCALE };
+    const beneath = { x: 6 * WORLD_SCALE + 1, y: 0, z: 6 * WORLD_SCALE };
+    expect(CollisionDetector.checkCollision(beside, 0.9, 'a-creature')).toBe(true);
+    expect(CollisionDetector.checkCollision(beneath, 0.9, 'a-creature')).toBe(false);
+  });
+
   it('two creatures on the same ramp at different progress points still collide', () => {
     ctx.loadPuzzle('elevation-ramp');
 
@@ -144,5 +171,65 @@ describe('Elevation-aware collision', () => {
     // Distance in Z = 1.0, combined radii = 0.9 + 0.9 = 1.8 -> geometric collision
     // Both on same ramp, elevation diff < 0.5 -> not filtered out
     expect(CollisionDetector.checkCollision(creatureA.position, 0.9, creatureA.id)).toBe(true);
+  });
+});
+
+/**
+ * Collision queries keep what they can about an area's entities between
+ * calls (which ones can block, and where the immovable ones stand).
+ * Whatever does change must count from the very next query.
+ */
+describe('Collision in a changing world', () => {
+  const song = [{ pitch: 'C4', length: '1/4' }];
+  // Open ground in elevation-basic, west of the platform: grid (2,10) and (2,12)
+  const here = { x: 2 * WORLD_SCALE, y: 0, z: 10 * WORLD_SCALE };
+  const there = { x: 2 * WORLD_SCALE, y: 0, z: 12 * WORLD_SCALE };
+
+  it('a creature blocks where it is now, not where it was', () => {
+    ctx.loadPuzzle('elevation-basic');
+    const creature = ctx.addCreature({ position: { ...here }, song });
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    creature.position.z = there.z;
+
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+    expect(CollisionDetector.checkCollision(there, 0.4)).toBe(true);
+  });
+
+  it('a blocker added, or swapped for another, blocks from the next query', () => {
+    ctx.loadPuzzle('elevation-basic');
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+
+    const gate = ctx.addGate({ position: { ...here }, song });
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    // The same number of entities, a different crowd
+    ctx.getEntityManager().remove(gate.id);
+    ctx.addFountain({ position: { ...there }, song });
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+    expect(CollisionDetector.checkCollision(there, 0.4)).toBe(true);
+  });
+
+  it("a gate's open state counts at every query", () => {
+    ctx.loadPuzzle('elevation-basic');
+    const gate = ctx.addGate({ position: { ...here }, song });
+    gate.open();
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+
+    gate.close();
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(true);
+
+    gate.open();
+    expect(CollisionDetector.checkCollision(here, 0.4)).toBe(false);
+  });
+
+  it('a wide mover touches a wall from farther away than a narrow one', () => {
+    ctx.loadPuzzle('elevation-basic');
+    // 6 units west of the wall at grid (4,4), at its elevation: the wall's
+    // box edge is 4.5 away
+    const besideWall = { x: 4 * WORLD_SCALE - 6, y: ELEVATION_HEIGHT, z: 4 * WORLD_SCALE };
+
+    expect(CollisionDetector.checkCollision(besideWall, 0.9)).toBe(false);
+    expect(CollisionDetector.checkCollision(besideWall, 5)).toBe(true);
   });
 });

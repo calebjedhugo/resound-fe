@@ -1,4 +1,5 @@
 import gameState from 'core/GameState';
+import memoizeOnEntityList from 'core/entityListMemo';
 import {
   ELEVATION_HEIGHT,
   ELEVATION_COLLISION_THRESHOLD,
@@ -7,6 +8,34 @@ import {
 
 // Fountain collision radius — matches the radius-1.5 cylinder in Fountain.createMesh
 const FOUNTAIN_COLLISION_RADIUS = 1.5;
+
+// Wall and gate boxes are 3x3 (they fill their cell)
+const BOX_HALF_SIZE = 1.5;
+
+// How far a static blocker's footprint reaches from its centre, and the
+// margin on the cheap reject in checkCollision (so float rounding in the
+// exact tests is never what decides)
+const STATIC_REACH = Math.max(BOX_HALF_SIZE, FOUNTAIN_COLLISION_RADIUS);
+const REJECT_SLACK = 0.5;
+
+// Per entity list, what a collision query walks: the STATIC blockers
+// (walls, gates, fountains — nothing ever moves one; a gate's open state is
+// still read per query) with their centres packed flat for a cheap reject,
+// and the creatures, which move, as they are. Everything else never blocks.
+const blockersOf = memoizeOnEntityList((entities) => {
+  const statics = [];
+  const centres = [];
+  const creatures = [];
+  for (const entity of entities) {
+    if (entity.type === 'creature') {
+      creatures.push(entity);
+    } else if (entity.type === 'wall' || entity.type === 'gate' || entity.type === 'fountain') {
+      statics.push(entity);
+      centres.push(entity.position.x, entity.position.z);
+    }
+  }
+  return { statics, centres: Float64Array.from(centres), creatures };
+});
 
 /**
  * CollisionDetector - Handles collision detection between entities
@@ -47,7 +76,6 @@ class CollisionDetector {
    * @returns {boolean} True if collision detected
    */
   static checkCollision(position, radius, ignoreId = null, area = null, fromPosition = null) {
-    const positionElevation = this.getElevationForPosition(position, area);
     const entities = area ? area.entities : gameState.entities;
 
     // Creatures collide with the PLAYER's body (symmetric with the player
@@ -56,80 +84,113 @@ class CollisionDetector {
     // player unrecoverably, since every escape move still collides. Only
     // meaningful in the player's own area (coordinates are per-area), and
     // only for creature movers (the player reports ignoreId null).
-    if (ignoreId !== null && (!area || area === gameState.activeArea)) {
+    if (
+      ignoreId !== null &&
+      (!area || area === gameState.activeArea) &&
+      this.checkCircleCircleCollision(
+        position,
+        radius,
+        gameState.player.position,
+        PLAYER_COLLISION_RADIUS
+      )
+    ) {
       const sameLevel =
-        Math.abs(positionElevation - (gameState.player.elevation || 0)) <=
-        ELEVATION_COLLISION_THRESHOLD;
+        Math.abs(
+          this.getElevationForPosition(position, area) - (gameState.player.elevation || 0)
+        ) <= ELEVATION_COLLISION_THRESHOLD;
+      if (sameLevel) return true;
+    }
+
+    // Check against the blocking entities (indexed loops: this runs for
+    // every candidate move of every mover, every frame). A static blocker
+    // whose centre is beyond its reach on either axis cannot touch the mover,
+    // so most of the list costs two subtractions.
+    const { statics, centres, creatures } = blockersOf(entities);
+    const reach = STATIC_REACH + Math.abs(radius) + REJECT_SLACK;
+    for (let i = 0; i < statics.length; i += 1) {
       if (
-        sameLevel &&
-        this.checkCircleCircleCollision(
-          position,
-          radius,
-          gameState.player.position,
-          PLAYER_COLLISION_RADIUS
-        )
+        Math.abs(position.x - centres[2 * i]) < reach &&
+        Math.abs(position.z - centres[2 * i + 1]) < reach &&
+        this.blocksOnLayer(statics[i], position, radius, ignoreId, area, fromPosition)
       ) {
         return true;
       }
     }
-
-    // Check against all entities
-    for (const entity of entities) {
-      // Skip self
-      if (entity.id === ignoreId) continue;
-
-      // Skip entities at different elevations
-      const entityElevation = this.getElevationForPosition(entity.position, area);
-      if (Math.abs(positionElevation - entityElevation) > ELEVATION_COLLISION_THRESHOLD) continue;
-
-      // Check collision based on entity type
-      if (entity.type === 'wall') {
-        if (this.checkCircleBoxCollision(position, radius, entity.position, 1.5)) {
-          return true;
-        }
-      } else if (entity.type === 'gate') {
-        // Only collide with closed gates — except around the PLAYER while
-        // their body already overlaps the box: a one-way crossing (through
-        // an alwaysOpen face) legally teleports the player INTO its CLOSED
-        // partner face, and a box solid to its own occupant wedges them
-        // forever (DESIGN.md: a door is solid from outside, open from
-        // within). The exception ends the moment they step fully clear, and
-        // never lets anyone IN: approached from outside, the occupant check
-        // is false before any overlapping move could be attempted.
-        const occupantEscaping =
-          ignoreId === null &&
-          fromPosition !== null &&
-          this.checkCircleBoxCollision(fromPosition, radius, entity.position, 1.5);
-        const solid = !entity.isOpen && !occupantEscaping;
-        if (solid) {
-          if (this.checkCircleBoxCollision(position, radius, entity.position, 1.5)) {
-            return true;
-          }
-        }
-      } else if (entity.type === 'creature') {
-        // Creature-creature collision (circle-circle)
-        const creatureRadius = entity.size || 0.9;
-        if (this.checkCircleCircleCollision(position, radius, entity.position, creatureRadius)) {
-          return true;
-        }
-      } else if (entity.type === 'fountain') {
-        // Fountains are solid landmarks — circle-circle against the basin
-        // (matches the radius-1.5 cylinder mesh in Fountain.createMesh). Movers
-        // (creatures lured toward it, or the player) bump the rim rather than
-        // passing through; they still activate it from within audible range.
-        if (
-          this.checkCircleCircleCollision(
-            position,
-            radius,
-            entity.position,
-            FOUNTAIN_COLLISION_RADIUS
-          )
-        ) {
-          return true;
-        }
+    for (let i = 0; i < creatures.length; i += 1) {
+      if (this.blocksOnLayer(creatures[i], position, radius, ignoreId, area, fromPosition)) {
+        return true;
       }
     }
 
+    return false;
+  }
+
+  /**
+   * Does `entity` block the mover? Arguments as in checkCollision.
+   * @returns {boolean}
+   */
+  static blocksOnLayer(entity, position, radius, ignoreId, area, fromPosition) {
+    // Skip self, and anything the mover's body doesn't overlap
+    if (entity.id === ignoreId) return false;
+    if (!this.overlapsBlocker(entity, position, radius, ignoreId, fromPosition)) return false;
+
+    // Skip entities at different elevations. Both tests are pure, so the
+    // cheap overlap runs first and layers (a grid + ramp lookup each) are
+    // derived only for an entity that actually overlaps: the same verdict.
+    const positionElevation = this.getElevationForPosition(position, area);
+    const entityElevation = this.getElevationForPosition(entity.position, area);
+    if (Math.abs(positionElevation - entityElevation) > ELEVATION_COLLISION_THRESHOLD) return false;
+
+    return true;
+  }
+
+  /**
+   * Would `entity` block a mover of `radius` at `position` if they shared a
+   * layer? (checkCollision applies the layer filter.) Arguments as in
+   * checkCollision.
+   * @returns {boolean}
+   */
+  static overlapsBlocker(entity, position, radius, ignoreId, fromPosition) {
+    // Check collision based on entity type
+    if (entity.type === 'wall') {
+      return this.checkCircleBoxCollision(position, radius, entity.position, BOX_HALF_SIZE);
+    }
+    if (entity.type === 'gate') {
+      // Only collide with closed gates — except around the PLAYER while
+      // their body already overlaps the box: a one-way crossing (through
+      // an alwaysOpen face) legally teleports the player INTO its CLOSED
+      // partner face, and a box solid to its own occupant wedges them
+      // forever (DESIGN.md: a door is solid from outside, open from
+      // within). The exception ends the moment they step fully clear, and
+      // never lets anyone IN: approached from outside, the occupant check
+      // is false before any overlapping move could be attempted.
+      if (entity.isOpen) return false;
+      const occupantEscaping =
+        ignoreId === null &&
+        fromPosition !== null &&
+        this.checkCircleBoxCollision(fromPosition, radius, entity.position, BOX_HALF_SIZE);
+      return (
+        !occupantEscaping &&
+        this.checkCircleBoxCollision(position, radius, entity.position, BOX_HALF_SIZE)
+      );
+    }
+    if (entity.type === 'creature') {
+      // Creature-creature collision (circle-circle)
+      const creatureRadius = entity.size || 0.9;
+      return this.checkCircleCircleCollision(position, radius, entity.position, creatureRadius);
+    }
+    if (entity.type === 'fountain') {
+      // Fountains are solid landmarks — circle-circle against the basin
+      // (matches the radius-1.5 cylinder mesh in Fountain.createMesh). Movers
+      // (creatures lured toward it, or the player) bump the rim rather than
+      // passing through; they still activate it from within audible range.
+      return this.checkCircleCircleCollision(
+        position,
+        radius,
+        entity.position,
+        FOUNTAIN_COLLISION_RADIUS
+      );
+    }
     return false;
   }
 

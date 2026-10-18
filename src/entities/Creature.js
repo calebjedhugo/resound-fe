@@ -5,6 +5,7 @@ import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import PlaybackManager from 'core/PlaybackManager';
 import SongMatcher from 'core/SongMatcher';
 import resolveSlide from 'core/SlideResolver';
+import memoizeOnEntityList from 'core/entityListMemo';
 import { messiaenColourCached, midiOf, registerLuminosity } from 'core/messiaenColour';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
@@ -26,6 +27,15 @@ import CreatureLook from 'entities/CreatureLook';
 // frame or two between one note's end and the next onset's callback (the
 // instrument runs on timers, the clock on frames) never reads as silence.
 const NOTE_END_GRACE_BEATS = 0.08;
+
+// The entities of a list (an area's) that can ever sound: the ones with an
+// instrument, which only their constructor gives them (creatures,
+// fountains). Walls and gates are most of a list and never sound, and
+// forEachSoundSource runs several times per frame per singing creature, so
+// it walks this instead — in list order, the order sources are visited in.
+const soundCapable = memoizeOnEntityList((entities) =>
+  entities.filter((entity) => entity.instrument)
+);
 
 class Creature extends Entity {
   constructor(position, data = {}) {
@@ -53,6 +63,10 @@ class Creature extends Entity {
     this.velocity = { x: 0, z: 0 };
     this.forces = []; // Accumulated forces from sound sources
 
+    // What the last full movement pass left (updateMovement's at-rest
+    // shortcut); not valid until there has been one
+    this._rest = { valid: false, x: 0, y: 0, z: 0, elevation: 0, grid: null };
+
     // Track current note being sung (for harmony analysis)
     this.currentNote = null;
 
@@ -70,6 +84,9 @@ class Creature extends Entity {
       if (extraDistance + getDistance(this.position, sourcePosition) > this.audibleRange) return;
       this._hearInto.push(midiOf(note.pitch));
     };
+    // ...and the forces' visitor, likewise bound once (calculateForces runs
+    // every physics pass)
+    this._forceVisitor = this._addForceFromSource.bind(this);
 
     // Create unique instrument for this creature
     this.instrument = new Random(this.id);
@@ -372,65 +389,67 @@ class Creature extends Entity {
    * Called every frame to continuously apply forces while harmonies exist
    */
   calculateForces() {
-    // Clear forces from previous frame
-    this.forces = [];
+    // Clear forces from previous frame (in place: this runs every physics
+    // pass for every creature)
+    this.forces.length = 0;
 
     // Only react if we're currently singing
     if (!this.currentNote || !this.instrument.playbackState.isPlaying) {
       return;
     }
 
-    // Helper to add force from a source. For a source in ANOTHER area,
-    // sourcePosition is the doorway on OUR side (the pull/push aims at the
-    // door — sound comes through it) and extraDistance carries the
-    // source->partner-gate leg (+ closed-door leak) for the range check.
-    const addForceFromSource = (sourceNote, sourcePosition, sourceSize, extraDistance = 0) => {
-      // Check if within audible range
-      const distance = extraDistance + getDistance(this.position, sourcePosition);
-      if (distance > this.audibleRange) return;
+    this.forEachSoundSource(this._forceVisitor);
+  }
 
-      // Skip if too close (prevents numerical instability and represents physical contact)
-      const minDistance = this.size + sourceSize;
-      if (distance < minDistance) return;
+  /**
+   * Add the force one source puts on us (calculateForces' visitor, bound
+   * once as this._forceVisitor). For a source in ANOTHER area,
+   * sourcePosition is the doorway on OUR side (the pull/push aims at the
+   * door — sound comes through it) and extraDistance carries the
+   * source->partner-gate leg (+ closed-door leak) for the range check.
+   */
+  _addForceFromSource(sourceNote, sourcePosition, sourceSize, extraDistance = 0) {
+    // Check if within audible range
+    const distance = extraDistance + getDistance(this.position, sourcePosition);
+    if (distance > this.audibleRange) return;
 
-      // Calculate harmony
-      const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, sourceNote.pitch);
-      const harmony = HarmonyAnalyzer.classifyInterval(interval);
+    // Skip if too close (prevents numerical instability and represents physical contact)
+    const minDistance = this.size + sourceSize;
+    if (distance < minDistance) return;
 
-      // Add force based on harmony
-      if (harmony === 'consonant') {
-        // Attraction force toward the sound source
-        const direction = {
-          x: sourcePosition.x - this.position.x,
-          z: sourcePosition.z - this.position.z,
-        };
-        const magnitude = Math.sqrt(direction.x ** 2 + direction.z ** 2);
+    // Calculate harmony: HarmonyAnalyzer.calculateInterval's octave-reduced
+    // interval, from memoized MIDI numbers (it re-parses both pitch strings
+    // per call, and this runs per heard source per pass)
+    const interval = Math.abs(midiOf(this.currentNote.pitch) - midiOf(sourceNote.pitch)) % 12;
+    const harmony = HarmonyAnalyzer.classifyInterval(interval);
 
-        if (magnitude > 0) {
-          this.forces.push({
-            x: (direction.x / magnitude) * ATTRACTION_FORCE_STRENGTH,
-            z: (direction.z / magnitude) * ATTRACTION_FORCE_STRENGTH,
-          });
-        }
-      } else if (harmony === 'dissonant') {
-        // Repulsion force away from the sound source
-        const direction = {
-          x: this.position.x - sourcePosition.x,
-          z: this.position.z - sourcePosition.z,
-        };
-        const magnitude = Math.sqrt(direction.x ** 2 + direction.z ** 2);
+    // Add force based on harmony
+    if (harmony === 'consonant') {
+      // Attraction force toward the sound source
+      const directionX = sourcePosition.x - this.position.x;
+      const directionZ = sourcePosition.z - this.position.z;
+      const magnitude = Math.sqrt(directionX ** 2 + directionZ ** 2);
 
-        if (magnitude > 0) {
-          this.forces.push({
-            x: (direction.x / magnitude) * REPULSION_FORCE_STRENGTH,
-            z: (direction.z / magnitude) * REPULSION_FORCE_STRENGTH,
-          });
-        }
+      if (magnitude > 0) {
+        this.forces.push({
+          x: (directionX / magnitude) * ATTRACTION_FORCE_STRENGTH,
+          z: (directionZ / magnitude) * ATTRACTION_FORCE_STRENGTH,
+        });
       }
-      // 'perfect' = no force added
-    };
+    } else if (harmony === 'dissonant') {
+      // Repulsion force away from the sound source
+      const directionX = this.position.x - sourcePosition.x;
+      const directionZ = this.position.z - sourcePosition.z;
+      const magnitude = Math.sqrt(directionX ** 2 + directionZ ** 2);
 
-    this.forEachSoundSource(addForceFromSource);
+      if (magnitude > 0) {
+        this.forces.push({
+          x: (directionX / magnitude) * REPULSION_FORCE_STRENGTH,
+          z: (directionZ / magnitude) * REPULSION_FORCE_STRENGTH,
+        });
+      }
+    }
+    // 'perfect' = no force added
   }
 
   /**
@@ -444,9 +463,10 @@ class Creature extends Entity {
    * @param {function} visit
    */
   forEachSoundSource(visit) {
-    // Check our own area's entities for active sound sources (an indexed
-    // loop: this runs several times per frame per singing creature)
-    const localEntities = this.area ? this.area.entities : gameState.entities;
+    // Check our own area's entities for active sound sources — only those
+    // that can sound at all, in list order (an indexed loop: this runs
+    // several times per frame per singing creature)
+    const localEntities = soundCapable(this.area ? this.area.entities : gameState.entities);
     for (let i = 0; i < localEntities.length; i += 1) {
       const entity = localEntities[i];
       // Skip self; skip anything without a playing instrument and a current
@@ -485,18 +505,36 @@ class Creature extends Entity {
    * @param {number} deltaTime - Time elapsed in seconds
    */
   updateMovement(deltaTime) {
-    // Sum all forces
-    const totalForce = this.forces.reduce(
-      (sum, force) => ({
-        x: sum.x + force.x,
-        z: sum.z + force.z,
-      }),
-      { x: 0, z: 0 }
-    );
+    const elevationGrid = this.area ? this.area.elevationGrid : gameState.elevationGrid;
+
+    // At rest, a pass changes nothing: with no force and no velocity the
+    // move is zero, so collision can only zero a velocity that is already
+    // zero, and the floor height and layer it re-derives at an unchanged spot
+    // are exactly the ones the last pass derived there (a fixed point). So
+    // skip the collision and floor work and keep only the writes (see
+    // _isAtRest for "unchanged"). Every creature rests until something first
+    // moves it; one that has COASTED never does again (its decaying velocity
+    // sticks at ~1.5e-323 instead of reaching 0) unless a block zeroes it.
+    if (this._isAtRest(elevationGrid)) {
+      // A full pass leaves +0 even from a -0
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+      this.placeMesh();
+      this.instrument.sourcePosition = this.position;
+      return;
+    }
+
+    // Sum all forces (in order from zero, as a reduce would)
+    let totalForceX = 0;
+    let totalForceZ = 0;
+    for (let i = 0; i < this.forces.length; i += 1) {
+      totalForceX += this.forces[i].x;
+      totalForceZ += this.forces[i].z;
+    }
 
     // Apply force to velocity
-    this.velocity.x += totalForce.x * deltaTime;
-    this.velocity.z += totalForce.z * deltaTime;
+    this.velocity.x += totalForceX * deltaTime;
+    this.velocity.z += totalForceZ * deltaTime;
 
     // Apply deceleration
     this.velocity.x *= CREATURE_DECELERATION;
@@ -523,7 +561,6 @@ class Creature extends Entity {
     // ALONG it instead of stopping dead. See core/SlideResolver. Collision is
     // strictly area-local: this creature moves against ITS OWN area's grid
     // and entities (a neighbor's walls can never block it).
-    const elevationGrid = this.area ? this.area.elevationGrid : gameState.elevationGrid;
     const resolved = resolveSlide(
       { x: oldX, z: oldZ },
       { x: newX, z: newZ },
@@ -561,7 +598,47 @@ class Creature extends Entity {
     // Update instrument source position for audio
     this.instrument.sourcePosition = this.position;
 
+    this._rememberRest(elevationGrid);
+
     // Forces are cleared at the start of calculateForces(), not here
+  }
+
+  /**
+   * Would a movement pass now change nothing? True with no force, no
+   * velocity, and the position, floor height, layer and grid all EXACTLY
+   * (bit for bit) as the last full pass left them — so anything else that
+   * moved or re-layered the creature since (a teleport, a test) gets a full
+   * pass that re-floors it.
+   * @param {?ElevationGrid} elevationGrid - the grid this pass would use
+   * @returns {boolean}
+   */
+  _isAtRest(elevationGrid) {
+    const rest = this._rest;
+    return (
+      rest.valid &&
+      this.forces.length === 0 &&
+      this.velocity.x === 0 &&
+      this.velocity.z === 0 &&
+      Object.is(this.position.x, rest.x) &&
+      Object.is(this.position.z, rest.z) &&
+      Object.is(this.position.y, rest.y) &&
+      Object.is(this.elevation, rest.elevation) &&
+      elevationGrid === rest.grid
+    );
+  }
+
+  /** Record what this full movement pass left, for _isAtRest. */
+  _rememberRest(elevationGrid) {
+    const rest = this._rest;
+    const { x, y, z } = this.position;
+    // A -0 coordinate is the one thing a zero move can still rewrite (to
+    // +0, whenever nothing blocks it), so it never counts as rest
+    rest.valid = !Object.is(x, -0) && !Object.is(z, -0);
+    rest.x = x;
+    rest.y = y;
+    rest.z = z;
+    rest.elevation = this.elevation;
+    rest.grid = elevationGrid;
   }
 
   dispose() {

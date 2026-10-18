@@ -263,6 +263,20 @@ describe('Creature movement from consonance/dissonance', () => {
 
       expect(creature.position.x).toBeGreaterThan(originalX);
     }, 10000);
+
+    it('feels only the forces of the current pass: none once the harmony stops', async () => {
+      ctx.loadPuzzle('creature-consonance');
+      const creature = ctx.getCreatures()[0];
+      const originalX = creature.position.x;
+      await startPlayerPlayback(ctx, 'E4');
+      await realTimeUpdate(ctx, 800);
+      expect(creature.position.x).toBeLessThan(originalX); // it was pulled
+
+      ctx.stopPlayerPlayback();
+      creature.calculateForces();
+
+      expect(creature.forces).toEqual([]);
+    }, 10000);
   });
 });
 
@@ -529,7 +543,14 @@ describe('Creature audible range', () => {
  */
 /* eslint-disable import/first -- section header for the suite below; imports
    are hoisted by babel-jest so the placement is cosmetic */
-import { ELEVATION_HEIGHT, WORLD_SCALE, CREATURE_HOVER_HEIGHT } from 'core/constants';
+import {
+  ELEVATION_HEIGHT,
+  WORLD_SCALE,
+  CREATURE_HOVER_HEIGHT,
+  CREATURE_DECELERATION,
+  ATTRACTION_FORCE_STRENGTH,
+  REPULSION_FORCE_STRENGTH,
+} from 'core/constants';
 import { getDistance, getDistanceVolume } from 'core/utils';
 /* eslint-enable import/first */
 
@@ -733,6 +754,185 @@ describe('Creature elevation behavior', () => {
       // Creature should not be recordable (too far in 3D)
       expect(creature.isRecordable).toBe(false);
     });
+  });
+});
+
+/**
+ * What a creature hears (forEachSoundSource: the ONE source model behind
+ * both its forces and its colour). sing() sounds a song's first note at
+ * once, so these need no timers.
+ */
+describe('What a creature hears', () => {
+  const sing = (creature) => {
+    creature.sing();
+    return creature;
+  };
+  const addSinger = (pitch, x) =>
+    ctx.addCreature({
+      position: { x, y: 0, z: 5 * WORLD_SCALE },
+      song: [{ pitch, length: '1/1' }],
+    });
+
+  it("hears its area's sounding creatures in the area's order, as they come and go", () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony'); // C4 and E4, in range of each other
+    const [c4, e4] = ctx.getCreatures();
+    expect(c4.heardNotes()).toEqual([]);
+
+    sing(e4);
+    expect(c4.heardNotes()).toEqual([64]);
+
+    // One joins mid-game
+    sing(addSinger('G4', 10 * WORLD_SCALE));
+    expect(c4.heardNotes()).toEqual([64, 67]);
+
+    // One leaves and another arrives between two listens: the same head
+    // count, a different crowd
+    ctx.getEntityManager().remove(e4.id);
+    sing(addSinger('A4', 12 * WORLD_SCALE));
+    expect(c4.heardNotes()).toEqual([67, 69]);
+  });
+
+  it("feels each heard source's own push or pull, afresh every pass", () => {
+    ctx.loadPuzzle('creature-two-creatures-harmony');
+    const [c4, e4] = ctx.getCreatures(); // E4 due east of C4: a major 3rd pulls
+    // A D4 due south of C4: a major 2nd pushes
+    const d4 = ctx.addCreature({
+      position: { x: c4.position.x, y: 0, z: c4.position.z + 15 },
+      song: [{ pitch: 'D4', length: '1/1' }],
+    });
+    [c4, e4, d4].forEach(sing);
+
+    c4.calculateForces();
+    expect(c4.forces).toEqual([
+      { x: ATTRACTION_FORCE_STRENGTH, z: 0 },
+      { x: 0, z: -REPULSION_FORCE_STRENGTH },
+    ]);
+
+    // The D4 moves round to the west: now it pushes east
+    d4.position.x = c4.position.x - 15;
+    d4.position.z = c4.position.z;
+    c4.calculateForces();
+    expect(c4.forces).toEqual([
+      { x: ATTRACTION_FORCE_STRENGTH, z: 0 },
+      { x: REPULSION_FORCE_STRENGTH, z: 0 },
+    ]);
+  });
+});
+
+/**
+ * A creature AT REST (no force, no velocity) skips its movement pass as a
+ * no-op (Creature.updateMovement). The skip must be EXACT: a resting
+ * creature ends every frame bit for bit where a full pass would, anything
+ * that moves or re-layers it is re-floored by the next frame, and its first
+ * force wakes it into exactly the move a full pass makes.
+ */
+/* eslint-disable import/first -- section header for the suite below; imports
+   are hoisted by babel-jest so the placement is cosmetic */
+import { getFloorY } from 'core/ElevationMovement';
+/* eslint-enable import/first */
+
+describe('Creature at rest', () => {
+  // Everything a movement pass writes. toEqual compares numbers with
+  // Object.is, so a -0 never passes for a +0.
+  const passState = (creature) => ({
+    position: { ...creature.position },
+    elevation: creature.elevation,
+    velocity: { ...creature.velocity },
+    mesh: { x: creature.mesh.position.x, y: creature.mesh.position.y, z: creature.mesh.position.z },
+    soundsFromPosition: creature.instrument.sourcePosition === creature.position,
+  });
+
+  it('ends every frame bit for bit where it was: on the ground, a platform and a ramp', async () => {
+    ctx.loadPuzzle('elevation-basic'); // its C4 creature is up on the E1 platform
+    // All C4 (unisons pull nothing), so all three stay at rest
+    ctx.addCreature({ position: { x: 2 * WORLD_SCALE, y: 0, z: 12 * WORLD_SCALE } });
+    // Partway up the north ramp at grid (7,9): a fractional layer
+    const onRamp = ctx.addCreature({
+      position: { x: 7 * WORLD_SCALE, y: 0, z: 9 * WORLD_SCALE + 0.5 },
+    });
+    const creatures = ctx.getCreatures();
+    await ctx.tick(48); // the first passes floor them
+    expect(onRamp.elevation).toBeGreaterThan(0);
+    expect(onRamp.elevation).toBeLessThan(1);
+
+    const settled = creatures.map(passState);
+    for (let frame = 0; frame < 30; frame += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await ctx.tick(16);
+      expect(creatures.map(passState)).toEqual(settled);
+    }
+    creatures.forEach((creature) => expect(creature.velocity).toEqual({ x: 0, z: 0 }));
+  });
+
+  it('is re-floored by the next frame when anything moves or re-layers it', async () => {
+    ctx.loadPuzzle('elevation-basic');
+    const [creature] = ctx.getCreatures(); // on the E1 platform at grid (7,6)
+    await ctx.tick(48);
+
+    // Lifted off its floor: back down onto the platform
+    creature.position.y += 1;
+    await ctx.tick(16);
+    expect(creature.position.y).toBe(ELEVATION_HEIGHT);
+
+    // Moved to the layer UNDER its platform (the cell is walkable at 0 and 1)
+    creature.elevation = 0;
+    await ctx.tick(16);
+    expect(creature.position.y).toBe(0);
+    expect(creature.elevation).toBe(0);
+
+    // Carried onto the ramp: it takes the slope's height there
+    creature.position.x = 7 * WORLD_SCALE;
+    creature.position.z = 9 * WORLD_SCALE + 0.5;
+    await ctx.tick(16);
+    const rampY = getFloorY(creature.position.x, creature.position.z, creature.area.elevationGrid);
+    expect(rampY).toBeGreaterThan(0);
+    expect(creature.position.y).toBe(rampY);
+    expect(creature.elevation).toBe(rampY / ELEVATION_HEIGHT);
+  });
+
+  it('wakes on its first force into exactly the move a full pass makes', async () => {
+    ctx.loadPuzzle('elevation-basic');
+    const creature = ctx.addCreature({
+      position: { x: 2 * WORLD_SCALE, y: 0, z: 12 * WORLD_SCALE },
+    });
+    await ctx.tick(160); // long at rest
+    const { x, z } = creature.position;
+
+    const dt = 1 / 60;
+    creature.forces.push({ x: 3, z: -4 });
+    creature.updateMovement(dt);
+
+    // From rest: velocity = force * dt, decelerated once; then one step of it
+    const vx = 3 * dt * CREATURE_DECELERATION;
+    const vz = -4 * dt * CREATURE_DECELERATION;
+    expect(creature.velocity).toEqual({ x: vx, z: vz });
+    expect(creature.position.x).toBe(x + vx * dt);
+    expect(creature.position.z).toBe(z + vz * dt);
+  });
+
+  it('treats signed zeros exactly as a full pass does', async () => {
+    // Nothing in the game makes a -0, but a pass turns a -0 velocity into
+    // +0, and a zero move turns a -0 coordinate into +0 whenever nothing
+    // blocks it — so a BLOCKED creature at -0 must keep taking full passes,
+    // or it would keep the -0 once freed
+    ctx.loadPuzzle('elevation-basic');
+    // (a song the C4 creature can never complete: the gate stays shut)
+    const song = [{ pitch: 'G5', length: '1/2' }];
+    const gate = ctx.addGate({ position: { x: 0, y: 0, z: 10 * WORLD_SCALE }, song });
+    const creature = ctx.addCreature({ position: { x: 0, y: 0, z: 10 * WORLD_SCALE } });
+    await ctx.tick(48); // inside the closed gate's box: every pass is blocked
+
+    creature.velocity.x = -0;
+    await ctx.tick(16);
+    expect(creature.velocity).toEqual({ x: 0, z: 0 });
+
+    creature.position.x = -0;
+    await ctx.tick(48);
+    expect(Object.is(creature.position.x, -0)).toBe(true);
+
+    gate.open();
+    await ctx.tick(16);
+    expect(Object.is(creature.position.x, 0)).toBe(true);
   });
 });
 
