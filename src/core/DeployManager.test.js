@@ -524,6 +524,55 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     hideSpy.mockRestore();
   });
 
+  it("a door beside the cleanser's cell never paints its panel over the gate's view", async () => {
+    // The Star -> poc-clap (playtest, 2026-10-18): the cleanser one cell in
+    // front of an open door, the eye a step from the gate. The mapped eye
+    // then stands in that door's cell, and the door's panel facing it sits
+    // inside the gate pass's one-cell clip overreach, square between the
+    // eye and the window — the gate showed that panel, solid black.
+    installFetchMock({ 'portal-b': portalB });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+    gameState.mode = 'PLAYING';
+    DeployManager.reset();
+    // portal-b's door stands at (15, 0, 21); the cleanser one cell north
+    gameState.activeCleanser = { puzzleId: 'portal-b', position: { x: 15, y: 0, z: 18 } };
+    standAt(15, 3, Math.PI); // facing +z: the gate lands at (15, 0, 9)
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+    const areaB = PortalManager._areas.get('portal-b');
+    const doorB = areaB.entityManager.getByType('gate').find((g) => g.gateId === 'south-door');
+    doorB.open();
+
+    const gateCameras = DeployManager._views.map((view) => view._camera);
+    // The door's panel on its north plane (for an eye south of it)
+    let doorPanel = null;
+    const shownInGatePass = [];
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render(scene, cam) {
+        if (gateCameras.includes(cam) && doorPanel) shownInGatePass.push(doorPanel.visible);
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    // South of the gate, a step off its face: mapped to (15, 1.8, 20.7).
+    // The approach panel looks straight past the door's panel; the side
+    // panels (their eye beside their doorway's column) through it too
+    const eye = { position: { x: 15, y: 1.8, z: 11.7 } };
+    DeployManager.renderPortal(renderer, eye);
+    doorPanel = doorB.mesh.children.find(
+      (child) => child._isPortalSurface && child.position.z < -1
+    );
+    expect(doorPanel).toBeTruthy();
+
+    for (let i = 0; i < 3; i += 1) DeployManager.renderPortal(renderer, eye);
+
+    expect(shownInGatePass.length).toBeGreaterThanOrEqual(9); // three panels, three frames
+    expect(shownInGatePass.every((shown) => !shown)).toBe(true);
+  });
+
   it('stays put when the destination cannot be loaded', async () => {
     installFetchMock({ 'portal-b': portalB });
     ctx.loadPuzzle('portal-a');

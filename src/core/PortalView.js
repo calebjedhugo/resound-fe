@@ -390,6 +390,30 @@ class PortalView {
       }
     }
 
+    // The gates whose doorway surfaces can stand in the clip's one-cell
+    // overreach (render hides those that do): this gate (a same-area
+    // door's own panels) and any other gate of the area beyond in the
+    // arrival cell or the one behind it, in the doorway's column or one
+    // beside it (a side panel's eye stands beside its column) — its partner
+    // aside (the partner's surfaces always hide)
+    this._overreachGates = [gate];
+    for (const entity of neighborEntities) {
+      if (entity.type !== 'gate' || entity === gate || entity === partnerGate) continue; // eslint-disable-line no-continue
+      const proj =
+        (entity.position.x - mappedCenter.x) * outward.x +
+        (entity.position.z - mappedCenter.z) * outward.z;
+      const lat =
+        (entity.position.x - mappedCenter.x) * this._right.x +
+        (entity.position.z - mappedCenter.z) * this._right.z;
+      if (
+        proj < 0 &&
+        proj > -(WORLD_SCALE * 1.5 + 0.1 + PANEL_EPSILON) &&
+        Math.abs(lat) < WORLD_SCALE * 2
+      ) {
+        this._overreachGates.push(entity);
+      }
+    }
+
     // frameCorners overwrites the projection every pass; only near/far apply.
     this._camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
     // DOUBLE-buffered target: each pass WRITES one buffer while every
@@ -799,33 +823,42 @@ class PortalView {
         }
       }
     }
-    // This gate's OWN surfaces normally aren't in the rendered scene (the
-    // neighbor is another area) — but a SAME-AREA door renders the main
-    // scene, where they are. For an ADJACENT pair (partner one cell along
-    // the axis) the one-cell translation maps this very panel into the clip
-    // plane's one-cell overreach, square between the mapped eye and the
-    // window: the pass paints the panel's own one-frame-stale texture
-    // across the whole doorway, which feeds back to solid black. Hide an
-    // own surface only when it actually sits in that junk zone — inside
-    // the overreach slab behind the window AND laterally overlapping the
-    // doorway column (deeper eye-side content is clipped by _clipPlane;
-    // lateral content is outside the window's frustum). Own surfaces
-    // BEYOND the window always stay: a distant same-area pair really does
-    // see its own door through the doorway (recursive doorways, ruled
-    // 2026-07-14). Gate meshes are unrotated, so local offsets add.
-    for (const child of this.gate.mesh.children) {
-      if (!child._isPortalSurface || !child.visible) continue; // eslint-disable-line no-continue
-      const dx = this.gate.mesh.position.x + child.position.x - this._mappedWindowCenter.x;
-      const dz = this.gate.mesh.position.z + child.position.z - this._mappedWindowCenter.z;
-      const proj = dx * this._outwardMapped.x + dz * this._outwardMapped.z;
-      const lat = dx * this._right.x + dz * this._right.z;
-      if (
-        proj < PANEL_EPSILON &&
-        proj > -(WORLD_SCALE + 0.1 + PANEL_EPSILON) &&
-        Math.abs(lat) < WORLD_SCALE
-      ) {
-        child.visible = false;
-        hiddenSurfaces.push(child);
+    // Doorway surfaces in the clip plane's one-cell overreach (see
+    // _overreachGates): this gate's OWN normally aren't in the rendered
+    // scene (the neighbor is another area) — but a SAME-AREA door renders
+    // the main scene, where they are. For an ADJACENT pair (partner one
+    // cell along the axis) the one-cell translation maps this very panel
+    // into the overreach, square between the mapped eye and the window: the
+    // pass paints the panel's own one-frame-stale texture across the whole
+    // doorway, which feeds back to solid black. A door of the area beyond
+    // standing just behind the arrival cell puts its panel there too: a
+    // cleanser gate's mapped eye, a step from the gate, stands in that
+    // door's cell and the panel facing it filled the gate black (The Star
+    // -> poc-clap, 2026-10-18). Hide a surface only when it actually sits
+    // in that junk zone — inside the overreach slab behind the window AND
+    // laterally overlapping the doorway column (deeper eye-side content is
+    // clipped by _clipPlane; lateral content is outside the window's
+    // frustum). Surfaces BEYOND the window always stay: a distant
+    // same-area pair really does see its own door through the doorway
+    // (recursive doorways, ruled 2026-07-14). Gate meshes are unrotated,
+    // so local offsets add.
+    for (const gate of this._overreachGates) {
+      const { mesh } = gate;
+      if (!mesh) continue; // eslint-disable-line no-continue
+      for (const child of mesh.children) {
+        if (!child._isPortalSurface || !child.visible) continue; // eslint-disable-line no-continue
+        const dx = mesh.position.x + child.position.x - this._mappedWindowCenter.x;
+        const dz = mesh.position.z + child.position.z - this._mappedWindowCenter.z;
+        const proj = dx * this._outwardMapped.x + dz * this._outwardMapped.z;
+        const lat = dx * this._right.x + dz * this._right.z;
+        if (
+          proj < PANEL_EPSILON &&
+          proj > -(WORLD_SCALE + 0.1 + PANEL_EPSILON) &&
+          Math.abs(lat) < WORLD_SCALE
+        ) {
+          child.visible = false;
+          hiddenSurfaces.push(child);
+        }
       }
     }
     // Hide the eye-side walls (this panel's own set + the approach
