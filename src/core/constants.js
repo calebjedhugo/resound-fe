@@ -67,10 +67,6 @@ export const CREATURE_PHYSICS_PASSES = 2;
 export const ATTRACTION_FORCE_STRENGTH = 15.0;
 export const REPULSION_FORCE_STRENGTH = 15.0;
 
-// Harmony timing: notes must fall on same subdivision to be considered simultaneous
-// 16 = sixteenth notes, 8 = eighth notes, etc.
-export const HARMONY_TIMING_SUBDIVISION = 16;
-
 // Clap constants
 // Fixed range for clap effect (world units)
 // Matches typical recording range (50% of 15-unit audible range)

@@ -95,13 +95,6 @@ class MainMenu extends Menu {
 
     return item;
   }
-
-  setPuzzles(puzzles) {
-    this.puzzles = puzzles;
-    if (this.visible) {
-      this.render();
-    }
-  }
 }
 
 export default MainMenu;

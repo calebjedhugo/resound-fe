@@ -129,19 +129,6 @@ class Creature extends Entity {
     ListeningManager.registerListener(this);
   }
 
-  /**
-   * Mesh-only creature look (no entity, no instrument, no listeners): the
-   * silent ball-lightning bubble, floating over `position`.
-   * @param {{x:number, y:number, z:number}} position - base world position
-   * @param {number} size - radius in world units
-   * @returns {object} the look's root THREE.Group
-   */
-  static buildBodyMesh(position, size) {
-    const look = new CreatureLook(size);
-    look.place(position);
-    return look.object;
-  }
-
   createMesh() {
     this.look = new CreatureLook(this.size);
     this.mesh = this.look.object;

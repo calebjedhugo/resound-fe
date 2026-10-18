@@ -705,10 +705,10 @@ function createTestContext(options = {}) {
     },
 
     /**
-     * Query the elevation grid at a grid coordinate
+     * The top walkable level of a grid cell
      */
     getElevationAt(gridX, gridZ) {
-      return gameState.elevationGrid?.getElevation(gridX, gridZ) ?? 0;
+      return gameState.elevationGrid?.nearestLevel(gridX, gridZ) ?? 0;
     },
 
     /**

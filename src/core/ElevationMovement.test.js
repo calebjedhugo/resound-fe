@@ -117,7 +117,7 @@ describe('Player elevation movement', () => {
       expect(pos.z).toBeLessThan(8 * WORLD_SCALE + WORLD_SCALE / 2); // inside footprint
       expect(ctx.getPlayerElevation()).toBe(0);
       const grid = gameState.elevationGrid.worldToGrid(pos.x, pos.z);
-      expect(gameState.elevationGrid.getElevation(grid.x, grid.z)).toBe(1); // slab overhead
+      expect(ctx.getElevationAt(grid.x, grid.z)).toBe(1); // slab overhead
     });
 
     it('player cannot walk off elevation 1 onto elevation 0 without a ramp', async () => {
@@ -138,7 +138,7 @@ describe('Player elevation movement', () => {
       expect(ctx.getPlayerElevation()).toBe(1);
       const pos = ctx.getPlayerPosition();
       const grid = gameState.elevationGrid.worldToGrid(pos.x, pos.z);
-      expect(gameState.elevationGrid.getElevation(grid.x, grid.z)).toBe(1);
+      expect(ctx.getElevationAt(grid.x, grid.z)).toBe(1);
     });
 
     it('player CAN walk from elevation 0 onto a ramp cell', async () => {

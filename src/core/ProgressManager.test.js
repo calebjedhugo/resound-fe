@@ -103,20 +103,6 @@ describe('ProgressManager', () => {
     });
   });
 
-  describe('getCompletedCount', () => {
-    it('returns 0 when no puzzles completed', () => {
-      expect(ProgressManager.getCompletedCount()).toBe(0);
-    });
-
-    it('returns correct count of completed puzzles', () => {
-      ProgressManager.markComplete('puzzle-1');
-      ProgressManager.markComplete('puzzle-2');
-      ProgressManager.markComplete('puzzle-3');
-
-      expect(ProgressManager.getCompletedCount()).toBe(3);
-    });
-  });
-
   describe('getNextUnsolvedPuzzle', () => {
     const puzzles = [
       { id: 'puzzle-1', name: 'First' },

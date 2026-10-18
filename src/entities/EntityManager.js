@@ -74,10 +74,6 @@ class EntityManager {
     return results;
   }
 
-  getAll() {
-    return Array.from(this.entities.values());
-  }
-
   update(deltaTime) {
     this.entities.forEach((entity) => {
       if (entity.active && entity.update) {
