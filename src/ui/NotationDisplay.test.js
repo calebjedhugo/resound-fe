@@ -658,6 +658,37 @@ describe('Staff planes a pass would paint invisibly are left out of it', () => {
     }
   });
 
+  it("a pass weighs only the planes it can draw: another scene's and hidden ones stay as they are", () => {
+    const { scene } = sceneWithGate();
+    const elsewhere = sceneWithGate(); // another area's scene
+    const leftOut = new Gate({ x: 60, y: 0, z: 30 }, { song });
+    const activated = new Gate({ x: 0, y: 0, z: 30 }, { song });
+    scene.add(leftOut.mesh);
+    scene.add(activated.mesh);
+    updateMatrixWorld(scene);
+    leftOut.mesh.visible = false; // a piece the pass leaves out (a door pass's cull)
+    activated.notationDisplay.hide(); // planes hidden themselves
+    const touched = [];
+    for (const plane of [
+      ...elsewhere.planes,
+      ...leftOut.notationDisplay.meshes,
+      ...activated.notationDisplay.meshes,
+    ]) {
+      let { visible } = plane.material;
+      Object.defineProperty(plane.material, 'visible', {
+        get: () => visible,
+        set: (value) => {
+          touched.push(plane);
+          visible = value;
+        },
+      });
+    }
+
+    for (const eye of EYES) renderPass(scene, eye);
+
+    expect(touched).toEqual([]);
+  });
+
   it('a gate seen from outside skips at least two of its four planes', () => {
     const { scene } = sceneWithGate();
     for (const eye of [EYES[0], EYES[1], EYES[2]]) {

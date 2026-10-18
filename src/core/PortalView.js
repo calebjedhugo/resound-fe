@@ -942,9 +942,7 @@ class PortalView {
   }
 
   dispose() {
-    // Remove from the gate mesh directly (where _buildDoorwaySurface put it)
-    // rather than via surface.parent — parent tracking isn't guaranteed
-    // outside real THREE (the test mock doesn't set it)
+    // Remove from the gate mesh (where _buildDoorwaySurface put it)
     if (this.gate.mesh) {
       this.gate.mesh.remove(this.surface);
     }
