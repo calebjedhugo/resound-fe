@@ -89,23 +89,6 @@ function drawFrame(renderer, camera) {
   renderer.render({ children: [gameState.activeArea.group] }, camera); // the main view
 }
 
-/**
- * The frames doors take to open: a door's first frame writes each face
- * something may show, the rest a few a frame after. Draws frames until
- * every panel of the active area's open doors is written (shown).
- */
-function openingFrames(renderer, camera) {
-  const waiting = () =>
-    gameState.activeArea.entities.some(
-      (e) => e.type === 'gate' && e.isOpen && e.mesh && panelsOf(e).some((panel) => !panel.visible)
-    );
-  let frames = 0;
-  do {
-    drawFrame(renderer, camera);
-    frames += 1;
-  } while (waiting() && frames < 20);
-}
-
 /** Put the player at a world spot and let PortalManager react (crossing). */
 async function stepTo(x, z) {
   gameState.player.position = { x, y: 1.8, z };
@@ -183,31 +166,29 @@ describe('The frame a door opens', () => {
     expect(renderer.unwrittenSamples).toEqual([]);
   });
 
-  it("writes each new face ONCE: the eye's own passes at once, a face they skip after a frame's wait", async () => {
+  it("writes each new face ONCE, all in its door's opening frame: the eye's own passes, plus a warm-up for each face they skip", async () => {
     installFetchMock({ 'portal-b': portalB });
     ctx.loadPuzzle('portal-a');
     await jest.runAllTimersAsync();
     const [door] = ctx.getGates();
     door.open();
     const renderer = createRecordingRenderer();
-    const north = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
 
     // North of the door: the approach panel and both (near edge-on) side
-    // panels are the eye's own; the far face, which nothing can show, waits
-    PortalManager.renderPortals(renderer, north);
-    expect(renderer.passes).toHaveLength(3);
-    expect(new Set(renderer.passes.map((pass) => pass.target)).size).toBe(3); // no face twice
-    expect(panelsOf(door).filter((panel) => panel.visible)).toHaveLength(3);
+    // panels are the eye's own; the far face, which nothing can show yet,
+    // is warmed up beside them
+    PortalManager.renderPortals(renderer, {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE },
+    });
 
-    // ...and gets its one write the next frame: a warm-up beside the eye's own
-    renderer.passes.length = 0;
-    PortalManager.renderPortals(renderer, north);
     expect(renderer.passes).toHaveLength(4);
+    const targets = renderer.passes.map((pass) => pass.target);
+    expect(new Set(targets).size).toBe(4); // no face drawn twice
     expect(panelsOf(door).every((panel) => panel.visible)).toBe(true);
   });
 });
 
-describe('A face waits for its first write only while nothing can show it', () => {
+describe('Every face of a door is written in the frame it opens', () => {
   // Same-area doors facing north. Looking north into A1 from (5, 10) shows
   // the view north out of A2: B1 straight ahead — behind the eye itself.
   // B2 looks out at the north wall: nothing shows B's other faces.
@@ -255,7 +236,7 @@ describe('A face waits for its first write only while nothing can show it', () =
     byId('a1').open();
     byId('a2').open();
     const renderer = createRecordingRenderer();
-    openingFrames(renderer, eye);
+    drawFrame(renderer, eye);
     byId('b1').open();
     byId('b2').open();
     renderer.passes.length = 0;
@@ -273,39 +254,13 @@ describe('A face waits for its first write only while nothing can show it', () =
     expect(renderer.unwrittenSamples).toEqual([]);
   });
 
-  it('every other new face waits, hidden, then gets its write a couple a frame', () => {
+  it('so is every face nothing shows yet: none waits for a later frame', () => {
     const { renderer, byId } = openB();
-    const faces = ['b1', 'b2'].flatMap((id) => panelsOf(byId(id)));
-    const shown = () => faces.filter((panel) => panel.visible);
     // Through A1, B1's south face shows (and its sides, obliquely through
     // the cell); its north face and all of B2's show nowhere yet
     const unseen = [faceOf(byId('b1'), 'north'), ...panelsOf(byId('b2'))];
-    for (const panel of unseen) expect(panel.visible).toBe(false);
-
-    let frames = 0;
-    while (shown().length < faces.length && frames < 10) {
-      const before = shown().length;
-      drawFrame(renderer, eye);
-      frames += 1;
-      expect(shown().length - before).toBeLessThanOrEqual(
-        PortalManager.constructor.FIRST_WRITES_PER_FRAME
-      );
-    }
-    expect(shown()).toHaveLength(faces.length);
+    for (const panel of unseen) expect(panel.visible).toBe(true);
     expect(renderer.unwrittenSamples).toEqual([]);
-  });
-
-  it('when a cap stops the look ahead short, every new face is written at once', () => {
-    const depth = PortalManager.constructor.MIRROR_MAX_DEPTH;
-    PortalManager.constructor.MIRROR_MAX_DEPTH = 0; // no chain is walked: anything could show
-    try {
-      const { byId } = openB();
-      for (const id of ['b1', 'b2']) {
-        expect(panelsOf(byId(id)).every((panel) => panel.visible)).toBe(true);
-      }
-    } finally {
-      PortalManager.constructor.MIRROR_MAX_DEPTH = depth;
-    }
   });
 });
 
@@ -316,7 +271,7 @@ describe('A crossing never rebuilds a door', () => {
     const gates = ctx.getGates();
     for (const gate of gates) gate.open();
     const renderer = createRecordingRenderer();
-    openingFrames(renderer, { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE } });
+    drawFrame(renderer, { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE } });
     const panelsBefore = gates.map((gate) => panelsOf(gate));
 
     await stepTo(5 * WORLD_SCALE, 5 * WORLD_SCALE + 1); // into pair1-a: lands in pair1-b
@@ -342,7 +297,7 @@ describe('A crossing never rebuilds a door', () => {
     door.open();
     const renderer = createRecordingRenderer();
     const eyeNorth = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
-    openingFrames(renderer, eyeNorth);
+    drawFrame(renderer, eyeNorth);
     const panels = panelsOf(door);
 
     // Away in the neighbor: nothing draws the old area's door there, so a
@@ -428,18 +383,17 @@ describe('A world left behind', () => {
     expect(await collected(left)).toBe(true);
   });
 
-  it('an area the world moves on from is let go, a face still waiting for its write and all', async () => {
+  it('an area the world moves on from is let go, its doors and all', async () => {
     installFetchMock({ 'portal-b': portalB, 'deploy-basic': deployBasic });
     const visit = async () => {
       ctx.loadPuzzle('portal-a');
       await jest.runAllTimersAsync();
       const [door] = ctx.getGates();
       door.open();
-      // One frame north of the door: its far face, which nothing shows, waits
+      // One frame north of the door: every face of it drawn
       drawFrame(createRecordingRenderer(), {
         position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE },
       });
-      expect(panelsOf(door).some((panel) => !panel.visible)).toBe(true);
       return new WeakRef(gameState.activeArea);
     };
     const left = await visit();

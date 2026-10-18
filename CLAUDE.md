@@ -224,13 +224,11 @@ instead of "fixing" it.
   materialized eagerly and WRITTEN ONCE before anything samples them (a
   door into another area: its eye-side faces by their first player pass;
   every other face by one straight-on warm-up), THEN the eye's passes run —
-  the frame a door appears already shows the player's perspective. Only a
-  face something may sample gets that write at once (the eye's, and those a
-  chain's sight reaches: `_firstWritesNeeded` runs the sweep's walk ahead,
-  waiting faces in place; all of them if a cap cuts it short); the rest
-  wait hidden and get theirs after the frame's passes,
-  `FIRST_WRITES_PER_FRAME` (2) a frame while a panel is drawn. A panel
-  never shows before its first write (`PortalView.written`), and stays
+  the frame a door appears already shows the player's perspective. Every
+  face gets that write in the frame its door opens (holding back the ones
+  nothing could show yet took a walk ahead that cost what it saved, and
+  its writes landed on the next frames: 2026-10-18). A panel never shows
+  before its first write (`PortalView.written`), and stays
   VISIBLE whatever side the player's eye is on (front-side culling
   hides them from behind) — a panel is sampled by OTHER portals' passes
   (mirror sightlines, the cleanser gate's mapped eye), and a lazily-created
