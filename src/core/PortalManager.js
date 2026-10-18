@@ -227,6 +227,9 @@ class PortalManager {
     this._tileMirrors = []; // meshes died with their areas' groups
     this._retained.clear();
     this._linkedGates = [];
+    // Door-pass scratch naming the old world's gates and views goes with it
+    this._drawingDoors.length = 0;
+    this._sweepOverflow.clear();
     // A new world is not a turn of the view
     this._lastLook = null;
     this._lookTurn = 0;
@@ -904,8 +907,12 @@ class PortalManager {
       if (scheduled.size >= PortalManager.MIRROR_MAX_PASSES) break;
     }
 
+    // The walk's scratch has served: none of it may keep a view reachable
+    // (and the torn-down world behind it) once that view is gone
+    for (let i = 0; i < this._sightsTaken; i += 1) this._sightPool[i].view = null;
     if (scheduled.size === 0) return;
     const ranked = [...scheduled.entries()];
+    scheduled.clear();
     // Shallowest-first for the cap, biggest on screen first within a level
     // (keep what dominates the screen), then render the keepers
     // deepest-first so each level samples fresh content
