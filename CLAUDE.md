@@ -68,6 +68,7 @@ AudioContexts and two instrument registries.
 ### Puzzle Editor (`src/editor/`)
 - Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
 - **EditorPuzzleModel** is the central mutable data model; **UndoManager** wraps it
+  (snapshot history, capped at `MAX_UNDO_STEPS` = 500, oldest dropped)
 - Serialization handles type-specific JSON format differences (creature `data.song` vs gate root `song`)
 - The notation editor is local code on top of published `resound-notation` — see `src/editor/CLAUDE.md`
 

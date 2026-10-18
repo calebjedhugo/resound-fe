@@ -22,7 +22,12 @@ import GitPanel from 'editor/ui/GitPanel';
 import ContextMenu from 'editor/ui/ContextMenu';
 import SongEditorModal from 'editor/ui/SongEditorModal';
 import { saveSession, loadSession, clearSession } from 'editor/io/sessionPersistence';
-import { savePuzzleToRepo, listRepoPuzzles, loadRepoPuzzle } from 'editor/io/repoPersistence';
+import {
+  savePuzzleToRepo,
+  listRepoPuzzles,
+  loadRepoPuzzle,
+  onRepoWrite,
+} from 'editor/io/repoPersistence';
 import { gitCommit, gitPull, gitPush, gitRevert, gitUnrevert } from 'editor/io/gitControls';
 import {
   createLink,
@@ -163,6 +168,11 @@ export default class EditorApp {
       onPush: () => this._gitPush(),
       onRevert: () => this._gitRevert(),
     });
+    // Git status changes when a puzzle file does, so re-read it once each
+    // write lands (autosave, a link partner's file, a delete) — never per
+    // edit, which spawned git on every keystroke and read the tree before
+    // the autosave had written it.
+    this._stopGitRefresh = onRepoWrite(() => this.gitPanel.refresh());
     this.entityDragger = new EntityDragger(
       this.scene,
       this.camera,
@@ -186,7 +196,6 @@ export default class EditorApp {
       this._scheduleValidation();
       this._scheduleAutoSave();
       this.toolbar.refresh();
-      if (this.gitPanel) this.gitPanel.refresh();
       const { id } = this.undoManager.getMetadata();
       this.toolbar.setStatus(id ? 'dirty' : 'unnamed');
     });
@@ -269,7 +278,10 @@ export default class EditorApp {
     const draftText = this._floorDraft
       ? `Draft floor E${this._floorDraft.elevation} — arrows size it, Enter creates, Esc cancels`
       : '';
-    this._hudEl.textContent = [pickText, draftText, toolText, cellText].filter(Boolean).join(' · ');
+    const text = [pickText, draftText, toolText, cellText].filter(Boolean).join(' · ');
+    // Runs every frame (a camera fling is ~60): rewriting the same text would
+    // still replace the text node and re-lay the HUD out each time.
+    if (this._hudEl.textContent !== text) this._hudEl.textContent = text;
   }
 
   /** Briefly show a message in the viewport (e.g. why a placement was refused). */
@@ -352,12 +364,22 @@ export default class EditorApp {
           return;
         }
         this._refreshGateLinkBadges();
-        this.selectionManager.select(sourceEntityId);
-        this.propertyPanel.show(sourceEntityId);
+        this._selectAndShow(sourceEntityId);
         if (warnings.length > 0) this._showToast(warnings.join(' • '));
         else this._showToast('Gates linked (both sides)', 'success');
       })
       .catch((err) => this._showToast(err.message));
+  }
+
+  /**
+   * Select an entity and show its (possibly just-changed) properties. A
+   * successful select() already shows them via onSelectionChange, so the
+   * panel is built here only when the selection didn't take — one build per
+   * keyboard move, not two (an unlinked gate's build fetches the manifest).
+   */
+  _selectAndShow(entityId) {
+    this.selectionManager.select(entityId);
+    if (this.selectionManager.selectedId !== entityId) this.propertyPanel.show(entityId);
   }
 
   /** Re-sync every gate's violet linked-badge with the model. */
@@ -883,8 +905,7 @@ export default class EditorApp {
       }
       this.entityPlacer.setEntityPosition(entityId, tx, tz, elevation);
       this.editorScene.moveCursor(delta.dx, delta.dz);
-      this.selectionManager.select(entityId);
-      this.propertyPanel.show(entityId);
+      this._selectAndShow(entityId);
       return;
     }
 
@@ -923,8 +944,7 @@ export default class EditorApp {
       }
       this.entityPlacer.setEntityPosition(entityId, cell.x, cell.z, targetElev);
       this.elevationSelector.step(dir); // follow the entity to its new storey
-      this.selectionManager.select(entityId);
-      this.propertyPanel.show(entityId);
+      this._selectAndShow(entityId);
       return;
     }
 
@@ -1169,7 +1189,7 @@ export default class EditorApp {
   }
 
   _setupKeyboard() {
-    document.addEventListener('keydown', (e) => {
+    this._onKeyDown = (e) => {
       // Modals take precedence — they own the keyboard while open (each closes
       // itself on Escape). An open context menu owns arrows/Enter/Escape too.
       if (this.songEditorModal && this.songEditorModal.isOpen) return;
@@ -1256,7 +1276,8 @@ export default class EditorApp {
         e.preventDefault();
         this._placeAtCursor(placeType);
       }
-    });
+    };
+    document.addEventListener('keydown', this._onKeyDown);
   }
 
   /**
@@ -1289,8 +1310,15 @@ export default class EditorApp {
   _setupRenderInvalidation() {
     const invalidate = () => this._requestFrame();
     this._invalidateRender = invalidate;
+    // Keys typed into the song editor or the world map change nothing the
+    // viewport draws (the editor's keyboard handler ignores them too; a song
+    // edit still invalidates through the model hook), so they don't redraw it.
+    this._invalidateOnKey = () => {
+      if (this.songEditorModal.isOpen || this.worldOverview.isOpen) return;
+      this._requestFrame();
+    };
     this.controls.addEventListener('change', invalidate);
-    document.addEventListener('keydown', invalidate);
+    document.addEventListener('keydown', this._invalidateOnKey);
     document.addEventListener('pointerdown', invalidate);
     document.addEventListener('pointerup', invalidate);
     document.addEventListener('wheel', invalidate, { passive: true });
@@ -1308,9 +1336,10 @@ export default class EditorApp {
 
   dispose() {
     if (this._frameId) cancelAnimationFrame(this._frameId);
+    document.removeEventListener('keydown', this._onKeyDown);
     if (this._invalidateRender) {
       this.controls.removeEventListener?.('change', this._invalidateRender);
-      document.removeEventListener('keydown', this._invalidateRender);
+      document.removeEventListener('keydown', this._invalidateOnKey);
       document.removeEventListener('pointerdown', this._invalidateRender);
       document.removeEventListener('pointerup', this._invalidateRender);
       document.removeEventListener('wheel', this._invalidateRender);
@@ -1318,6 +1347,7 @@ export default class EditorApp {
     clearTimeout(this._validationTimer);
     clearTimeout(this._autoSaveTimer);
     clearTimeout(this._toastTimer);
+    if (this._stopGitRefresh) this._stopGitRefresh();
     this.songEditorModal.dispose();
     this.worldOverview.dispose();
     this.contextMenu.dispose();

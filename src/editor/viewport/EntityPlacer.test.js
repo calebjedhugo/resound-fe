@@ -10,6 +10,7 @@
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
 import UndoManager from 'editor/model/UndoManager';
 import EntityPlacer from 'editor/viewport/EntityPlacer';
+import SelectionManager from 'editor/viewport/SelectionManager';
 
 function createMockScene() {
   const children = [];
@@ -172,5 +173,97 @@ describe('EntityPlacer', () => {
 
     expect(undoManager.getEntity(id)).toBeUndefined();
     expect(placer.getMeshById(id)).toBeNull();
+  });
+
+  describe('rebuildFromModel after undo/redo', () => {
+    /** Everything a viewer (or a raycast) can tell about the placed meshes. */
+    function describeView(p, s) {
+      const meshes = p.getAllMeshes().map((m) => ({
+        id: m.userData.entityId,
+        type: m.userData.type,
+        position: { x: m.position.x, y: m.position.y, z: m.position.z },
+        rotation: { ...m.rotation },
+        color: m.material.color.getHex(),
+        emissive: m.material.emissive.getHex(),
+        emissiveIntensity: m.material.emissiveIntensity,
+        inScene: s.children.includes(m),
+      }));
+      const spawn = p._playerSpawnMesh;
+      return {
+        meshes,
+        spawn: spawn && { ...spawn.position, rotation: { ...spawn.rotation } },
+        sceneSize: s.children.length, // nothing freed is left drawing
+      };
+    }
+
+    /** What a brand-new placer builds from the same model. */
+    function freshView() {
+      const freshScene = createMockScene();
+      const fresh = new EntityPlacer(freshScene, undoManager);
+      fresh.rebuildFromModel();
+      return describeView(fresh, freshScene);
+    }
+
+    it('leaves every mesh exactly as a full rebuild would, step after step', () => {
+      const selection = new SelectionManager({}, placer);
+      const wall = placer.placeEntity('wall', 1, 1, 0);
+      const gate = placer.placeEntity('gate', 4, 4, 0);
+      const ramp = placer.placeEntity('ramp', 6, 2, 0);
+      placer.placeEntity('player', 8, 8, 0);
+      undoManager.updateEntity(gate, {
+        data: { ...undoManager.getEntity(gate).data, link: { puzzleId: 'p', gateId: 'g' } },
+      });
+      undoManager.updateEntity(ramp, { data: { direction: 'east' } });
+      placer.setEntityPosition(wall, 2, 3, 1);
+      placer.placeEntity('player', 9, 3, 0); // the spawn moves
+      placer.removeEntityById(ramp);
+      placer.clearPlayerSpawn();
+      placer.placeEntity('cleanser', 4, 4, 0); // a cleanser under the gate
+      selection.select(wall); // a highlighted mesh must not keep its highlight
+
+      const steps = [];
+      while (undoManager.canUndo()) {
+        undoManager.undo();
+        placer.rebuildFromModel();
+        steps.push(['undo', describeView(placer, scene), freshView()]);
+      }
+      while (undoManager.canRedo()) {
+        undoManager.redo();
+        placer.rebuildFromModel();
+        steps.push(['redo', describeView(placer, scene), freshView()]);
+      }
+
+      expect(steps.length).toBeGreaterThan(20);
+      steps.forEach(([, reused, fresh]) => expect(reused).toEqual(fresh));
+    });
+
+    it('frees and builds only the meshes whose entities came or went', () => {
+      const walls = [0, 1, 2, 3].map((x) => placer.placeEntity('wall', x, 0, 0));
+      const meshesBefore = walls.map((id) => placer.getMeshById(id));
+      const last = meshesBefore[3];
+      const freed = jest.spyOn(last.geometry, 'dispose');
+
+      undoManager.undo(); // takes back the last wall
+      placer.rebuildFromModel();
+
+      walls.slice(0, 3).forEach((id, i) => expect(placer.getMeshById(id)).toBe(meshesBefore[i]));
+      expect(placer.getMeshById(walls[3])).toBeNull();
+      expect(freed).toHaveBeenCalled();
+      expect(scene.children).not.toContain(last);
+    });
+
+    it('builds a new mesh when a loaded puzzle gives an id to a different type', () => {
+      const id = placer.placeEntity('wall', 2, 2, 0);
+      const wallMesh = placer.getMeshById(id);
+      const other = new EditorPuzzleModel();
+      other.addEntity('creature', 5, 0, 6, { song: [] }); // same id, another puzzle
+
+      undoManager.replaceModel(other);
+      placer.rebuildFromModel();
+
+      expect(placer.getMeshById(id)).not.toBe(wallMesh);
+      expect(scene.children).not.toContain(wallMesh);
+      expect(describeView(placer, scene)).toEqual(freshView());
+    });
   });
 });

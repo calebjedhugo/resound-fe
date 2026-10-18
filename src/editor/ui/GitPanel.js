@@ -6,6 +6,8 @@
  * ("branch · N puzzle files changed · ↑ahead ↓behind"). Presentation only —
  * EditorApp supplies async handlers (which own reloads and Cmd-Z wiring); the
  * panel manages the busy state, the message field, and status refresh.
+ * EditorApp refreshes it after every repo write lands (never per edit: each
+ * status read spawns git on the dev server).
  *
  * The panel hides itself entirely when /api/git is unreachable (e.g. a
  * production build with no Node dev server behind it).
@@ -21,6 +23,9 @@ export default class GitPanel {
     this._container = container;
     this._handlers = handlers;
     this._busy = false;
+    this._status = null; // last status read; null until one succeeds
+    this._refreshing = null; // the status read in flight, if any
+    this._refreshAgain = false;
     this._render();
     this.refresh();
   }
@@ -100,9 +105,22 @@ export default class GitPanel {
 
   _setBusy(busy) {
     this._busy = busy;
-    for (const btn of [this._commitBtn, this._pullBtn, this._pushBtn, this._revertBtn]) {
-      btn.disabled = busy;
+    this._syncButtons();
+  }
+
+  /** Every button is off while an action runs; otherwise the last status rules. */
+  _syncButtons() {
+    const status = this._status;
+    if (this._busy || !status) {
+      for (const btn of [this._commitBtn, this._pullBtn, this._pushBtn, this._revertBtn]) {
+        btn.disabled = this._busy;
+      }
+      return;
     }
+    this._commitBtn.disabled = status.changedCount === 0;
+    this._revertBtn.disabled = status.changedCount === 0;
+    this._pushBtn.disabled = status.hasUpstream && status.ahead === 0;
+    this._pullBtn.disabled = false;
   }
 
   /** Set the status line; `isError` styles it as a failure. */
@@ -111,8 +129,32 @@ export default class GitPanel {
     this._statusEl.classList.toggle('git-error', isError);
   }
 
-  /** Re-fetch git state and update the status line + button enablement. */
-  async refresh() {
+  /**
+   * Re-fetch git state and update the status line + button enablement. One
+   * read runs at a time: refreshes asked for while one is in flight share a
+   * single trailing read, and every caller's promise settles on a read that
+   * started after its call (so it sees any write that preceded the call).
+   */
+  refresh() {
+    if (this._refreshing) {
+      this._refreshAgain = true;
+      return this._refreshing;
+    }
+    this._refreshing = (async () => {
+      try {
+        do {
+          this._refreshAgain = false;
+          // eslint-disable-next-line no-await-in-loop -- the reads are serial by design
+          await this._readStatus();
+        } while (this._refreshAgain);
+      } finally {
+        this._refreshing = null;
+      }
+    })();
+    return this._refreshing;
+  }
+
+  async _readStatus() {
     let status;
     try {
       status = await gitStatus();
@@ -143,12 +185,7 @@ export default class GitPanel {
       parts.push(track.join(' '));
     }
     this.setStatus(parts.join(' · '));
-
-    if (!this._busy) {
-      this._commitBtn.disabled = status.changedCount === 0;
-      this._revertBtn.disabled = status.changedCount === 0;
-      this._pushBtn.disabled = status.hasUpstream && status.ahead === 0;
-      this._pullBtn.disabled = false;
-    }
+    this._status = status;
+    this._syncButtons();
   }
 }

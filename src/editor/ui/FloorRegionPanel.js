@@ -24,6 +24,7 @@ export default class FloorRegionPanel {
     this._firstCorner = null;
     this._previewMesh = null;
     this._floorMeshes = [];
+    this._renderedFloorsKey = null; // the floor list the meshes were built from
     // Elevation the *next* region is placed on. Defaults to the current storey;
     // can go one above the highest floor to start a new upper storey.
     this._targetElevation = editorScene.activeElevation || 0;
@@ -193,6 +194,13 @@ export default class FloorRegionPanel {
   }
 
   _renderFloors() {
+    // The slabs follow from the floor list alone. Undo/redo and loads refresh
+    // whatever changed, so keep the meshes when the floors did not.
+    const floors = this._undoManager.getFloors();
+    const floorsKey = JSON.stringify(floors);
+    if (floorsKey === this._renderedFloorsKey) return;
+    this._renderedFloorsKey = floorsKey;
+
     // Clear old meshes
     this._floorMeshes.forEach((m) => {
       this._editorScene._scene.remove(m);
@@ -200,8 +208,6 @@ export default class FloorRegionPanel {
       m.material.dispose();
     });
     this._floorMeshes = [];
-
-    const floors = this._undoManager.getFloors();
 
     floors.forEach((f) => {
       const width = (f.x2 - f.x1 + 1) * WORLD_SCALE;

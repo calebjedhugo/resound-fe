@@ -1085,3 +1085,167 @@ describe('EditorApp wiring', () => {
     });
   });
 });
+
+describe('EditorApp git status follows the autosave', () => {
+  let app;
+  let changedFiles; // puzzle files the fake dev server has written (uncommitted)
+  let statusReads;
+
+  /** A dev server that dirties a puzzle file on each POST and reports it in git status. */
+  function fakeDevServer(url, opts = {}) {
+    const reply = (body) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    if (url === '/api/git/status') {
+      statusReads += 1;
+      return reply({
+        ok: true,
+        branch: 'main',
+        changedCount: changedFiles.size,
+        files: [...changedFiles],
+        ahead: 0,
+        behind: 0,
+        hasUpstream: false,
+      });
+    }
+    if (url.startsWith('/api/puzzles/') && opts.method === 'POST') {
+      changedFiles.add(url);
+      return reply({ ok: true });
+    }
+    return reply({ puzzles: [] }); // manifest: nothing saved yet
+  }
+
+  const commitButton = () =>
+    [...document.querySelectorAll('#git-panel button')].find((b) => b.textContent === 'Commit');
+
+  beforeEach(async () => {
+    setupEditorDOM();
+    changedFiles = new Set();
+    statusReads = 0;
+    global.fetch = jest.fn(fakeDevServer);
+    jest.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    app = new EditorApp();
+    app.init();
+    await jest.advanceTimersByTimeAsync(0); // the panel's first read: a clean tree
+  });
+
+  afterEach(() => {
+    app.dispose();
+    app = null;
+    document.body.innerHTML = '';
+    delete global.fetch;
+    jest.restoreAllMocks();
+  });
+
+  it('enables Commit once the first edit on a clean tree has been saved', async () => {
+    expect(commitButton().disabled).toBe(true);
+
+    app.undoManager.setMetadata({ id: 'first-edit', name: 'First Edit' });
+    await jest.advanceTimersByTimeAsync(600); // past the autosave debounce
+
+    expect(changedFiles.size).toBe(1);
+    expect(commitButton().disabled).toBe(false);
+  });
+
+  it('reads git status once per save, not once per edit', async () => {
+    const readsBefore = statusReads;
+
+    app.undoManager.setMetadata({ id: 'burst', name: 'Burst' });
+    for (let tempo = 100; tempo < 110; tempo += 1) app.undoManager.setMetadata({ tempo });
+    await jest.advanceTimersByTimeAsync(600);
+
+    expect(statusReads - readsBefore).toBe(1);
+  });
+});
+
+describe('EditorApp per-input work', () => {
+  let app;
+  let frames; // animation-frame callbacks waiting to run
+
+  /** Run animation frames until none are pending (a frame may ask for another). */
+  function flushFrames() {
+    for (let i = 0; i < 10 && frames.length > 0; i += 1) {
+      frames.splice(0).forEach((callback) => callback(0));
+    }
+  }
+
+  const press = (key, init = {}) =>
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+    );
+
+  beforeEach(() => {
+    setupEditorDOM();
+    frames = [];
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    app = new EditorApp();
+    app.init();
+    flushFrames();
+    app.renderer.render.mockClear();
+  });
+
+  afterEach(() => {
+    app.dispose();
+    app = null;
+    document.body.innerHTML = '';
+    delete global.fetch;
+    jest.restoreAllMocks();
+  });
+
+  it('builds the property panel once per keyboard move', () => {
+    // An unlinked gate's panel lists link targets from the manifest
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ puzzles: [] }) })
+    );
+    app.undoManager.addEntity('gate', 7, 0, 7, { song: [], gateId: 'gate-1' }); // under the cursor
+
+    press('ArrowRight', { shiftKey: true });
+
+    const manifestReads = fetch.mock.calls.filter(([url]) => url.includes('manifest.json'));
+    expect(manifestReads).toHaveLength(1);
+    expect(document.querySelector('#property-panel').textContent).toContain('Gate Properties');
+  });
+
+  it("doesn't redraw the viewport for keys typed into the song editor", () => {
+    const id = app.undoManager.addEntity('creature', 5, 0, 3, {
+      song: [{ pitch: 'C4', length: '1/4' }],
+      interval: 8,
+      audibleRange: 15,
+    });
+    app.songEditorModal.open(id);
+    flushFrames();
+    app.renderer.render.mockClear();
+    const staff = document.querySelector('.notation-staff');
+    const type = (key) =>
+      staff.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+    ['ArrowLeft', 'ArrowRight', 'Shift'].forEach(type);
+    flushFrames();
+    expect(app.renderer.render).not.toHaveBeenCalled();
+
+    type('5'); // an edit: the model changed, so the viewport redraws once
+    flushFrames();
+    expect(app.renderer.render).toHaveBeenCalledTimes(1);
+  });
+
+  it('still redraws the viewport for grid keys', () => {
+    press('ArrowRight'); // moves the cursor highlight
+    flushFrames();
+    expect(app.renderer.render).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the HUD text node through frames that change nothing, and updates it when they do', () => {
+    const hud = document.querySelector('.viewport-hud');
+    const textNode = hud.firstChild;
+
+    document.dispatchEvent(new Event('pointerdown')); // a frame with nothing new to say
+    flushFrames();
+    expect(app.renderer.render).toHaveBeenCalledTimes(1);
+    expect(hud.firstChild).toBe(textNode);
+
+    press('ArrowUp', { altKey: true }); // onto the empty E1: draft-floor mode
+    flushFrames();
+    expect(hud.textContent).toContain('Draft floor E1');
+  });
+});

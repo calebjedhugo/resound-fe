@@ -6,7 +6,7 @@
  * allowing full undo/redo traversal of edit history.
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
-import UndoManager from 'editor/model/UndoManager';
+import UndoManager, { MAX_UNDO_STEPS } from 'editor/model/UndoManager';
 
 describe('UndoManager', () => {
   let model;
@@ -280,6 +280,44 @@ describe('UndoManager', () => {
       const id = undoManager.addEntity('creature', 0, 0, 0, {});
 
       expect(typeof id).toBe('number');
+    });
+  });
+
+  describe('bounded history', () => {
+    const undoAll = () => {
+      let steps = 0;
+      while (undoManager.canUndo()) {
+        undoManager.undo();
+        steps += 1;
+      }
+      return steps;
+    };
+
+    it(`keeps the newest ${MAX_UNDO_STEPS} steps, dropping the oldest`, () => {
+      const extra = 7;
+      for (let tempo = 1; tempo <= MAX_UNDO_STEPS + extra; tempo += 1) {
+        undoManager.setMetadata({ tempo });
+      }
+
+      expect(undoAll()).toBe(MAX_UNDO_STEPS);
+      // The oldest steps went; the earliest state left is just after them
+      expect(undoManager.getMetadata().tempo).toBe(extra);
+    });
+
+    it('redoes every kept step back to the newest state', () => {
+      for (let tempo = 1; tempo <= MAX_UNDO_STEPS + 3; tempo += 1) {
+        undoManager.setMetadata({ tempo });
+      }
+      undoAll();
+
+      let steps = 0;
+      while (undoManager.canRedo()) {
+        undoManager.redo();
+        steps += 1;
+      }
+
+      expect(steps).toBe(MAX_UNDO_STEPS);
+      expect(undoManager.getMetadata().tempo).toBe(MAX_UNDO_STEPS + 3);
     });
   });
 });

@@ -8,6 +8,25 @@
  */
 import { serializePuzzle } from 'editor/model/serialization';
 
+// Told after every write or delete request completes, so state derived from
+// the files on disk (the git panel's change count) is re-read only once the
+// files have actually changed.
+const writeListeners = new Set();
+
+/**
+ * Call `listener` after each puzzle file write or delete completes.
+ * @param {() => void} listener
+ * @returns {() => void} unsubscribe
+ */
+export function onRepoWrite(listener) {
+  writeListeners.add(listener);
+  return () => writeListeners.delete(listener);
+}
+
+function notifyRepoWrite() {
+  writeListeners.forEach((listener) => listener());
+}
+
 /**
  * Fetch the puzzle manifest (list of { id, name, difficulty }).
  * @returns {Promise<Array<{id: string, name: string, difficulty: number}>>}
@@ -55,6 +74,7 @@ export async function savePuzzleJsonToRepo(json) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(json),
   });
+  notifyRepoWrite(); // even a failed write may have changed one of the files
   if (!response.ok) {
     let detail = response.statusText;
     try {
@@ -75,6 +95,7 @@ export async function savePuzzleJsonToRepo(json) {
 export async function deletePuzzleFromRepo(id) {
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return false;
   const response = await fetch(`/api/puzzles/${id}`, { method: 'DELETE' });
+  notifyRepoWrite();
   if (!response.ok) {
     let detail = response.statusText;
     try {

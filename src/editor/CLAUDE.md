@@ -11,7 +11,10 @@ the renderer + `components/*` + `lib/*`).
 Files (`ui/` + `model/`):
 - **NotationEditor.js** — the editor: builds song JSON, calls `NotationRenderer.render()`,
   and overlays interaction (selection, edit cursor, click-to-place, keyboard, Play/Stop).
-  Container + song JSON in, edited song out via `onChange`.
+  Container + song JSON in, edited song out via `onChange`. Keyboard input
+  draws once per animation frame and only what changed (`_flushRender`): an
+  edit re-engraves, a selection/cursor/voice move redraws only the overlay
+  (`_drawSelection`), any other key draws nothing.
 - **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
 - **RhythmPalette.js** — duration selector (renders note icons via `resound-notation/components/Note`).
 - **staffCoords.js** — reverse pitch mapping (click Y → pitch) via `resound-notation/lib/notePositions`.
@@ -52,7 +55,9 @@ edits show up in the game on a manual reload.
   level (reusing `io/importPuzzle`); a `+ New puzzle` item makes a fresh model.
   A not-yet-saved puzzle shows a transient `(unsaved)` entry.
 - **Toolbar** (`ui/EditorToolbar.js`) — undo/redo buttons (mirror
-  `UndoManager.canUndo/canRedo`; undo/redo is centralized in `EditorApp._undo/_redo`),
+  `UndoManager.canUndo/canRedo`; undo/redo is centralized in `EditorApp._undo/_redo`,
+  which refits meshes in place: `EntityPlacer.rebuildFromModel` keeps a mesh
+  whose entity kept its id + type and builds/frees only the rest),
   a live save-status line driven by the autosave flow, a "Test in game" deep
   link (`/?puzzle=<id>`, handled in `src/main.js`), and a keyboard-shortcut popover.
 - **Puzzle id is derived, not typed** — `MetadataPanel` has no ID field. The id
@@ -71,10 +76,17 @@ edits show up in the game on a manual reload.
   middleware in `vite.config.js` (dev-only; validates the id, matches body id,
   writes pretty-printed JSON). Browsers can't write repo files, so this bridge
   is required. **Changing `vite.config.js` requires a dev-server restart.**
+  Writes run one at a time in arrival order (a save still waiting its turn
+  takes a newer save of the same puzzle); a file whose formatted bytes would
+  not change is not rewritten (so an edit leaves `manifest.json` alone unless
+  the puzzle's name/difficulty changed).
 - **Git controls** (`ui/GitPanel.js` + `io/gitControls.js`) — dev-only
   Commit / Pull / Push / Revert in the sidebar, over `/api/git/*` (a second
   `configureServer` middleware, `gitPlugin`, that shells out via `execFile`).
   The panel **hides itself** when `/api/git` is unreachable (production build).
+  Its status re-reads **after each repo write lands** (`repoPersistence.onRepoWrite`)
+  and after its own actions, one read at a time — never per edit (each read
+  spawns git on the dev server, and a per-edit read ran before the autosave).
   **Commit and Revert scope to `public/puzzles/`** (Commit stages only that
   path, so Husky/lint-staged never sees unrelated files); **Pull/Push are
   whole-repo** (git can't push a subtree). **Revert = `git stash push -u --

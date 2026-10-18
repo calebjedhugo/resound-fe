@@ -97,47 +97,60 @@ export default class EntityPlacer {
   // rebuilds don't touch the model / undo stack / autosave.
   _createPlayerSpawnMesh(gridX, gridZ, elevation) {
     // Remove old spawn mesh
-    if (this._playerSpawnMesh) {
-      this._scene.remove(this._playerSpawnMesh);
-      this._playerSpawnMesh.geometry.dispose();
-      this._playerSpawnMesh.material.dispose();
-    }
-
-    const world = gridToWorld(gridX, gridZ);
-    const y = elevation * ELEVATION_HEIGHT;
+    if (this._playerSpawnMesh) this._disposeMesh(this._playerSpawnMesh);
 
     // Spawn marker: cone pointing down
     const geo = createEntityGeometry('player');
     const mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.player });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(world.x, y + WORLD_SCALE * Y_OFFSETS.player, world.z);
+    this._placeSpawnMesh(mesh, gridX, gridZ, elevation);
     mesh.rotation.x = Math.PI; // Point downward
     this._scene.add(mesh);
     this._playerSpawnMesh = mesh;
     mesh.userData = { type: 'player' };
   }
 
+  _placeSpawnMesh(mesh, gridX, gridZ, elevation) {
+    const world = gridToWorld(gridX, gridZ);
+    mesh.position.set(
+      world.x,
+      elevation * ELEVATION_HEIGHT + WORLD_SCALE * Y_OFFSETS.player,
+      world.z
+    );
+  }
+
   _createMesh(id, type, gridX, gridZ, elevation, data) {
     if (!PLACEABLE_TYPES.includes(type)) return;
-
-    const world = gridToWorld(gridX, gridZ);
-    const y = elevation * ELEVATION_HEIGHT;
 
     const geo = createEntityGeometry(type);
     const mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS[type] });
     const mesh = new THREE.Mesh(geo, mat);
+    this._fitMesh(mesh, { id, type, x: gridX, y: elevation, z: gridZ, data });
+    this._scene.add(mesh);
+    this._entityMeshes.set(id, mesh);
+  }
 
+  /**
+   * Set everything about an entity's mesh except its geometry and material
+   * (those follow from the type alone): transform, ids and the emissive state
+   * a fresh mesh starts with. Mesh creation and rebuildFromModel's reuse both
+   * go through here, so a reused mesh ends exactly where a new one would.
+   */
+  _fitMesh(mesh, { id, type, x, y, z, data }) {
+    const world = gridToWorld(x, z);
+    mesh.rotation.x = 0;
+    mesh.rotation.y = 0;
+    mesh.rotation.z = 0;
     if (type === 'ramp') {
       // Rotate based on direction (default: north)
       this._applyRampRotation(mesh, (data && data.direction) || 'north');
     }
 
-    mesh.position.set(world.x, y + WORLD_SCALE * Y_OFFSETS[type], world.z);
+    mesh.position.set(world.x, y * ELEVATION_HEIGHT + WORLD_SCALE * Y_OFFSETS[type], world.z);
     mesh.userData = { entityId: id, type };
-    this._scene.add(mesh);
-    this._entityMeshes.set(id, mesh);
 
     if (type === 'gate') this._applyLinkBadge(mesh, Boolean(data && data.link));
+    else mesh.material.emissive.setHex(0x000000); // unlit, as a new material starts
   }
 
   /** Re-read a gate's link state from the model and restyle its mesh. */
@@ -184,9 +197,7 @@ export default class EntityPlacer {
   clearPlayerSpawn() {
     this._undoManager.clearPlayerSpawn();
     if (this._playerSpawnMesh) {
-      this._scene.remove(this._playerSpawnMesh);
-      this._playerSpawnMesh.geometry.dispose();
-      this._playerSpawnMesh.material.dispose();
+      this._disposeMesh(this._playerSpawnMesh);
       this._playerSpawnMesh = null;
     }
   }
@@ -195,9 +206,7 @@ export default class EntityPlacer {
     this._undoManager.removeEntity(id);
     const mesh = this._entityMeshes.get(id);
     if (mesh) {
-      this._scene.remove(mesh);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
+      this._disposeMesh(mesh);
       this._entityMeshes.delete(id);
     }
   }
@@ -215,32 +224,50 @@ export default class EntityPlacer {
     return mesh.userData?.entityId ?? null;
   }
 
-  // Rebuild all meshes from model state (used after undo/redo or import)
+  _disposeMesh(mesh) {
+    this._scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+  }
+
+  /**
+   * Bring the meshes in line with the model (after undo/redo or import). An
+   * entity that kept its id and type keeps its mesh, refitted as a fresh one
+   * would be; only added, removed or retyped entities create or free GPU
+   * resources. (Freeing and re-making every mesh cost ~1.6 ms CPU per undo
+   * for a 104-entity puzzle, before re-uploading it all on the next frame.)
+   */
   rebuildFromModel() {
-    // Clear existing meshes
-    this._entityMeshes.forEach((mesh) => {
-      this._scene.remove(mesh);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-    });
-    this._entityMeshes.clear();
-
-    if (this._playerSpawnMesh) {
-      this._scene.remove(this._playerSpawnMesh);
-      this._playerSpawnMesh.geometry.dispose();
-      this._playerSpawnMesh.material.dispose();
-      this._playerSpawnMesh = null;
-    }
-
-    // Rebuild from model
     const entities = this._undoManager.getEntities();
+    const kept = new Map();
+    for (const e of entities) {
+      const mesh = this._entityMeshes.get(e.id);
+      if (mesh && mesh.userData.type === e.type) kept.set(e.id, mesh);
+    }
+    this._entityMeshes.forEach((mesh, id) => {
+      if (kept.get(id) !== mesh) this._disposeMesh(mesh);
+    });
+
+    // Re-filled in model order, like a full rebuild (getAllMeshes order)
+    this._entityMeshes.clear();
     entities.forEach((e) => {
-      this._createMesh(e.id, e.type, e.x, e.z, e.y, e.data);
+      const mesh = kept.get(e.id);
+      if (mesh) {
+        this._fitMesh(mesh, e);
+        this._entityMeshes.set(e.id, mesh);
+      } else {
+        this._createMesh(e.id, e.type, e.x, e.z, e.y, e.data);
+      }
     });
 
     const spawn = this._undoManager.getPlayerSpawn();
-    if (spawn) {
+    if (spawn && this._playerSpawnMesh) {
+      this._placeSpawnMesh(this._playerSpawnMesh, spawn.x, spawn.z, spawn.y);
+    } else if (spawn) {
       this._createPlayerSpawnMesh(spawn.x, spawn.z, spawn.y);
+    } else if (this._playerSpawnMesh) {
+      this._disposeMesh(this._playerSpawnMesh);
+      this._playerSpawnMesh = null;
     }
   }
 }
