@@ -57,6 +57,15 @@ async function runIdleSlice(timeRemaining = 0) {
   await settle();
 }
 
+/**
+ * Run idle slices until no area build has one left. AudioPrewarm's own run
+ * re-queues until a period has room for its next job, so a queue drained
+ * with no idle time to spare need never empty (the afterEach finishes it).
+ */
+async function runBuildSlices() {
+  while (idleQueue.some((callback) => callback.name === 'slice')) await runIdleSlice(0);
+}
+
 const neighborArea = () => PortalManager.getArea('portal-live-b');
 const neighborListeners = () =>
   ListeningManager.listeners.filter((entity) => entity.area && entity.area.id === 'portal-live-b');
@@ -185,7 +194,7 @@ describe('Neighbor areas build in idle time', () => {
     await runIdleSlice(0); // E5 engraved
 
     PortalManager.reset();
-    while (idleQueue.length > 0) await runIdleSlice(0);
+    await runBuildSlices();
 
     expect(neighborArea()).toBeNull();
     expect(neighborListeners()).toHaveLength(0);
@@ -211,7 +220,7 @@ describe('Neighbor areas build in idle time', () => {
     expect(gameState.currentPuzzle.id).toBe('portal-live-b');
     const crossedInto = neighborArea();
 
-    while (idleQueue.length > 0) await runIdleSlice(0);
+    await runBuildSlices();
 
     expect(neighborArea()).toBe(crossedInto);
     expect(neighborListeners().filter((entity) => entity.type === 'creature')).toHaveLength(1);

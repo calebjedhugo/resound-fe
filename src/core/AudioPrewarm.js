@@ -138,6 +138,16 @@ const AudioPrewarm = {
   },
 
   /**
+   * The world was torn down (PortalManager.reset): its creatures' queued
+   * voices go, as their instruments did. The piano outlives every world, so
+   * its queued pitches stay, and so does any run already scheduled for the
+   * queue (it serves the next world's jobs, or finds nothing and stops).
+   */
+  reset() {
+    voiceJobs.length = 0;
+  },
+
+  /**
    * The world is held still (the StartGate is up), or running again: held,
    * jobs stop waiting for idle time.
    * @param {boolean} isHeld

@@ -38,6 +38,7 @@
 import PuzzleLoader from 'core/PuzzleLoader';
 import PortalView from 'core/PortalView';
 import ListeningManager from 'core/ListeningManager';
+import AudioPrewarm from 'core/AudioPrewarm';
 import PlaybackManager from 'core/PlaybackManager';
 import gameState from 'core/GameState';
 import {
@@ -202,6 +203,8 @@ class PortalManager {
     for (const area of this._areas.values()) {
       area.dispose();
     }
+    // Voices still queued for its creatures went with them
+    AudioPrewarm.reset();
     this._areas.clear();
     this._doors = [];
     this._doorOf.clear();

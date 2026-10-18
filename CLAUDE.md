@@ -116,7 +116,8 @@ instead of "fixing" it.
   every area's creature voices (`Random.warm`) and creature pitches for the
   tape's piano (the tape only holds creature notes; one velocity layer, 0.7).
   Flat out while the StartGate is up, else only in idle periods with room
-  for the job — an unwarmed note still plays, built lazily
+  for the job — an unwarmed note still plays, built lazily. A world reset
+  drops the queued creature voices (piano pitches stay)
 - **A Random voice is ~0.6 MB** of Chrome wavetable per (creature, pitch),
   ~2.8 MB at 96 kHz (measured 2026-10-17): `Creature.dispose` calls
   `instrument.dispose()` (not `stop()`), which frees them and lets no
