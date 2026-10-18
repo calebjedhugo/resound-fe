@@ -29,6 +29,54 @@ function planeGeometry(width, height) {
   return geometry;
 }
 
+// Staff textures no pass has drawn yet, oldest first, waiting to be handed
+// to the GPU in idle time. three uploads a texture on the first draw that
+// shows it — a 512 or 1024 px canvas plus its mipmaps — and for a staff an
+// idle-built neighbour shows (PuzzleLoader.buildAreaWhenIdle) that first
+// draw is a door pass, mid-game: the upload landed inside that frame. With
+// a renderer to upload to (uploadInIdleTime), each new texture is uploaded
+// in an idle period instead, one per period that has room for what an
+// upload last cost. A texture some pass draws first (the StartGate's shader
+// prewarm, the main view) was uploaded by that draw and leaves the queue,
+// so none is uploaded twice; one freed first leaves it too (an upload would
+// bring it back to the GPU, where nothing would ever free it again).
+const pendingUploads = new Set(); // THREE.CanvasTexture
+let uploader = null; // the renderer idle uploads go to
+let uploadScheduled = false;
+let uploadCost = 2; // main-thread ms the last upload took (first guess)
+
+// The longest idle period a browser grants (requestIdleCallback spec), so a
+// one-off slow upload can't price the rest out of ever running
+const MAX_IDLE_MS = 50;
+
+// Without requestIdleCallback (Safari), uploads run on timers this far apart
+const TIMER_FALLBACK_MS = 50;
+
+function scheduleUpload() {
+  if (uploadScheduled || !uploader || pendingUploads.size === 0) return;
+  uploadScheduled = true;
+  /* eslint-disable no-use-before-define */
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(uploadOne);
+  } else {
+    setTimeout(() => uploadOne({ timeRemaining: () => Infinity }), TIMER_FALLBACK_MS);
+  }
+  /* eslint-enable no-use-before-define */
+}
+
+/** In an idle period: the oldest waiting texture, if the period has room. */
+function uploadOne(deadline) {
+  uploadScheduled = false;
+  const [texture] = pendingUploads;
+  if (uploader && texture && deadline.timeRemaining() >= uploadCost) {
+    pendingUploads.delete(texture);
+    const started = performance.now();
+    uploader.initTexture(texture);
+    uploadCost = Math.min(performance.now() - started, MAX_IDLE_MS);
+  }
+  scheduleUpload();
+}
+
 /** No DOM (node env without jsdom): displays get meshes but no texture. */
 function hasDom() {
   return typeof document !== 'undefined' && Boolean(document.createElementNS);
@@ -151,6 +199,8 @@ function engrave(engraving, input, width) {
       engraving.texture = new THREE.CanvasTexture(canvas);
       engraving.texture.needsUpdate = true;
       engraving.aspect = canvasHeight / canvasWidth;
+      pendingUploads.add(engraving.texture);
+      scheduleUpload();
       for (const display of engraving.waiting) display._showEngraving(engraving);
       engraving.waiting.clear();
 
@@ -194,7 +244,10 @@ function releaseEngraving(engraving) {
   if (engraving.users > 0) return;
   // (a failed engraving may already be forgotten, its key engraved anew)
   if (engravings.get(engraving.key) === engraving) engravings.delete(engraving.key);
-  if (engraving.texture) engraving.texture.dispose();
+  if (engraving.texture) {
+    pendingUploads.delete(engraving.texture);
+    engraving.texture.dispose();
+  }
 }
 
 // Plane-distance fade for staff planes: invisible while the eye is within
@@ -311,6 +364,17 @@ class NotationDisplay {
     };
   }
 
+  /**
+   * Upload staff textures to the GPU in idle time, ahead of the first pass
+   * that draws them (see pendingUploads). Until a renderer is given (the
+   * editor, tests) a texture uploads on its first draw, as three does.
+   * @param {?THREE.WebGLRenderer} renderer - null stops idle uploads
+   */
+  static uploadInIdleTime(renderer) {
+    uploader = renderer;
+    scheduleUpload();
+  }
+
   /** The renderer input for this display's staff (see renderInput). */
   _renderInput() {
     return renderInput(this);
@@ -358,6 +422,8 @@ class NotationDisplay {
       mesh.onBeforeRender = (renderer, scene, camera) => {
         material.opacity = mesh._notationOpacity * planeFade(mesh, camera);
         hookScene(scene);
+        // This draw uploads the staff texture, if no idle period has yet
+        pendingUploads.delete(material.map);
       };
 
       livePlanes.add(mesh);

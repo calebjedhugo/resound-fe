@@ -21,6 +21,7 @@ import RecordingUI from 'ui/RecordingUI';
 import EndingOverlay from 'ui/EndingOverlay';
 import DebugUI from 'ui/DebugUI';
 import ClapVisual from 'ui/ClapVisual';
+import NotationDisplay from 'ui/NotationDisplay';
 import ClapManager from 'core/ClapManager';
 import PlaybackManager from 'core/PlaybackManager';
 import ListeningManager from 'core/ListeningManager';
@@ -80,6 +81,10 @@ PortalManager.initialize(scene, (puzzle, arrivalGate) => {
 
 // The deployable cleanser gate's aiming phantom renders in the main scene
 DeployManager.initialize(scene);
+
+// Staff textures go to the GPU in idle time, not in the frame of the first
+// pass that shows them (a door into a neighbour built after the start gate)
+NotationDisplay.uploadInIdleTime(renderer);
 
 // State machine
 const stateMachine = new StateMachine(gameState);

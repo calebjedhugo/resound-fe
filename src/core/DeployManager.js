@@ -52,7 +52,9 @@ class DeployManager {
   constructor() {
     this._scene = null;
     this._state = 'idle'; // 'idle' | 'aiming' | 'deployed'
-    this._phantom = null; // ghost mesh while aiming
+    // The aiming ghost: built on the first aim, then kept for the session
+    // and hidden between aims (see _enterAiming)
+    this._phantom = null;
     this._spot = null; // { x, y, z, valid } — the phantom's current target
     this._pad = null; // { area, id, entity } while deployed
     this._views = []; // the gate's see-through panels (one per face)
@@ -71,6 +73,7 @@ class DeployManager {
   /** @param {THREE.Scene} scene - the render scene (phantom lives here) */
   initialize(scene) {
     this._scene = scene;
+    if (this._phantom) scene.add(this._phantom);
   }
 
   get state() {
@@ -195,7 +198,7 @@ class DeployManager {
 
   /** Tear down (menu exit / new world entry). */
   reset() {
-    this._removePhantom();
+    this._hidePhantom();
     this._clearDeployment();
   }
 
@@ -312,9 +315,15 @@ class DeployManager {
   }
 
   _enterAiming() {
-    this._phantom = CleansingTile.buildTileMesh({ x: 0, y: 0, z: 0 });
-    this._phantom.material.opacity = PHANTOM_OPACITY;
-    if (this._scene) this._scene.add(this._phantom);
+    // ONE phantom for the session: a fresh one per aim cost a geometry
+    // upload and a shader-program derivation on the frame G was pressed,
+    // and freed both again on deploy. Every aim paints it before it shows
+    // (_updatePhantom), so it looks exactly like a new one.
+    if (!this._phantom) {
+      this._phantom = CleansingTile.buildTileMesh({ x: 0, y: 0, z: 0 });
+      this._phantom.material.opacity = PHANTOM_OPACITY;
+      if (this._scene) this._scene.add(this._phantom);
+    }
     this._state = 'aiming';
     this._updatePhantom();
   }
@@ -384,7 +393,7 @@ class DeployManager {
     const pad = new CleanserGatePad({ x: this._spot.x, y: this._spot.y, z: this._spot.z });
     area.entityManager.add(pad);
     this._pad = { area, id: pad.id, entity: pad };
-    this._removePhantom();
+    this._hidePhantom();
     this._state = 'deployed';
     // The hint stays: the remaining lesson is "g again to cancel" — it
     // retires when the gate is removed (or used). See _removePad / update.
@@ -401,12 +410,9 @@ class DeployManager {
     this._clearDeployment();
   }
 
-  _removePhantom() {
-    if (!this._phantom) return;
-    if (this._scene) this._scene.remove(this._phantom);
-    this._phantom.geometry.dispose();
-    this._phantom.material.dispose();
-    this._phantom = null;
+  /** Aiming is over: the phantom stays in the scene, undrawn, for the next aim. */
+  _hidePhantom() {
+    if (this._phantom) this._phantom.visible = false;
     this._spot = null;
   }
 }
