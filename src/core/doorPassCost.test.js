@@ -89,7 +89,11 @@ function createRecordingRenderer() {
       pending.panel = allPanels().find((panel) => panel.material.map === pending.target.texture);
       pending = null;
     },
-    getDrawingBufferSize: (size) => size.set(SCREEN.width, SCREEN.height),
+    // The drawing buffer (a resize changes it)
+    screen: { ...SCREEN },
+    getDrawingBufferSize(size) {
+      return size.set(this.screen.width, this.screen.height);
+    },
     /** Passes of frame `frame` that drew `panel`. */
     writesOf(panel, frame = this.frame) {
       return this.passes.filter((pass) => pass.frame === frame && pass.panel === panel);
@@ -181,6 +185,22 @@ describe('A door pass draws at the size its panel shows on screen', () => {
       const onScreen = Math.min(CAP.height, panelPixels(z - SOUTH_PANEL_Z));
       expect(shown.height).toBeGreaterThanOrEqual(onScreen);
     }
+  });
+
+  it('a screen resized under a still eye refits the next pass to it', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    drawFrame(renderer, eye);
+    const panel = panelOf(door, 'south');
+
+    // Twice the pixels, the eye where it was
+    renderer.screen = { width: 2 * SCREEN.width, height: 2 * SCREEN.height };
+    drawFrame(renderer, eye);
+
+    const onScreen = 2 * panelPixels(eye.position.z - SOUTH_PANEL_Z);
+    expect(renderer.shownBy(panel).height).toBeGreaterThanOrEqual(onScreen);
   });
 
   it('stepping back, a target shrinks only after a run of passes asking for less', async () => {
@@ -289,6 +309,43 @@ describe('A small panel re-renders one frame in three', () => {
       drawFrame(renderer, eye);
       expect(renderer.writesOf(panel)).toHaveLength(1);
     }
+  });
+});
+
+describe('A pass runs only for a panel the eye can see now', () => {
+  /** Passes of the last frame that drew any of `door`'s panels. */
+  const doorWrites = (renderer, door) =>
+    ['north', 'south', 'east', 'west'].flatMap((f) => renderer.writesOf(panelOf(door, f)));
+
+  it('turning away where it stands, the eye draws none of its panels', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, DOOR.z + 2 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    drawFrame(renderer, eye);
+    expect(doorWrites(renderer, door).length).toBeGreaterThan(0);
+
+    eye.quaternion = LOOK_SOUTH;
+    drawFrame(renderer, eye);
+
+    expect(doorWrites(renderer, door)).toEqual([]);
+  });
+
+  it('a narrower view (the window resized) leaves out a panel it no longer holds', async () => {
+    // The door 35° to the right of the eye's view, 15 units off: inside a
+    // 4:3 view, outside a 1:2 one
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const bearing = (35 * Math.PI) / 180;
+    const eye = eyeAt(DOOR.x - 15 * Math.sin(bearing), SOUTH_PANEL_Z + 15 * Math.cos(bearing));
+    drawFrame(renderer, eye);
+    drawFrame(renderer, eye);
+    expect(doorWrites(renderer, door).length).toBeGreaterThan(0);
+
+    eye.aspect = 0.5;
+    drawFrame(renderer, eye);
+
+    expect(doorWrites(renderer, door)).toEqual([]);
   });
 });
 

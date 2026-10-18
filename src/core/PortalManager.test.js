@@ -798,6 +798,26 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     }
   });
 
+  it('stepping from off the doorway onto its axis, the jambs are back on the next frame', () => {
+    const walls = witnessWalls();
+    const seen = [];
+    const renderer = wallWatchingRenderer(walls, seen);
+    gate.open();
+    // ONE camera, like the player's: off to the side, then a step sideways
+    // onto the door axis
+    const camera = { position: { x: 3 * WORLD_SCALE, y: 1.8, z: -1 * WORLD_SCALE } };
+    PortalManager.renderPortals(renderer, camera);
+    PortalManager.renderPortals(renderer, camera);
+
+    camera.position.x = 5 * WORLD_SCALE;
+    seen.length = 0;
+    PortalManager.renderPortals(renderer, camera);
+
+    const approachPasses = seen.filter((s) => s.isApproach);
+    expect(approachPasses.length).toBeGreaterThan(0);
+    for (const pass of approachPasses) expect(pass.frame).toBe(true);
+  });
+
   it('an eye AT the threshold keeps the flush frame walls; only strictly-behind walls hide', () => {
     // The clip overreaches one cell to the eye side precisely so the
     // arrival cell paints when you are at the door: its floor, THE WALLS

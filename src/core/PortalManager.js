@@ -179,6 +179,7 @@ class PortalManager {
     this._screenPlanes = new Float64Array(4 * 4);
     this._cellCenter = { x: 0, y: 0, z: 0 };
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
+    this._passOptions = {}; // scratch: a player pass's PortalView.render options
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -579,16 +580,10 @@ class PortalManager {
     // approached from whichever side the player is on, and clipping along
     // its authored facing there sliced every sightline sideways: black side
     // panels, and viewer-side content painting into the view.
-    const approach = this._approachFacing(gate, camera);
-    // Every face is materialized before any renders (_renderDoors); fall
-    // back to per-panel clips if the approach face somehow is not
-    // (defensive).
-    const approachView = faces.get(approach);
-    const sharedClip = approachView ? approachView.clipPlane : null;
-    // The approach panel's eye-side walls ride along with its clip plane:
-    // the shared plane's overreach can graze their faces in EVERY panel's
-    // pass, not just the approach panel's own.
-    const sharedWalls = approachView ? approachView.wallsToHide(camera) : null;
+    // (Found for the first face that renders.) Every face is materialized
+    // before any renders (_renderDoors); fall back to per-panel clips if the
+    // approach face somehow is not (defensive).
+    let approachView;
     for (const f of FACINGS) {
       if (!this._canLookInto(gate, f, camera.position)) continue; // eslint-disable-line no-continue
       const view = faces.get(f);
@@ -606,7 +601,16 @@ class PortalManager {
         this._panelDrawn = true;
         continue; // eslint-disable-line no-continue
       }
-      const options = { clipOverride: sharedClip, extraWallsBehind: sharedWalls, footprint };
+      if (approachView === undefined) {
+        approachView = faces.get(this._approachFacing(gate, camera)) || null;
+      }
+      const options = this._passOptions;
+      options.clipOverride = approachView ? approachView.clipPlane : null;
+      // The approach panel's eye-side walls ride along with its clip plane:
+      // the shared plane's overreach can graze their faces in EVERY panel's
+      // pass, not just the approach panel's own.
+      options.extraWallsBehind = approachView ? approachView.wallsToHide(camera) : null;
+      options.footprint = footprint;
       if (view.render(renderer, camera, options)) {
         this._wrote(view, camera, camera.position);
         view._playerFresh = this._passId;

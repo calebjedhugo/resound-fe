@@ -25,6 +25,7 @@ import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
 import { createSceneTarget, showStoredTexels } from 'core/passContext';
 import { scenePieces, updateSceneMatrices } from 'core/sceneMatrices';
+import memoizeOnEntityList from 'core/entityListMemo';
 import {
   FACING_VECTORS,
   DOORWAY_OFFSET,
@@ -93,6 +94,16 @@ const SHRINK_AFTER_PASSES = 30;
 const PASS_PLANES = 7;
 const WHOLE_DOORWAY = Object.freeze({ u0: 0, u1: 1, v0: 0, v1: 1 });
 
+/** Hide each of `meshes` still shown, recording it in `hidden`. */
+function hideAll(meshes, hidden) {
+  for (const mesh of meshes) {
+    if (mesh.visible) {
+      mesh.visible = false;
+      hidden.push(mesh);
+    }
+  }
+}
+
 /** Write THREE.Plane `plane` as plane `index` of `out` (portalMath's layout). */
 function writePlane(out, index, { normal, constant }) {
   out[index * 4] = normal.x;
@@ -110,6 +121,59 @@ const CULL_MARGIN = 1e-3;
 const scratchSize = new THREE.Vector2();
 // showsCreature's four side normals, [x, y, z] each
 const scratchSides = new Float64Array(12);
+
+// An area's creatures (showsCreature reads where they are now)
+const creaturesIn = memoizeOnEntityList((entities) =>
+  entities.filter((e) => e.type === 'creature')
+);
+
+/**
+ * The last question asked about an eye — where it is, the pose it looks
+ * with, the screen — so the same question gets its answer back without the
+ * math: an eye that hasn't moved or turned asks the same every frame.
+ */
+class EyeMemo {
+  constructor() {
+    this._asked = new Float64Array(11).fill(NaN);
+    this.answer = undefined;
+  }
+
+  /**
+   * Is this the question last asked? If not, it is from now on (the caller
+   * then stores its answer).
+   */
+  asked(position, pose, width = 0, height = 0) {
+    const a = this._asked;
+    const q = pose.quaternion;
+    if (
+      a[0] === position.x &&
+      a[1] === position.y &&
+      a[2] === position.z &&
+      a[3] === q.x &&
+      a[4] === q.y &&
+      a[5] === q.z &&
+      a[6] === q.w &&
+      a[7] === pose.fov &&
+      a[8] === pose.aspect &&
+      a[9] === width &&
+      a[10] === height
+    ) {
+      return true;
+    }
+    a[0] = position.x;
+    a[1] = position.y;
+    a[2] = position.z;
+    a[3] = q.x;
+    a[4] = q.y;
+    a[5] = q.z;
+    a[6] = q.w;
+    a[7] = pose.fov;
+    a[8] = pose.aspect;
+    a[9] = width;
+    a[10] = height;
+    return false;
+  }
+}
 
 /** Target size along one axis for `texels` of panel, under `cap`. */
 const bucket = (texels, cap) =>
@@ -261,6 +325,7 @@ class PortalView {
     this._wallsStrictBehind = [];
     this._wallsFlushLateral = []; // { mesh, lat }
     this._wallsHidden = []; // wallsToHide's answer, recycled per call
+    this._wallsHiddenLat = NaN; // ...for an eye this far to the side
     const { outward } = mapping;
     // Window basis in NEIGHBOR space, for per-frame lateral tests
     this._mappedWindowCenter = { x: mappedCenter.x, z: mappedCenter.z };
@@ -313,6 +378,13 @@ class PortalView {
     // A pass's region, and the pieces of its scene it hid (_hideUndrawable)
     this._cullPlanes = new Float64Array(PASS_PLANES * 4);
     this._hiddenPieces = [];
+    // What a pass hid or turned for its scene, put back after it (render)
+    this._turnedNotation = [];
+    this._hiddenSurfaces = [];
+    this._hiddenWalls = [];
+    // The last eyes inView and footprint answered for
+    this._inViewMemo = new EyeMemo();
+    this._footprintMemo = new EyeMemo();
 
     this._buildDoorwaySurface();
   }
@@ -378,11 +450,16 @@ class PortalView {
    * skips a pass on; bare {position} eyes have no pose, so no cull.
    */
   inView(camera) {
+    const posed = Boolean(camera.quaternion && camera.fov);
+    if (posed && this._inViewMemo.asked(camera.position, camera)) return this._inViewMemo.answer;
     const eye = camera.position;
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
-    if (eyeDistance < MIN_EYE_DISTANCE) return false;
-    return !(camera.quaternion && camera.fov && !sphereInView(camera, center, PANEL_CULL_RADIUS));
+    const seen =
+      !(eyeDistance < MIN_EYE_DISTANCE) &&
+      !(posed && !sphereInView(camera, center, PANEL_CULL_RADIUS));
+    if (posed) this._inViewMemo.answer = seen;
+    return seen;
   }
 
   /**
@@ -393,13 +470,19 @@ class PortalView {
    * such an eye writes the full half-res target.
    * @param {{position, quaternion?, fov?, aspect?, pose?}} eye
    * @param {THREE.WebGLRenderer} renderer - for the drawing-buffer size
+   * @returns {?object} shared with the next ask for the same eye: read it,
+   *   never change it
    */
   footprint(eye, renderer) {
     const posed = (camera) => Boolean(camera && camera.quaternion && camera.fov);
     const pose = posed(eye) ? eye : eye.pose;
     if (!posed(pose)) return null;
     renderer.getDrawingBufferSize(scratchSize);
-    return panelFootprint(eye.position, pose, this._corners, scratchSize.x, scratchSize.y);
+    const memo = this._footprintMemo;
+    if (!memo.asked(eye.position, pose, scratchSize.x, scratchSize.y)) {
+      memo.answer = panelFootprint(eye.position, pose, this._corners, scratchSize.x, scratchSize.y);
+    }
+    return memo.answer;
   }
 
   /**
@@ -422,7 +505,8 @@ class PortalView {
    * @param {{x, y, z}} eye - world position, this panel's side
    */
   showsCreature(eye) {
-    const entities = (this.neighborArea && this.neighborArea.entities) || [];
+    const creatures = this.neighborArea ? creaturesIn(this.neighborArea.entities) : [];
+    if (creatures.length === 0) return false;
     const e = this._map(eye);
     const rim = this._mappedRim;
     const mid = this._mappedMid;
@@ -446,8 +530,8 @@ class PortalView {
       sides[3 * i + 1] = ny * scale;
       sides[3 * i + 2] = nz * scale;
     }
-    for (const entity of entities) {
-      if (entity.type !== 'creature' || !entity.mesh) continue; // eslint-disable-line no-continue
+    for (const entity of creatures) {
+      if (!entity.mesh) continue; // eslint-disable-line no-continue
       const p = entity.mesh.position;
       const reach = CREATURE_GLOW_REACH * (entity.size || 1);
       let inside = true;
@@ -552,8 +636,9 @@ class PortalView {
    * frame. PortalManager passes the APPROACH panel's picks into every
    * panel's render so the shared clip's overreach never leaks a wall face.
    * @param {THREE.Camera} camera - the player camera (world position)
-   * @returns {THREE.Mesh[]} recycled by this view's next call (its own
-   *   pass for the same eye refills it with the same walls)
+   * @returns {THREE.Mesh[]} recycled by this view's next call for an eye
+   *   standing elsewhere to the side (one for the same offset returns it
+   *   as it is)
    */
   wallsToHide(camera) {
     if (this._wallsFlushLateral.length === 0) return this._wallsStrictBehind;
@@ -561,6 +646,9 @@ class PortalView {
     const latEye =
       (eye.x - this._mappedWindowCenter.x) * this._right.x +
       (eye.z - this._mappedWindowCenter.z) * this._right.z;
+    // The answer is the eye's lateral offset's alone
+    if (latEye === this._wallsHiddenLat) return this._wallsHidden;
+    this._wallsHiddenLat = latEye;
     const hidden = this._wallsHidden;
     hidden.length = 0;
     for (const mesh of this._wallsStrictBehind) hidden.push(mesh);
@@ -641,7 +729,8 @@ class PortalView {
     const partnerMesh = this._partnerGate.mesh;
     const partnerMaterialWasVisible = partnerMesh ? partnerMesh.material.visible : true;
     if (partnerMesh) partnerMesh.material.visible = false;
-    const frontOnlyNotation = [];
+    const frontOnlyNotation = this._turnedNotation;
+    frontOnlyNotation.length = 0;
     if (partnerMesh) {
       for (const child of partnerMesh.children) {
         if (child._isNotationMesh && child.material && child.material.side === THREE.DoubleSide) {
@@ -650,7 +739,8 @@ class PortalView {
         }
       }
     }
-    const hiddenSurfaces = [];
+    const hiddenSurfaces = this._hiddenSurfaces;
+    hiddenSurfaces.length = 0;
     if (partnerMesh && partnerMesh !== this.gate.mesh) {
       for (const child of partnerMesh.children) {
         if (child._isPortalSurface && child.visible) {
@@ -691,15 +781,10 @@ class PortalView {
     // Hide the eye-side walls (this panel's own set + the approach
     // panel's — see constructor and wallsToHide) so their outside faces
     // don't paint into the doorway view.
-    const hiddenWalls = [];
-    const hideWall = (mesh) => {
-      if (mesh.visible) {
-        mesh.visible = false;
-        hiddenWalls.push(mesh);
-      }
-    };
-    for (const mesh of this.wallsToHide(camera)) hideWall(mesh);
-    if (extraWallsBehind) for (const mesh of extraWallsBehind) hideWall(mesh);
+    const hiddenWalls = this._hiddenWalls;
+    hiddenWalls.length = 0;
+    hideAll(this.wallsToHide(camera), hiddenWalls);
+    if (extraWallsBehind) hideAll(extraWallsBehind, hiddenWalls);
 
     const previousPlanes = renderer.clippingPlanes;
     // Shared doorway-axis plane (seam consistency) AND this panel's own
