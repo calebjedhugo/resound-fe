@@ -422,7 +422,9 @@ instead of "fixing" it.
   `public/puzzles` to the `poc-*` set + a filtered manifest, precompresses),
   and uploads with `deploy/upload.sh` (assets first, `index.html` last, the
   previous deploy's assets kept). Hashed `/assets/` cache immutably (three +
-  each resound package in its own chunk), the rest revalidates; changing
+  each resound package in its own chunk, renamed only when the package or
+  the set of its exports used changes: keep `minifyInternalExports: false`,
+  mangled export names follow import order), the rest revalidates; changing
   `deploy/nginx-resound.conf` is a by-hand install. See `deploy/README.md`.
 - Puzzle JSON changes require manual refresh (no HMR)
 - **The page can boot at 0x0** (a hidden in-app browser pane): view math

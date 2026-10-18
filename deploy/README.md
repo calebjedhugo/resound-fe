@@ -35,8 +35,10 @@ Which does:
    assets first, then the puzzles, then `index.html` (and only then are stale
    unhashed files deleted). The previous deploy's assets stay for pages loaded
    before this one; only older ones are pruned (the server's `.deploy-assets`,
-   recorded each deploy, says which). Re-running is safe; the first deploy onto
-   a root with no `.deploy-assets` prunes nothing.
+   recorded each deploy, says which). While `index.html` changes it records
+   both builds, so a deploy that stops there leaves both for the next one to
+   keep. Re-running is safe; the first deploy onto a root with no
+   `.deploy-assets` prunes nothing.
 
 `deploy/dist-poc/` is a build artifact (gitignored). `deploy/build.test.js`
 and `deploy/upload.test.js` (in `npm test`) pin the chunking, staging and
@@ -45,8 +47,10 @@ upload order.
 ## Caching + compression (`deploy/nginx-resound.conf`)
 
 - `/assets/*` (Vite's hashed names: three and each resound package have their
-  own chunk, so a game edit renames only the game's): `public,
-  max-age=31536000, immutable` — never revalidated.
+  own chunk, exporting by real names (`minifyInternalExports: false`), so a
+  game edit renames only the game's, unless it starts or stops using one of
+  a package's exports): `public, max-age=31536000, immutable` — never
+  revalidated.
 - Everything else (`index.html`, `puzzles/*.json`): `no-cache` + ETag — a 304
   on every load until a deploy changes the file.
 - `gzip_static` serves the precompressed `.gz`; `gzip` (level 6) covers any
