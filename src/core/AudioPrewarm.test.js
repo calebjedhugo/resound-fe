@@ -288,6 +288,22 @@ describe('What building ahead costs a frame in play', () => {
     expect(renders.slice(2)).toEqual([{ room: RENDER_MS + 1 }]);
   });
 
+  it("starts the session's first piano render before anything else behind the StartGate", async () => {
+    const { prewarm } = fresh();
+    grantIdle([], 50);
+    prewarm.hold(true);
+    prewarm.warmArea({
+      entities: [creatureSinging(['C4', 'E4']), creatureSinging(['G4']), creatureSinging(['A4'])],
+    });
+    await jest.advanceTimersToNextTimerAsync(); // one held job, then the gate is woken
+    prewarm.hold(false);
+    expect(renders).toEqual([{ room: null }]); // the render only the gate can run
+    expect(waves).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(500);
+    expect(waves).toHaveBeenCalledTimes(4); // the voices still come, in idle time
+  });
+
   it('keeps a render for idle time with room after a pitch a strike rendered first', async () => {
     const { prewarm, piano } = fresh();
     await renderBehindGate(prewarm, ['C4', 'D4']); // teaches it a render's cost

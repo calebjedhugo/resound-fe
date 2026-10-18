@@ -184,7 +184,12 @@ function renderPianoPitch() {
 function runOne() {
   scheduled = false;
   cancelRun = null;
-  if (voiceJobs.length > 0) buildVoice();
+  // An unpriced render (the session's first) can only ever run here: no idle
+  // period has room for it. Start it before the voices and songs, which fit
+  // idle time, so a gate woken early still gets it.
+  const unpricedRender = cost.piano === Infinity && !pianoBusy && pianoPitches.length > 0;
+  if (unpricedRender) renderPianoPitch();
+  else if (voiceJobs.length > 0) buildVoice();
   else if (noteJobs.size > 0) buildNotes(nextNoteJob().instrument);
   else if (!pianoBusy && pianoPitches.length > 0) renderPianoPitch();
   schedule();
