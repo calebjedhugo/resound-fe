@@ -104,6 +104,11 @@ function reachPast(out, rect, margin) {
 // Every panel of a door lies within this distance of its cell's center
 const CELL_REACH = (WORLD_SCALE * Math.sqrt(3)) / 2;
 
+/** How far an eye moved from `a` to `b` (summed over the axes). */
+function stepBetween(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z);
+}
+
 // Who drew what a face shows, when it was not an exterior pass's own eye
 // (that eye object itself is recorded): see _restsThisFrame
 const MIRROR_WRITER = 'mirror';
@@ -735,9 +740,10 @@ class PortalManager {
    * or MIRROR_WRITER — within the last SMALL_PANEL_EVERY frames, from
    * within SMALL_PANEL_DRIFT of `eye`: a picture another pass drew (a
    * warm-up, the rotor, another eye's view), an old one, or one drawn from
-   * elsewhere is replaced at once — and never while the panel has outgrown
-   * its picture or a creature shows through it. A footprint-less pass (no
-   * pose to measure it by) never rests.
+   * elsewhere is replaced at once, and so is one drawn over such a picture
+   * (it may copy it: _wrote) — and never while the panel has outgrown its
+   * picture or a creature shows through it. A footprint-less pass (no pose
+   * to measure it by) never rests.
    */
   _restsThisFrame(view, footprint, writer, eye, renderer) {
     if (!footprint || footprint.screenShare >= PortalManager.SMALL_PANEL_SHARE) return false;
@@ -745,9 +751,10 @@ class PortalManager {
     // screen after a while away re-renders at once
     if (view._writer !== writer) return false;
     if (this._frameId - view._freshFrame >= PortalManager.SMALL_PANEL_EVERY) return false;
-    const from = view._writtenFrom;
-    const drift = Math.abs(eye.x - from.x) + Math.abs(eye.y - from.y) + Math.abs(eye.z - from.z);
-    if (drift >= PortalManager.SMALL_PANEL_DRIFT) return false;
+    if (stepBetween(eye, view._writtenFrom) >= PortalManager.SMALL_PANEL_DRIFT) return false;
+    // ...and so must the picture before it, where the panel's own door shows
+    // in its picture (see _wrote): back on screen, it draws twice running
+    if (!view._settled) return false;
     // Grown past its picture (approaching): re-render bigger, never soft
     if (!view.covers(footprint, renderer)) return false;
     // A creature in view always moves at full frame rate, however small
@@ -761,6 +768,16 @@ class PortalManager {
 
   /** Record a pass that drew `view` for `writer` from `eye` (_restsThisFrame). */
   _wrote(view, writer, eye) {
+    // A panel's picture can show its own door, where the pass copies the
+    // picture the panel showed (the double-buffered cascade): that copy is
+    // right only once the picture before was this writer's too, recent and
+    // from nearby. Resting on its first draw back on screen kept the stale
+    // rotor's straight-on picture (or one from before the eye looked away)
+    // inside its door-in-a-door two more frames
+    view._settled =
+      view._writer === writer &&
+      this._frameId - view._freshFrame <= PortalManager.SMALL_PANEL_EVERY &&
+      stepBetween(eye, view._writtenFrom) < PortalManager.SMALL_PANEL_DRIFT;
     view._freshFrame = this._frameId;
     view._writer = writer;
     if (!view._writtenFrom) view._writtenFrom = { x: 0, y: 0, z: 0 };

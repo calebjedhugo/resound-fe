@@ -105,6 +105,13 @@ function createRecordingRenderer() {
       }
       return null;
     },
+    /** The pass that drew the picture `panel` showed while `pass` ran. */
+    shownDuring(panel, pass) {
+      for (let i = this.passes.indexOf(pass) - 1; i >= 0; i -= 1) {
+        if (this.passes[i].panel === panel) return this.passes[i];
+      }
+      return null;
+    },
   };
 }
 
@@ -327,6 +334,88 @@ describe('A small panel re-renders one frame in three', () => {
       eye.quaternion = LOOK_NORTH;
       drawFrame(renderer, eye);
       expect(renderer.writesOf(panel)).toHaveLength(1);
+    }
+  });
+
+  /**
+   * P1 seen from far down its own line (under 1% of the screen): looking
+   * north into it shows the view north out of P2 — P1 itself, so P1's
+   * picture holds a copy of the one it showed before. `expectCopyFresh`
+   * checks the copy P1 shows now was drawn for the eye where it stands, as
+   * recently as two draws a beat apart leave it.
+   */
+  function enterOwnDoor() {
+    const gate = (id, z, partner) => ({
+      type: 'gate',
+      id,
+      facing: 'north',
+      link: { puzzleId: 'own-door', gateId: partner },
+      position: { x: 5, y: 0, z },
+      song: [{ pitch: 'C4', length: '1/4' }],
+    });
+    installFetchMock({});
+    PortalManager.enterWorld({
+      id: 'own-door',
+      name: 'Own door',
+      difficulty: 1,
+      gridSize: 30,
+      tempo: 120,
+      playerStart: { x: 5, y: 0, z: 24 },
+      entities: [gate('p1', 5, 'p2'), gate('p2', 28, 'p1')],
+    });
+    const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of gates) g.open();
+    const [p1, p2] = ['p1', 'p2'].map((id) => gates.find((g) => g.gateId === id));
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(5 * WORLD_SCALE, 24 * WORLD_SCALE);
+    for (let i = 0; i < 10; i += 1) drawFrame(renderer, eye);
+    const panel = panelOf(p1, 'south');
+    const { SMALL_PANEL_EVERY, SMALL_PANEL_DRIFT } = PortalManager.constructor;
+    const expectCopyFresh = () => {
+      const copied = renderer.shownDuring(panel, renderer.shownBy(panel));
+      const from = {
+        x: eye.position.x + p2.position.x - p1.position.x,
+        z: eye.position.z + p2.position.z - p1.position.z,
+      };
+      expect(Math.abs(copied.from.x - from.x) + Math.abs(copied.from.z - from.z)).toBeLessThan(
+        SMALL_PANEL_DRIFT
+      );
+      expect(renderer.frame - copied.frame).toBeLessThan(2 * SMALL_PANEL_EVERY);
+    };
+    return { renderer, eye, expectCopyFresh };
+  }
+
+  it('showing its own door, back on screen its copy is this eye’s from the second frame', () => {
+    const { renderer, eye, expectCopyFresh } = enterOwnDoor();
+    const EVERY = PortalManager.constructor.SMALL_PANEL_EVERY;
+
+    // Away long enough that its copy is an old picture (or the stale
+    // rotor's straight-on one), for 20, 21 and 22 frames: back on every
+    // beat. The first frame back can only copy that
+    for (let away = 20; away < 20 + EVERY; away += 1) {
+      eye.quaternion = LOOK_SOUTH;
+      for (let i = 0; i < away; i += 1) drawFrame(renderer, eye);
+      eye.quaternion = LOOK_NORTH;
+      drawFrame(renderer, eye);
+      for (let i = 0; i < 2 * EVERY; i += 1) {
+        drawFrame(renderer, eye);
+        expectCopyFresh();
+      }
+    }
+  });
+
+  it('showing its own door, after a jump of the eye its copy is from the new spot by the second frame', () => {
+    const { renderer, eye, expectCopyFresh } = enterOwnDoor();
+    const EVERY = PortalManager.constructor.SMALL_PANEL_EVERY;
+
+    // A unit sideways and back, every 2 * EVERY + 1 frames: every beat
+    for (let jump = 1; jump <= EVERY; jump += 1) {
+      eye.position.x += jump % 2 ? 1 : -1;
+      drawFrame(renderer, eye);
+      for (let i = 0; i < 2 * EVERY; i += 1) {
+        drawFrame(renderer, eye);
+        expectCopyFresh();
+      }
     }
   });
 });
