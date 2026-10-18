@@ -115,13 +115,17 @@ instead of "fixing" it.
 - AudioContext must be resumed on user interaction (handled in main.js)
 - Don't create oscillators until needed (memory leak if not stopped)
 - **Audio is built ahead** (`core/AudioPrewarm`, from `PuzzleLoader.buildArea`):
-  every area's creature voices (`Random.warm`) and creature pitches for the
-  tape's piano (the tape only holds creature notes; one velocity layer, 0.7).
-  Flat out while the StartGate is up, else only in idle periods with room
-  for the job — an unwarmed note still plays, built lazily. A world reset
-  drops the queued creature voices (piano pitches stay)
-- **A Random voice is ~0.6 MB** of Chrome wavetable per (creature, pitch),
-  ~2.8 MB at 96 kHz (measured 2026-10-17): `Creature.dispose` calls
+  every area's creature voices (`Random.warm`, one job per pitch) and
+  creature pitches for the tape's piano (the tape only holds creature notes;
+  one velocity layer, 0.7). Flat out while the StartGate is up, else only in
+  idle periods with room for the job (8 ms timer slices without
+  requestIdleCallback: in Safari piano renders wait for the gate) — an
+  unwarmed note still plays, built lazily. Only work that builds something
+  runs or sets a job's price (`isWarm`, `canRenderNow`). A world reset drops
+  the queued creature voices (piano pitches stay)
+- **A Random voice is ~0.6 MB** of Chrome wavetable per (creature, pitch) at
+  44.1-48 kHz; above 88.2 kHz resound-sound builds none (one would be
+  ~2.8 MB; measured 2026-10-17): `Creature.dispose` calls
   `instrument.dispose()` (not `stop()`), which frees them and lets no
   straggler note out of a song in progress; `Fountain.dispose` too (its song
   never outlives its area). A fountain's song hushes its area's creatures,
