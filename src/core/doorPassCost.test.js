@@ -89,7 +89,11 @@ function createRecordingRenderer() {
       pending.panel = allPanels().find((panel) => panel.material.map === pending.target.texture);
       pending = null;
     },
-    getDrawingBufferSize: (size) => size.set(SCREEN.width, SCREEN.height),
+    // The drawing buffer (a resize changes it)
+    screen: { ...SCREEN },
+    getDrawingBufferSize(size) {
+      return size.set(this.screen.width, this.screen.height);
+    },
     /** Passes of frame `frame` that drew `panel`. */
     writesOf(panel, frame = this.frame) {
       return this.passes.filter((pass) => pass.frame === frame && pass.panel === panel);
@@ -181,6 +185,22 @@ describe('A door pass draws at the size its panel shows on screen', () => {
       const onScreen = Math.min(CAP.height, panelPixels(z - SOUTH_PANEL_Z));
       expect(shown.height).toBeGreaterThanOrEqual(onScreen);
     }
+  });
+
+  it('a screen resized under a still eye refits the next pass to it', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    drawFrame(renderer, eye);
+    const panel = panelOf(door, 'south');
+
+    // Twice the pixels, the eye where it was
+    renderer.screen = { width: 2 * SCREEN.width, height: 2 * SCREEN.height };
+    drawFrame(renderer, eye);
+
+    const onScreen = 2 * panelPixels(eye.position.z - SOUTH_PANEL_Z);
+    expect(renderer.shownBy(panel).height).toBeGreaterThanOrEqual(onScreen);
   });
 
   it('stepping back, a target shrinks only after a run of passes asking for less', async () => {
@@ -289,6 +309,43 @@ describe('A small panel re-renders one frame in three', () => {
       drawFrame(renderer, eye);
       expect(renderer.writesOf(panel)).toHaveLength(1);
     }
+  });
+});
+
+describe('A pass runs only for a panel the eye can see now', () => {
+  /** Passes of the last frame that drew any of `door`'s panels. */
+  const doorWrites = (renderer, door) =>
+    ['north', 'south', 'east', 'west'].flatMap((f) => renderer.writesOf(panelOf(door, f)));
+
+  it('turning away where it stands, the eye draws none of its panels', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, DOOR.z + 2 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    drawFrame(renderer, eye);
+    expect(doorWrites(renderer, door).length).toBeGreaterThan(0);
+
+    eye.quaternion = LOOK_SOUTH;
+    drawFrame(renderer, eye);
+
+    expect(doorWrites(renderer, door)).toEqual([]);
+  });
+
+  it('a narrower view (the window resized) leaves out a panel it no longer holds', async () => {
+    // The door 35° to the right of the eye's view, 15 units off: inside a
+    // 4:3 view, outside a 1:2 one
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const bearing = (35 * Math.PI) / 180;
+    const eye = eyeAt(DOOR.x - 15 * Math.sin(bearing), SOUTH_PANEL_Z + 15 * Math.cos(bearing));
+    drawFrame(renderer, eye);
+    drawFrame(renderer, eye);
+    expect(doorWrites(renderer, door).length).toBeGreaterThan(0);
+
+    eye.aspect = 0.5;
+    drawFrame(renderer, eye);
+
+    expect(doorWrites(renderer, door)).toEqual([]);
   });
 });
 
@@ -423,6 +480,149 @@ describe('The mirror sweep spends its passes on what the screen can show', () =>
   });
 });
 
+describe('The stale rotor hurries only for faces something may see', () => {
+  // Same-area doors facing north: looking north into A1 shows the view
+  // north out of A2, where B1 stands straight ahead; B2 looks out at the
+  // north wall (nothing more to see). Grid coordinates.
+  const gate = (id, x, z, partner) => ({
+    type: 'gate',
+    id,
+    facing: 'north',
+    link: { puzzleId: 'rotor-pace', gateId: partner },
+    position: { x, y: 0, z },
+    song: [{ pitch: 'C4', length: '1/4' }],
+  });
+  const WORLD = {
+    id: 'rotor-pace',
+    name: 'Rotor pace',
+    difficulty: 1,
+    gridSize: 30,
+    tempo: 120,
+    playerStart: { x: 5, y: 0, z: 29 },
+    entities: [gate('a1', 5, 15, 'a2'), gate('a2', 15, 5, 'a1')].concat([
+      gate('b1', 15, 2, 'b2'),
+      gate('b2', 28, 1, 'b1'),
+    ]),
+  };
+  const FACE_OUT = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
+  const caps = ['MIRROR_MAX_DEPTH', 'MIRROR_MAX_FRONTIER', 'MIRROR_MAX_PASSES'];
+  const originalCaps = caps.map((cap) => PortalManager.constructor[cap]);
+
+  afterEach(() => {
+    caps.forEach((cap, i) => {
+      PortalManager.constructor[cap] = originalCaps[i];
+    });
+  });
+
+  /**
+   * Once every face but the eye's and the sweep's has gone stale: the rotor's
+   * refreshes a frame (passes drawn from a face's straight-on eye, 1.5 cells
+   * out at head height, carried through its door), and the oldest picture
+   * any panel shows (frames)
+   */
+  const rotorPace = () => {
+    installFetchMock({});
+    PortalManager.enterWorld(WORLD);
+    const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of gates) g.open();
+    const byId = (id) => gates.find((g) => g.gateId === id);
+    const straightOn = gates.flatMap((g) => {
+      const partner = byId(g.link.gateId);
+      return Object.values(FACE_OUT).map(([x, z]) => ({
+        x: partner.position.x + x * 1.5 * WORLD_SCALE,
+        z: partner.position.z + z * 1.5 * WORLD_SCALE,
+      }));
+    });
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE);
+    drawFrame(renderer, eye); // the doors' first frame writes every face
+    const panels = gates.flatMap((g) => Object.keys(FACE_OUT).map((f) => panelOf(g, f)));
+    let oldest = 0;
+    for (let i = 1; i < 120; i += 1) {
+      drawFrame(renderer, eye);
+      if (i >= 60) {
+        for (const panel of panels) {
+          oldest = Math.max(oldest, renderer.frame - renderer.shownBy(panel).frame);
+        }
+      }
+    }
+    const rotor = renderer.passes.filter(
+      (pass) =>
+        pass.frame > 60 &&
+        straightOn.some((at) => Math.abs(at.x - pass.from.x) + Math.abs(at.z - pass.from.z) < 1e-6)
+    );
+    return { pace: rotor.length / 60, oldest };
+  };
+
+  it('faces no sight reaches take turns: one every STALE_UNSEEN_EVERY frames', () => {
+    const { pace, oldest } = rotorPace();
+    expect(pace).toBeCloseTo(1 / PortalManager.constructor.STALE_UNSEEN_EVERY, 5);
+    expect(oldest).toBeGreaterThan(PortalManager.constructor.STALE_MAX_FRAMES + 1);
+  });
+
+  it.each([
+    ['depth', 'MIRROR_MAX_DEPTH', 1],
+    ['frontier', 'MIRROR_MAX_FRONTIER', 0],
+  ])(
+    'a sweep stopped short of its chains (the %s cap) leaves none unseen: none grows old',
+    (_, cap, value) => {
+      PortalManager.constructor[cap] = value; // B1's view goes unwalked
+      expect(rotorPace().oldest).toBeLessThanOrEqual(
+        PortalManager.constructor.STALE_MAX_FRAMES + 1
+      );
+    }
+  );
+
+  it('a face the sweep sees but has no room for keeps the full pace', async () => {
+    // Behind the eye, but straight ahead through A1 (out of A2): two doors
+    // into another area, side by side — a sweep with room for one sees
+    // both, and no chain goes on through them
+    installFetchMock({
+      'rotor-next': {
+        id: 'rotor-next',
+        name: 'Rotor next',
+        difficulty: 1,
+        gridSize: 10,
+        tempo: 120,
+        playerStart: { x: 1, y: 0, z: 9 },
+        entities: [
+          { ...gate('nb', 3, 5, 'b1'), link: { puzzleId: 'rotor-pace', gateId: 'b1' } },
+          { ...gate('nd', 7, 5, 'd1'), link: { puzzleId: 'rotor-pace', gateId: 'd1' } },
+        ],
+      },
+    });
+    PortalManager.enterWorld({
+      ...WORLD,
+      entities: [
+        gate('a1', 5, 8, 'a2'),
+        gate('a2', 15, 25, 'a1'),
+        { ...gate('b1', 15, 22, 'nb'), link: { puzzleId: 'rotor-next', gateId: 'nb' } },
+        { ...gate('d1', 16, 23, 'nd'), link: { puzzleId: 'rotor-next', gateId: 'nd' } },
+      ],
+    });
+    await jest.runAllTimersAsync(); // the neighbour loads
+    const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of gates) g.open();
+    PortalManager.constructor.MIRROR_MAX_PASSES = 1;
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(5 * WORLD_SCALE, 10 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    const faces = gates
+      .filter((g) => g.gateId === 'b1' || g.gateId === 'd1')
+      .map((g) => panelOf(g, 'south'));
+
+    let oldest = 0;
+    for (let i = 1; i < 120; i += 1) {
+      drawFrame(renderer, eye);
+      for (const panel of faces) {
+        if (i >= 60) oldest = Math.max(oldest, renderer.frame - renderer.shownBy(panel).frame);
+      }
+    }
+
+    expect(oldest).toBeLessThanOrEqual(PortalManager.constructor.STALE_MAX_FRAMES + 1);
+  });
+});
+
 describe('The mirror sweep draws only what a chain can show on screen', () => {
   // Same-area doors, every gate facing north: looking north into A1 shows
   // the view north out of A2 (and P1's north out of P2). Grid coordinates.
@@ -465,10 +665,34 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
   const turned = (yaw) => ({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) });
   const cutYaw = (distance, u) => HALF_ACROSS - Math.atan((WORLD_SCALE * (u - 0.5)) / distance);
   const cutting = (distance, u) => turned(cutYaw(distance, u));
-  /** Steady frames after a door's opening frame (before any face goes stale) */
-  const steadyWrites = (renderer, panel) =>
-    renderer.passes.filter((pass) => pass.frame > 1 && pass.panel === panel).length;
+  /**
+   * The sweep's passes for `door`'s `facing` panel in the steady frames after
+   * the doors' opening ones (until every face has its first write): passes
+   * not drawn from the face's straight-on eye (1.5 cells out, carried
+   * through its door — a warm-up's or the stale rotor's)
+   */
+  const steadyWrites = (renderer, door, facing) => {
+    const panel = panelOf(door, facing);
+    const partner = gameState.activeArea.entities.find((e) => e.gateId === door.link.gateId);
+    const out = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] }[facing];
+    const straightOn = {
+      x: partner.position.x + out[0] * 1.5 * WORLD_SCALE,
+      z: partner.position.z + out[1] * 1.5 * WORLD_SCALE,
+    };
+    return renderer.passes.filter(
+      (pass) =>
+        pass.frame >= renderer.steadyFrom &&
+        pass.panel === panel &&
+        Math.abs(pass.from.x - straightOn.x) + Math.abs(pass.from.z - straightOn.z) > 1e-6
+    ).length;
+  };
   const drawSteady = (renderer, eye) => {
+    // The opening frames, while a face waits for its first write
+    do drawFrame(renderer, eye);
+    while (allPanels().some((panel) => !panel.visible) && renderer.frame < 30);
+    expect(allPanels().every((panel) => panel.visible)).toBe(true);
+    // eslint-disable-next-line no-param-reassign
+    renderer.steadyFrom = renderer.frame + 1;
     for (let i = 0; i < 10; i += 1) drawFrame(renderer, eye);
   };
   /**
@@ -519,14 +743,14 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const renderer = createRecordingRenderer();
     drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE));
 
-    expect(steadyWrites(renderer, panelOf(door('b1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('b1'), 'south')).toBeGreaterThan(0);
     for (const [id, facing] of [
       ['c1', 'north'],
       ['c1', 'east'],
       ['c2', 'north'],
       ['c2', 'west'],
     ]) {
-      expect(steadyWrites(renderer, panelOf(door(id), facing))).toBe(0);
+      expect(steadyWrites(renderer, door(id), facing)).toBe(0);
     }
   });
 
@@ -536,7 +760,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
       const door = enter(...DOOR_A, ...D);
       const renderer = createRecordingRenderer();
       drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE, cutting(panelDistance(2), u)));
-      return steadyWrites(renderer, panelOf(door('d1'), 'south'));
+      return steadyWrites(renderer, door('d1'), 'south');
     };
 
     expect(sweptWith(1)).toBeGreaterThan(0); // the whole panel on screen
@@ -552,7 +776,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const eye = eyeAt(5 * WORLD_SCALE, 25 * WORLD_SCALE, cutting(panelDistance(10), 0.05));
     drawSteady(renderer, eye);
 
-    expect(steadyWrites(renderer, panelOf(door('d1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('d1'), 'south')).toBeGreaterThan(0);
   });
 
   it('a door at the edge of a view is swept: its cell may lie outside, a panel reaching in', () => {
@@ -563,7 +787,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const renderer = createRecordingRenderer();
     drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 25 * WORLD_SCALE, cutting(panelDistance(10), 1)));
 
-    expect(steadyWrites(renderer, panelOf(door('d1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('d1'), 'south')).toBeGreaterThan(0);
   });
 
   it('a door that shows itself in its own view keeps that whole view in sight', () => {
@@ -579,7 +803,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const renderer = createRecordingRenderer();
     drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 7 * WORLD_SCALE, cutting(panelDistance(2), 0.25)));
 
-    expect(steadyWrites(renderer, panelOf(door('k1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('k1'), 'south')).toBeGreaterThan(0);
   });
 
   it('running past a door, a door seen through it shows its own picture the frame it slides in', () => {

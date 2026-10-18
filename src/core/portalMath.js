@@ -108,32 +108,26 @@ function rotate(q, v) {
   };
 }
 
-/**
- * Is a sphere at least partly inside the camera's view frustum? Pure plain-
- * object math (position + quaternion + vertical fov in degrees + aspect), so
- * it works on the real player camera and stays testable under the mocked
- * renderer. Used to skip portal passes for doorway panels the player cannot
- * see this frame (the far plane is ignored — the game never culls by
- * distance).
- *
- * @param {{position, quaternion, fov, aspect}} camera
- * @param {{x,y,z}} center - sphere center, world space
- * @param {number} radius
- */
-export function sphereInView(camera, center, radius) {
+// The pose sphereInView last built a view's planes for, and those planes:
+// every panel tested against the player's view in a frame shares them
+const lastView = {
+  qx: NaN,
+  qy: NaN,
+  qz: NaN,
+  qw: NaN,
+  fov: NaN,
+  aspect: NaN,
+  planes: null,
+};
+
+/** Inward normals of the near + four side planes of a view (sphereInView). */
+function viewNormals(camera) {
   const q = camera.quaternion;
   const forward = rotate(q, { x: 0, y: 0, z: -1 });
   const right = rotate(q, { x: 1, y: 0, z: 0 });
   const up = rotate(q, { x: 0, y: 1, z: 0 });
   const halfV = (camera.fov / 2) * (Math.PI / 180);
   const halfH = Math.atan(Math.tan(halfV) * camera.aspect);
-  const d = {
-    x: center.x - camera.position.x,
-    y: center.y - camera.position.y,
-    z: center.z - camera.position.z,
-  };
-  const dot = (n) => n.x * d.x + n.y * d.y + n.z * d.z;
-  // Inward normals of the near + four side planes, all through the eye
   const mix = (a, sa, b, cb) => ({
     x: a.x * sa + b.x * cb,
     y: a.y * sa + b.y * cb,
@@ -143,15 +137,50 @@ export function sphereInView(camera, center, radius) {
   const cosH = Math.cos(halfH);
   const sinV = Math.sin(halfV);
   const cosV = Math.cos(halfV);
-  const planes = [
+  return [
     forward,
     mix(forward, sinH, right, cosH),
     mix(forward, sinH, right, -cosH),
     mix(forward, sinV, up, cosV),
     mix(forward, sinV, up, -cosV),
   ];
-  for (const n of planes) {
-    if (dot(n) < -radius) return false;
+}
+
+/**
+ * Is a sphere at least partly inside the camera's view frustum? Pure plain-
+ * object math (position + quaternion + vertical fov in degrees + aspect), so
+ * it works on the real player camera and stays testable under the mocked
+ * renderer. Used to skip portal passes for doorway panels the player cannot
+ * see this frame (the far plane is ignored — the game never culls by
+ * distance). The planes are built once per pose (the last one asked about).
+ *
+ * @param {{position, quaternion, fov, aspect}} camera
+ * @param {{x,y,z}} center - sphere center, world space
+ * @param {number} radius
+ */
+export function sphereInView(camera, center, radius) {
+  const q = camera.quaternion;
+  if (
+    lastView.qx !== q.x ||
+    lastView.qy !== q.y ||
+    lastView.qz !== q.z ||
+    lastView.qw !== q.w ||
+    lastView.fov !== camera.fov ||
+    lastView.aspect !== camera.aspect
+  ) {
+    lastView.planes = viewNormals(camera);
+    lastView.qx = q.x;
+    lastView.qy = q.y;
+    lastView.qz = q.z;
+    lastView.qw = q.w;
+    lastView.fov = camera.fov;
+    lastView.aspect = camera.aspect;
+  }
+  const dx = center.x - camera.position.x;
+  const dy = center.y - camera.position.y;
+  const dz = center.z - camera.position.z;
+  for (const n of lastView.planes) {
+    if (n.x * dx + n.y * dy + n.z * dz < -radius) return false;
   }
   return true;
 }

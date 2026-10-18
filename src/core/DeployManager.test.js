@@ -515,8 +515,11 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
 
     expect(areaSpy).toHaveBeenCalledWith(areaB, renderer, expect.anything());
     expect(hideSpy).toHaveBeenCalledWith(areaB);
-    // The neighbor door got real faces built for the mapped eye
-    expect(PortalManager._views.get(doorB)).toBeTruthy();
+    // The neighbor door got real faces built for the mapped eye — every one
+    // written at once (no look-ahead into another area's doors)
+    const faces = PortalManager._views.get(doorB);
+    expect(faces).toBeTruthy();
+    expect([...faces.values()].every((view) => view.written)).toBe(true);
     areaSpy.mockRestore();
     hideSpy.mockRestore();
   });
@@ -672,13 +675,14 @@ describe('The deployed gate draws only what can show, and never shows a blank pa
       shown = map;
     }
 
-    // Nobody looks into that face: the stale rotor refreshes it once every
-    // STALE_MAX_FRAMES + 1 frames — counting one per frame, pre-pass or not
+    // Nobody can see that face (no sight reaches it): the stale rotor
+    // refreshes it on its first turn once it is STALE_MAX_FRAMES old —
+    // counting one per frame, pre-pass or not
+    const { STALE_MAX_FRAMES, STALE_UNSEEN_EVERY } = PortalManager.constructor;
+    const turns = Math.ceil((STALE_MAX_FRAMES + 1) / STALE_UNSEEN_EVERY);
     expect(refreshedOn.length).toBeGreaterThan(1);
     for (let i = 1; i < refreshedOn.length; i += 1) {
-      expect(refreshedOn[i] - refreshedOn[i - 1]).toBe(
-        PortalManager.constructor.STALE_MAX_FRAMES + 1
-      );
+      expect(refreshedOn[i] - refreshedOn[i - 1]).toBe(turns * STALE_UNSEEN_EVERY);
     }
   });
 

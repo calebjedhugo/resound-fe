@@ -24,7 +24,8 @@ import * as THREE from 'three';
 import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
 import { createSceneTarget, showStoredTexels } from 'core/passContext';
-import { updateSceneMatrices } from 'core/sceneMatrices';
+import { scenePieces, updateSceneMatrices } from 'core/sceneMatrices';
+import memoizeOnEntityList from 'core/entityListMemo';
 import {
   FACING_VECTORS,
   DOORWAY_OFFSET,
@@ -87,15 +88,102 @@ const MIN_TARGET_SIZE = 32;
 // otherwise reallocate every frame).
 const SHRINK_AFTER_PASSES = 30;
 
+// A pass's region (_hideUndrawable): its clip planes — its own, and the
+// door's shared one when that is another — then its frustum's four sides
+// (through the whole doorway) and near plane
+const PASS_PLANES = 7;
+const WHOLE_DOORWAY = Object.freeze({ u0: 0, u1: 1, v0: 0, v1: 1 });
+
+/** Hide each of `meshes` still shown, recording it in `hidden`. */
+function hideAll(meshes, hidden) {
+  for (const mesh of meshes) {
+    if (mesh.visible) {
+      mesh.visible = false;
+      hidden.push(mesh);
+    }
+  }
+}
+
+/** Write THREE.Plane `plane` as plane `index` of `out` (portalMath's layout). */
+function writePlane(out, index, { normal, constant }) {
+  out[index * 4] = normal.x;
+  out[index * 4 + 1] = normal.y;
+  out[index * 4 + 2] = normal.z;
+  out[index * 4 + 3] = constant;
+}
+
+// A piece is left out of a pass only when it lies this far (world units)
+// past one of the pass's planes: far beyond any rounding between these
+// planes and three's own (a frustum from the projection matrix, clipping in
+// float32 view space), so what three would still draw is never hidden
+const CULL_MARGIN = 1e-3;
+
 const scratchSize = new THREE.Vector2();
 // showsCreature's four side normals, [x, y, z] each
 const scratchSides = new Float64Array(12);
+
+// An area's creatures (showsCreature reads where they are now)
+const creaturesIn = memoizeOnEntityList((entities) =>
+  entities.filter((e) => e.type === 'creature')
+);
+
+/**
+ * The last question asked about an eye — where it is, the pose it looks
+ * with, the screen — so the same question gets its answer back without the
+ * math: an eye that hasn't moved or turned asks the same every frame.
+ */
+class EyeMemo {
+  constructor() {
+    this._asked = new Float64Array(11).fill(NaN);
+    this.answer = undefined;
+  }
+
+  /**
+   * Is this the question last asked? If not, it is from now on (the caller
+   * then stores its answer).
+   */
+  asked(position, pose, width = 0, height = 0) {
+    const a = this._asked;
+    const q = pose.quaternion;
+    if (
+      a[0] === position.x &&
+      a[1] === position.y &&
+      a[2] === position.z &&
+      a[3] === q.x &&
+      a[4] === q.y &&
+      a[5] === q.z &&
+      a[6] === q.w &&
+      a[7] === pose.fov &&
+      a[8] === pose.aspect &&
+      a[9] === width &&
+      a[10] === height
+    ) {
+      return true;
+    }
+    a[0] = position.x;
+    a[1] = position.y;
+    a[2] = position.z;
+    a[3] = q.x;
+    a[4] = q.y;
+    a[5] = q.z;
+    a[6] = q.w;
+    a[7] = pose.fov;
+    a[8] = pose.aspect;
+    a[9] = width;
+    a[10] = height;
+    return false;
+  }
+}
 
 /** Target size along one axis for `texels` of panel, under `cap`. */
 const bucket = (texels, cap) =>
   Math.min(cap, Math.max(MIN_TARGET_SIZE, 2 ** Math.ceil(Math.log2(Math.max(1, texels)))));
 
 class PortalView {
+  // Passes leave out the pieces of their scene they can't draw
+  // (_hideUndrawable); off only to compare with passes that walk it all
+  static cullPieces = true;
+
   /**
    * @param {Gate} gate - the linked source gate (in the player's area)
    * @param {Gate} partnerGate - the partner gate ENTITY in the live neighbor
@@ -237,6 +325,7 @@ class PortalView {
     this._wallsStrictBehind = [];
     this._wallsFlushLateral = []; // { mesh, lat }
     this._wallsHidden = []; // wallsToHide's answer, recycled per call
+    this._wallsHiddenLat = NaN; // ...for an eye this far to the side
     const { outward } = mapping;
     // Window basis in NEIGHBOR space, for per-frame lateral tests
     this._mappedWindowCenter = { x: mappedCenter.x, z: mappedCenter.z };
@@ -286,6 +375,16 @@ class PortalView {
     this._shown = false;
     // The two clip planes a pass binds (render), recycled pass to pass
     this._passPlanes = [this._clipPlane, this._clipPlane];
+    // A pass's region, and the pieces of its scene it hid (_hideUndrawable)
+    this._cullPlanes = new Float64Array(PASS_PLANES * 4);
+    this._hiddenPieces = [];
+    // What a pass hid or turned for its scene, put back after it (render)
+    this._turnedNotation = [];
+    this._hiddenSurfaces = [];
+    this._hiddenWalls = [];
+    // The last eyes inView and footprint answered for
+    this._inViewMemo = new EyeMemo();
+    this._footprintMemo = new EyeMemo();
 
     this._buildDoorwaySurface();
   }
@@ -351,11 +450,16 @@ class PortalView {
    * skips a pass on; bare {position} eyes have no pose, so no cull.
    */
   inView(camera) {
+    const posed = Boolean(camera.quaternion && camera.fov);
+    if (posed && this._inViewMemo.asked(camera.position, camera)) return this._inViewMemo.answer;
     const eye = camera.position;
     const { center } = this._corners;
     const eyeDistance = this._outward.x * (eye.x - center.x) + this._outward.z * (eye.z - center.z);
-    if (eyeDistance < MIN_EYE_DISTANCE) return false;
-    return !(camera.quaternion && camera.fov && !sphereInView(camera, center, PANEL_CULL_RADIUS));
+    const seen =
+      !(eyeDistance < MIN_EYE_DISTANCE) &&
+      !(posed && !sphereInView(camera, center, PANEL_CULL_RADIUS));
+    if (posed) this._inViewMemo.answer = seen;
+    return seen;
   }
 
   /**
@@ -366,13 +470,19 @@ class PortalView {
    * such an eye writes the full half-res target.
    * @param {{position, quaternion?, fov?, aspect?, pose?}} eye
    * @param {THREE.WebGLRenderer} renderer - for the drawing-buffer size
+   * @returns {?object} shared with the next ask for the same eye: read it,
+   *   never change it
    */
   footprint(eye, renderer) {
     const posed = (camera) => Boolean(camera && camera.quaternion && camera.fov);
     const pose = posed(eye) ? eye : eye.pose;
     if (!posed(pose)) return null;
     renderer.getDrawingBufferSize(scratchSize);
-    return panelFootprint(eye.position, pose, this._corners, scratchSize.x, scratchSize.y);
+    const memo = this._footprintMemo;
+    if (!memo.asked(eye.position, pose, scratchSize.x, scratchSize.y)) {
+      memo.answer = panelFootprint(eye.position, pose, this._corners, scratchSize.x, scratchSize.y);
+    }
+    return memo.answer;
   }
 
   /**
@@ -395,7 +505,8 @@ class PortalView {
    * @param {{x, y, z}} eye - world position, this panel's side
    */
   showsCreature(eye) {
-    const entities = (this.neighborArea && this.neighborArea.entities) || [];
+    const creatures = this.neighborArea ? creaturesIn(this.neighborArea.entities) : [];
+    if (creatures.length === 0) return false;
     const e = this._map(eye);
     const rim = this._mappedRim;
     const mid = this._mappedMid;
@@ -419,8 +530,8 @@ class PortalView {
       sides[3 * i + 1] = ny * scale;
       sides[3 * i + 2] = nz * scale;
     }
-    for (const entity of entities) {
-      if (entity.type !== 'creature' || !entity.mesh) continue; // eslint-disable-line no-continue
+    for (const entity of creatures) {
+      if (!entity.mesh) continue; // eslint-disable-line no-continue
       const p = entity.mesh.position;
       const reach = CREATURE_GLOW_REACH * (entity.size || 1);
       let inside = true;
@@ -483,21 +594,27 @@ class PortalView {
    * @returns {number} the index after the last plane written
    */
   sightPlanes(apex, rect, out, index = 0) {
-    let next = pyramidPlanes(apex, this._mappedCorners, rect, out, index);
-    // Near plane: the pass looks along the mapped outward, square to the
-    // doorway (frameCorners)
-    const o = this._outwardMapped;
-    out[next * 4] = o.x;
-    out[next * 4 + 1] = o.y;
-    out[next * 4 + 2] = o.z;
-    out[next * 4 + 3] = -(o.x * apex.x + o.y * apex.y + o.z * apex.z) - this._camera.near;
-    next += 1;
-    const { normal, constant } = this._clipPlane;
-    out[next * 4] = normal.x;
-    out[next * 4 + 1] = normal.y;
-    out[next * 4 + 2] = normal.z;
-    out[next * 4 + 3] = constant;
+    const next = this._nearPlane(
+      apex,
+      out,
+      pyramidPlanes(apex, this._mappedCorners, rect, out, index)
+    );
+    writePlane(out, next, this._clipPlane);
     return next + 1;
+  }
+
+  /**
+   * The near plane of a pass drawn from `apex`: it looks along the mapped
+   * outward, square to the doorway (frameCorners). Plane `index` of `out`.
+   * @returns {number} the index after it
+   */
+  _nearPlane(apex, out, index) {
+    const o = this._outwardMapped;
+    out[index * 4] = o.x;
+    out[index * 4 + 1] = o.y;
+    out[index * 4 + 2] = o.z;
+    out[index * 4 + 3] = -(o.x * apex.x + o.y * apex.y + o.z * apex.z) - this._camera.near;
+    return index + 1;
   }
 
   /**
@@ -519,8 +636,9 @@ class PortalView {
    * frame. PortalManager passes the APPROACH panel's picks into every
    * panel's render so the shared clip's overreach never leaks a wall face.
    * @param {THREE.Camera} camera - the player camera (world position)
-   * @returns {THREE.Mesh[]} recycled by this view's next call (its own
-   *   pass for the same eye refills it with the same walls)
+   * @returns {THREE.Mesh[]} recycled by this view's next call for an eye
+   *   standing elsewhere to the side (one for the same offset returns it
+   *   as it is)
    */
   wallsToHide(camera) {
     if (this._wallsFlushLateral.length === 0) return this._wallsStrictBehind;
@@ -528,6 +646,9 @@ class PortalView {
     const latEye =
       (eye.x - this._mappedWindowCenter.x) * this._right.x +
       (eye.z - this._mappedWindowCenter.z) * this._right.z;
+    // The answer is the eye's lateral offset's alone
+    if (latEye === this._wallsHiddenLat) return this._wallsHidden;
+    this._wallsHiddenLat = latEye;
     const hidden = this._wallsHidden;
     hidden.length = 0;
     for (const mesh of this._wallsStrictBehind) hidden.push(mesh);
@@ -608,7 +729,8 @@ class PortalView {
     const partnerMesh = this._partnerGate.mesh;
     const partnerMaterialWasVisible = partnerMesh ? partnerMesh.material.visible : true;
     if (partnerMesh) partnerMesh.material.visible = false;
-    const frontOnlyNotation = [];
+    const frontOnlyNotation = this._turnedNotation;
+    frontOnlyNotation.length = 0;
     if (partnerMesh) {
       for (const child of partnerMesh.children) {
         if (child._isNotationMesh && child.material && child.material.side === THREE.DoubleSide) {
@@ -617,7 +739,8 @@ class PortalView {
         }
       }
     }
-    const hiddenSurfaces = [];
+    const hiddenSurfaces = this._hiddenSurfaces;
+    hiddenSurfaces.length = 0;
     if (partnerMesh && partnerMesh !== this.gate.mesh) {
       for (const child of partnerMesh.children) {
         if (child._isPortalSurface && child.visible) {
@@ -658,15 +781,10 @@ class PortalView {
     // Hide the eye-side walls (this panel's own set + the approach
     // panel's — see constructor and wallsToHide) so their outside faces
     // don't paint into the doorway view.
-    const hiddenWalls = [];
-    const hideWall = (mesh) => {
-      if (mesh.visible) {
-        mesh.visible = false;
-        hiddenWalls.push(mesh);
-      }
-    };
-    for (const mesh of this.wallsToHide(camera)) hideWall(mesh);
-    if (extraWallsBehind) for (const mesh of extraWallsBehind) hideWall(mesh);
+    const hiddenWalls = this._hiddenWalls;
+    hiddenWalls.length = 0;
+    hideAll(this.wallsToHide(camera), hiddenWalls);
+    if (extraWallsBehind) hideAll(extraWallsBehind, hiddenWalls);
 
     const previousPlanes = renderer.clippingPlanes;
     // Shared doorway-axis plane (seam consistency) AND this panel's own
@@ -680,10 +798,12 @@ class PortalView {
     renderer.clippingPlanes = this._passPlanes;
     renderer.setRenderTarget(writeTarget);
     updateSceneMatrices(this._scene); // once a frame, not once a pass
+    const undrawable = this._hideUndrawable(mappedEye, this._passPlanes[0]);
     renderer.render(this._scene, this._camera);
     renderer.setRenderTarget(null);
     renderer.clippingPlanes = previousPlanes;
 
+    for (const object of undrawable) object.visible = true;
     for (const child of hiddenSurfaces) child.visible = true;
     for (const mesh of hiddenWalls) mesh.visible = true;
     for (const child of frontOnlyNotation) child.material.side = THREE.DoubleSide;
@@ -698,6 +818,69 @@ class PortalView {
       this.surface.visible = this._shown; // safe to sample from now on
     }
     return true; // a pass actually ran (callers track face freshness)
+  }
+
+  /**
+   * Hide, for this pass, each piece of its scene (sceneMatrices.scenePieces)
+   * the pass cannot draw: wholly outside its frustum (the pyramid from
+   * `apex` through the doorway that frameCorners fits), where three would
+   * cull every bit of it anyway, or wholly past one of its clip planes,
+   * where every fragment would be discarded. Each pass used to walk and
+   * frustum-test the whole scene (~270 objects in The Star, about a third of
+   * a pass's CPU in Chrome) and drew what its clip planes then threw away;
+   * without them three draws the same picture, the draws that remain in the
+   * same order.
+   * @param {{x, y, z}} apex - where the pass renders from
+   * @param {THREE.Plane} sharedClip - the door's shared clip plane
+   * @returns {THREE.Object3D[]} what it hid, for the caller to show again
+   *   after the pass (recycled by the next one)
+   */
+  _hideUndrawable(apex, sharedClip) {
+    const hidden = this._hiddenPieces;
+    hidden.length = 0;
+    if (!PortalView.cullPieces) return hidden;
+    // Clip planes first: most pieces a pass can't draw lie past its own
+    const planes = this._cullPlanes;
+    writePlane(planes, 0, this._clipPlane);
+    let clipCount = 1;
+    if (sharedClip !== this._clipPlane) {
+      writePlane(planes, 1, sharedClip);
+      clipCount = 2;
+    }
+    const count = this._nearPlane(
+      apex,
+      planes,
+      pyramidPlanes(apex, this._mappedCorners, WHOLE_DOORWAY, planes, clipCount)
+    );
+    const pieces = scenePieces(this._scene);
+    if (!pieces) return hidden;
+    const { culls, clips, spheres, objects, children } = pieces;
+    for (let i = 0; i < pieces.count; i += 1) {
+      // The planes that leave this piece out once it lies wholly past one
+      const from = clips[i] ? 0 : clipCount;
+      const to = culls[i] ? count : clipCount;
+      const at = 4 * i;
+      const x = spheres[at];
+      const y = spheres[at + 1];
+      const z = spheres[at + 2];
+      const beyond = -(spheres[at + 3] + CULL_MARGIN);
+      let k = from;
+      while (
+        k < to &&
+        planes[4 * k] * x + planes[4 * k + 1] * y + planes[4 * k + 2] * z + planes[4 * k + 3] >=
+          beyond
+      ) {
+        k += 1;
+      }
+      if (k < to) {
+        const object = objects[i];
+        if (object.visible && object.children.length === children[i]) {
+          object.visible = false;
+          hidden.push(object);
+        }
+      }
+    }
+    return hidden;
   }
 
   /**

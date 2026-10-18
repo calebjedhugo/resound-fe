@@ -143,7 +143,8 @@ class PortalManager {
     // gate -> facings whose adjacent cell holds no wall (static per area,
     // computed lazily; drives the shared-clip approach axis)
     this._openFacingsByGate = new WeakMap();
-    // Faces created this pass, pending their first write (_flushWarmUps)
+    // Faces waiting for their first write (_flushWarmUps): born this pass,
+    // or held back while nothing could sample them
     this._newViews = [];
     // Frame counter for face freshness: a face nobody's eye renders still
     // shows in other portals' mirrors, and must not freeze in time. One per
@@ -169,9 +170,16 @@ class PortalManager {
     // Faces the last mirror sweep reached but its cap left out -> their
     // share of the screen (the stale rotor serves them first)
     this._sweepOverflow = new Map();
+    // The last frame a mirror sweep stopped short of walking every chain
+    // (a cap): until a frame after it, faces outside every sight may still
+    // show somewhere (see _refreshStaleFaces). Each face in a sight notes
+    // the frame (view._sightFrame)
+    this._sightsCut = 0;
     // Mirror-sweep scratch, reused every sweep: the faces it schedules, its
     // sights (_takeSight) and the screen's edges (viewPlanes)
     this._sweepScheduled = new Map();
+    // ...the faces a planning walk's sights reach (_walkSights)
+    this._sightsReached = new Set();
     this._sightPool = [];
     this._sightsTaken = 0;
     this._sightRect = { u0: 0, u1: 1, v0: 0, v1: 1 };
@@ -179,6 +187,7 @@ class PortalManager {
     this._screenPlanes = new Float64Array(4 * 4);
     this._cellCenter = { x: 0, y: 0, z: 0 };
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
+    this._passOptions = {}; // scratch: a player pass's PortalView.render options
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -364,10 +373,14 @@ class PortalManager {
       this._noteTurn(camera.quaternion);
     }
     this._renderDoorPasses(renderer, camera);
-    // The rotor's faces show only THROUGH other door panels: a frame that
-    // drew none (every door off screen or behind the eye — and so no mirror
-    // sweep either) has nowhere they could be seen
-    if (this._panelDrawn) this._refreshStaleFaces(renderer);
+    // The faces still waiting for a first write, and the rotor's, show only
+    // THROUGH other door panels: a frame that drew none (every door off
+    // screen or behind the eye — and so no mirror sweep either) has nowhere
+    // they could be seen
+    if (this._panelDrawn) {
+      this._writeWaitingFaces(renderer);
+      this._refreshStaleFaces(renderer);
+    }
     this._panelDrawn = false;
   }
 
@@ -426,9 +439,9 @@ class PortalManager {
   /**
    * Draw the doorway views of `gates` (each open, or fading open) for
    * `camera`: every face of each door exists, every face born this pass
-   * gets its first write, THEN the faces the eye looks into render — so the
-   * frame a door appears, those faces already show this eye's perspective,
-   * and they sample peers that all hold content.
+   * that something may sample gets its first write, THEN the faces the eye
+   * looks into render — so the frame a door appears, those faces already
+   * show this eye's perspective, and they sample peers that hold content.
    */
   _renderDoors(gates, renderer, camera) {
     for (const gate of gates) {
@@ -437,7 +450,7 @@ class PortalManager {
         this._views.set(gate, null); // dangling link: the gate stays an ordinary gate
       }
     }
-    const drawn = this._flushWarmUps(renderer, camera);
+    const drawn = this._flushWarmUps(gates, renderer, camera);
     for (const gate of gates) {
       const faces = this._views.get(gate);
       if (faces && faces.size === FACINGS.length && !(drawn && drawn.has(gate))) {
@@ -518,38 +531,121 @@ class PortalManager {
     return true;
   }
 
+  // First writes of faces nothing can sample yet, a frame: a pair of doors
+  // opening into its own area had all eight written in its first frame —
+  // 15 passes, 26 ms at 4x CPU in The Star (measured 2026-10-17)
+  static FIRST_WRITES_PER_FRAME = 2;
+
   /**
-   * Give every face born this pass its FIRST write, before any pass samples
-   * it (an unwritten panel stays hidden; until then a sightline through it
-   * would see the empty cell, not the door). A door into ANOTHER area shows
-   * that area's scene, where none of this pass's panels show: its player
-   * passes are its first write (run right here), and only the faces they
-   * skip warm up. A door into its OWN area shows the scene its peers hang
-   * in, so each of its faces warms up first — visible from that write on,
-   * so later warm-ups sample it — and its player passes follow with every
-   * peer holding content. One write per face: a second round once re-warmed
-   * every new face AFTER the player passes, painting the straight-on
-   * picture over the player's own perspective on the frame a door opened.
+   * Give faces their FIRST write before any pass samples them (an unwritten
+   * panel stays hidden; until then a sightline through it would see the
+   * empty cell, not the door). A door into ANOTHER area shows that area's
+   * scene, where none of this pass's panels show: its player passes are its
+   * first write (run right here), and only the faces they skip warm up. A
+   * door into its OWN area shows the scene its peers hang in, so each of its
+   * faces warms up first — visible from that write on, so later warm-ups
+   * sample it — and its player passes follow with every peer holding
+   * content. One write per face: a second round once re-warmed every new
+   * face AFTER the player passes, painting the straight-on picture over the
+   * player's own perspective on the frame a door opened.
+   *
+   * Only the faces something may sample (_firstWritesNeeded) warm up here;
+   * the rest wait, hidden, for their turn (_writeWaitingFaces).
+   * @param {Gate[]} gates - the doors this run draws (another door's faces
+   *   wait on)
    * @returns {?Set<Gate>} doors whose player passes already ran (null when
-   *   no face was born this pass)
+   *   none of their faces waited)
    */
-  _flushWarmUps(renderer, camera) {
+  _flushWarmUps(gates, renderer, camera) {
     if (this._newViews.length === 0) return null;
-    const pending = this._newViews;
+    const waiting = this._newViews;
     this._newViews = [];
-    const drawn = new Set();
-    for (const view of pending) {
-      if (view.neighborArea === view.gate.area) continue; // eslint-disable-line no-continue -- own area: below
-      if (!drawn.has(view.gate)) {
-        drawn.add(view.gate);
-        this._renderExteriorViews(view.gate, renderer, camera);
-      }
-      if (!view.written) this._warmUpView(view, view.gate, view.facing, renderer);
+    const drawing = new Set(gates);
+    const due = [];
+    for (const view of waiting) {
+      if (!this._stillWaits(view)) continue; // eslint-disable-line no-continue
+      if (drawing.has(view.gate)) due.push(view);
+      else this._newViews.push(view);
     }
-    for (const view of pending) {
-      if (!view.written) this._warmUpView(view, view.gate, view.facing, renderer);
+    if (due.length === 0) return null;
+    const needed = this._firstWritesNeeded(due, renderer, camera);
+    const drawn = new Set();
+    for (const view of due) {
+      if (view.neighborArea === view.gate.area || drawn.has(view.gate)) continue; // eslint-disable-line no-continue -- own area: below
+      drawn.add(view.gate);
+      this._renderExteriorViews(view.gate, renderer, camera);
+    }
+    for (const view of due) {
+      if (view.written) continue; // eslint-disable-line no-continue -- its player pass
+      if (needed.has(view)) {
+        this._warmUpView(view, view.gate, view.facing, renderer);
+      } else {
+        if (view._waitingSince === undefined) view._waitingSince = this._frameId;
+        this._newViews.push(view);
+      }
     }
     return drawn;
+  }
+
+  /** Is `view` still a face of its door with no write yet (_newViews)? */
+  _stillWaits(view) {
+    const faces = this._views.get(view.gate);
+    return Boolean(faces) && faces.get(view.facing) === view && !view.written;
+  }
+
+  /**
+   * After the frame's passes, give FIRST_WRITES_PER_FRAME of the faces
+   * that waited since an earlier frame — oldest first, of doors the frame
+   * drew — their first write. Nothing could sample them yet: each shows
+   * from its first write on, its door's other faces a frame or two apart.
+   */
+  _writeWaitingFaces(renderer) {
+    if (this._newViews.length === 0) return;
+    const drawing = new Set(this._drawingDoors);
+    let room = PortalManager.FIRST_WRITES_PER_FRAME;
+    const waiting = this._newViews;
+    this._newViews = [];
+    for (const view of waiting) {
+      if (!this._stillWaits(view)) continue; // eslint-disable-line no-continue
+      if (room > 0 && drawing.has(view.gate) && view._waitingSince < this._frameId) {
+        room -= 1;
+        this._warmUpView(view, view.gate, view.facing, renderer);
+      } else {
+        this._newViews.push(view);
+      }
+    }
+  }
+
+  /**
+   * Of the faces `due` their first write, those something may sample this
+   * frame or the next: faces the eye looks into, and faces a chain's sight
+   * reaches from what it looks into (were every one of them in place) —
+   * all of them when the walk is cut short (anything could show), and the
+   * faces of another area's doors (the cleanser gate's view into it: the
+   * walk follows the active area's doors only). (A straight-on warm-up seen
+   * through a chain on the frame its door opens may miss a face written
+   * after it, as it always could.)
+   * @returns {Set<PortalView>}
+   */
+  _firstWritesNeeded(due, renderer, camera) {
+    const waiting = new Set(due);
+    if (!this._walkSights(renderer, camera, waiting)) return waiting;
+    const needed = new Set();
+    for (const view of due) {
+      if (
+        view.gate.area !== this._activeArea ||
+        this._sightsReached.has(view) ||
+        this._eyeDraws(view, camera)
+      ) {
+        needed.add(view);
+      }
+    }
+    return needed;
+  }
+
+  /** Is `view` a face `camera` looks into this pass (_renderExteriorViews)? */
+  _eyeDraws(view, camera) {
+    return this._canLookInto(view.gate, view.facing, camera.position) && view.inView(camera);
   }
 
   /**
@@ -579,16 +675,10 @@ class PortalManager {
     // approached from whichever side the player is on, and clipping along
     // its authored facing there sliced every sightline sideways: black side
     // panels, and viewer-side content painting into the view.
-    const approach = this._approachFacing(gate, camera);
-    // Every face is materialized before any renders (_renderDoors); fall
-    // back to per-panel clips if the approach face somehow is not
-    // (defensive).
-    const approachView = faces.get(approach);
-    const sharedClip = approachView ? approachView.clipPlane : null;
-    // The approach panel's eye-side walls ride along with its clip plane:
-    // the shared plane's overreach can graze their faces in EVERY panel's
-    // pass, not just the approach panel's own.
-    const sharedWalls = approachView ? approachView.wallsToHide(camera) : null;
+    // (Found for the first face that renders.) Every face is materialized
+    // before any renders (_renderDoors); fall back to per-panel clips if the
+    // approach face somehow is not (defensive).
+    let approachView;
     for (const f of FACINGS) {
       if (!this._canLookInto(gate, f, camera.position)) continue; // eslint-disable-line no-continue
       const view = faces.get(f);
@@ -606,7 +696,16 @@ class PortalManager {
         this._panelDrawn = true;
         continue; // eslint-disable-line no-continue
       }
-      const options = { clipOverride: sharedClip, extraWallsBehind: sharedWalls, footprint };
+      if (approachView === undefined) {
+        approachView = faces.get(this._approachFacing(gate, camera)) || null;
+      }
+      const options = this._passOptions;
+      options.clipOverride = approachView ? approachView.clipPlane : null;
+      // The approach panel's eye-side walls ride along with its clip plane:
+      // the shared plane's overreach can graze their faces in EVERY panel's
+      // pass, not just the approach panel's own.
+      options.extraWallsBehind = approachView ? approachView.wallsToHide(camera) : null;
+      options.footprint = footprint;
       if (view.render(renderer, camera, options)) {
         this._wrote(view, camera, camera.position);
         view._playerFresh = this._passId;
@@ -798,9 +897,58 @@ class PortalManager {
    */
   _mirrorSweep(renderer, camera) {
     this._sweepOverflow.clear();
-    this._sightsTaken = 0;
+    if (!this._walkSights(renderer, camera, null)) this._sightsCut = this._frameId;
     const scheduled = this._sweepScheduled; // view -> { eye, depth, bound, footprint, share }
+    if (scheduled.size === 0) return;
+    const ranked = [...scheduled.entries()];
     scheduled.clear();
+    // Shallowest-first for the cap, biggest on screen first within a level
+    // (keep what dominates the screen), then render the keepers
+    // deepest-first so each level samples fresh content
+    ranked.sort((a, b) => a[1].depth - b[1].depth || b[1].share - a[1].share);
+    const kept = ranked.slice(0, PortalManager.MIRROR_MAX_PASSES).reverse();
+    for (let i = PortalManager.MIRROR_MAX_PASSES; i < ranked.length; i += 1) {
+      const [view, { share }] = ranked[i];
+      if (share > 0) this._sweepOverflow.set(view, share);
+    }
+    for (const [view, { eye, footprint, share }] of kept) {
+      const seen = footprint && { ...footprint, screenShare: share };
+      if (this._restsThisFrame(view, seen, MIRROR_WRITER, eye, renderer)) continue; // eslint-disable-line no-continue
+      if (view.render(renderer, { position: eye }, { footprint })) {
+        this._wrote(view, MIRROR_WRITER, eye);
+      }
+    }
+  }
+
+  /**
+   * The mirror sweep's walk (see _mirrorSweep): from the faces the eye drew
+   * this pass, every face a chain's sight reaches — noted on the face
+   * (view._sightFrame) and, unless the eye drew it, scheduled into
+   * this._sweepScheduled. With `plan` it walks AHEAD of the pass instead
+   * (_firstWritesNeeded): from the faces the eye is about to draw, the
+   * faces of `plan` (hidden, waiting for their first write) counted as in
+   * place; it notes nothing, leaves nothing scheduled, and gathers the faces
+   * it reaches in this._sightsReached.
+   * @param {?Set<PortalView>} plan
+   * @returns {boolean} false when a cap left chains unwalked
+   */
+  _walkSights(renderer, camera, plan) {
+    this._sightsTaken = 0;
+    const scheduled = this._sweepScheduled;
+    scheduled.clear();
+    this._sightsReached.clear();
+    const shown = (view) => view.surface.visible || Boolean(plan && plan.has(view));
+    // The faces the eye draws, where their pictures are drawn from, and the
+    // share of the screen they cover
+    const drawn = plan
+      ? (view) => this._eyeDraws(view, camera)
+      : (view) => view._playerFresh === this._passId;
+    const drawnFrom = (view) => (plan ? view.renderEye(camera.position) : view.drawnFrom);
+    const drawnShare = (view) => {
+      if (!plan) return view._screenShare;
+      const footprint = view.footprint(camera, renderer);
+      return footprint ? footprint.screenShare : 1;
+    };
     // A posed eye sees a seed panel only within the screen's edges — any of
     // it, next frame, while the view turns faster than SIGHT_SLACK
     const posed = Boolean(camera.quaternion && camera.fov);
@@ -826,12 +974,13 @@ class PortalManager {
       let bound = -1;
       let sights = null;
       for (const v of faces.values()) {
-        if (v._playerFresh !== this._passId) continue; // eslint-disable-line no-continue
-        bound = Math.max(bound, v._screenShare);
+        if (!drawn(v)) continue; // eslint-disable-line no-continue
+        const share = drawnShare(v);
+        bound = Math.max(bound, share);
         const rect = this._sightRect;
         if (cut && !clipQuad(v.corners, this._screenPlanes, 4, rect)) continue; // eslint-disable-line no-continue
         sights = sights || [];
-        sights.push(this._takeSight(v, cut ? rect : WHOLE_PANEL, v.drawnFrom, v._screenShare));
+        sights.push(this._takeSight(v, cut ? rect : WHOLE_PANEL, drawnFrom(v), share));
       }
       if (sights) frontier.push({ gate, eye: camera.position, bound, sights });
     }
@@ -840,6 +989,7 @@ class PortalManager {
     // frontier cap keeps the biggest chains (bounds pass down unchanged)
     frontier.sort((a, b) => b.bound - a.bound);
 
+    let walkedAll = true;
     for (
       let depth = 1;
       depth <= PortalManager.MIRROR_MAX_DEPTH && frontier.length > 0;
@@ -851,7 +1001,7 @@ class PortalManager {
         const [anyView] = sourceFaces.values();
         const mapped = anyView._map(eye);
         const partner = this._partnerGate(source);
-        for (const sight of sights) this._aimSight(sight, sourceFaces);
+        for (const sight of sights) this._aimSight(sight, sourceFaces, shown);
         for (const gate of this._linkedGates) {
           if (gate === source || gate === partner) continue; // eslint-disable-line no-continue
           if (!gate.isOpen && !(gate._fade > 0)) continue; // eslint-disable-line no-continue
@@ -862,14 +1012,19 @@ class PortalManager {
           let seen = null;
           for (const f of FACINGS) {
             const view = faces.get(f);
-            if (!view || !view.surface.visible || !this._canLookInto(gate, f, mapped)) continue; // eslint-disable-line no-continue
+            if (!view || !shown(view) || !this._canLookInto(gate, f, mapped)) continue; // eslint-disable-line no-continue
             const rect = this._sightRect;
             if (!this._inSight(view, sights, rect)) continue; // eslint-disable-line no-continue
+            if (plan) this._sightsReached.add(view);
+            else view._sightFrame = this._frameId;
             // Seen from here: its picture is the player's own, or the one
             // this sweep draws for the eye it was scheduled with
-            let apex = view.drawnFrom;
-            let share = view._screenShare;
-            if (view._playerFresh !== this._passId) {
+            let apex;
+            let share;
+            if (drawn(view)) {
+              apex = drawnFrom(view);
+              share = drawnShare(view);
+            } else {
               let entry = scheduled.get(view);
               if (!entry) {
                 const footprint = pose
@@ -892,12 +1047,12 @@ class PortalManager {
           }
           // The chain continues through what it sees of this door's view —
           // but only same-area doors show panels to keep refreshing
-          if (
-            seen &&
-            this._isSameAreaDoor(gate) &&
-            next.length < PortalManager.MIRROR_MAX_FRONTIER
-          ) {
-            next.push({ gate, eye: mapped, bound, sights: seen });
+          if (seen && this._isSameAreaDoor(gate)) {
+            if (next.length < PortalManager.MIRROR_MAX_FRONTIER) {
+              next.push({ gate, eye: mapped, bound, sights: seen });
+            } else {
+              walkedAll = false; // a chain left unwalked
+            }
           }
         }
       }
@@ -906,29 +1061,16 @@ class PortalManager {
       // is full, none of them could make it
       if (scheduled.size >= PortalManager.MIRROR_MAX_PASSES) break;
     }
+    // Chains left past the depth or pass cap: what they show is unknown
+    if (frontier.length > 0) walkedAll = false;
 
     // The walk's scratch has served: none of it may keep a view reachable
     // (and the torn-down world behind it) once that view is gone
     for (let i = 0; i < this._sightsTaken; i += 1) this._sightPool[i].view = null;
-    if (scheduled.size === 0) return;
-    const ranked = [...scheduled.entries()];
-    scheduled.clear();
-    // Shallowest-first for the cap, biggest on screen first within a level
-    // (keep what dominates the screen), then render the keepers
-    // deepest-first so each level samples fresh content
-    ranked.sort((a, b) => a[1].depth - b[1].depth || b[1].share - a[1].share);
-    const kept = ranked.slice(0, PortalManager.MIRROR_MAX_PASSES).reverse();
-    for (let i = PortalManager.MIRROR_MAX_PASSES; i < ranked.length; i += 1) {
-      const [view, { share }] = ranked[i];
-      if (share > 0) this._sweepOverflow.set(view, share);
+    if (plan) {
+      scheduled.clear();
     }
-    for (const [view, { eye, footprint, share }] of kept) {
-      const seen = footprint && { ...footprint, screenShare: share };
-      if (this._restsThisFrame(view, seen, MIRROR_WRITER, eye, renderer)) continue; // eslint-disable-line no-continue
-      if (view.render(renderer, { position: eye }, { footprint })) {
-        this._wrote(view, MIRROR_WRITER, eye);
-      }
-    }
+    return walkedAll;
   }
 
   /**
@@ -938,8 +1080,9 @@ class PortalManager {
    * cascade), so any part of it can reach the screen: such a sight takes
    * the whole panel (and SIGHT_MARGIN past it).
    * @param {Map<string, PortalView>} ownFaces - the faces of the sight's door
+   * @param {function(PortalView): boolean} shown - does a face show
    */
-  _aimSight(sight, ownFaces) {
+  _aimSight(sight, ownFaces, shown) {
     const { view, apex, rect, planes } = sight;
     const margin = PortalManager.SIGHT_MARGIN;
     // Short of the whole panel and its margin: does the picture show its door?
@@ -947,7 +1090,7 @@ class PortalManager {
       view.sightPlanes(apex, WHOLE_PANEL, planes);
       for (const own of ownFaces.values()) {
         if (
-          own.surface.visible &&
+          shown(own) &&
           own.facesToward(apex) &&
           clipQuad(own.corners, planes, SIGHT_PLANES, this._sightPart)
         ) {
@@ -1045,6 +1188,21 @@ class PortalManager {
 
   static STALE_REFRESH_PER_FRAME = 2;
 
+  // ...but a face outside every sight of a sweep that walked every chain
+  // can show nowhere next frame (sights reach a frame ahead): such faces
+  // take turns, one every STALE_UNSEEN_EVERY frames and only when no face
+  // in sight needs the refresh. A flick from rest (unforeseeable, see
+  // SIGHT_SLACK) that brings one into a door's view shows its last picture
+  // for that one frame: of the right door, from a straight-on eye, at most
+  // about STALE_UNSEEN_EVERY frames per such face old.
+  static STALE_UNSEEN_EVERY = 3;
+
+  /**
+   * Refresh the stalest faces (see STALE_MAX_FRAMES): what the mirror sweep
+   * reached but had no room for first, biggest on screen first (the
+   * likeliest in sight), then the oldest — where a face no sight reaches
+   * takes its turn (STALE_UNSEEN_EVERY).
+   */
   _refreshStaleFaces(renderer) {
     const stale = [];
     for (const [gate, faces] of this._views) {
@@ -1058,18 +1216,26 @@ class PortalManager {
       }
     }
     if (stale.length === 0) return;
-    // What the mirror sweep reached but had no room for goes first, biggest
-    // on screen first — those faces are the likeliest in sight; then the
-    // oldest
+    // A sight noted this frame or the last (the cleanser gate's pre-pass
+    // sweeps ahead of the frame's count) reaches it; or nothing is known
+    const known = this._sightsCut < this._frameId - 1;
+    const unseen = (view) => known && !(view._sightFrame >= this._frameId - 1);
     const overflow = this._sweepOverflow;
     stale.sort(
       (a, b) =>
         (overflow.get(b) || 0) - (overflow.get(a) || 0) ||
         (a._freshFrame || 0) - (b._freshFrame || 0)
     );
-    const budget = Math.min(PortalManager.STALE_REFRESH_PER_FRAME, stale.length);
-    for (let i = 0; i < budget; i += 1) {
-      this._warmUpView(stale[i], stale[i].gate, stale[i].facing, renderer);
+    let budget = PortalManager.STALE_REFRESH_PER_FRAME;
+    let unseenTurn = this._frameId % PortalManager.STALE_UNSEEN_EVERY === 0;
+    for (const view of stale) {
+      if (budget === 0) break;
+      if (unseen(view)) {
+        if (!unseenTurn) continue; // eslint-disable-line no-continue
+        unseenTurn = false;
+      }
+      this._warmUpView(view, view.gate, view.facing, renderer);
+      budget -= 1;
     }
   }
 

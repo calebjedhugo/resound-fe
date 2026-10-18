@@ -209,7 +209,12 @@ instead of "fixing" it.
   materialized eagerly and WRITTEN ONCE before anything samples them (a
   door into another area: its eye-side faces by their first player pass;
   every other face by one straight-on warm-up), THEN the eye's passes run —
-  the frame a door appears already shows the player's perspective. A panel
+  the frame a door appears already shows the player's perspective. Only a
+  face something may sample gets that write at once (the eye's, and those a
+  chain's sight reaches: `_firstWritesNeeded` runs the sweep's walk ahead,
+  waiting faces in place; all of them if a cap cuts it short); the rest
+  wait hidden and get theirs after the frame's passes,
+  `FIRST_WRITES_PER_FRAME` (2) a frame while a panel is drawn. A panel
   never shows before its first write (`PortalView.written`), and stays
   VISIBLE whatever side the player's eye is on (front-side culling
   hides them from behind) — a panel is sampled by OTHER portals' passes
@@ -237,10 +242,14 @@ instead of "fixing" it.
   biggest-on-screen-first, so the cap keeps what is in sight; self/partner
   recursion still rides the double-buffered cascade; cross-area door
   interiors unchanged); and faces in NO sightline fall back to the stale
-  rotor (`_refreshStaleFaces`, ≤ `STALE_MAX_FRAMES` old, the sweep's
+  rotor (`_refreshStaleFaces`, past `STALE_MAX_FRAMES`, the sweep's
   overflow first, then oldest-first, bounded per frame) so nothing ever
   freezes in time — it idles in frames that draw no door panel (nothing
-  could show its faces). Keyed off `_playerFresh` (a face that was
+  could show its faces). A face outside every sight of a sweep that walked
+  all its chains (no cap hit) takes turns: one every `STALE_UNSEEN_EVERY`
+  (3) frames — so a flick from rest can show such a face's last picture
+  (the right door, straight-on) for one frame, up to ~3 frames per such
+  face old (The Star, all doors: ~2-3 s). Keyed off `_playerFresh` (a face that was
   ELIGIBLE but frustum-culled still needs a mirror render). Freshness ages
   in REAL frames: the cleanser gate's mapped-eye door pass
   (`renderPortalsFor`) counts none. Its pad panels age via their own rotor
@@ -328,7 +337,13 @@ instead of "fixing" it.
   `matrixWorldAutoUpdate` off; main.js `render()` and `PortalView.render`
   update each before its first pass. **Render-time code must never MOVE
   anything** (visibility/material toggles only), and an object added
-  mid-frame computes its own `updateMatrixWorld()` (doorway surfaces do)
+  mid-frame computes its own `updateMatrixWorld()` (doorway surfaces do).
+  Door passes skip what they can't draw: `scenePieces` measures a scene's
+  pieces (topmost meshes under its groups, subtree spheres) once a frame on
+  its second pass, and `PortalView` hides those wholly outside its frustum or
+  past a clip plane — three draws the same, in the same order
+  (`doorPassDraws.test`); a piece whose child count changed mid-frame is
+  left to three
 - **Passes skip invisible staff planes**: a pass leaves out every notation
   plane it would paint at opacity 0 (seen from behind/edge-on, texture
   pending) via hooks `NotationDisplay` chains onto each scene's
