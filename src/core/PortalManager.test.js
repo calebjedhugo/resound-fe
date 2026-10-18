@@ -53,6 +53,29 @@ async function stepTo(x, z) {
   await flushCrossing();
 }
 
+/**
+ * The frames doors take to open: a door's first frame writes each face
+ * something may show, and the faces nothing can show yet get their first
+ * write a few a frame after. Draws door passes for `camera` until every
+ * panel of the active area's open doors is written (shown) — every frame
+ * after is a steady one.
+ */
+function openingFrames(renderer, camera) {
+  const waiting = () =>
+    gameState.activeArea.entities.some(
+      (e) =>
+        e.type === 'gate' &&
+        e.isOpen &&
+        e.mesh &&
+        e.mesh.children.some((child) => child._isPortalSurface && !child.visible)
+    );
+  let frames = 0;
+  do {
+    PortalManager.renderPortals(renderer, camera);
+    frames += 1;
+  } while (waiting() && frames < 20);
+}
+
 describe('PortalManager crossing', () => {
   let gate;
 
@@ -277,9 +300,9 @@ describe('PortalManager see-through rendering', () => {
 
   it('an open linked gate shows the neighbor view through its doorway', () => {
     gate.open();
-    // First frame materializes + WARMS every face (buffer seeding — the
-    // teleport stress test); assert on the steady-state pass that follows.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding — the teleport
+    // stress test); assert on the steady-state pass that follows.
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
     renderer.targets.length = 0;
 
@@ -298,8 +321,8 @@ describe('PortalManager see-through rendering', () => {
 
   it('a face nobody looks at refreshes on the stale rotor — mirrors never freeze in time', () => {
     gate.open();
-    // Materialize + warm all faces, then reach steady state
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face, then steady state
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
 
     // Within the stale window: steady frames render only the eligible faces
@@ -376,9 +399,9 @@ describe('PortalManager see-through rendering', () => {
     // Crossing a jamb popped a side panel in/out and the neighbour geometry
     // visibly jumped. All panels must now clip with the SAME plane.
     gate.open();
-    // First frame materializes + WARMS every face (buffer seeding — the
-    // teleport stress test); assert on the steady-state pass that follows.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding — the teleport
+    // stress test); assert on the steady-state pass that follows.
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -413,9 +436,9 @@ describe('PortalManager see-through rendering', () => {
 
   it('closing the gate hides the doorway and stops paying for the pass', () => {
     gate.open();
-    // First frame materializes + WARMS every face (buffer seeding — the
-    // teleport stress test); assert on the steady-state pass that follows.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding — the teleport
+    // stress test); assert on the steady-state pass that follows.
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
     PortalManager.renderPortals(renderer, camera);
     gate.close();
@@ -468,9 +491,9 @@ describe('PortalManager see-through rendering', () => {
     gate.open();
     // Stand south of the partner gate (grid 5,7 facing south), looking north at it
     camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 9 * WORLD_SCALE } };
-    // First frame materializes + WARMS every face (buffer seeding — the
-    // teleport stress test); assert on the steady-state pass that follows.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding — the teleport
+    // stress test); assert on the steady-state pass that follows.
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
     renderer.targets.length = 0;
     PortalManager.renderPortals(renderer, camera);
@@ -504,7 +527,7 @@ describe('Recursive mirrors render frame-fresh (the tunnel is never laggy)', () 
     // of pair1-b — where the view shows pair2-a's SOUTH face, a face the
     // player's own eye is NOT past (only its north face is).
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE } };
-    PortalManager.renderPortals(renderer, camera); // materialize + warm
+    openingFrames(renderer, camera); // every face written
     PortalManager.renderPortals(renderer, camera); // steady frame
 
     const pair2a = gates.find((g) => g.gateId === 'pair2-a');
@@ -542,7 +565,7 @@ describe('Recursive mirrors render frame-fresh (the tunnel is never laggy)', () 
       fov: 75,
       aspect: 1,
     };
-    PortalManager.renderPortals(renderer, camera); // materialize + warm
+    openingFrames(renderer, camera); // every face written
     PortalManager.renderPortals(renderer, camera); // steady frame
 
     // pair1-a's view shows pair2-a's south face — mirror-fresh THIS frame
@@ -744,9 +767,9 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     // showed the strip.
     const camera = { position: { x: 3 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
 
-    // First frame materializes + WARMS every face (buffer seeding); assert
-    // on the steady-state passes that follow.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding); assert on the
+    // steady-state passes that follow.
+    openingFrames(renderer, camera);
     seen.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -780,9 +803,9 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     // Far back but dead on the door axis
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: -1 * WORLD_SCALE } };
 
-    // First frame materializes + WARMS every face (buffer seeding); assert
-    // on the steady-state passes that follow.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding); assert on the
+    // steady-state passes that follow.
+    openingFrames(renderer, camera);
     seen.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -830,9 +853,9 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     // Inside the source doorway cell, a step shy of the commit line
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 6 - 0.5 } };
 
-    // First frame materializes + WARMS every face (buffer seeding); assert
-    // on the steady-state passes that follow.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding); assert on the
+    // steady-state passes that follow.
+    openingFrames(renderer, camera);
     seen.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -894,9 +917,9 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
     // the real approach axis is X, perpendicular to the authored facing
     const camera = { position: { x: 2 * WORLD_SCALE, y: 1.8, z: 2 * WORLD_SCALE } };
 
-    // First frame materializes + WARMS every face (buffer seeding); assert
-    // on the steady-state pass that follows.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding); assert on the
+    // steady-state pass that follows.
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -949,9 +972,9 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
     // lie BEYOND (south of door-b) — the black-sky bug hid them anyway.
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 0 } };
 
-    // First frame materializes + WARMS every face (buffer seeding); assert
-    // on the steady-state passes that follow.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding); assert on the
+    // steady-state passes that follow.
+    openingFrames(renderer, camera);
     seen.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -983,9 +1006,9 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
     // approach resolves south, east panel still visible
     const camera = { position: { x: 18.1, y: 1.8, z: 10 } };
 
-    // First frame materializes + WARMS every face (buffer seeding); assert
-    // on the steady-state pass that follows.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding); assert on the
+    // steady-state pass that follows.
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -1323,9 +1346,9 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     // Player one cell north of door-a, looking at its doorway face
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 1 * WORLD_SCALE } };
 
-    // First frame materializes + WARMS every face (buffer seeding); assert
-    // on the steady-state pass that follows.
-    PortalManager.renderPortals(renderer, camera);
+    // The opening frames write every face (buffer seeding); assert on the
+    // steady-state pass that follows.
+    openingFrames(renderer, camera);
     renderer.renderCalls.length = 0;
 
     PortalManager.renderPortals(renderer, camera);
@@ -1353,9 +1376,9 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     const visibleSurfaces = () =>
       doorA.mesh.children.filter((c) => c._isPortalSurface && c.visible);
 
-    // First frame materializes + WARMS all four faces (buffer seeding —
-    // the teleport stress test); count fresh passes on steady frames.
-    PortalManager.renderPortals(renderer, {
+    // The opening frames write all four faces (buffer seeding — the
+    // teleport stress test); count fresh passes on steady frames.
+    openingFrames(renderer, {
       position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
     renderer.renderCalls = [];
@@ -1406,8 +1429,8 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
       getDrawingBufferSize: (size) => size.set(800, 600),
     };
     doorA.open();
-    // A first pass from outside builds the south-approach view
-    PortalManager.renderPortals(renderer, {
+    // The opening frames from outside build and write the door's views
+    openingFrames(renderer, {
       position: { x: 5 * WORLD_SCALE, y: 1.8, z: 4 * WORLD_SCALE },
     });
 
@@ -1471,10 +1494,10 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     await ctx.tick(16); // mirror door-b open
 
     // Stand where BOTH doors' views are live at once (between them). The
-    // first frame builds both doors' views lazily; assert on the SECOND,
+    // opening frames build and write both doors' views; assert on a
     // steady-state frame.
     const camera = { position: { x: 5 * WORLD_SCALE, y: 1.8, z: 5 * WORLD_SCALE } };
-    PortalManager.renderPortals(renderer, camera);
+    openingFrames(renderer, camera);
     passes.length = 0;
     feedback = 0;
     PortalManager.renderPortals(renderer, camera);
@@ -1532,7 +1555,7 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     doorIn.open(); // door-out stays closed: only door-in's views render
     // Just off-axis south of door-in (the report's stance), looking north
     const camera = { position: { x: 5 * WORLD_SCALE - 0.1, y: 1.8, z: 6 * WORLD_SCALE + 4.1 } };
-    PortalManager.renderPortals(renderer, camera); // frame 1 builds views lazily
+    openingFrames(renderer, camera); // the opening frames build and write the views
     snaps.length = 0;
     PortalManager.renderPortals(renderer, camera); // assert on the steady frame
 

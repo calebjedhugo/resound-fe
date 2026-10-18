@@ -665,10 +665,34 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
   const turned = (yaw) => ({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) });
   const cutYaw = (distance, u) => HALF_ACROSS - Math.atan((WORLD_SCALE * (u - 0.5)) / distance);
   const cutting = (distance, u) => turned(cutYaw(distance, u));
-  /** Steady frames after a door's opening frame (before any face goes stale) */
-  const steadyWrites = (renderer, panel) =>
-    renderer.passes.filter((pass) => pass.frame > 1 && pass.panel === panel).length;
+  /**
+   * The sweep's passes for `door`'s `facing` panel in the steady frames after
+   * the doors' opening ones (until every face has its first write): passes
+   * not drawn from the face's straight-on eye (1.5 cells out, carried
+   * through its door — a warm-up's or the stale rotor's)
+   */
+  const steadyWrites = (renderer, door, facing) => {
+    const panel = panelOf(door, facing);
+    const partner = gameState.activeArea.entities.find((e) => e.gateId === door.link.gateId);
+    const out = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] }[facing];
+    const straightOn = {
+      x: partner.position.x + out[0] * 1.5 * WORLD_SCALE,
+      z: partner.position.z + out[1] * 1.5 * WORLD_SCALE,
+    };
+    return renderer.passes.filter(
+      (pass) =>
+        pass.frame >= renderer.steadyFrom &&
+        pass.panel === panel &&
+        Math.abs(pass.from.x - straightOn.x) + Math.abs(pass.from.z - straightOn.z) > 1e-6
+    ).length;
+  };
   const drawSteady = (renderer, eye) => {
+    // The opening frames, while a face waits for its first write
+    do drawFrame(renderer, eye);
+    while (allPanels().some((panel) => !panel.visible) && renderer.frame < 30);
+    expect(allPanels().every((panel) => panel.visible)).toBe(true);
+    // eslint-disable-next-line no-param-reassign
+    renderer.steadyFrom = renderer.frame + 1;
     for (let i = 0; i < 10; i += 1) drawFrame(renderer, eye);
   };
   /**
@@ -719,14 +743,14 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const renderer = createRecordingRenderer();
     drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE));
 
-    expect(steadyWrites(renderer, panelOf(door('b1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('b1'), 'south')).toBeGreaterThan(0);
     for (const [id, facing] of [
       ['c1', 'north'],
       ['c1', 'east'],
       ['c2', 'north'],
       ['c2', 'west'],
     ]) {
-      expect(steadyWrites(renderer, panelOf(door(id), facing))).toBe(0);
+      expect(steadyWrites(renderer, door(id), facing)).toBe(0);
     }
   });
 
@@ -736,7 +760,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
       const door = enter(...DOOR_A, ...D);
       const renderer = createRecordingRenderer();
       drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE, cutting(panelDistance(2), u)));
-      return steadyWrites(renderer, panelOf(door('d1'), 'south'));
+      return steadyWrites(renderer, door('d1'), 'south');
     };
 
     expect(sweptWith(1)).toBeGreaterThan(0); // the whole panel on screen
@@ -752,7 +776,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const eye = eyeAt(5 * WORLD_SCALE, 25 * WORLD_SCALE, cutting(panelDistance(10), 0.05));
     drawSteady(renderer, eye);
 
-    expect(steadyWrites(renderer, panelOf(door('d1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('d1'), 'south')).toBeGreaterThan(0);
   });
 
   it('a door at the edge of a view is swept: its cell may lie outside, a panel reaching in', () => {
@@ -763,7 +787,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const renderer = createRecordingRenderer();
     drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 25 * WORLD_SCALE, cutting(panelDistance(10), 1)));
 
-    expect(steadyWrites(renderer, panelOf(door('d1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('d1'), 'south')).toBeGreaterThan(0);
   });
 
   it('a door that shows itself in its own view keeps that whole view in sight', () => {
@@ -779,7 +803,7 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     const renderer = createRecordingRenderer();
     drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 7 * WORLD_SCALE, cutting(panelDistance(2), 0.25)));
 
-    expect(steadyWrites(renderer, panelOf(door('k1'), 'south'))).toBeGreaterThan(0);
+    expect(steadyWrites(renderer, door('k1'), 'south')).toBeGreaterThan(0);
   });
 
   it('running past a door, a door seen through it shows its own picture the frame it slides in', () => {

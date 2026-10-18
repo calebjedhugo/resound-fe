@@ -50,6 +50,8 @@ export function createGLStub(width, height) {
       if (is(p, 'VERSION')) return 'WebGL 2.0 (stub)';
       if (is(p, 'SHADING_LANGUAGE_VERSION')) return 'WebGL GLSL ES 3.00 (stub)';
       if (is(p, 'VIEWPORT') || is(p, 'SCISSOR_BOX')) return new Int32Array([0, 0, width, height]);
+      // three sizes its per-draw attribute state by this one
+      if (is(p, 'MAX_VERTEX_ATTRIBS')) return 16;
       return 16384;
     },
     getProgramParameter: (program, p) =>
