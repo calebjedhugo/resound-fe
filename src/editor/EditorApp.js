@@ -70,6 +70,10 @@ export default class EditorApp {
     this._floorDraft = null; // { anchor: {x,z}, elevation } while sizing a new floor
     this._validationTimer = null;
     this._autoSaveTimer = null;
+    this._repoSaves = new Set(); // autosave writes still in flight
+    // Bumped each time a load replaces the model: a save that lands under a
+    // newer generation was written for a puzzle that is no longer open.
+    this._modelGeneration = 0;
     // True once the current puzzle exists on disk. While false (a brand-new
     // puzzle), the id is derived live from the name; once true it is locked so
     // renaming never forks the file.
@@ -156,7 +160,15 @@ export default class EditorApp {
         this.toolbar.setStatus('saved');
       },
       () => this._newPuzzle(),
-      () => this._newPuzzle() // after delete: drop to a fresh, unsaved puzzle
+      () => {
+        // After delete: drop to a fresh, unsaved puzzle. An edit made while
+        // the delete was out must not write the deleted file back.
+        this._cancelAutoSave();
+        this._newPuzzle();
+      },
+      // Before the picker reads a level or deletes a file, the open puzzle's
+      // last edit lands: a reload reads it back, a delete comes after it.
+      () => this._settleAutoSave()
     );
     this.worldOverview = new WorldOverview(document.getElementById('world-panel'), {
       onOpenPuzzle: (id) => this.puzzlePicker.open(id),
@@ -414,10 +426,45 @@ export default class EditorApp {
 
   _scheduleAutoSave() {
     clearTimeout(this._autoSaveTimer);
-    this._autoSaveTimer = setTimeout(() => {
-      saveSession(this.undoManager);
-      this._saveToRepo();
-    }, 500);
+    this._autoSaveTimer = setTimeout(() => this._autoSave(), 500);
+  }
+
+  /** The debounced autosave: snapshot the session and write the puzzle file. */
+  _autoSave() {
+    this._autoSaveTimer = null;
+    saveSession(this.undoManager);
+    const save = this._saveToRepo();
+    this._repoSaves.add(save);
+    save.finally(() => this._repoSaves.delete(save));
+  }
+
+  /**
+   * Run a pending autosave NOW, before something replaces the model it is
+   * for. Left to its timer it writes whatever model is open by then — the
+   * newly opened puzzle, reformatting its file — and this one's last edit is
+   * never written. The model is serialized before this returns (the write
+   * itself lands later), so the caller may replace it at once.
+   */
+  _flushAutoSave() {
+    if (this._autoSaveTimer === null) return;
+    clearTimeout(this._autoSaveTimer);
+    this._autoSave();
+  }
+
+  /** Drop a pending autosave unwritten (its puzzle's file was just deleted). */
+  _cancelAutoSave() {
+    clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = null;
+  }
+
+  /**
+   * Flush the pending autosave and wait until every autosave write has
+   * landed, so what runs next reads or rewrites the files as the editor last
+   * left them (git; the picker reading a puzzle back or deleting one).
+   */
+  async _settleAutoSave() {
+    this._flushAutoSave();
+    await Promise.all(this._repoSaves);
   }
 
   async _saveToRepo() {
@@ -428,15 +475,22 @@ export default class EditorApp {
       this.puzzlePicker.setSelected('', name);
       return;
     }
+    const generation = this._modelGeneration;
+    // A save flushed as its model was replaced lands for a puzzle that is no
+    // longer open: the id lock, the picker's selection and the status line
+    // are the open puzzle's by then (its file still joins the list).
+    const stillOpen = () => generation === this._modelGeneration;
     this.toolbar.setStatus('saving');
     try {
       const written = await savePuzzleToRepo(this.undoManager);
+      if (written && stillOpen()) this._puzzleCommitted = true;
+      // A newly-created id won't be in the dropdown yet; refresh to add it.
+      if (written && !this.puzzlePicker.hasLevel(id)) await this.puzzlePicker.refresh();
+      if (!stillOpen()) {
+        this._selectOpenPuzzleInPicker();
+        return;
+      }
       if (written) {
-        this._puzzleCommitted = true;
-        // A newly-created id won't be in the dropdown yet; refresh to add it.
-        if (!this.puzzlePicker.hasLevel(id)) {
-          await this.puzzlePicker.refresh(id);
-        }
         this.puzzlePicker.setSelected(id);
         this.toolbar.setStatus('saved');
       } else {
@@ -446,6 +500,12 @@ export default class EditorApp {
       console.warn('Repo save failed:', err);
       this.toolbar.setStatus('error', err.message);
     }
+  }
+
+  /** Point the picker at the open puzzle: its entry, or an "(unsaved)" one. */
+  _selectOpenPuzzleInPicker() {
+    const { id, name } = this.undoManager.getMetadata();
+    this.puzzlePicker.setSelected(id || '', name);
   }
 
   async _restoreSession() {
@@ -509,6 +569,11 @@ export default class EditorApp {
   }
 
   _applyRestoredModel(importedModel) {
+    // Every path that replaces the model comes through here (picker, world
+    // map, new puzzle, git reloads, session restore): the old model's
+    // pending edit is written first, for the old model.
+    this._flushAutoSave();
+    this._modelGeneration += 1;
     this.undoManager.replaceModel(importedModel);
     this._syncGridToScene();
     this.editorScene.recenterCursor();
@@ -537,9 +602,11 @@ export default class EditorApp {
       );
       if (!ok) return;
     }
-    clearSession();
     this._puzzleCommitted = false;
     this._applyRestoredModel(new EditorPuzzleModel());
+    // After the old puzzle's pending edit was written (with its session
+    // snapshot), or a reload would bring that puzzle back.
+    clearSession();
     this.metadataPanel.expand();
     this.toolbar.setStatus('unnamed');
     // Focus the name field so the first thing you do is name it.
@@ -579,15 +646,19 @@ export default class EditorApp {
   }
 
   // --- Git controls (dev-only; see ui/GitPanel.js + io/gitControls.js) ---
+  // Each one that reads or rewrites the puzzle files waits for the last
+  // edit's autosave to land first, so git works on the files as edited.
 
   /** Commit the staged puzzle files. Throws (surfaced by GitPanel) on failure. */
   async _gitCommit(message) {
+    await this._settleAutoSave();
     const result = await gitCommit(message);
     return result.summary || 'Committed';
   }
 
   /** Pull (whole repo), then reload the open puzzle in case it changed. */
   async _gitPull() {
+    await this._settleAutoSave();
     const result = await gitPull();
     await this._reloadCurrentPuzzleFromDisk();
     return result.summary || 'Pulled';
@@ -604,6 +675,7 @@ export default class EditorApp {
    * open puzzle from the reverted files, and arm the one-shot Cmd-Z restore.
    */
   async _gitRevert() {
+    await this._settleAutoSave(); // the stash must hold the last edit, or ⌘Z can't bring it back
     const result = await gitRevert();
     if (result.nothing) return 'Nothing to revert';
     await this._reloadCurrentPuzzleFromDisk();
@@ -615,6 +687,7 @@ export default class EditorApp {
   async _gitUnrevert() {
     this._pendingUnrevert = false;
     try {
+      await this._settleAutoSave();
       await gitUnrevert();
       await this._reloadCurrentPuzzleFromDisk();
       if (this.gitPanel) {

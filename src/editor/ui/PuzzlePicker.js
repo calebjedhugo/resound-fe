@@ -24,12 +24,16 @@ export default class PuzzlePicker {
    * @param {(model) => void} onLoad - called with the imported model of a chosen level
    * @param {() => void} onNew - called when "+ New puzzle" is chosen
    * @param {() => void} [onDelete] - called after the open puzzle is deleted
+   * @param {() => Promise} [beforeChange] - awaited before a level is read to
+   *   open and before a file is deleted (the open puzzle's last edit lands
+   *   first: a reload reads it back, a delete comes after it)
    */
-  constructor(container, onLoad, onNew, onDelete) {
+  constructor(container, onLoad, onNew, onDelete, beforeChange) {
     this._container = container;
     this._onLoad = onLoad;
     this._onNew = onNew;
     this._onDelete = onDelete || (() => {});
+    this._beforeChange = beforeChange || (() => {});
     this._currentId = '';
     this._render();
     this.refresh();
@@ -133,6 +137,7 @@ export default class PuzzlePicker {
     );
     if (!ok) return;
     try {
+      await this._beforeChange();
       await deletePuzzleFromRepo(id);
       this._currentId = '';
       await this.refresh();
@@ -165,6 +170,7 @@ export default class PuzzlePicker {
   async _loadSelected(id) {
     if (!id) return;
     try {
+      await this._beforeChange();
       const json = await loadRepoPuzzle(id);
       const { model, errors, warnings } = importPuzzle(json);
       this._showStatus(errors, warnings);

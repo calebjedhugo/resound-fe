@@ -1156,6 +1156,188 @@ describe('EditorApp git status follows the autosave', () => {
   });
 });
 
+describe('EditorApp writes each edit to its own puzzle', () => {
+  let app;
+  let head; // the puzzle files as committed: what a revert puts back
+  let disk; // puzzle id -> its file, as the fake dev server holds it
+  let log; // file writes and git actions, in the order the server got them
+  let releaseDelete = null; // set while a delete's reply is held back
+
+  const puzzle = (id) => ({
+    id,
+    name: id.toUpperCase(),
+    difficulty: 1,
+    gridSize: 15,
+    tempo: 120,
+    playerStart: { x: 0, y: 0, z: 0 },
+    entities: [],
+  });
+  const copy = (json) => JSON.parse(JSON.stringify(json));
+  const reply = (body) => ({ ok: true, json: () => Promise.resolve(body) });
+
+  /**
+   * The dev server: static puzzle files, the puzzle writer, git. With
+   * `holdDeletes`, a delete takes effect at once but its reply waits for
+   * `releaseDelete()` (the editor is still awaiting it).
+   */
+  function fakeDevServer({ holdDeletes = false } = {}) {
+    return async (url, { method = 'GET', body } = {}) => {
+      if (url === '/puzzles/manifest.json') {
+        const puzzles = Object.values(disk).map(({ id, name, difficulty }) => ({
+          id,
+          name,
+          difficulty,
+        }));
+        return reply({ puzzles });
+      }
+      const file = url.match(/^\/puzzles\/(.+)\.json$/);
+      if (file) {
+        return disk[file[1]] ? reply(copy(disk[file[1]])) : { ok: false, statusText: 'Not Found' };
+      }
+      const [, id] = url.match(/^\/api\/puzzles\/(.+)$/) || [];
+      if (id && method === 'POST') {
+        log.push(`write ${id}`);
+        disk[id] = JSON.parse(body);
+        return reply({ ok: true });
+      }
+      if (id && method === 'DELETE') {
+        log.push(`delete ${id}`);
+        delete disk[id];
+        if (!holdDeletes) return reply({ ok: true });
+        return new Promise((resolve) => {
+          releaseDelete = () => resolve(reply({ ok: true }));
+        });
+      }
+      if (url === '/api/git/status') {
+        return reply({ ok: true, branch: 'main', changedCount: 1, files: [], ahead: 0 });
+      }
+      const action = url.replace('/api/git/', '');
+      log.push(`git ${action}`);
+      if (action === 'revert') disk = copy(head);
+      return reply({ ok: true, nothing: false });
+    };
+  }
+
+  /** Choose an entry in the puzzle dropdown, as the user does. */
+  function choose(value) {
+    const select = document.querySelector('.puzzle-select');
+    select.value = value;
+    select.dispatchEvent(new Event('change'));
+  }
+
+  const gitButton = (label) =>
+    [...document.querySelectorAll('#git-panel button')].find((b) => b.textContent === label);
+
+  async function openEditorOn(id, server = fakeDevServer()) {
+    global.fetch = jest.fn(server);
+    app = new EditorApp();
+    app.init();
+    await jest.advanceTimersByTimeAsync(0); // the picker's list and the git panel's status
+    await app.puzzlePicker.open(id);
+  }
+
+  beforeEach(() => {
+    setupEditorDOM();
+    head = { a: puzzle('a'), b: puzzle('b') };
+    disk = copy(head);
+    log = [];
+    releaseDelete = null;
+    jest.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+  });
+
+  afterEach(() => {
+    app.dispose();
+    app = null;
+    document.body.innerHTML = '';
+    delete global.fetch;
+    jest.restoreAllMocks();
+  });
+
+  it('writes an edit made just before opening another puzzle to its own file', async () => {
+    await openEditorOn('a');
+
+    app.undoManager.setMetadata({ tempo: 99 });
+    choose('b'); // inside the autosave's half second
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(app.undoManager.getMetadata().id).toBe('b');
+    expect(disk.a.tempo).toBe(99);
+    expect(log).toEqual(['write a']); // the opened puzzle's file is left as it was
+  });
+
+  it('reads the last edit back when the open puzzle is opened again (world map)', async () => {
+    await openEditorOn('a');
+
+    app.undoManager.setMetadata({ tempo: 99 });
+    await app.puzzlePicker.open('a'); // what clicking its own node on the world map does
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(app.undoManager.getMetadata().tempo).toBe(99);
+    expect(disk.a.tempo).toBe(99);
+  });
+
+  it('writes an edit made just before "+ New puzzle"', async () => {
+    await openEditorOn('a');
+
+    app.undoManager.setMetadata({ tempo: 99 });
+    choose('__new__');
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(disk.a.tempo).toBe(99);
+    expect(app.undoManager.getMetadata().id).toBe('');
+  });
+
+  it('leaves a new puzzle new when the last puzzle’s save lands after it opened', async () => {
+    await openEditorOn('a');
+    app.undoManager.setMetadata({ tempo: 99 });
+    choose('__new__'); // a's last save is still on its way
+    await jest.advanceTimersByTimeAsync(1000);
+
+    // The picker and the status line still speak for the new puzzle...
+    expect(document.querySelector('.puzzle-select').selectedOptions[0].textContent).toBe(
+      'Untitled (unsaved)'
+    );
+    expect(document.querySelector('#toolbar-panel .save-status').textContent).toBe(
+      'Add a name to save'
+    );
+    // ...and its id still follows its name (a's save did not lock it).
+    const nameInput = document.querySelector('#metadata-panel .prop-input');
+    nameInput.value = 'Fresh Start';
+    nameInput.dispatchEvent(new Event('change'));
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(disk['fresh-start']).toMatchObject({ name: 'Fresh Start' });
+  });
+
+  it.each([['Commit'], ['Pull'], ['Revert']])(
+    '%s waits for the last edit to be written, and nothing is written after it',
+    async (label) => {
+      await openEditorOn('a');
+      document.querySelector('.git-message').value = 'Slower';
+
+      app.undoManager.setMetadata({ tempo: 99 });
+      gitButton(label).click();
+      await jest.advanceTimersByTimeAsync(1000);
+
+      expect(log).toEqual(['write a', `git ${label.toLowerCase()}`]);
+    }
+  );
+
+  it('keeps a just-edited puzzle deleted: nothing writes it back', async () => {
+    await openEditorOn('a', fakeDevServer({ holdDeletes: true }));
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+
+    app.undoManager.setMetadata({ tempo: 99 });
+    document.querySelector('.puzzle-delete-btn').click();
+    await jest.advanceTimersByTimeAsync(1000); // past the autosave's half second
+    app.undoManager.setMetadata({ tempo: 98 }); // an edit while the delete is out
+    releaseDelete();
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(disk.a).toBeUndefined();
+    expect(log[log.length - 1]).toBe('delete a');
+  });
+});
+
 describe('EditorApp per-input work', () => {
   let app;
   let frames; // animation-frame callbacks waiting to run
