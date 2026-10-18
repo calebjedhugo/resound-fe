@@ -646,9 +646,10 @@ class Creature extends Entity {
   }
 
   dispose() {
-    // Stop any playing sounds
+    // Fade out what it is singing, sing nothing more (a stop() would let one
+    // more note of a song in progress out), and free the voices it built
     if (this.instrument) {
-      this.instrument.stop();
+      this.instrument.dispose();
     }
 
     // Remove from recording range
