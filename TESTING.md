@@ -151,6 +151,9 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/editor/ui/FloorRegionPanel.test.js` | Floor slabs follow the floor list through undo/redo; a refresh that changes no floor keeps the meshes |
 | `src/editor/viewport/RangeIndicator.test.js` | A selected creature's audible/recordable spheres: moved (not rebuilt) while the range holds, rebuilt and freed when it changes |
 | `src/editor/ui/GitPanel.test.js` | Editor git status: one read at a time (mid-read refreshes fold into one trailing read); buttons follow the last status after an action |
+| `src/core/CameraController.test.js` | Look limits: keyboard pitch stops at straight up/down; a mouse beyond the look band turns the view at most a quarter turn |
+| `deploy/build.test.js` | Real Vite builds (`deploy/__tests__/viteBuild.mjs`): a tuning edit renames only game chunks (three + resound packages keep their cached names); the game page loads no editor code and one copy of each package; the deploy build (`RESOUND_BUILD=game`) holds the game alone, with no dynamic import (so no modulepreload polyfill); its stylesheet is a hashed asset, byte-for-byte; the POC stage drops the editor, ships only `poc-*` levels, preloads exactly the JSON the boot fetches (replayed through PuzzleLoader + PortalManager), precompresses every text file (each `.gz` unzips to its file) and lists exactly its assets |
+| `deploy/upload.test.js` | `deploy/upload.sh` against a local web root: new assets + puzzles land before `index.html`; the previous deploy's assets stay, older ones are pruned; a re-run or a first deploy prunes nothing; unchanged files keep their mtime (ETag) |
 
 ---
 

@@ -375,10 +375,13 @@ instead of "fixing" it.
 - **Deployment:** **POC build is LIVE at https://resound.calebhugo.com** (Pi
   static hosting, nginx `127.0.0.1:8100` behind the `calebhugo` Cloudflare
   Tunnel — same house pattern as the other `*.calebhugo.com` apps). Deploy with
-  `./deploy/deploy.sh`: it builds, stages a **POC-only** artifact
-  (`deploy/build-poc.mjs` drops `editor.html` + editor assets and prunes
-  `public/puzzles` to the `poc-*` set + a filtered manifest), and rsyncs to the
-  Pi web root. See `deploy/README.md`.
+  `./deploy/deploy.sh`: it builds the game alone (`RESOUND_BUILD=game`),
+  stages a **POC-only** artifact (`deploy/build-poc.mjs` prunes
+  `public/puzzles` to the `poc-*` set + a filtered manifest, precompresses),
+  and uploads with `deploy/upload.sh` (assets first, `index.html` last, the
+  previous deploy's assets kept). Hashed `/assets/` cache immutably (three +
+  each resound package in its own chunk), the rest revalidates; changing
+  `deploy/nginx-resound.conf` is a by-hand install. See `deploy/README.md`.
 - Puzzle JSON changes require manual refresh (no HMR)
 - **The page can boot at 0x0** (a hidden in-app browser pane): view math
   treats a zero screen as no mouse offset, camera/canvas/screen center refit

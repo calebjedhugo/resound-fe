@@ -465,10 +465,37 @@ export default defineConfig({
     },
   },
   build: {
+    // Ship stylesheets byte-for-byte: esbuild's CSS minifier rewrites colours
+    // (rgba(255, 255, 255, 0.5) -> #ffffff80 is alpha 0.502, not 0.5) for
+    // under 0.2 kB gzip saved
+    cssMinify: false,
+    // The <link rel="modulepreload"> tags stay; the polyfill for browsers
+    // without them goes. It runs only once the whole static graph has loaded
+    // (it is part of it), so with no dynamic import in production it could
+    // only re-fetch chunks already fetched (and watch every DOM mutation)
+    modulePreload: { polyfill: false },
     rollupOptions: {
-      input: {
-        main: 'index.html',
-        editor: 'editor.html',
+      // RESOUND_BUILD=game (deploy/deploy.sh) builds the game alone: the POC
+      // ships no editor, and with none in the build the game's chunks carry
+      // nothing only the editor uses (2.8 kB gzip, mostly three) and an
+      // editor edit can't rename them
+      input:
+        process.env.RESOUND_BUILD === 'game'
+          ? { main: 'index.html' }
+          : { main: 'index.html', editor: 'editor.html' },
+      output: {
+        // Each dependency gets a chunk of its own, so its hashed file name
+        // changes only when that package does: a game edit (a constants.js
+        // tuning, say) no longer renames the chunk three lives in, and a
+        // returning player keeps three cached. three's core only — addons
+        // ride with the entry that uses them (OrbitControls is editor-only).
+        // The resound packages are matched by name: today they are file:
+        // links that resolve outside node_modules.
+        manualChunks(id) {
+          if (id.includes('/node_modules/three/build/')) return 'three';
+          const [, resoundPackage] = id.match(/\/(resound-(?:notation|sound))\//) || [];
+          return resoundPackage;
+        },
       },
     },
   },

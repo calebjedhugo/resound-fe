@@ -483,6 +483,8 @@ class Raycaster {
 const MathUtils = {
   RAD2DEG: 180 / Math.PI,
   DEG2RAD: Math.PI / 180,
+  // three's own (three/src/math/MathUtils.js)
+  clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
 };
 
 module.exports = {

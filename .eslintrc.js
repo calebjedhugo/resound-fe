@@ -28,8 +28,8 @@ module.exports = {
       },
     },
     {
-      // Node CLI generators — console output is their job
-      files: ['puzzles/**/*.js'],
+      // Node CLI generators and deploy scripts — console output is their job
+      files: ['puzzles/**/*.js', 'deploy/**/*.mjs'],
       env: {
         node: true,
       },
@@ -90,5 +90,7 @@ module.exports = {
       },
     ],
   },
+  // The staged POC build (deploy/build-poc.mjs) is minified output, like dist/
+  ignorePatterns: ['deploy/dist-poc/'],
   root: true,
 };
