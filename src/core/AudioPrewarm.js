@@ -23,10 +23,11 @@
  * are none, Safari, in timer slices of TIMER_SLICE_MS), each only when the
  * idle period has room for what that kind of job last cost, so no frame pays
  * for one (a Piano render may wait for the next gate: on a slow machine, and
- * in Safari). The one exception is a song's notes come their deadline: built
- * whatever the room (a frame that has no idle time, e.g. at 4x CPU with
- * doors open, still gets them before the song starts), one job per task, so
- * synchronised songs spread over tasks between frames. Only work that builds
+ * in Safari; the session's first always does). The one exception is a
+ * song's notes come their deadline: built whatever the room (a frame that
+ * has no idle time, e.g. at 4x CPU with doors open, still gets them before
+ * the song starts), one job per task, so synchronised songs spread over
+ * tasks between frames. Only work that builds
  * something is run and priced: a pitch the audio already has (a note in play
  * got there first) is dropped, and a Piano render waits while the Piano's
  * own render pool is full rather than queue there, to be built whenever a
@@ -36,8 +37,12 @@
 import PlaybackManager from 'core/PlaybackManager';
 
 // Main-thread ms a job of each kind cost last time; these first guesses are
-// the audited 1x costs, rounded up (notes: one creature's next song)
-const cost = { voice: 2, piano: 12, notes: 1 };
+// the audited 1x costs, rounded up (notes: one creature's next song). A
+// Piano render gets no guess: the session's first also builds the offline
+// phase bank every later render shares (47 ms at 4x CPU against 2-9 ms for
+// the rest, measured 2026-10-18), so until one has run, no idle period has
+// room for it and it waits for the StartGate
+const cost = { voice: 2, piano: Infinity, notes: 1 };
 
 // A song's notes are built at least this long before it starts, idle time or
 // not: a few frames' margin over the frame its onset lands in
@@ -93,9 +98,11 @@ function hasWork(room) {
 
 function schedule() {
   const idleCallbacks = typeof window !== 'undefined' && window.requestIdleCallback;
-  // A timer slice never has room for a job dearer than itself: that job
-  // waits for the gate, rather than re-arm a timer that can never run it
-  const room = held || idleCallbacks ? Infinity : TIMER_SLICE_MS;
+  // No idle period has room for a job dearer than the longest a browser
+  // grants, nor a timer slice for one dearer than itself: that job waits
+  // for the gate, rather than re-arm a callback that can never run it
+  let room = Infinity;
+  if (!held) room = idleCallbacks ? MAX_IDLE_MS : TIMER_SLICE_MS;
   if (scheduled || !hasWork(room)) return;
   scheduled = true;
   // The next run comes by the first song's deadline, idle time or not
