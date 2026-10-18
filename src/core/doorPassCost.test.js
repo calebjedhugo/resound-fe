@@ -6,7 +6,7 @@
  * works only while some door panel is drawn.
  *
  * Rendering is mocked: a recording renderer stands in for three's, logging
- * every pass (frame, target, size) and the panel it drew. Eyes carry a pose
+ * every pass (frame, target, size, eye) and the panel it drew. Eyes carry a pose
  * (quaternion, fov, aspect) like the real player camera, so passes cull and
  * size as in play.
  */
@@ -67,14 +67,21 @@ function createRecordingRenderer() {
   return {
     clippingPlanes: [],
     frame: 0,
-    passes: [], // { frame, target, width, height, panel }
+    passes: [], // { frame, target, width, height, from, panel }
     setRenderTarget(next) {
       target = next;
     },
-    render() {
+    render(scene, camera) {
       this.settle();
       if (!target) return;
-      pending = { frame: this.frame, target, width: target.width, height: target.height };
+      const { x, y, z } = camera.position; // where the pass drew from
+      pending = {
+        frame: this.frame,
+        target,
+        width: target.width,
+        height: target.height,
+        from: { x, y, z },
+      };
       this.passes.push(pending);
     },
     settle() {
@@ -455,15 +462,53 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
   const HALF_ACROSS = Math.atan(
     Math.tan((FOV / 2) * (Math.PI / 180)) * (SCREEN.width / SCREEN.height)
   );
-  const cutting = (distance, u) => {
-    const yaw = HALF_ACROSS - Math.atan((WORLD_SCALE * (u - 0.5)) / distance);
-    return { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
-  };
+  const turned = (yaw) => ({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) });
+  const cutYaw = (distance, u) => HALF_ACROSS - Math.atan((WORLD_SCALE * (u - 0.5)) / distance);
+  const cutting = (distance, u) => turned(cutYaw(distance, u));
   /** Steady frames after a door's opening frame (before any face goes stale) */
   const steadyWrites = (renderer, panel) =>
     renderer.passes.filter((pass) => pass.frame > 1 && pass.panel === panel).length;
   const drawSteady = (renderer, eye) => {
     for (let i = 0; i < 10; i += 1) drawFrame(renderer, eye);
+  };
+  /**
+   * Does the screen show `far`'s south panel through `near`'s, for `eye`
+   * looking north turned `yaw` to the west, the door leading out at `exit`?
+   * A plan view: every panel spans the eye's height, the floor is open.
+   */
+  const showsThrough = (eye, yaw, near, exit, far) => {
+    const e = eye.position;
+    const half = WORLD_SCALE / 2;
+    const panelZ = (g) => g.position.z - (half - 0.01);
+    const depth = e.z - panelZ(near);
+    // The part of the near panel within the screen's sides...
+    const left = Math.max(near.position.x - half, e.x - depth * Math.tan(HALF_ACROSS + yaw));
+    const right = Math.min(near.position.x + half, e.x + depth * Math.tan(HALF_ACROSS - yaw));
+    if (left >= right) return false;
+    // ...carried through the door, then on to the far panel's plane
+    const shift = exit.position.x - near.position.x;
+    const scale = (e.z + exit.position.z - near.position.z - panelZ(far)) / depth;
+    const reach = (x) => e.x + shift + (x - e.x) * scale;
+    return reach(right) > far.position.x - half && reach(left) < far.position.x + half;
+  };
+  /**
+   * Is `pass` (the picture a panel shows on `frame`) one drawn for `eye`
+   * carried through the doors along `path` (each door's gate, then its
+   * partner), as recently and as near as a small panel may keep it — not
+   * the straight-on warm-up's?
+   */
+  const drawnThrough = (pass, eye, frame, ...path) => {
+    let { x, z } = eye.position;
+    for (let i = 0; i < path.length; i += 2) {
+      x += path[i + 1].position.x - path[i].position.x;
+      z += path[i + 1].position.z - path[i].position.z;
+    }
+    return (
+      Boolean(pass) &&
+      Math.abs(pass.from.x - x) + Math.abs(pass.from.z - z) <
+        PortalManager.constructor.SMALL_PANEL_DRIFT &&
+      frame - pass.frame <= PortalManager.constructor.SMALL_PANEL_EVERY
+    );
   };
 
   it('a face no door shows on screen is never swept, however near a mapped eye it stands', () => {
@@ -535,5 +580,83 @@ describe('The mirror sweep draws only what a chain can show on screen', () => {
     drawSteady(renderer, eyeAt(5 * WORLD_SCALE, 7 * WORLD_SCALE, cutting(panelDistance(2), 0.25)));
 
     expect(steadyWrites(renderer, panelOf(door('k1'), 'south'))).toBeGreaterThan(0);
+  });
+
+  it('running past a door, a door seen through it shows its own picture the frame it slides in', () => {
+    // A1's panel is wholly on screen; D1, six times deeper beyond A2,
+    // slides in past A1's east edge five times as fast as the eye runs.
+    // What a panel shows was drawn the frame before
+    const door = enter(
+      gate('a1', 5, 25, 'a2'),
+      gate('a2', 20, 25, 'a1'),
+      gate('d1', 23, 15, 'd2'),
+      gate('d2', 28, 28, 'd1')
+    );
+    const [a1, a2, d1, d2] = ['a1', 'a2', 'd1', 'd2'].map(door);
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(a1.position.x - 6, a1.position.z + 4.5);
+    drawFrame(renderer, eye); // the doors' first frame writes every face
+    const panel = panelOf(d1, 'south');
+
+    let seen = 0;
+    for (let i = 0; i < 60; i += 1) {
+      eye.position.x += 0.134; // running east
+      const shown = renderer.shownBy(panel); // as this frame's passes find it
+      drawFrame(renderer, eye);
+      if (showsThrough(eye, 0, a1, a2, d1)) {
+        seen += 1;
+        expect(drawnThrough(shown, eye, renderer.frame, a1, a2, d1, d2)).toBe(true);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('turning fast, a door seen through a door shows its own picture from the turn’s second frame', () => {
+    // A mouse turn to the right, 0.13 a frame: D1 comes into view through
+    // A1 on its second frame, further than the screen's slack reached on
+    // the first. (A flick's first frame can't be foreseen.)
+    const door = enter(...DOOR_A, ...D);
+    const [a1, a2, d1, d2] = ['a1', 'a2', 'd1', 'd2'].map(door);
+    const renderer = createRecordingRenderer();
+    let yaw = cutYaw(panelDistance(2), 0.1);
+    const eye = eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE, turned(yaw));
+    drawSteady(renderer, eye);
+    const panel = panelOf(d1, 'south');
+
+    let seen = 0;
+    for (let i = 0; i < 6; i += 1) {
+      if (i < 3) yaw -= 0.13;
+      eye.quaternion = turned(yaw);
+      const shown = renderer.shownBy(panel);
+      drawFrame(renderer, eye);
+      if (showsThrough(eye, yaw, a1, a2, d1)) {
+        seen += 1;
+        expect(drawnThrough(shown, eye, renderer.frame, a1, a2, d1, d2)).toBe(true);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('once a fast turn settles, what lies past the screen goes unswept again', () => {
+    // Turned back left, fast, until A1's west quarter alone shows: D1 is
+    // out of sight (see above)
+    const door = enter(...DOOR_A, ...D);
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE, cutting(panelDistance(2), 1));
+    drawSteady(renderer, eye);
+    const from = cutYaw(panelDistance(2), 1);
+    const to = cutYaw(panelDistance(2), 0.25);
+    for (let i = 1; i <= 3; i += 1) {
+      eye.quaternion = turned(from + ((to - from) * i) / 3);
+      drawFrame(renderer, eye);
+    }
+    const turnEnd = renderer.frame;
+
+    drawSteady(renderer, eye);
+
+    const settled = renderer.passes.filter(
+      (pass) => pass.frame > turnEnd + 3 && pass.panel === panelOf(door('d1'), 'south')
+    );
+    expect(settled).toEqual([]);
   });
 });

@@ -90,6 +90,17 @@ const SIGHT_PLANES = 6;
 // A sight through all of a panel (quad coordinates)
 const WHOLE_PANEL = Object.freeze({ u0: 0, u1: 1, v0: 0, v1: 1 });
 
+/**
+ * `rect` (quad coordinates) grown by `margin` on every side into `out` —
+ * past the quad's edges where it reaches them (pyramidPlanes extrapolates).
+ */
+function reachPast(out, rect, margin) {
+  out.u0 = rect.u0 - margin;
+  out.u1 = rect.u1 + margin;
+  out.v0 = rect.v0 - margin;
+  out.v1 = rect.v1 + margin;
+}
+
 // Every panel of a door lies within this distance of its cell's center
 const CELL_REACH = (WORLD_SCALE * Math.sqrt(3)) / 2;
 
@@ -148,6 +159,11 @@ class PortalManager {
     // The player camera (once one with a pose has rendered): the lens that
     // warm-up and mirror eyes size their targets with (PortalView.footprint)
     this._playerCamera = null;
+    // Where the player camera looked last frame, and how far its view has
+    // been turning (radians, settling: _noteTurn) — how wide the mirror
+    // sweep's seed sights reach past the screen (SIGHT_SLACK)
+    this._lastLook = null;
+    this._lookTurn = 0;
     // Next small-panel beat to hand out (_restsThisFrame)
     this._nextBeat = 0;
     // Faces the last mirror sweep reached but its cap left out -> their
@@ -211,6 +227,9 @@ class PortalManager {
     this._tileMirrors = []; // meshes died with their areas' groups
     this._retained.clear();
     this._linkedGates = [];
+    // A new world is not a turn of the view
+    this._lastLook = null;
+    this._lookTurn = 0;
     this._transitioning = false;
     this._insideDoor = null;
   }
@@ -337,7 +356,10 @@ class PortalManager {
    */
   renderPortals(renderer, camera) {
     this._frameId += 1;
-    if (camera.quaternion && camera.fov) this._playerCamera = camera;
+    if (camera.quaternion && camera.fov) {
+      this._playerCamera = camera;
+      this._noteTurn(camera.quaternion);
+    }
     this._renderDoorPasses(renderer, camera);
     // The rotor's faces show only THROUGH other door panels: a frame that
     // drew none (every door off screen or behind the eye — and so no mirror
@@ -705,17 +727,47 @@ class PortalManager {
   static MIRROR_MAX_FRONTIER = 16;
 
   // How far a chain's sight reaches past the part of a panel it can see, in
-  // panel widths. What a door's panel shows now was decided by the sights
-  // of the frame before (the panel samples last frame's sweep), so a sight
-  // covers two frames of the eye moving on: 0.3 units, two frames of
-  // running (any sight edge, however deep, moves no further than the eye
-  // does). It also covers the texel a screen pixel samples past the part it
-  // sees (bilinear; a target is at least 32 texels across).
+  // panel widths, measured in the panel's plane — past its edges too (a
+  // panel wholly on screen is about to show what lies just past them).
+  // What a door's panel shows now was decided by the sights of the frame
+  // before (the panel samples last frame's sweep), so a sight covers two
+  // frames of the eye moving on: 0.3 units, two frames of running. An eye
+  // stepping δ shifts where a point L beyond the panel (the eye d before
+  // it) lines up on it by δ·L/(d + L) < δ, so that covers every depth —
+  // though what shows sweeps across deep content far faster, δ·L/d. It also
+  // covers the texel a screen pixel samples past the part it sees
+  // (bilinear; a target is at least 32 texels across).
   static SIGHT_MARGIN = 0.1;
 
   // ...and past the screen's edges, in radians on every side: two frames of
-  // keyboard turning (CameraController's 0.025 a frame)
+  // keyboard turning (CameraController's 0.025 a frame), or of the turn the
+  // view is really making (_lookTurn) when that is faster. Mouse look turns
+  // the view as far as the mouse moves — up to a quarter turn in a frame —
+  // so a view turning faster than this gives every seed its whole panel
+  // until the turn settles. (The first frame of a flick from rest can't be
+  // foreseen: it may show a door-in-a-door's last picture for that frame.)
   static SIGHT_SLACK = 0.05;
+
+  /**
+   * Note how far the player's view turned since last frame (_lookTurn). The
+   * measure settles rather than drops — the larger of this frame's turn and
+   * half the last measure — since mouse moves land unevenly across frames:
+   * a flick that skips a frame is still a flick.
+   * @param {{x, y, z, w}} q - the player camera's quaternion
+   */
+  _noteTurn(q) {
+    const last = this._lastLook;
+    if (!last) {
+      this._lastLook = { x: q.x, y: q.y, z: q.z, w: q.w };
+      return;
+    }
+    const dot = Math.abs(q.x * last.x + q.y * last.y + q.z * last.z + q.w * last.w);
+    this._lookTurn = Math.max(2 * Math.acos(Math.min(1, dot)), this._lookTurn / 2);
+    last.x = q.x;
+    last.y = q.y;
+    last.z = q.z;
+    last.w = q.w;
+  }
 
   /**
    * Recursive mirror sweep: BFS the portal graph from every SAME-AREA
@@ -746,10 +798,13 @@ class PortalManager {
     this._sightsTaken = 0;
     const scheduled = this._sweepScheduled; // view -> { eye, depth, bound, footprint, share }
     scheduled.clear();
-    // A posed eye sees a seed panel only within the screen's edges
+    // A posed eye sees a seed panel only within the screen's edges — any of
+    // it, next frame, while the view turns faster than SIGHT_SLACK
     const posed = Boolean(camera.quaternion && camera.fov);
-    if (posed) {
-      viewPlanes(camera.position, camera, this._screenPlanes, 0, PortalManager.SIGHT_SLACK);
+    const cut = posed && this._lookTurn <= PortalManager.SIGHT_SLACK;
+    if (cut) {
+      const slack = Math.max(PortalManager.SIGHT_SLACK, 2 * this._lookTurn);
+      viewPlanes(camera.position, camera, this._screenPlanes, 0, slack);
     }
     // Each face as its mapped eye sees it, through the player's look and
     // lens (a door's mapping is a pure translation): what its target needs,
@@ -771,9 +826,9 @@ class PortalManager {
         if (v._playerFresh !== this._passId) continue; // eslint-disable-line no-continue
         bound = Math.max(bound, v._screenShare);
         const rect = this._sightRect;
-        if (posed && !clipQuad(v.corners, this._screenPlanes, 4, rect)) continue; // eslint-disable-line no-continue
+        if (cut && !clipQuad(v.corners, this._screenPlanes, 4, rect)) continue; // eslint-disable-line no-continue
         sights = sights || [];
-        sights.push(this._takeSight(v, posed ? rect : WHOLE_PANEL, v.drawnFrom, v._screenShare));
+        sights.push(this._takeSight(v, cut ? rect : WHOLE_PANEL, v.drawnFrom, v._screenShare));
       }
       if (sights) frontier.push({ gate, eye: camera.position, bound, sights });
     }
@@ -874,21 +929,24 @@ class PortalManager {
    * whose picture shows a panel of its OWN door repeats its whole last
    * picture there, shrunk (that recursion rides the double-buffered
    * cascade), so any part of it can reach the screen: such a sight takes
-   * the whole panel.
+   * the whole panel (and SIGHT_MARGIN past it).
    * @param {Map<string, PortalView>} ownFaces - the faces of the sight's door
    */
   _aimSight(sight, ownFaces) {
     const { view, apex, rect, planes } = sight;
-    view.sightPlanes(apex, WHOLE_PANEL, planes);
-    if (rect.u0 === 0 && rect.u1 === 1 && rect.v0 === 0 && rect.v1 === 1) return;
-    for (const own of ownFaces.values()) {
-      if (
-        own.surface.visible &&
-        own.facesToward(apex) &&
-        clipQuad(own.corners, planes, SIGHT_PLANES, this._sightPart)
-      ) {
-        Object.assign(rect, WHOLE_PANEL);
-        return;
+    const margin = PortalManager.SIGHT_MARGIN;
+    // Short of the whole panel and its margin: does the picture show its door?
+    if (rect.u0 > -margin || rect.u1 < 1 + margin || rect.v0 > -margin || rect.v1 < 1 + margin) {
+      view.sightPlanes(apex, WHOLE_PANEL, planes);
+      for (const own of ownFaces.values()) {
+        if (
+          own.surface.visible &&
+          own.facesToward(apex) &&
+          clipQuad(own.corners, planes, SIGHT_PLANES, this._sightPart)
+        ) {
+          reachPast(rect, WHOLE_PANEL, margin);
+          break;
+        }
       }
     }
     view.sightPlanes(apex, rect, planes);
@@ -931,11 +989,12 @@ class PortalManager {
   }
 
   /**
-   * A sight through `view`: the part `rect` of its panel (grown by
-   * SIGHT_MARGIN, within the panel), seen in a picture drawn from `apex`.
-   * A panel under SMALL_PANEL_SHARE of the screen (`share`) may keep its
-   * picture two more frames while the eye moves on (_restsThisFrame): its
-   * sight is the whole panel. Recycled every sweep — never keep one.
+   * A sight through `view`: the part `rect` of its panel, reaching
+   * SIGHT_MARGIN past it (past the panel's edges too), seen in a picture
+   * drawn from `apex`. A panel under SMALL_PANEL_SHARE of the screen
+   * (`share`) may keep its picture two more frames while the eye moves on
+   * (_restsThisFrame): its sight is the whole panel (and the margin past
+   * it). Recycled every sweep — never keep one.
    */
   _takeSight(view, rect, apex, share) {
     if (this._sightsTaken === this._sightPool.length) {
@@ -948,12 +1007,9 @@ class PortalManager {
     }
     const sight = this._sightPool[this._sightsTaken];
     this._sightsTaken += 1;
-    const margin = share < PortalManager.SMALL_PANEL_SHARE ? 1 : PortalManager.SIGHT_MARGIN;
+    const seen = share < PortalManager.SMALL_PANEL_SHARE ? WHOLE_PANEL : rect;
     sight.view = view;
-    sight.rect.u0 = Math.max(0, rect.u0 - margin);
-    sight.rect.u1 = Math.min(1, rect.u1 + margin);
-    sight.rect.v0 = Math.max(0, rect.v0 - margin);
-    sight.rect.v1 = Math.min(1, rect.v1 + margin);
+    reachPast(sight.rect, seen, PortalManager.SIGHT_MARGIN);
     sight.apex.x = apex.x;
     sight.apex.y = apex.y;
     sight.apex.z = apex.z;
