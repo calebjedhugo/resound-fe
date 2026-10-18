@@ -48,6 +48,12 @@ export const DOORWAY_COMMIT_DEPTH = 0.3;
 // Lower = faster deceleration. Applied as: velocity *= factor
 export const CREATURE_DECELERATION = 0.85;
 
+// A coasting creature's velocity component below this (units/sec) is spent:
+// the pass zeroes it, so the creature comes to REST (left alone, the decay
+// sticks at ~1.5e-323 and never reaches 0). What the rest of the coast would
+// have moved it is under 6 × this × deltaTime: < 1e-10 units at 60 fps
+export const CREATURE_REST_VELOCITY = 1e-9;
+
 // Creature physics runs this many force+integration passes per frame, each
 // with the full frame deltaTime. The game loop historically updated entities
 // twice per frame; every playtested movement value (max speed, deceleration,
