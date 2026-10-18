@@ -18,8 +18,9 @@
  * So beside the scenes the first portal passes will draw, it draws a
  * STAND-IN for every program a look can need, kept forever (a disposed
  * material releases its programs: the last ramp level unloading would
- * otherwise free the wedge's). ShaderPrewarm.test checks every look the
- * game builds against them.
+ * otherwise free the wedge's, and every world entry the textured staff's,
+ * relinked in the next world's first frame). ShaderPrewarm.test checks
+ * every look the game builds against them.
  * A warmed program is reused only if its key matches EXACTLY, so this draws
  * for real, in the pass context EVERY gameplay pass shares (core/passContext:
  * canvas colour space, CLIP_PLANE_COUNT planes) — the main view and the
@@ -87,6 +88,10 @@ function setup(mainScene) {
     new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }),
     // A notation plane until its staff texture arrives (NotationDisplay)
     new THREE.MeshBasicMaterial({ transparent: true }),
+    // ...and once it has (a map is a program of its own). A world's staves
+    // all go with it, so without this one every world entry relinked it:
+    // 6.8 ms (poc-clap) to 21.4 ms (The Star) in the first frame (2026-10-17)
+    new THREE.MeshBasicMaterial({ map: new THREE.Texture(), transparent: true, depthWrite: false }),
   ];
   for (const material of looks) standIns.add(new THREE.Mesh(box, material));
   // The batched walls: an instanced draw is a program of its own
