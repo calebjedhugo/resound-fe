@@ -71,6 +71,9 @@ export default class EditorApp {
     this._validationTimer = null;
     this._autoSaveTimer = null;
     this._repoSaves = new Set(); // autosave writes still in flight
+    // { edited } while git rewrites the puzzle files under the open model:
+    // autosave is held, not scheduled (see _rewriteFilesWithGit); else null
+    this._autoSaveHold = null;
     // Bumped each time a load replaces the model: a save that lands under a
     // newer generation was written for a puzzle that is no longer open.
     this._modelGeneration = 0;
@@ -200,8 +203,12 @@ export default class EditorApp {
     // not immediately write back.
     this.undoManager.setOnChange(() => {
       // A real edit lands: the pending "Cmd-Z restores the revert" one-shot no
-      // longer applies (autosave has re-diverged the file from HEAD anyway).
-      this._pendingUnrevert = false;
+      // longer applies (autosave has re-diverged the file from HEAD anyway),
+      // nor does the git panel's "⌘Z to restore".
+      if (this._pendingUnrevert) {
+        this._pendingUnrevert = false;
+        this.gitPanel.clearNote();
+      }
       this._syncGridToScene();
       this._refreshRangeIndicator();
       this._requestFrame();
@@ -426,6 +433,11 @@ export default class EditorApp {
 
   _scheduleAutoSave() {
     clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = null;
+    if (this._autoSaveHold) {
+      this._autoSaveHold.edited = true;
+      return;
+    }
     this._autoSaveTimer = setTimeout(() => this._autoSave(), 500);
   }
 
@@ -675,10 +687,8 @@ export default class EditorApp {
    * open puzzle from the reverted files, and arm the one-shot Cmd-Z restore.
    */
   async _gitRevert() {
-    await this._settleAutoSave(); // the stash must hold the last edit, or ⌘Z can't bring it back
-    const result = await gitRevert();
-    if (result.nothing) return 'Nothing to revert';
-    await this._reloadCurrentPuzzleFromDisk();
+    const reverted = await this._rewriteFilesWithGit(async () => !(await gitRevert()).nothing);
+    if (!reverted) return 'Nothing to revert';
     this._pendingUnrevert = true;
     return 'Reverted — ⌘Z to restore';
   }
@@ -687,15 +697,41 @@ export default class EditorApp {
   async _gitUnrevert() {
     this._pendingUnrevert = false;
     try {
-      await this._settleAutoSave();
-      await gitUnrevert();
-      await this._reloadCurrentPuzzleFromDisk();
-      if (this.gitPanel) {
-        await this.gitPanel.refresh();
-        this.gitPanel.setStatus('Restored reverted edits');
-      }
+      await this._rewriteFilesWithGit(async () => {
+        await gitUnrevert();
+        return true;
+      });
+      if (this.gitPanel) await this.gitPanel.showResult('Restored reverted edits');
     } catch (err) {
-      if (this.gitPanel) this.gitPanel.setStatus(err.message || String(err), true);
+      if (this.gitPanel) await this.gitPanel.showResult(err.message || String(err), true);
+    }
+  }
+
+  /**
+   * Run `op`, a git op that rewrites the puzzle files under the open model,
+   * and reload the open puzzle from them if it resolves true (false: it
+   * changed nothing). The last edit is written first, so git works on it (a
+   * revert's stash holds it, or ⌘Z couldn't bring it back). Autosave is held
+   * for any later edit until the reload: it is to the model git is
+   * replacing, and written back it would undo git's change to the open
+   * puzzle (re-dirty what a revert reverted, overwrite what ⌘Z restored) and
+   * be read straight back by the reload. It goes with that model; if git
+   * changed nothing, or failed, it is saved as usual.
+   * @param {() => Promise<boolean>} op
+   * @returns {Promise<boolean>} whether the files were rewritten
+   */
+  async _rewriteFilesWithGit(op) {
+    const hold = { edited: false };
+    this._autoSaveHold = hold;
+    let rewritten = false;
+    try {
+      await this._settleAutoSave();
+      rewritten = await op();
+      if (rewritten) await this._reloadCurrentPuzzleFromDisk();
+      return rewritten;
+    } finally {
+      this._autoSaveHold = null;
+      if (hold.edited && !rewritten) this._scheduleAutoSave();
     }
   }
 
