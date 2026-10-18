@@ -472,6 +472,25 @@ describe('NotationDisplay on Gates and Fountains', () => {
       expect(shownTexture(after)).toBe(shownTexture(next));
     });
 
+    it('a staff whose image could not be drawn is tried again by the next gate', () => {
+      // The image loaded but painting it failed: forgotten like any other
+      // failure, never left for later gates to wait on a staff that can't come
+      HTMLCanvasElement.prototype.getContext.mockImplementationOnce(() => ({
+        clearRect() {},
+        drawImage() {
+          throw new DOMException('The image could not be drawn', 'InvalidStateError');
+        },
+      }));
+      const failed = gateWith({ song: song('C6', 'E6') });
+      jest.runAllTimers();
+
+      const next = gateWith({ song: song('C6', 'E6') });
+      jest.runAllTimers();
+
+      expect(shownTexture(failed)).toBeFalsy();
+      expect(shownTexture(next)).toBeInstanceOf(THREE.CanvasTexture);
+    });
+
     it('a staff whose image loads at once is shown all the same', () => {
       global.Image = class {
         set src(url) {
@@ -494,6 +513,76 @@ describe('NotationDisplay on Gates and Fountains', () => {
       // Released by the preparer, still held by the gate
       expect(shownTexture(gate)).toBeInstanceOf(THREE.CanvasTexture);
     });
+  });
+});
+
+// Hand-edited JSON can give a gate or fountain a voices list no staff can be
+// laid out for: no voices at all, or a first voice that is null or has no
+// note list. It shows no staff, as it always did, and nothing worse: a throw
+// out of its constructor fails the whole area (an entry area never starts;
+// a neighbor never loads, so the door to it never opens onto it).
+describe('A song no staff can be laid out for shows none, and fails nothing', () => {
+  const savedImage = global.Image;
+  const savedGetContext = HTMLCanvasElement.prototype.getContext;
+  const built = [];
+  const build = (Type, song) => {
+    const entity = new Type({ x: 0, y: 0, z: 0 }, { song });
+    built.push(entity);
+    return entity;
+  };
+  const planes = (entity) => entity.mesh.children.filter((c) => c._isNotationMesh);
+  const showsNoStaff = (entity) => planes(entity).every((plane) => !plane.material.map);
+
+  // A staff that can be laid out arrives at once, as it would in a browser
+  // (jsdom loads no images and has no 2D canvas or object URLs: stood in for)
+  beforeEach(() => {
+    global.Image = class {
+      set src(url) {
+        this.onload();
+      }
+    };
+    HTMLCanvasElement.prototype.getContext = () => ({ clearRect() {}, drawImage() {} });
+    URL.createObjectURL = () => 'blob:staff';
+    URL.revokeObjectURL = () => {};
+  });
+
+  afterEach(() => {
+    for (const entity of built.splice(0)) entity.dispose();
+    global.Image = savedImage;
+    HTMLCanvasElement.prototype.getContext = savedGetContext;
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+  });
+
+  it('a gate whose song has no voices is built, its planes showing no staff', () => {
+    const gate = build(Gate, { voices: [] });
+
+    expect(planes(gate)).toHaveLength(4);
+    expect(showsNoStaff(gate)).toBe(true);
+  });
+
+  it('a fountain whose first voice is missing, null or has no note list is built, showing no staff', () => {
+    for (const song of [
+      { voices: [] },
+      { voices: [null] },
+      { voices: [{ id: 'v0', notes: {} }] },
+    ]) {
+      const fountain = build(Fountain, song);
+
+      expect(planes(fountain)).toHaveLength(4);
+      expect(showsNoStaff(fountain)).toBe(true);
+    }
+  });
+
+  it('preparing such a staff ahead (an idle-time area build) fails nothing either', () => {
+    // As PuzzleLoader.buildAreaWhenIdle does: prepare, build, release
+    const song = { voices: [] };
+    const release = NotationDisplay.prepare({ song });
+    const gate = build(Gate, song);
+    release();
+    release(); // idempotent, as for any staff
+
+    expect(showsNoStaff(gate)).toBe(true);
   });
 });
 

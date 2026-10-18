@@ -31,9 +31,9 @@ const neighbor = {
   entities: [...portalLiveB.entities, plainGate('E5', 1), plainGate('F5', 2), plainGate('G5', 3)],
 };
 
-function installFetchMock() {
+function installFetchMock(puzzle = neighbor) {
   global.fetch = jest.fn(() =>
-    Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(JSON.stringify(neighbor))) })
+    Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(JSON.stringify(puzzle))) })
   );
 }
 
@@ -224,6 +224,29 @@ describe('Neighbor areas build in idle time', () => {
 
     expect(neighborArea()).toBe(crossedInto);
     expect(neighborListeners().filter((entity) => entity.type === 'creature')).toHaveLength(1);
+  });
+
+  it('a neighbor whose gate or fountain song no staff can be laid out for still loads', async () => {
+    // Hand-edited JSON: a gate with no voices, a fountain with a null first
+    // voice. They show no staff; the rest of the area is unaffected
+    installFetchMock({
+      ...portalLiveB,
+      entities: [
+        ...portalLiveB.entities,
+        { type: 'gate', position: { x: 1, y: 0, z: 2 }, song: { voices: [] } },
+        { type: 'fountain', position: { x: 3, y: 0, z: 2 }, song: { voices: [null] } },
+      ],
+    });
+    installIdleCallbacks();
+    ctx.loadPuzzle('portal-live-a');
+    await settle();
+
+    await runBuildSlices();
+
+    expect(neighborArea()).not.toBeNull();
+    expect(neighborArea().entityManager.getByType('gate')).toHaveLength(2);
+    expect(neighborArea().entityManager.getByType('fountain')).toHaveLength(1);
+    expect(neighborListeners()).toHaveLength(4); // 2 gates, the fountain, the creature
   });
 
   it('without requestIdleCallback (Safari), neighbors still load, on timer slices', async () => {
