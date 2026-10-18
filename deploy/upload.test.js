@@ -3,7 +3,8 @@
  * Pi's): a deploy never takes away a file the page before it still needs.
  * New assets and puzzles land before index.html changes, the previous
  * deploy's assets stay, and only older ones are pruned. Re-running a deploy
- * is harmless, and unchanged files keep their ETags.
+ * is harmless, a deploy that stopped once its index.html was live still gets
+ * its assets kept, and unchanged files keep their ETags.
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -35,9 +36,32 @@ const deploy = (dir) => execFileSync('bash', [UPLOAD, dir, root], { stdio: 'pipe
 const served = (dir) => fs.readdirSync(path.join(root, dir)).sort();
 const servedFile = (file) => path.join(root, file);
 
+/**
+ * A deploy that stops once index.html has landed, before it records its
+ * assets: a stale file it can't delete (a root-owned leftover, say) makes
+ * rsync exit 23 there.
+ */
+function deployStoppingAfterIndex(dir) {
+  const stuck = servedFile('stuck');
+  fs.mkdirSync(stuck);
+  fs.writeFileSync(path.join(stuck, 'old.txt'), '');
+  fs.chmodSync(stuck, 0o555);
+  try {
+    expect(() => deploy(dir)).toThrow();
+  } finally {
+    fs.chmodSync(stuck, 0o755);
+    fs.rmSync(stuck, { recursive: true });
+  }
+  expect(fs.readFileSync(servedFile('index.html'), 'utf8')).toBe(
+    fs.readFileSync(path.join(dir, 'index.html'), 'utf8')
+  );
+}
+
 const V1 = { assets: ['main-1.js', 'three-a.js'] };
 const V2 = { assets: ['main-2.js', 'three-a.js'] };
 const V3 = { assets: ['main-3.js', 'three-a.js'] };
+const V4 = { assets: ['main-4.js', 'three-a.js'] };
+const V5 = { assets: ['main-5.js', 'three-a.js'] };
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'resound-upload-'));
@@ -113,5 +137,38 @@ describe('Uploading a deploy', () => {
     deploy(stage('v2', V2));
 
     expect(fs.statSync(servedFile('puzzles/poc-a.json')).mtime).toEqual(LONG_AGO);
+  });
+});
+
+describe('A deploy that stopped after switching index.html', () => {
+  it('leaves its assets for the next deploy to keep: its page was live', () => {
+    deploy(stage('v1', V1));
+    deploy(stage('v2', V2));
+    deployStoppingAfterIndex(stage('v3', V3));
+
+    deploy(stage('v4', V4));
+
+    expect(served('assets')).toEqual(['main-2.js', 'main-3.js', 'main-4.js', 'three-a.js']);
+  });
+
+  it('is pruned as usual once a deploy after it completes', () => {
+    deploy(stage('v1', V1));
+    deploy(stage('v2', V2));
+    deployStoppingAfterIndex(stage('v3', V3));
+    deploy(stage('v4', V4));
+
+    deploy(stage('v5', V5));
+
+    expect(served('assets')).toEqual(['main-4.js', 'main-5.js', 'three-a.js']);
+  });
+
+  it('leaves nothing to prune by on a web root with no record of its last deploy', () => {
+    fs.mkdirSync(path.join(root, 'assets'));
+    fs.writeFileSync(servedFile('assets/main-0.js'), '// before the asset record existed');
+    deployStoppingAfterIndex(stage('v1', V1));
+
+    deploy(stage('v2', V2));
+
+    expect(served('assets')).toEqual(['main-0.js', 'main-1.js', 'main-2.js', 'three-a.js']);
   });
 });
