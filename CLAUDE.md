@@ -123,6 +123,15 @@ instead of "fixing" it.
   unwarmed note still plays, built lazily. Only work that builds something
   runs or sets a job's price (`isWarm`, `canRenderNow`). A world reset drops
   the queued creature voices (piano pitches stay)
+- **Each creature's NEXT song is built ahead too** (`Creature.prepareNextSong`
+  → `AudioPrewarm.prepareSong` → `Random.prepare`: every note's nodes,
+  unstarted and unconnected), asked for as a song ends, after a clap and at
+  construction, so the frame its onset lands in builds no audio node
+  (creatures share onsets: The Star starts 10-11 notes in one frame). Idle
+  time first; else forced `NOTES_LEAD_MS` before the song, ONE song per
+  task, on voices already built (never builds a voice). A stop (clap)
+  drops the built notes, hence the re-ask. Needs a resound-sound with
+  `Random.prepare` (older: no-op, its tests skip)
 - **A Random voice is ~0.6 MB** of Chrome wavetable per (creature, pitch) at
   44.1-48 kHz; above 88.2 kHz resound-sound builds none (one would be
   ~2.8 MB; measured 2026-10-17): `Creature.dispose` calls
@@ -451,4 +460,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-10-18 — each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

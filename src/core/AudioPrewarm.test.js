@@ -5,6 +5,7 @@
  * The test harness has no OfflineAudioContext, so the Piano could never
  * pre-render; these tests supply one that "renders" silence instantly.
  */
+import { Random, audioContextManager } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
 import PlaybackManager from 'core/PlaybackManager';
 import PortalManager from 'core/PortalManager';
@@ -310,5 +311,221 @@ describe('What building ahead costs a frame in play', () => {
     const prewarmed = renders.slice(struck);
     expect(prewarmed).toHaveLength(2); // A4 and B4
     prewarmed.forEach(({ room }) => expect(room).toBeGreaterThanOrEqual(RENDER_MS));
+  });
+});
+
+/**
+ * Each creature's next song is built ahead (Random.prepare: every note's
+ * oscillator, onset source and envelope gain), so the moment a note starts
+ * builds no audio node. A world's creatures share their onsets: built as
+ * they start, The Star's 10-11 notes built 33 nodes in the one frame they
+ * start in. Needs a resound-sound whose Random prepares notes; on an older
+ * one notes build as they start, as they always did.
+ */
+const preparesNotes = typeof Random.prototype.prepare === 'function';
+(preparesNotes ? describe : describe.skip)("Building each creature's next song ahead", () => {
+  const BUILT_PER_NOTE = 3; // its oscillator, onset source and envelope gain
+
+  /**
+   * Count the audio nodes built as these creatures' notes start (inside
+   * their instruments' startNote) apart from those built at any other time,
+   * and when (on the mocked clock) each was built and each note started;
+   * `inCallback` wraps an idle callback to record the most any one built.
+   */
+  function watchNodeBuilds(creatures) {
+    const built = { atOnset: 0, ahead: 0, oscillatorsAhead: 0, mostInOneCallback: 0 };
+    built.aheadAt = [];
+    built.onsetsAt = [];
+    let starting = false;
+    const context = audioContextManager.getContext();
+    ['createOscillator', 'createGain', 'createBufferSource'].forEach((method) => {
+      const create = context[method].bind(context);
+      jest.spyOn(context, method).mockImplementation((...args) => {
+        if (starting) built.atOnset += 1;
+        else {
+          built.ahead += 1;
+          built.aheadAt.push(performance.now());
+        }
+        if (!starting && method === 'createOscillator') built.oscillatorsAhead += 1;
+        return create(...args);
+      });
+    });
+    creatures.forEach(({ instrument }) => {
+      const startNote = instrument.startNote.bind(instrument);
+      jest.spyOn(instrument, 'startNote').mockImplementation((...args) => {
+        built.onsetsAt.push(performance.now());
+        starting = true;
+        try {
+          return startNote(...args);
+        } finally {
+          starting = false;
+        }
+      });
+    });
+    built.inCallback = (callback) => (deadline) => {
+      const before = built.ahead;
+      callback(deadline);
+      built.mostInOneCallback = Math.max(built.mostInOneCallback, built.ahead - before);
+    };
+    return built;
+  }
+
+  /**
+   * This test's machine: its requestIdleCallback (none: Safari's timer
+   * slices). The prewarm is one module for the whole file, and an earlier
+   * test's machine can have left its run waiting on an idle callback that
+   * never comes; the world running again (no StartGate) schedules it afresh.
+   */
+  function onMachine(requestIdleCallback) {
+    window.cancelIdleCallback = (handle) => clearTimeout(handle);
+    if (requestIdleCallback) window.requestIdleCallback = requestIdleCallback;
+    else delete window.requestIdleCallback;
+    AudioPrewarm.hold(false);
+    if (!requestIdleCallback) delete window.cancelIdleCallback;
+  }
+
+  /** Idle periods with room to spare, 16 ms apart. */
+  function grantIdleTime() {
+    onMachine((callback) => setTimeout(() => callback({ timeRemaining: () => 50 }), 16));
+  }
+
+  const sungBy = (creature) => ctx.getEmittedNotes().filter((note) => note.source === creature.id);
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete window.requestIdleCallback;
+    delete window.cancelIdleCallback;
+  });
+
+  it('starts every song on notes built ahead in idle time', async () => {
+    grantIdleTime();
+    ctx.loadPuzzle('recording-two-creatures'); // C4 and G4, a song every 4 beats
+    // Each sings its first song the moment it is built (in the game the
+    // StartGate holds the world still while that one is built)
+    await ctx.advanceBeats(2);
+    const built = watchNodeBuilds(ctx.getCreatures());
+    ctx.clearEmittedNotes();
+
+    await ctx.advanceBeats(12);
+
+    expect(ctx.getEmittedNotes()).toHaveLength(6); // three songs each
+    expect(built.atOnset).toBe(0);
+    expect(built.ahead).toBeGreaterThanOrEqual(6 * BUILT_PER_NOTE);
+  });
+
+  it('builds every note of a song ahead, the ones its play loop starts on timers too', async () => {
+    grantIdleTime();
+    ctx.loadPuzzle('recording-basic');
+    const creature = ctx.addCreature({
+      song: [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+        [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      ],
+      interval: 8,
+    });
+    await ctx.advanceBeats(4);
+    const built = watchNodeBuilds([creature]);
+    ctx.clearEmittedNotes();
+
+    await ctx.advanceBeats(16);
+
+    expect(sungBy(creature).map((note) => note.pitch)).toEqual(
+      ['C4', 'E4', 'C4', 'G4', 'C4', 'E4', 'C4', 'G4'] // two songs
+    );
+    expect(built.atOnset).toBe(0);
+  });
+
+  it('builds a song by its deadline on a machine with no idle time, one song per task', async () => {
+    let built = { inCallback: (callback) => callback };
+    // No idle period ever comes: a callback runs only when its timeout is up
+    onMachine((callback, options) =>
+      options
+        ? setTimeout(() => built.inCallback(callback)({ timeRemaining: () => 0 }), options.timeout)
+        : -1
+    );
+    ctx.loadPuzzle('recording-two-creatures'); // two songs that start together
+    await ctx.advanceBeats(2);
+    built = watchNodeBuilds(ctx.getCreatures());
+    ctx.clearEmittedNotes();
+
+    await ctx.advanceBeats(12);
+
+    expect(ctx.getEmittedNotes()).toHaveLength(6);
+    expect(built.atOnset).toBe(0);
+    // Each creature's next song in a task of its own, never both in one
+    expect(built.mostInOneCallback).toBe(BUILT_PER_NOTE);
+    // And frames before the song: a frame late, it would have to race it
+    built.onsetsAt.forEach((onset) => {
+      const lastBuild = Math.max(...built.aheadAt.filter((at) => at <= onset));
+      expect(onset - lastBuild).toBeGreaterThanOrEqual(50);
+    });
+  });
+
+  it('builds songs ahead in timer slices without requestIdleCallback', async () => {
+    onMachine(null);
+    ctx.loadPuzzle('recording-two-creatures');
+    await ctx.advanceBeats(2);
+    const built = watchNodeBuilds(ctx.getCreatures());
+    ctx.clearEmittedNotes();
+
+    await ctx.advanceBeats(12);
+
+    expect(ctx.getEmittedNotes()).toHaveLength(6);
+    expect(built.atOnset).toBe(0);
+  });
+
+  it("builds a clapped creature's next song again: the clap's stop let the built one go", async () => {
+    grantIdleTime();
+    ctx.loadPuzzle('clap-basic'); // a creature in clap range, singing every 4 beats
+    await ctx.advanceBeats(2); // its first song over, its next one built
+    const [creature] = ctx.getCreatures();
+    const built = watchNodeBuilds([creature]);
+    ctx.clearEmittedNotes();
+
+    ctx.pressKey('c');
+    await ctx.tick(200); // the clap lands on the next 16th
+    expect(built.oscillatorsAhead).toBe(1); // built again, for the displaced song
+    await ctx.advanceBeats(4);
+
+    expect(sungBy(creature)).toHaveLength(1);
+    expect(built.atOnset).toBe(0);
+  });
+
+  it("builds each creature's first song behind the StartGate", async () => {
+    onMachine(jest.fn(() => 1)); // no idle time to speak of
+    const gate = new StartGate();
+    gate.show(); // up while the world loads
+    ctx.loadPuzzle('recording-two-creatures');
+    await jest.advanceTimersByTimeAsync(200); // held: jobs run flat out
+    gate.hide();
+    const built = watchNodeBuilds(ctx.getCreatures());
+
+    await ctx.tick(16); // both sing their first song
+
+    expect(ctx.getEmittedNotes()).toHaveLength(2);
+    expect(built.atOnset).toBe(0);
+  });
+
+  it("drops the old world's waiting songs when the world goes", async () => {
+    // A machine whose idle callbacks never come: everything queued waits
+    onMachine(jest.fn(() => 1));
+    // A creature the teardown leaves alive (the harness's sandbox), so only
+    // the queue decides whether its next song gets built
+    const creature = ctx.addCreature({ song: [{ pitch: 'D5', length: '1/4' }], interval: 8 });
+    await ctx.tick(16); // it sings its first song...
+    await jest.advanceTimersByTimeAsync(1000); // ...and asks for its next
+    const built = watchNodeBuilds([creature]);
+
+    PortalManager.reset(); // leaving for the menu
+    const gate = new StartGate();
+    gate.show(); // the next world's gate: whatever is queued runs flat out
+    await jest.advanceTimersByTimeAsync(200);
+    gate.hide();
+
+    expect(built.ahead).toBe(0);
   });
 });
