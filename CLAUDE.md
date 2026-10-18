@@ -169,8 +169,10 @@ instead of "fixing" it.
   copied in by each mesh's `onBeforeRender` — never write a uniform on the
   material itself. Shader programs compile behind the StartGate
   (`core/ShaderPrewarm`: one never-disposed STAND-IN per program a look can
-  need); a new material config hitches mid-game unless it gets a stand-in —
-  `ShaderPrewarm.test` checks every look against them (extend its looks)
+  need, which also keeps it across world entries: a world's materials go
+  with it); a new material config hitches mid-game (or relinks at every
+  world entry) unless it gets a stand-in — `ShaderPrewarm.test` checks
+  every look, in every state, against them (extend its looks)
 
 ### Gates & elevation
 - **Gates LATCH**: they open on the COMPLETED song, stay open with NO timer,

@@ -1,3 +1,4 @@
+/** @jest-environment jsdom */
 /**
  * ShaderPrewarm: while the StartGate holds the world still, draw what
  * gameplay would otherwise compile mid-game — a stand-in for every program
@@ -5,18 +6,29 @@
  * hint on the first hint, a ramp in whichever level has one) and every
  * scene a portal pass will draw — in the ONE pass context every gameplay
  * draw shares (core/passContext: CLIP_PLANE_COUNT clip planes, the canvas
- * colour space).
+ * colour space). jsdom so staves really engrave (resound-notation renders
+ * into the DOM) and, given the browser stand-ins below, their textures
+ * arrive.
  */
 import * as THREE from 'three';
 import ShaderPrewarm from 'core/ShaderPrewarm';
 import PortalManager from 'core/PortalManager';
+import DeployManager from 'core/DeployManager';
 import gameState from 'core/GameState';
 import CreatureLook from 'entities/CreatureLook';
+import Gate from 'entities/Gate';
+import Fountain from 'entities/Fountain';
 import KeyHints from 'ui/KeyHints';
 import ClapVisual from 'ui/ClapVisual';
 import { CLIP_PLANE_COUNT, renderMainView } from 'core/passContext';
 import { CLAP_RANGE, WORLD_SCALE } from 'core/constants';
-import { drawnObjects, objectsIn, programKey } from '../__tests__/helpers/drawList';
+import {
+  drawnObjects,
+  objectsIn,
+  programKey,
+  renderPass,
+  updateMatrixWorld,
+} from '../__tests__/helpers/drawList';
 
 // The parts of a pass three keys a program by that the pass itself sets: the
 // clip-plane count and the output colour space (the canvas's, or a render
@@ -59,16 +71,17 @@ function litScene() {
   return scene;
 }
 
-// KeyHints draws its keycaps on 2D canvases; the test DOM has no 2D
-// context, so hand it one that draws nothing
+// KeyHints draws its keycaps on 2D canvases; jsdom has no 2D context, so
+// hand it one that draws nothing
 function buildKeyHints(scene) {
-  const { createElement } = document;
   const canvas2d = new Proxy({}, { get: (target, name) => target[name] ?? (() => {}) });
-  document.createElement = (tag) => ({ ...createElement(tag), getContext: () => canvas2d });
+  const getContext = jest
+    .spyOn(HTMLCanvasElement.prototype, 'getContext')
+    .mockReturnValue(canvas2d);
   try {
     return new KeyHints(scene);
   } finally {
-    document.createElement = createElement;
+    getContext.mockRestore();
   }
 }
 
@@ -158,14 +171,16 @@ describe('Shader prewarm behind the start gate', () => {
   });
 });
 
-// three compiles a program the first time anything draws under its key, so
-// a look first drawn after the gate drops — first SHOWN mid-game, or in a
-// level loaded two doors away — hitches unless the prewarm's stand-ins
-// already compiled its program. Every look's programs (every material it
-// can draw with, shown yet or not) must be among theirs. (A notation plane
-// WITH its staff texture is warmed with the scenes instead: the texture
-// arrives behind the gate, and the scenes are drawn again while it is up.)
+// three compiles a program the first time anything draws under its key, and
+// frees it with the last material using it, so a look first drawn after the
+// gate drops — first SHOWN mid-game, or in a level loaded two doors away —
+// hitches unless the prewarm's stand-ins already compiled its program, and a
+// look every world has (a staff) is relinked in each new world's first frame
+// unless a stand-in outlives the world. Every look's programs (every
+// material it can draw with, shown yet or not) must be among theirs.
 describe('Every look gameplay can show is compiled behind the start gate', () => {
+  const savedImage = global.Image;
+
   /** The programs of `root`'s looks that no stand-in warmed. */
   function coldPrograms(root) {
     const renderer = recordingRenderer();
@@ -174,13 +189,78 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     return [...new Set(objectsIn(root).map(programKey))].filter((key) => !warmed.has(key));
   }
 
+  // Staff textures arrive as in a browser: the rendered SVG loads as an
+  // image and is drawn onto a canvas (jsdom loads no images, has no 2D
+  // canvas and no object URLs, so those browser APIs are stood in for)
   beforeEach(() => {
     global.fetch = jest.fn(() => Promise.resolve({ ok: false, statusText: 'Not Found' }));
+    global.Image = class {
+      set src(url) {
+        this.onload();
+      }
+    };
+    jest
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ clearRect() {}, drawImage() {} });
+    URL.createObjectURL = () => 'blob:staff';
+    URL.revokeObjectURL = () => {};
   });
 
   afterEach(() => {
+    DeployManager.reset();
     PortalManager.reset();
     delete global.fetch;
+    global.Image = savedImage;
+    jest.restoreAllMocks();
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+  });
+
+  // A staff plane is drawn with one material from the moment its gate or
+  // fountain is built: map-less and unseen until the staff's texture
+  // arrives, then textured, fading per pass by the eye's distance from its
+  // plane. Each staff below is one nothing else in this file shows
+  // (engravings are shared per staff, so a staff engraved earlier would
+  // arrive at once).
+  const staffSong = (pitch) => ({ song: [{ pitch, length: '1/4' }] });
+  const planesOf = (entity) => entity.notationDisplay.meshes;
+
+  it('a staff still waiting for its texture', () => {
+    URL.createObjectURL = undefined; // the texture never arrives
+    const gate = new Gate({ x: 0, y: 0, z: 0 }, staffSong('A3'));
+
+    expect(planesOf(gate).some((plane) => plane.material.map)).toBe(false);
+    expect(coldPrograms(gate.mesh)).toEqual([]);
+    gate.dispose();
+  });
+
+  it.each([
+    ['gate', Gate, 'B3'],
+    ['fountain', Fountain, 'C#4'],
+  ])("a %s's staff once its texture has arrived", (_, Entity, pitch) => {
+    const entity = new Entity({ x: 0, y: 0, z: 0 }, staffSong(pitch));
+
+    expect(planesOf(entity).every((plane) => plane.material.map)).toBe(true);
+    expect(coldPrograms(entity.mesh)).toEqual([]);
+    entity.dispose();
+  });
+
+  it('a staff fading as the eye nears its plane', () => {
+    const scene = new THREE.Scene();
+    const gate = new Gate({ x: 0, y: 0, z: 0 }, staffSong('D#4'));
+    scene.add(gate.mesh);
+    updateMatrixWorld(scene);
+    // Just past the +Z staff's plane (1.52 off the gate's centre): between
+    // the fade's ends
+    const eye = { position: new THREE.Vector3(0, 1.8, 1.8) };
+    renderPass(scene, eye); // the first pass hooks the scene
+    renderPass(scene, eye);
+
+    const [front] = planesOf(gate);
+    expect(front.material.opacity).toBeGreaterThan(0);
+    expect(front.material.opacity).toBeLessThan(1);
+    expect(coldPrograms(gate.mesh)).toEqual([]);
+    gate.dispose();
   });
 
   it.each([
@@ -215,6 +295,58 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
 
     const panels = objectsIn(gameState.activeArea.group).filter((mesh) => mesh._isPortalSurface);
     expect(panels.length).toBeGreaterThan(0);
+    expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
+  });
+
+  it('a gate glowing red, locked out by a wrong note', async () => {
+    const [{ song }] = ctx.loadPuzzle('listening-gate-multi-note').entities;
+    ctx.setInventorySlot(0, [{ ...song[0], pitch: 'D4' }]);
+    ctx.setActiveSlot(0);
+    ctx.pressKey('space');
+    await ctx.advanceBeats(0.5);
+
+    const [gate] = ctx.getGates();
+    expect(gate.mesh.material.emissive.getHex()).toBe(0xaa1111); // the lockout's glow
+    expect(coldPrograms(gate.mesh)).toEqual([]);
+  });
+
+  it('an activated fountain', async () => {
+    const [{ song }] = ctx.loadPuzzle('listening-fountain-basic').entities;
+    ctx.setInventorySlot(0, song);
+    ctx.setActiveSlot(0);
+    ctx.pressKey('space');
+    await ctx.advanceBeats(2);
+
+    const [fountain] = gameState.activeArea.entityManager.getByType('fountain');
+    expect(ctx.isFountainActive(fountain)).toBe(true);
+    expect(coldPrograms(fountain.mesh)).toEqual([]);
+  });
+
+  it('the cleanser gate: its aiming phantom, the gold tile and the deployed gate', async () => {
+    const scene = litScene(); // the phantom shows in the main scene
+    DeployManager.initialize(scene);
+    ctx.loadPuzzle('deploy-basic');
+    gameState.mode = 'PLAYING';
+    const [tile] = gameState.activeArea.entityManager.getByType('cleanser');
+    ctx.setPlayerPosition({ x: tile.position.x, y: 1.8, z: tile.position.z });
+    await ctx.tick(20); // stepping on it makes it the ACTIVE (gold) cleanser
+    ctx.setPlayerPosition({ x: tile.position.x + 9, y: 1.8, z: tile.position.z + 6 });
+    gameState.camera.viewCenter = [0, 0];
+
+    DeployManager.toggle(); // aim
+    DeployManager.update();
+    const [phantom] = objectsIn(scene);
+    DeployManager.toggle(); // deploy
+    DeployManager.update();
+    DeployManager.renderPortal(recordingRenderer(), { position: gameState.player.position });
+
+    expect(phantom).toBeDefined();
+    expect(tile.isActiveCleanser()).toBe(true);
+    const [pad] = gameState.activeArea.entityManager.getByType('cleanser-gate');
+    expect(objectsIn(pad.mesh).filter((mesh) => mesh._isPortalSurface)).toHaveLength(4);
+    const looks = objectsIn(gameState.activeArea.group);
+    expect(looks.some((mesh) => mesh._isCleanserMirror)).toBe(true); // the tile, at the gate
+    expect(coldPrograms(phantom)).toEqual([]);
     expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
   });
 
