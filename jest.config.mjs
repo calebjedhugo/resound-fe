@@ -31,10 +31,14 @@ export default {
   testMatch: ['**/src/**/*.test.js', '**/deploy/**/*.test.js'],
 
   // Ignore patterns
-  testPathIgnorePatterns: ['/node_modules/'],
+  // .claude/ holds agent worktrees: whole copies of src/ that aren't this checkout's tests
+  testPathIgnorePatterns: ['/node_modules/', '/.claude/'],
 
   // resound-sound ships an ESM bundle; babel-jest needs to transform it even
   // though it lives under node_modules. three/examples (CameraUtils for the
-  // portal camera) is likewise ESM-only.
-  transformIgnorePatterns: ['/node_modules/(?!(resound-sound|resound-notation|three/examples)/)'],
+  // portal camera) and three/src (the real Matrix4 the drawList test helper
+  // projects with) are likewise ESM-only.
+  transformIgnorePatterns: [
+    '/node_modules/(?!(resound-sound|resound-notation|three/examples|three/src)/)',
+  ],
 };

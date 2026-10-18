@@ -175,6 +175,14 @@ instead of "fixing" it.
   delegate to the ACTIVE area — simulation code must use `entity.area`
   (a neighbor's entities must never reach active-area matching, recording,
   collision, or forces except through the doorway model).
+- **Neighbors build in IDLE time** (`PuzzleLoader.buildAreaWhenIdle`): their
+  staves engrave in `requestIdleCallback` slices (`core/idleSlices`), then
+  the area assembles AND registers in ONE slice. **Never split assembly**:
+  entities register listeners and read the world clock in their
+  constructors. Staff textures are SHARED per distinct staff (song + meter
+  + key; `NotationDisplay`, ref-counted) — never dispose a notation `map`
+  directly. Puzzle JSON is cached per world (`PuzzleLoader.load`;
+  `clearCache` at every world entry, so editor saves show up)
 - **Open linked gates are see-through**: the `facing` face shows the LIVE
   neighbor area (`core/PortalView.js` renders the neighbor's `Area.scene`).
   The extra pass runs only while a linked gate is open; a closed linked gate
@@ -314,7 +322,9 @@ instead of "fixing" it.
   `slots` only at the duet, `clap` only at the clap
 - Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
-- `ui/StartGate.js` freezes the world per level start until a key/click
+- `ui/StartGate.js` freezes the world per level start until a key/click.
+  It goes up BEFORE the puzzle loads (`showLoading`: the first paint) and
+  is wakeable only once the world is built (`show`)
 - Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
   `syncCameraToPlayer` for scripted browser verification (reposition +
   screenshot), `setTapImpulse(true)` to re-enable the tap-impulse
@@ -402,4 +412,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-17 — survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

@@ -56,6 +56,80 @@ describe('PuzzleLoader', () => {
     });
   });
 
+  describe('load() within one world (fetched once, fresh per world)', () => {
+    const file = (name) => ({
+      id: 'cached-puzzle',
+      name,
+      difficulty: 1,
+      gridSize: 10,
+      playerStart: { x: 5, y: 0, z: 5 },
+      entities: [{ type: 'wall', position: { x: 1, y: 0, z: 1 } }],
+    });
+    // The server's copy of the file; tests "save" a new version into it
+    let onServer;
+
+    beforeEach(() => {
+      onServer = file('First save');
+      global.fetch = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(JSON.parse(JSON.stringify(onServer))),
+        })
+      );
+    });
+
+    afterEach(() => {
+      delete global.fetch;
+    });
+
+    it('loads racing each other share ONE request', async () => {
+      const [a, b] = await Promise.all([
+        PuzzleLoader.load('cached-puzzle'),
+        PuzzleLoader.load('cached-puzzle'),
+      ]);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(a).toEqual(onServer);
+      expect(b).toEqual(onServer);
+    });
+
+    it('a puzzle loaded earlier in the world is not fetched again', async () => {
+      await PuzzleLoader.load('cached-puzzle');
+      await PuzzleLoader.load('cached-puzzle');
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('every load gets its own copy: an area never shares data with another', async () => {
+      const first = await PuzzleLoader.load('cached-puzzle');
+      first.entities[0].position.x = 99;
+      first.name = 'mutated';
+
+      const second = await PuzzleLoader.load('cached-puzzle');
+
+      expect(second).not.toBe(first);
+      expect(second).toEqual(onServer);
+    });
+
+    it('a failed load is retried by the next one', async () => {
+      global.fetch.mockResolvedValueOnce({ ok: false, statusText: 'Bad Gateway' });
+      await expect(PuzzleLoader.load('cached-puzzle')).rejects.toThrow('Bad Gateway');
+
+      await expect(PuzzleLoader.load('cached-puzzle')).resolves.toEqual(onServer);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('a new world (clearCache) sees a file saved since the last one', async () => {
+      await PuzzleLoader.load('cached-puzzle');
+      onServer = file('Saved from the editor');
+
+      PuzzleLoader.clearCache();
+      const data = await PuzzleLoader.load('cached-puzzle');
+
+      expect(data.name).toBe('Saved from the editor');
+    });
+  });
+
   describe('loadPuzzleList()', () => {
     beforeEach(() => {
       global.fetch = jest.fn();

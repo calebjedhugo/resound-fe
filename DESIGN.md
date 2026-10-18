@@ -630,7 +630,10 @@ rulings, in the designer's words where it matters:
 - **The start gate replaces the overlay's freeze role.** Each level starts
   behind a dark scrim with a pulsing ring; any key/click wakes the world.
   While it's up, the clock and creatures hold still (self-solve protection)
-  and the waking gesture satisfies the browser audio-interaction rule.
+  and the waking gesture satisfies the browser audio-interaction rule. The
+  scrim goes up when the level starts LOADING, so it is the first thing
+  painted (perf pass 2026-10-17); input wakes it only once the world is
+  built.
 - **`awakening` teaches by geometry** (compact grid 18; rebuilt 2026-07-05):
   Creature A (C4) → Gate 1 (C4, play-to-pass) → Creature X (E4) on the ground
   + ramp UP to a platform where Creature Y (G4) lives → **melody fountain**

@@ -356,7 +356,8 @@ class Mesh {
   constructor(geometry, material) {
     this.position = new Vector3();
     this.rotation = { x: 0, y: 0, z: 0 };
-    this.scale = { x: 1, y: 1, z: 1, set: () => {} };
+    // Like three: a Vector3 (notation planes fit their staff's aspect by it)
+    this.scale = new Vector3(1, 1, 1);
     this.visible = true;
     this.material = material || new Material();
     this.geometry = geometry || new Geometry();

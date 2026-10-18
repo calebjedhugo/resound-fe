@@ -11,10 +11,44 @@ import Area from 'core/Area';
 import AudioPrewarm from 'core/AudioPrewarm';
 import ElevationGrid from 'core/ElevationGrid';
 import { inPortalHideBand } from 'core/portalMath';
+import runInIdleSlices from 'core/idleSlices';
+import NotationDisplay from 'ui/NotationDisplay';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
+// Puzzle files fetched for the current world: id -> promise of the validated
+// JSON. A world loads the same files again and again — every crossing loads
+// the new neighbors, usually areas pruned a few crossings back — and a
+// crossing can race a neighbor load still in flight; both now share one
+// request. Cleared at every world entry (clearCache, main.js startPuzzle):
+// the editor saves puzzles through /api/puzzles while a game tab stays
+// open, and a new world must start from the files as they are now.
+const fetched = new Map();
+
 class PuzzleLoader {
-  static async load(puzzleId) {
+  /**
+   * Fetch and validate a puzzle file, once per world (see `fetched`). Each
+   * call resolves to its OWN copy, as a fresh fetch did: areas built from
+   * the same file never share data. A failed load is not remembered.
+   * @returns {Promise<object>} validated puzzle JSON
+   */
+  static load(puzzleId) {
+    let pending = fetched.get(puzzleId);
+    if (!pending) {
+      pending = this._fetch(puzzleId);
+      fetched.set(puzzleId, pending);
+      pending.catch(() => {
+        if (fetched.get(puzzleId) === pending) fetched.delete(puzzleId);
+      });
+    }
+    return pending.then((data) => JSON.parse(JSON.stringify(data)));
+  }
+
+  /** Forget every fetched puzzle file (a new world re-reads them). */
+  static clearCache() {
+    fetched.clear();
+  }
+
+  static async _fetch(puzzleId) {
     try {
       const response = await fetch(`/puzzles/${puzzleId}.json`);
       if (!response.ok) {
@@ -201,6 +235,51 @@ class PuzzleLoader {
     AudioPrewarm.warmArea(area);
 
     return area;
+  }
+
+  /**
+   * buildArea for an area not needed this instant (a neighbor loading
+   * behind a doorway), without one long task: The Star took 23-29 ms in
+   * one go, 26 of it engraving staves (measured 2026-10-17). First every
+   * staff its gates and fountains show is engraved in idle slices
+   * (NotationDisplay.prepare — shared, so a staff another area already
+   * shows costs nothing), then the area assembles in ONE short idle task.
+   * Assembly stays atomic on purpose: entities register with
+   * ListeningManager and read the world clock as they are constructed, so
+   * a half-built area would already hear notes and keep time. The promise
+   * resolves inside that same task, so a caller registering the area in
+   * `then` has it fully live before the next frame — never partially.
+   * @param {object} puzzleData - validated puzzle JSON
+   * @param {() => boolean} [stillWanted] - checked before every slice; once
+   *   false the build stops (the world moved on) and resolves null
+   * @returns {Promise<?Area>}
+   */
+  static async buildAreaWhenIdle(puzzleData, stillWanted = () => true) {
+    const releases = [];
+    try {
+      // Exactly the staves buildArea's gates and fountains will ask for
+      const engraveSteps = puzzleData.entities
+        .filter((e) => (e.type === 'gate' || e.type === 'fountain') && e.song)
+        .map((e) => () => {
+          releases.push(
+            NotationDisplay.prepare({
+              song: e.song,
+              timeSignature: puzzleData.timeSignature,
+              keySignature: puzzleData.keySignature,
+            })
+          );
+        });
+      if (!(await runInIdleSlices(engraveSteps, stillWanted))) return null;
+
+      let area = null;
+      const assemble = () => {
+        area = this.buildArea(puzzleData);
+      };
+      return (await runInIdleSlices([assemble], stillWanted)) ? area : null;
+    } finally {
+      // The area's own displays hold its staves now (or nobody needs them)
+      for (const release of releases) release();
+    }
   }
 
   /**
