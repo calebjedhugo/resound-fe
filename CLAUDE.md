@@ -119,7 +119,8 @@ instead of "fixing" it.
   creature pitches for the tape's piano (the tape only holds creature notes;
   one velocity layer, 0.7). Flat out while the StartGate is up, else only in
   idle periods with room for the job (8 ms timer slices without
-  requestIdleCallback: in Safari piano renders wait for the gate) — an
+  requestIdleCallback: in Safari piano renders wait for the gate; so does a
+  session's first, which also builds the shared phase bank: 47 ms at 4x) — an
   unwarmed note still plays, built lazily. Only work that builds something
   runs or sets a job's price (`isWarm`, `canRenderNow`). A world reset drops
   the queued creature voices (piano pitches stay)

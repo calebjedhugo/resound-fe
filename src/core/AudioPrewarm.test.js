@@ -43,11 +43,12 @@ describe('Building audio ahead', () => {
   });
 
   it("renders the tape's piano notes for every pitch an area's creatures sing", async () => {
-    // A machine with idle time to spare
-    window.requestIdleCallback = (callback) =>
-      setTimeout(() => callback({ timeRemaining: () => 50 }), 16);
+    // The world loads behind the StartGate, as in the game (main.js)
+    const gate = new StartGate();
+    gate.show();
     ctx.loadPuzzle('recording-two-creatures'); // creatures singing C4 and G4
-    await ctx.tick(100); // idle time
+    await jest.advanceTimersByTimeAsync(100);
+    gate.hide();
 
     const live = jest.spyOn(piano, 'playLiveNote');
     const sampled = jest.spyOn(piano, 'playSampledNote');
@@ -74,29 +75,6 @@ describe('Building audio ahead', () => {
 
     expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['C4']);
     expect(waves).not.toHaveBeenCalled();
-  });
-
-  it('starts a piano render only in an idle period with room for it', async () => {
-    // A fresh copy that has measured nothing yet (renders above cost no
-    // fake time, which would make any idle period big enough)
-    let freshPrewarm;
-    jest.isolateModules(() => {
-      // eslint-disable-next-line global-require
-      freshPrewarm = require('core/AudioPrewarm').default;
-    });
-    let idleMs = 5; // less than a render's first-guess cost
-    window.requestIdleCallback = (callback) =>
-      setTimeout(() => callback({ timeRemaining: () => idleMs }), 16);
-    const creature = ctx.addCreature({ song: [{ pitch: 'A5', length: '1/4' }] });
-    const before = MockOfflineAudioContext.renders;
-
-    freshPrewarm.warmArea({ entities: [creature] });
-    await jest.advanceTimersByTimeAsync(200);
-    expect(MockOfflineAudioContext.renders).toBe(before);
-
-    idleMs = 50;
-    await jest.advanceTimersByTimeAsync(200);
-    expect(MockOfflineAudioContext.renders).toBe(before + 1);
   });
 
   it('builds without waiting for idle time while the StartGate is up', async () => {
@@ -142,10 +120,13 @@ describe('Building audio ahead', () => {
 
 describe('What building ahead costs a frame in play', () => {
   // Main-thread ms the audio work costs, on a clock nothing else moves: a
-  // creature voice's wavetable, and a piano render's graph (charged as the
-  // render starts, the moment that build ends)
+  // creature voice's wavetable, a piano render's graph (charged as the
+  // render starts, the moment that build ends), and each of the 16
+  // wavetables of the offline phase bank the session's first render builds
+  // too (that render: 45 ms, as at 4x CPU)
   const VOICE_MS = 3;
   const RENDER_MS = 13;
+  const BANK_WAVE_MS = 2;
   const TIMER_SLICE_MS = 8; // AudioPrewarm's slice without requestIdleCallback
 
   let clock;
@@ -159,6 +140,11 @@ describe('What building ahead costs a frame in play', () => {
       super();
       this.length = length;
       this.sampleRate = sampleRate;
+    }
+
+    createPeriodicWave(...args) {
+      clock += BANK_WAVE_MS;
+      return super.createPeriodicWave(...args);
     }
 
     startRendering() {
@@ -187,6 +173,17 @@ describe('What building ahead costs a frame in play', () => {
 
   function creatureSinging(pitches) {
     return ctx.addCreature({ song: pitches.map((pitch) => ({ pitch, length: '1/4' })) });
+  }
+
+  /**
+   * The session's first renders, behind the StartGate: the first builds the
+   * phase bank too, so the next is what gives a render its price.
+   */
+  async function renderBehindGate(prewarm, pitches) {
+    prewarm.hold(true);
+    prewarm.warmArea({ entities: [creatureSinging(pitches)] });
+    await jest.advanceTimersByTimeAsync(100);
+    prewarm.hold(false);
   }
 
   /** Idle periods of these lengths (ms), then of `otherwise` from then on. */
@@ -267,12 +264,34 @@ describe('What building ahead costs a frame in play', () => {
     expect(renders).toHaveLength(0);
   });
 
+  it("renders the session's first piano note, the phase bank's too, only behind the StartGate", async () => {
+    const { prewarm } = fresh();
+    grantIdle([], 50); // the longest idle periods a browser grants
+    const idleRequests = jest.spyOn(window, 'requestIdleCallback');
+    prewarm.warmArea({ entities: [creatureSinging(['C4', 'E4'])] }); // the gate woken at once
+    await jest.advanceTimersByTimeAsync(500);
+    expect(waves).toHaveBeenCalledTimes(2); // the voices, in idle time
+    expect(renders).toHaveLength(0); // a render's price is unknown: no idle period has room
+    const requested = idleRequests.mock.calls.length;
+    await jest.advanceTimersByTimeAsync(500);
+    expect(idleRequests).toHaveBeenCalledTimes(requested); // and asks for none to wait in
+
+    prewarm.hold(true); // the next world's gate
+    await jest.advanceTimersByTimeAsync(100);
+    prewarm.hold(false);
+    expect(renders).toEqual([{ room: null }, { room: null }]); // C4 (and the bank), E4
+
+    // Later renders run in idle time with room for what the last one cost
+    grantIdle([RENDER_MS - 1, RENDER_MS + 1], 1);
+    prewarm.warmArea({ entities: [creatureSinging(['G4'])] }); // a neighbor
+    await jest.advanceTimersByTimeAsync(300);
+    expect(renders.slice(2)).toEqual([{ room: RENDER_MS + 1 }]);
+  });
+
   it('keeps a render for idle time with room after a pitch a strike rendered first', async () => {
     const { prewarm, piano } = fresh();
-    grantIdle([], 50);
-    prewarm.warmArea({ entities: [creatureSinging(['C4'])] }); // teaches it a render's cost
-    await jest.advanceTimersByTimeAsync(100);
-    expect(renders).toHaveLength(1);
+    await renderBehindGate(prewarm, ['C4', 'D4']); // teaches it a render's cost
+    expect(renders).toHaveLength(2);
 
     piano.startNote('E4', 300); // struck live before the prewarm got to it: it renders now
     // A neighbor queues E4 and G4; one roomy idle period, then only crumbs
@@ -281,15 +300,13 @@ describe('What building ahead costs a frame in play', () => {
     await jest.advanceTimersByTimeAsync(300);
 
     const prewarmed = renders.filter(({ room }) => room !== null);
-    expect(prewarmed).toHaveLength(2); // C4, then G4: E4 cost it nothing
+    expect(prewarmed).toHaveLength(1); // G4: E4 cost it nothing
     prewarmed.forEach(({ room }) => expect(room).toBeGreaterThanOrEqual(RENDER_MS));
   });
 
   it("waits out the piano's full render pool for idle time with room, never building outside it", async () => {
     const { prewarm, piano } = fresh();
-    grantIdle([], 50);
-    prewarm.warmArea({ entities: [creatureSinging(['C4'])] });
-    await jest.advanceTimersByTimeAsync(100);
+    await renderBehindGate(prewarm, ['C4', 'D4']);
 
     // Four strikes in play fill the pool with renders still in flight
     heldRenders = [];

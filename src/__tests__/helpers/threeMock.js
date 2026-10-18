@@ -246,6 +246,8 @@ class Material {
     // three's default render side is FrontSide (0). Preserve an explicit
     // side so tests can assert single- vs double-sided rendering.
     this.side = opts.side !== undefined ? opts.side : FrontSide;
+    // three draws a transparent double-sided material in two passes unless set
+    this.forceSinglePass = opts.forceSinglePass || false;
     this.color = opts.color !== undefined ? new Color(opts.color) : new Color();
     this.map = opts.map || null;
     this.blending = opts.blending !== undefined ? opts.blending : NormalBlending;

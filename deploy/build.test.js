@@ -20,12 +20,18 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import vm from 'vm';
 import zlib from 'zlib';
 import PortalManager from 'core/PortalManager';
 import PuzzleLoader from 'core/PuzzleLoader';
 
 const ROOT = path.resolve(__dirname, '..');
 const BUILD_TIMEOUT_MS = 120000;
+
+// The levels the POC stage ships, as build-poc.mjs picks them
+const POC_LEVELS = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/puzzles/manifest.json')))
+  .puzzles.map(({ id }) => id)
+  .filter((id) => id.startsWith('poc-'));
 
 let tmp;
 let full; // npm run build: game + editor
@@ -228,24 +234,84 @@ describe('The POC stage', () => {
     expect(gzipped.filter(unzipsWrong)).toEqual([]);
   });
 
-  it('preloads exactly the JSON the game fetches as it boots', async () => {
+  /**
+   * main.js's boot, for a page load with this query string: a deep link's
+   * level fetched alongside the manifest and entered if the manifest lists
+   * it, else the first level; then into the world (its neighbors load).
+   * @returns {string[]} every URL it fetched
+   */
+  async function bootFetches(search) {
     const fetched = [];
     global.fetch = jest.fn(async (url) => {
       fetched.push(url);
+      if (!fs.existsSync(poc(url))) return { ok: false, statusText: 'Not Found' };
       return { ok: true, json: async () => JSON.parse(fs.readFileSync(poc(url), 'utf8')) };
     });
-    // main.js's boot: the manifest, its first level, then into the world
-    const [first] = await PuzzleLoader.loadPuzzleList();
-    PortalManager.enterWorld(await PuzzleLoader.load(first.id));
+    const requested = new URLSearchParams(search).get('puzzle');
+    const requestedLoad = requested ? PuzzleLoader.load(requested) : null;
+    if (requestedLoad) requestedLoad.catch(() => {});
+    const puzzles = await PuzzleLoader.loadPuzzleList();
+    const listed = puzzles.some(({ id }) => id === requested);
+    PuzzleLoader.clearCache(); // startPuzzle: a world entry re-reads the files
+    PortalManager.enterWorld(await (listed ? requestedLoad : PuzzleLoader.load(puzzles[0].id)));
     await jest.runAllTimersAsync();
     PortalManager.reset();
     delete global.fetch;
+    return fetched;
+  }
 
+  /**
+   * What the staged page preloads for a page load with this query string:
+   * its own preload links, and those its plain scripts (the game's is a
+   * module) add.
+   */
+  function pagePreloads(search) {
     const html = fs.readFileSync(poc('index.html'), 'utf8');
-    const preloaded = [
+    const linked = [
       ...html.matchAll(/<link rel="preload" href="([^"]+)" as="fetch" crossorigin>/g),
-    ];
-    expect(preloaded.map(([, href]) => href).sort()).toEqual([...new Set(fetched)].sort());
+    ].map(([, href]) => href);
+    const added = [];
+    for (const [, script] of html.matchAll(/<script src="([^"]+)"><\/script>/g)) {
+      vm.runInNewContext(fs.readFileSync(poc(script), 'utf8'), {
+        window: { location: { search } },
+        document: { createElement: () => ({}), head: { appendChild: (link) => added.push(link) } },
+        URLSearchParams,
+      });
+    }
+    // Each as the page's own links (crossorigin: anonymous)
+    expect(added).toEqual(
+      added.map(({ href }) => ({ rel: 'preload', href, as: 'fetch', crossOrigin: 'anonymous' }))
+    );
+    return [...linked, ...added.map(({ href }) => href)];
+  }
+
+  it.each([
+    ['the default boot', ''],
+    ['an empty deep link', '?puzzle='],
+    ...POC_LEVELS.map((id) => [`a deep link to ${id}`, `?puzzle=${id}`]),
+  ])('preloads exactly the JSON %s fetches, each once', async (_, search) => {
+    const fetched = await bootFetches(search);
+
+    expect(pagePreloads(search).sort()).toEqual(fetched.sort());
+  });
+
+  it("preloads the first level's chain for a deep link to a level it doesn't ship", async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {}); // the level's 404
+    const fetched = await bootFetches('?puzzle=awakening');
+
+    expect(fetched).toContain('/puzzles/awakening.json'); // fetched, not found
+    expect(pagePreloads('?puzzle=awakening').sort()).toEqual(
+      fetched.filter((url) => url !== '/puzzles/awakening.json').sort()
+    );
+  });
+
+  it("adds a level's preloads from a plain script, ahead of the game's script and stylesheet", () => {
+    // Plain (no async, defer or type): its links are in before the game's
+    // script runs, and nothing waits on a stylesheet first
+    const [head] = fs.readFileSync(poc('index.html'), 'utf8').split('</head>');
+    const [first] = head.match(/<(script|link)\b[^>]*>/);
+
+    expect(first).toMatch(/^<script src="\/assets\/preload-[0-9a-f]{8}\.js">$/);
   });
 
   it('lists exactly the assets it ships, for the upload to keep next time', () => {

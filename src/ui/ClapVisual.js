@@ -102,11 +102,20 @@ class ClapVisual {
     return geometry;
   }
 
-  /** A ring mesh lying flat, with a material of its own (it fades alone). */
+  /**
+   * A ring mesh lying flat, with a material of its own (it fades alone).
+   * Readable from both sides in ONE pass: three draws a transparent
+   * double-sided material as two, back faces then front, re-deriving its
+   * shader program before each (twice a draw, for as long as a ring shows).
+   * The ring is flat, so from any eye one of those passes culls all of it:
+   * the one pass draws the same triangles, in the same order, and a basic
+   * material's colour never depends on the side it shows.
+   */
   static _createRing(geometry) {
     const material = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       side: THREE.DoubleSide,
+      forceSinglePass: true,
       transparent: true,
       opacity: RING_OPACITY,
     });
