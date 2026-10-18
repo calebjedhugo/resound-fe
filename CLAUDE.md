@@ -381,6 +381,14 @@ instead of "fixing" it.
 - `ui/StartGate.js` freezes the world per level start until a key/click.
   It goes up BEFORE the puzzle loads (`showLoading`: the first paint) and
   is wakeable only once the world is built (`show`)
+- **Controller** (`core/Gamepad.js`, DESIGN.md "A game controller"):
+  polled at the top of main.js `update()`, game only (never the editor).
+  Buttons dispatch SYNTHETIC keydown/keyup (`fromGamepad: true`) on window,
+  so every key listener just works — map new pad actions to a key, don't
+  teach listeners about pads. Sticks are analog `gameState.input.stick`
+  (exactly 0 at rest, so motion's at-rest skip holds), rest outside play.
+  A pad press is NO user activation: the StartGate wakes on one only with
+  audio running (`_wakeFromPad`); never let it drop into a silent world
 - Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
   `syncCameraToPlayer` for scripted browser verification (reposition +
   screenshot), `setTapImpulse(true)` to re-enable the tap-impulse
@@ -470,4 +478,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-18 — a door's faces all written in its opening frame; door targets at twice their panel's pixels (straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

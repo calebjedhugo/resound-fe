@@ -111,6 +111,25 @@ unlocks/activates it. Activating fountains completes the puzzle.
 | H | Controls/objective overlay |
 | Esc | Pause |
 
+A game controller (PS4 DualShock 4, or any pad the browser maps to the
+"standard" layout) plays too; an agent has none, so this is for reference:
+
+| Button | Action |
+|---|---|
+| Left stick | Walk / strafe (speed follows the tilt) |
+| L3 (click) | Run, until the left stick returns to rest |
+| Right stick | Look (fine near center) |
+| Cross | Perform the tape (Space) |
+| Square | Record, like R (tap toggles, hold records while held) |
+| Circle | Clap (C) |
+| Triangle | Cleanser gate (G) |
+| L1 / R1, d-pad ←/→ | Tape cursor (←/→) |
+| Options | Pause / resume (Esc) |
+
+Any button wakes the start gate, but only into a world with sound: on a
+fresh page a pad press can't unlock audio, so the gate stays up and asks for
+a key or a click.
+
 - **Movement/look are HELD-KEY for players** (2026-07-12): the camera
   moves/turns every frame a key is DOWN and stops exactly on release — no
   post-release lurch. You are a code-blind, human-like tester, so drive input

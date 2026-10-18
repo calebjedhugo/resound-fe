@@ -8,6 +8,10 @@ const CENTER_RANGE_PERC_Y = 1;
 const CENTER_MOTION_START_OFFSET = 150;
 const KEYBOARD_LOOK_SPEED = 0.025; // Radians per frame (~86°/sec at 60fps)
 const KEYBOARD_LOOK_STEP = Math.PI / 24; // Guaranteed tap rotation (7.5°), tap-impulse only
+// Radians per frame at the right stick's full tilt (~129°/sec at 60fps). Its
+// curve (core/Gamepad) passes the keyboard's speed at ~80% of the throw:
+// everything short of that is finer, the rim turns around a little faster.
+const STICK_LOOK_SPEED = KEYBOARD_LOOK_SPEED * 1.5;
 const MAX_PITCH = Math.PI / 2;
 
 // A page can boot before its window has a size (a hidden pane is 0x0): a zero
@@ -104,6 +108,22 @@ class CameraController {
 
     const [x, y] = gameState.camera.viewCenter;
     gameState.camera.viewCenter = [x + dx, clamp(y + dy, -MAX_PITCH, MAX_PITCH)];
+  }
+
+  /**
+   * The right stick (core/Gamepad): turns the view at its tilt's share of
+   * STICK_LOOK_SPEED every frame, on top of any held look key, within the
+   * same pitch limits. At rest it leaves the view alone.
+   */
+  static applyStickLook(gameState) {
+    const { look } = gameState.input.stick;
+    if (look.x === 0 && look.y === 0) return;
+
+    const [x, y] = gameState.camera.viewCenter;
+    gameState.camera.viewCenter = [
+      x - STICK_LOOK_SPEED * look.x,
+      clamp(y + STICK_LOOK_SPEED * look.y, -MAX_PITCH, MAX_PITCH),
+    ];
   }
 
   static toggleMouseLook(gameState) {

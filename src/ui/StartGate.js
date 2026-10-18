@@ -9,7 +9,10 @@
  * before the player sees it, and the waking gesture satisfies the browser's
  * user-interaction requirement before any audio plays. With nothing moving,
  * it is also when the world's audio is built ahead (core/AudioPrewarm).
+ *
+ * A controller button wakes it only into a world with sound (_wakeFromPad).
  */
+import { audioContextManager } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
 
 class StartGate {
@@ -75,11 +78,48 @@ class StartGate {
     // Capture-phase so the waking keypress never reaches the game
     this.dismissHandler = (event) => {
       event.stopPropagation();
-      if (this.wakeable && (event.type === 'keydown' || event.type === 'click')) this.hide();
+      if (!this.wakeable || (event.type !== 'keydown' && event.type !== 'click')) return;
+      if (event.fromGamepad) this._wakeFromPad();
+      else this.hide();
     };
     window.addEventListener('keydown', this.dismissHandler, true);
     window.addEventListener('keyup', this.dismissHandler, true);
     this.element.addEventListener('click', this.dismissHandler, true);
+  }
+
+  /**
+   * A controller button (core/Gamepad) while the world can wake. Browsers
+   * don't count a pad press as the user activation that lets audio start,
+   * so a gate it dropped could leave the world silent: it wakes the world
+   * only with audio running, already (an earlier gate's gesture started
+   * it) or once the resume it asks for starts it (a page already clicked
+   * or keyed may). Otherwise the gate stays up for a key or a click, and
+   * says so.
+   */
+  _wakeFromPad() {
+    const context = audioContextManager.getContext();
+    if (context.state === 'running') {
+      this.hide();
+      return;
+    }
+    const scrim = this.element;
+    context.resume().then(
+      () => {
+        if (this.element === scrim && this.wakeable && context.state === 'running') this.hide();
+      },
+      () => {} // refused: still a key or a click to come
+    );
+    if (!this.element.querySelector('.start-gate-sound')) {
+      const note = document.createElement('div');
+      note.className = 'start-gate-sound';
+      note.textContent = 'press a key or click to start sound';
+      note.style.cssText = `
+        position: absolute; top: calc(50% + 64px); left: 0; right: 0;
+        text-align: center; font: 15px monospace; letter-spacing: 1px;
+        color: rgba(255, 217, 122, 0.75);
+      `;
+      this.element.appendChild(note);
+    }
   }
 
   hide() {

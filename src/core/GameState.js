@@ -48,6 +48,16 @@ class GameState {
         lookUp: false,
         lookDown: false,
       },
+      // The controller's sticks (core/Gamepad): each one's tilt past the
+      // dead zone, -1..1 per axis and exactly 0 at rest. `walk` (x right,
+      // y ahead) is read by motion.js, `look` (x right, y up; curved for
+      // fine aim) by CameraController, beside the key flags. `running`: L3
+      // was clicked and the left stick hasn't come back to rest since.
+      stick: {
+        walk: { x: 0, y: 0 },
+        look: { x: 0, y: 0 },
+        running: false,
+      },
       mouseLookEnabled: true,
       // OFF for humans: movement/look are held-key only, so releasing a key
       // stops the camera exactly where it is (no post-release lurch). When

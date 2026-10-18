@@ -241,6 +241,22 @@ automated playtesters can observe them.)
   mulling a possible refinement: gradual turn slow-down after the mouse
   stops moving. Idea only; ask before building.) Keyboard look (M + IJKL)
   remains the alternative.
+- **A game controller plays too** (mapping approved 2026-10-18; PS4
+  DualShock 4 or any "standard"-layout pad, `core/Gamepad.js`, game only).
+  Left stick walks/strafes at its tilt (full tilt = walking speed); clicking
+  L3 runs until the stick comes back to rest; right stick looks, its tilt
+  squared so a small tilt aims finely (full tilt ~1.5x the keyboard's look
+  speed). Buttons ARE keys (each press goes out once as its key, no
+  auto-repeat): Cross = Space, Square = R (tap toggles, hold records while
+  held), Circle = C, Triangle = G, L1/R1 and d-pad ←/→ = the tape cursor,
+  Options = Esc; any other button is an unbound key (it still wakes the
+  start gate and dismisses the ending card). A held key drives its axis
+  alone (stick + key never doubles the speed). Browsers don't count a pad
+  press as the gesture that unlocks audio, so a pad press wakes the start
+  gate only into a world with sound; on a fresh page the gate stays up and
+  shows its one line, "press a key or click to start sound" — settings
+  feedback like the mouse-look toast, not gameplay words. The key hints
+  still show keyboard glyphs.
 
 ## Creature look (ruled 2026-10-02; colour reworked 2026-10-17)
 

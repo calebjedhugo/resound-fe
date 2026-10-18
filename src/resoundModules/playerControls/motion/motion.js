@@ -30,8 +30,8 @@ const runMultiplier = 2; // Running is 2x walk speed (8 units/sec)
 const playerRadius = PLAYER_COLLISION_RADIUS;
 
 const getSpeed = () => {
-  const { running } = gameState.input.keys;
-  return running ? baseSpeed * runMultiplier : baseSpeed;
+  const { keys, stick } = gameState.input;
+  return keys.running || stick.running ? baseSpeed * runMultiplier : baseSpeed;
 };
 
 // Guaranteed distance for a discrete key tap (a tap shorter than one frame
@@ -112,6 +112,13 @@ const updateBackForthPosition = (cameraDirection) => {
   if (forward) {
     camera.position.addScaledVector(cameraDirection, speed);
   }
+
+  // The left stick (core/Gamepad) walks at its tilt's share of the speed, on
+  // an axis no key is driving. At rest it adds nothing, not even a zero step.
+  const { walk } = gameState.input.stick;
+  if (walk.y !== 0 && !backward && !forward) {
+    camera.position.addScaledVector(cameraDirection, speed * walk.y);
+  }
 };
 
 const updateLateralPosition = (cameraDirection) => {
@@ -132,12 +139,19 @@ const updateLateralPosition = (cameraDirection) => {
   if (latRight) {
     camera.position.addScaledVector(cameraSide, -speed);
   }
+
+  // The left stick's strafe, likewise (cameraSide points left)
+  const { walk } = gameState.input.stick;
+  if (walk.x !== 0 && !latLeft && !latRight) {
+    camera.position.addScaledVector(cameraSide, -speed * walk.x);
+  }
 };
 
 const updateCameraDirection = () => {
   const { centered: mouseCentered } = gameState.input.mouse;
 
   CameraController.applyKeyboardLook(gameState);
+  CameraController.applyStickLook(gameState);
 
   // Condition here is for performance.
   if (!mouseCentered) {
