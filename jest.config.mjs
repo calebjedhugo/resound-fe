@@ -31,8 +31,11 @@ export default {
   testMatch: ['**/src/**/*.test.js', '**/deploy/**/*.test.js'],
 
   // Ignore patterns
-  // .claude/ holds agent worktrees: whole copies of src/ that aren't this checkout's tests
-  testPathIgnorePatterns: ['/node_modules/', '/.claude/'],
+  // .claude/ holds agent worktrees: whole copies of src/ that aren't this
+  // checkout's tests. Anchored to <rootDir>: a worktree's own path contains
+  // /.claude/, so an unanchored pattern would hide every test run inside one
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/.claude/'],
+  modulePathIgnorePatterns: ['<rootDir>/.claude/'],
 
   // resound-sound ships an ESM bundle; babel-jest needs to transform it even
   // though it lives under node_modules. three/examples (CameraUtils for the
