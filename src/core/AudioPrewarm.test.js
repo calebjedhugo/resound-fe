@@ -7,6 +7,7 @@
  */
 import AudioPrewarm from 'core/AudioPrewarm';
 import PlaybackManager from 'core/PlaybackManager';
+import PortalManager from 'core/PortalManager';
 import StartGate from 'ui/StartGate';
 
 class MockOfflineAudioContext extends global.AudioContext {
@@ -109,5 +110,28 @@ describe('Building audio ahead', () => {
     await jest.advanceTimersByTimeAsync(200);
     expect(MockOfflineAudioContext.renders).toBe(before + 1);
     gate.hide();
+  });
+
+  it("drops the old world's waiting creature voices when the world goes, and keeps the piano's", async () => {
+    // A machine that never goes idle: everything queued waits
+    window.requestIdleCallback = jest.fn(() => 1);
+    window.cancelIdleCallback = jest.fn();
+    // Creatures the teardown leaves alive (the harness's sandbox), so only
+    // the queue decides whose voice gets built
+    const old = ctx.addCreature({ song: [{ pitch: 'D5', length: '1/4' }] });
+    const next = ctx.addCreature({ song: [{ pitch: 'F5', length: '1/4' }] });
+    const waves = jest.spyOn(piano.context, 'createPeriodicWave');
+    const before = MockOfflineAudioContext.renders;
+    AudioPrewarm.warmArea({ entities: [old] });
+
+    PortalManager.reset(); // leaving for the menu
+    AudioPrewarm.warmArea({ entities: [next] }); // the next world's
+    const gate = new StartGate();
+    gate.show();
+    await jest.advanceTimersByTimeAsync(200);
+    gate.hide();
+
+    expect(waves).toHaveBeenCalledTimes(1); // F5, for the next world's creature
+    expect(MockOfflineAudioContext.renders).toBe(before + 2); // D5 and F5 on the piano
   });
 });

@@ -1249,3 +1249,109 @@ describe('Creature look (ball lightning)', () => {
     freed.forEach((spy) => expect(spy).not.toHaveBeenCalled());
   });
 });
+
+/**
+ * A creature leaving the world (its area disposed: pruned, or the whole
+ * world torn down) sings nothing more and lets go of the voices it built —
+ * each one a PeriodicWave the browser keeps ~0.6 MB of wavetables for
+ * (~2.8 MB at 96 kHz; resound-sound's Random).
+ */
+/* eslint-disable import/first -- section header for the suite below; imports
+   are hoisted by babel-jest so the placement is cosmetic */
+import { audioContextManager } from 'resound-sound';
+import PortalManager from 'core/PortalManager';
+/* eslint-enable import/first */
+
+describe('A creature leaving the world', () => {
+  const PHRASE = [
+    { pitch: 'C4', length: '1/4' },
+    { pitch: 'E4', length: '1/4' },
+    { pitch: 'G4', length: '1/4' },
+  ];
+
+  // Every object reachable from a root through own properties, Map and Set
+  // entries: what a garbage collector keeps alive while the root lives (the
+  // AudioContext is shared, not the creature's)
+  const reachableFrom = (root) => {
+    const context = audioContextManager.getContext();
+    const seen = new Set();
+    const visit = (value) => {
+      if (value === null || typeof value !== 'object' || value === context || seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+      if (value instanceof Map) value.forEach((entry, key) => [key, entry].forEach(visit));
+      if (value instanceof Set) value.forEach(visit);
+      if (!ArrayBuffer.isView(value)) Object.values(value).forEach(visit);
+    };
+    visit(root);
+    return seen;
+  };
+
+  const sungBy = (creature) =>
+    ctx
+      .getEmittedNotes()
+      .filter((note) => note.source === creature.id)
+      .map((note) => note.pitch);
+
+  // A world creature that has just sung the first note of PHRASE: its play
+  // loop is asleep until the next (a ctx.tick would play the song out)
+  function midPhrase() {
+    ctx.loadPuzzle('recording-basic');
+    const creature = ctx.addCreature({ song: PHRASE, interval: 8 });
+    creature.sing();
+    expect(sungBy(creature)).toEqual(['C4']);
+    return creature;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('sings nothing more once its world is torn down mid-song', async () => {
+    const creature = midPhrase();
+    const oscillators = jest.spyOn(audioContextManager.getContext(), 'createOscillator');
+
+    PortalManager.reset(); // leaving for the menu
+    await jest.advanceTimersByTimeAsync(2000); // the rest of its phrase, and more
+
+    // A stop() let E4 out after its world was gone, into whatever came next
+    expect(sungBy(creature)).toEqual(['C4']);
+    expect(oscillators).not.toHaveBeenCalled();
+  });
+
+  it('lets go of the voices it built when its area goes', () => {
+    const context = audioContextManager.getContext();
+    const create = context.createPeriodicWave.bind(context);
+    const waves = [];
+    jest.spyOn(context, 'createPeriodicWave').mockImplementation((...args) => {
+      const wave = create(...args);
+      waves.push(wave);
+      return wave;
+    });
+    const creature = midPhrase();
+    // (The walk does reach its C4 voice while it lives)
+    expect(waves.some((wave) => reachableFrom(creature.instrument).has(wave))).toBe(true);
+
+    PortalManager.reset();
+
+    const left = reachableFrom(creature.instrument);
+    expect(waves.filter((wave) => left.has(wave))).toEqual([]);
+  });
+
+  it('holds one voice per distinct pitch of its song, however often it sings it', async () => {
+    const waves = jest.spyOn(audioContextManager.getContext(), 'createPeriodicWave');
+    // The harness's sandbox: built without prewarming, so it builds its own
+    const creature = ctx.addCreature({
+      song: [PHRASE[0], PHRASE[1], PHRASE[0]],
+      interval: 4,
+    });
+
+    await ctx.advanceBeats(12);
+
+    const sung = sungBy(creature);
+    expect(sung.length).toBeGreaterThanOrEqual(9); // three songs or more
+    expect(new Set(sung)).toEqual(new Set(['C4', 'E4']));
+    expect(waves).toHaveBeenCalledTimes(2);
+  });
+});
