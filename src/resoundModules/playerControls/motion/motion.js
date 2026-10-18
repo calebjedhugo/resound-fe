@@ -48,6 +48,40 @@ const scratchSide = new THREE.Vector3();
 const scratchYaw = new THREE.Quaternion();
 const scratchPitch = new THREE.Quaternion();
 
+// What the last full collision + floor pass left (updateMotion's at-rest
+// shortcut); not valid until there has been one
+const rest = { valid: false, x: 0, y: 0, z: 0, elevation: 0, grid: null };
+
+/**
+ * Would the collision + floor pass now change nothing? True when this
+ * frame's keys moved the camera nowhere (bit for bit) from where the last
+ * full pass left it, on the same layer, height and grid. Then the pass is a
+ * fixed point, as for a resting creature (Creature._isAtRest): resolving a
+ * zero move returns the start (blocked or not), and the floor height and
+ * layer it re-derives at that spot are the ones the last pass derived
+ * there. Anything else that moved or re-layered the player since (a
+ * crossing, syncCameraToPlayer) gets a full pass that re-floors them.
+ */
+const isAtRest = (oldX, oldZ, elevationGrid) =>
+  rest.valid &&
+  Object.is(camera.position.x, oldX) &&
+  Object.is(camera.position.z, oldZ) &&
+  Object.is(oldX, rest.x) &&
+  Object.is(oldZ, rest.z) &&
+  Object.is(camera.position.y, rest.y) &&
+  Object.is(gameState.player.elevation, rest.elevation) &&
+  elevationGrid === rest.grid;
+
+/** Record what this full collision + floor pass left, for isAtRest. */
+const rememberRest = (elevationGrid) => {
+  rest.valid = true;
+  rest.x = camera.position.x;
+  rest.y = camera.position.y;
+  rest.z = camera.position.z;
+  rest.elevation = gameState.player.elevation;
+  rest.grid = elevationGrid;
+};
+
 // Consume ALL queued impulses for a direction, returning how many steps to
 // apply this frame. Draining fully (not one per frame) keeps burst taps and
 // background-throttled tabs responsive. While the key is held, leave the
@@ -121,33 +155,17 @@ const updateCameraDirection = () => {
   camera.setRotationFromQuaternion(mousePosRotation);
 };
 
-const updateMotion = () => {
-  const cameraDirection = scratchDirection;
-  camera.getWorldDirection(cameraDirection);
-
-  // Walking is ground-based: flatten the view direction so looking up/down
-  // never slows (or zeroes) movement.
-  cameraDirection.y = 0;
-  if (cameraDirection.lengthSq() < 1e-6) {
-    // Looking straight up/down — derive forward from yaw instead
-    const [viewX] = CameraController.getView(gameState);
-    cameraDirection.set(-Math.sin(viewX), 0, -Math.cos(viewX));
-  } else {
-    cameraDirection.normalize();
-  }
-
-  // Store old position for collision checking
-  const oldX = camera.position.x;
-  const oldZ = camera.position.z;
-
-  updateLateralPosition(cameraDirection);
-  updateBackForthPosition(cameraDirection);
-
+/**
+ * Resolve this frame's move from (oldX, oldZ) and re-floor the player there.
+ * @param {number} oldX
+ * @param {number} oldZ
+ * @param {?ElevationGrid} elevationGrid - the player's area's grid
+ */
+const settleMove = (oldX, oldZ, elevationGrid) => {
   // Resolve the move with elevation-aware, axis-separated collision response
   // (wall/cliff sliding): walking into a wall or cliff edge at an angle slides
   // ALONG it instead of stopping dead. The mover carries its current layer so
   // it stays on its own level in walk-under cells. See core/SlideResolver.
-  const { elevationGrid } = gameState;
   const priorLevel = gameState.player.elevation;
   const resolved = resolveSlide(
     { x: oldX, z: oldZ },
@@ -176,6 +194,34 @@ const updateMotion = () => {
     const floorY = getFloorY(camera.position.x, camera.position.z, elevationGrid, priorLevel);
     camera.position.y = floorY + fixedYPosition;
   }
+  rememberRest(elevationGrid);
+};
+
+const updateMotion = () => {
+  const cameraDirection = scratchDirection;
+  camera.getWorldDirection(cameraDirection);
+
+  // Walking is ground-based: flatten the view direction so looking up/down
+  // never slows (or zeroes) movement.
+  cameraDirection.y = 0;
+  if (cameraDirection.lengthSq() < 1e-6) {
+    // Looking straight up/down — derive forward from yaw instead
+    const [viewX] = CameraController.getView(gameState);
+    cameraDirection.set(-Math.sin(viewX), 0, -Math.cos(viewX));
+  } else {
+    cameraDirection.normalize();
+  }
+
+  // Store old position for collision checking
+  const oldX = camera.position.x;
+  const oldZ = camera.position.z;
+
+  updateLateralPosition(cameraDirection);
+  updateBackForthPosition(cameraDirection);
+
+  // Standing still, there is nothing to resolve or re-floor (isAtRest)
+  const { elevationGrid } = gameState;
+  if (!isAtRest(oldX, oldZ, elevationGrid)) settleMove(oldX, oldZ, elevationGrid);
 
   updateCameraDirection();
 };
