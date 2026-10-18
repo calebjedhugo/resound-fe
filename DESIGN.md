@@ -464,8 +464,11 @@ rulings, in the designer's words where it matters:
   fullscreen renders per frame (the round-4 fan spin). Below that cap each
   pass's target follows its panel's size ON SCREEN (2026-10-17), at twice
   the texels it covers (2026-10-18: drawn 1:1, a staff seen through a far
-  door came out visibly softer than half-res drew it): a distant door draws
-  a 32-256 px target, a door filling the screen keeps half-res. A
+  door came out visibly softer than half-res drew it) — and where a staff's
+  lines are about a pixel tall (a 32-64 px panel) four times across and
+  eight up (2026-10-18: twice drew them lighter or broken; this keeps them
+  level with half-res): a distant door draws a target 32-256 px across, a
+  door filling the screen keeps half-res. A
   straight-on warm-up's picture shows only through other doors, far
   smaller than its stand-in eye sees it, so it draws at half that eye's
   texels. A door's panels

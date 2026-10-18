@@ -752,9 +752,10 @@ class PortalManager {
   // stand-in eye sees the panel: with every door of The Star open, standing,
   // walking, turning and flicking at each door, the biggest any chain
   // showed was 55 px, where that eye sees the panel at ~213 (bench,
-  // 2026-10-18). Half that eye's texels is twice the biggest, as any pass
-  // draws (PortalView's SUPERSAMPLE): 256x256 targets became 128x128, The
-  // Star's 80 rotor-only ones 30 MiB -> 7.5
+  // 2026-10-18). Half that eye's texels is twice the biggest, as a pass
+  // draws most panels (PortalView's SUPERSAMPLE; one where a staff's lines
+  // are thin gets more from the pass that replaces this picture): 256x256
+  // targets became 128x128, The Star's 80 rotor-only ones 30 MiB -> 7.5
   static STAND_IN_SUPERSAMPLE = 0.5;
 
   /**

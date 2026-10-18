@@ -159,7 +159,24 @@ afterEach(() => {
 const powerOfTwo = (texels) => 2 ** Math.ceil(Math.log2(texels));
 
 describe('A door pass draws at the size its panel shows on screen', () => {
-  it('a distant panel gets a small target, twice its pixels on screen (so as sharp as half-res)', async () => {
+  it('a panel over 64 px gets twice its pixels on screen (so as sharp as half-res)', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 5 * WORLD_SCALE); // 3 cells south, looking at the door
+
+    drawFrame(renderer, eye);
+
+    const shown = renderer.shownBy(panelOf(door, 'south'));
+    const onScreen = panelPixels(eye.position.z - SOUTH_PANEL_Z);
+    expect(onScreen).toBeGreaterThan(64);
+    // ...and no more than that
+    expect([shown.width, shown.height]).toEqual([
+      powerOfTwo(2 * onScreen),
+      powerOfTwo(2 * onScreen),
+    ]);
+  });
+
+  it("a distant panel (32-64 px) gets a small target, four times its pixels across and eight up (a staff's lines, a pixel tall there, keep their contrast)", async () => {
     const door = await openPortalA();
     const renderer = createRecordingRenderer();
     const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE); // 7 cells south, looking at the door
@@ -168,10 +185,27 @@ describe('A door pass draws at the size its panel shows on screen', () => {
 
     const shown = renderer.shownBy(panelOf(door, 'south'));
     const onScreen = panelPixels(eye.position.z - SOUTH_PANEL_Z);
-    expect(shown.height).toBeGreaterThanOrEqual(2 * onScreen);
-    expect(shown.width).toBeGreaterThanOrEqual(2 * onScreen);
-    expect(shown.height).toBe(powerOfTwo(2 * onScreen)); // no more than that
-    expect(shown.height).toBeLessThan(CAP.height); // not the old half-res target
+    expect(onScreen).toBeGreaterThan(32);
+    expect(onScreen).toBeLessThan(64);
+    expect(shown.width).toBe(powerOfTwo(4 * onScreen)); // no more than that
+    expect(shown.height).toBe(Math.min(CAP.height, powerOfTwo(8 * onScreen)));
+    expect(shown.width).toBeLessThan(CAP.width); // not the old half-res target
+  });
+
+  it("a panel under 32 px gets twice its pixels again (a staff's lines merge however it is drawn)", async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 14 * WORLD_SCALE); // 12 cells south, looking at the door
+
+    drawFrame(renderer, eye);
+
+    const shown = renderer.shownBy(panelOf(door, 'south'));
+    const onScreen = panelPixels(eye.position.z - SOUTH_PANEL_Z);
+    expect(onScreen).toBeLessThan(32);
+    expect([shown.width, shown.height]).toEqual([
+      powerOfTwo(2 * onScreen),
+      powerOfTwo(2 * onScreen),
+    ]);
   });
 
   it("a face's straight-on warm-up draws at half the pixels that stand-in eye sees", async () => {
@@ -240,10 +274,10 @@ describe('A door pass draws at the size its panel shows on screen', () => {
     // Far away: a small panel — but no reallocation on the first pass
     const far = eyeAt(DOOR.x, 9 * WORLD_SCALE);
     drawFrame(renderer, far);
-    expect(renderer.shownBy(panel).height).toBe(CAP.height);
+    expect(renderer.shownBy(panel).width).toBe(CAP.width);
 
     for (let i = 0; i < 120; i += 1) drawFrame(renderer, far);
-    expect(renderer.shownBy(panel).height).toBeLessThan(CAP.height);
+    expect(renderer.shownBy(panel).width).toBeLessThan(CAP.width);
   });
 });
 
@@ -300,8 +334,9 @@ describe('A small panel re-renders one frame in three', () => {
   it('outgrowing its picture between draws, it redraws at once', async () => {
     const door = await openPortalA();
     const renderer = createRecordingRenderer();
-    // Just short of where the panel needs more than 128 texels: 64 on screen
-    const crossing = SOUTH_PANEL_Z + (WORLD_SCALE * FOCAL) / 64;
+    // Just short of where the panel wants four times its pixels across
+    // (twice them: 64 texels): 32 on screen
+    const crossing = SOUTH_PANEL_Z + (WORLD_SCALE * FOCAL) / 32;
     const eye = eyeAt(DOOR.x, crossing + 0.05);
     drawFrame(renderer, eye);
     const panel = panelOf(door, 'south');
@@ -316,9 +351,31 @@ describe('A small panel re-renders one frame in three', () => {
     drawFrame(renderer, eye);
 
     expect(renderer.writesOf(panel)).toHaveLength(1);
-    expect(renderer.shownBy(panel).height).toBeGreaterThanOrEqual(
-      2 * panelPixels(crossing - 0.1 - SOUTH_PANEL_Z)
+    expect(renderer.shownBy(panel).width).toBeGreaterThanOrEqual(
+      4 * panelPixels(crossing - 0.1 - SOUTH_PANEL_Z)
     );
+  });
+
+  it('a screen grown under a still eye, it redraws at once when its staff wants more of it', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 10 * WORLD_SCALE); // 8 cells south: its height at the cap
+    drawFrame(renderer, eye);
+    const panel = panelOf(door, 'south');
+    // Settle into its rhythm: a frame it rests, then the frame it draws
+    do drawFrame(renderer, eye);
+    while (renderer.writesOf(panel).length > 0);
+    do drawFrame(renderer, eye);
+    while (renderer.writesOf(panel).length === 0);
+
+    // The very next frame — a resting one — on a screen a quarter bigger:
+    // the panel still under 64 px, under a taller cap
+    renderer.screen = { width: 1.25 * SCREEN.width, height: 1.25 * SCREEN.height };
+    drawFrame(renderer, eye);
+
+    expect(1.25 * panelPixels(eye.position.z - SOUTH_PANEL_Z)).toBeLessThan(64);
+    expect(renderer.writesOf(panel)).toHaveLength(1);
+    expect(renderer.shownBy(panel).height).toBe(1.25 * CAP.height);
   });
 
   it('back on screen after a look away, it redraws on the first frame', async () => {

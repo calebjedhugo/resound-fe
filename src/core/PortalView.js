@@ -95,6 +95,25 @@ const MIN_TARGET_SIZE = 32;
 // the cap the factor fades to 1: the cap holds.
 const SUPERSAMPLE = 2;
 
+// ...and more where a staff's lines are about a pixel tall on screen: along
+// an axis the panel covers more than MERGED_LINE_TEXELS and at most
+// THIN_LINE_TEXELS of, THIN_LINE_SUPERSAMPLE times across and
+// THIN_LINE_SUPERSAMPLE_UP up. Twice what such a panel shows can round up to
+// barely more (a 57 px panel: a 128 target), and a line a pixel tall, sampled
+// 2:1 by a filter that skips texels, kept its full contrast only where the
+// samples landed on it (The Star's entry from 7 cells: 87% of half-res's
+// sharpness across nine positions, four of them 76-87%, lines lighter or
+// broken). A staff's lines run across the panel, so its height takes the
+// most: 4x both ways still left a 50 px panel at 95%, 2x across with 8x up
+// a 57 px one at 91%; 4x across, 8x up (half-res's own height on a 1280x656
+// screen) keeps 37-57 px panels at 99-100%. Past 64 px the lines are wide
+// enough for twice (99-100% at 78-122 px); under 32 they lie under a pixel
+// apart, a blur however it's drawn (twice: 101% of half-res at 28 px).
+const THIN_LINE_TEXELS = 64;
+const MERGED_LINE_TEXELS = 32;
+const THIN_LINE_SUPERSAMPLE = 4;
+const THIN_LINE_SUPERSAMPLE_UP = 8;
+
 // Resizing reallocates the target's GPU buffers, so a target grows at once
 // but shrinks only after this many passes running have asked for a smaller
 // one (a panel near a bucket edge, or sized for two eyes in turn, would
@@ -191,6 +210,14 @@ class EyeMemo {
 /** Target size along one axis for `texels` of panel, under `cap`. */
 const bucket = (texels, cap) =>
   Math.min(cap, Math.max(MIN_TARGET_SIZE, 2 ** Math.ceil(Math.log2(Math.max(1, texels)))));
+
+/**
+ * Target texels along an axis the panel covers `texels` of, for the eye
+ * that sees it: SUPERSAMPLE times, or `thin` times where a staff's lines
+ * are about a pixel tall (see THIN_LINE_TEXELS).
+ */
+const supersampled = (texels, thin) =>
+  texels * (texels > MERGED_LINE_TEXELS && texels <= THIN_LINE_TEXELS ? thin : SUPERSAMPLE);
 
 class PortalView {
   // Passes leave out the pieces of their scene they can't draw
@@ -501,14 +528,16 @@ class PortalView {
   /**
    * Is the picture this panel shows still as sharp as a pass would draw it
    * at `footprint` (the target it was last drawn into holds SUPERSAMPLE
-   * texels per pixel, short of the cap)?
+   * texels per pixel, more where a staff's lines are thin, short of the
+   * cap)?
    */
   covers(footprint, renderer) {
     renderer.getDrawingBufferSize(scratchSize);
+    const across = supersampled(footprint.texelsAcross, THIN_LINE_SUPERSAMPLE);
+    const up = supersampled(footprint.texelsUp, THIN_LINE_SUPERSAMPLE_UP);
     return (
-      Math.min(Math.floor(scratchSize.x / 2), footprint.texelsAcross * SUPERSAMPLE) <=
-        this._width &&
-      Math.min(Math.floor(scratchSize.y / 2), footprint.texelsUp * SUPERSAMPLE) <= this._height
+      Math.min(Math.floor(scratchSize.x / 2), across) <= this._width &&
+      Math.min(Math.floor(scratchSize.y / 2), up) <= this._height
     );
   }
 
@@ -700,10 +729,11 @@ class PortalView {
    * @param {?object} [options.footprint] - this panel's footprint on the
    *   screen the pass is for, when the caller already has it (footprint());
    *   worked out from `camera` otherwise
-   * @param {number} [options.supersample=SUPERSAMPLE] - target texels per
-   *   texel the panel covers on `camera`'s screen: an eye that only stands
-   *   in for whoever will see the picture (a straight-on warm-up) asks for
-   *   what they need
+   * @param {number} [options.supersample] - target texels per texel the
+   *   panel covers on `camera`'s screen (by default what the eye that sees
+   *   it needs: SUPERSAMPLE, more where a staff's lines are thin): an eye
+   *   that only stands in for whoever will see the picture (a straight-on
+   *   warm-up) asks for what they need
    */
   render(renderer, camera, options = {}) {
     const { clipOverride = null, extraWallsBehind = null } = options;
@@ -721,7 +751,7 @@ class PortalView {
     const writeTarget = this._fitTarget(
       renderer,
       options.footprint === undefined ? this.footprint(camera, renderer) : options.footprint,
-      options.supersample === undefined ? SUPERSAMPLE : options.supersample
+      options.supersample
     );
 
     const mappedEye = this.renderEye(eye);
@@ -910,14 +940,21 @@ class PortalView {
    * cost several fullscreen renders per frame (GPU fan spin, round-4
    * playtest) — so half the drawing buffer is the ceiling; below it the
    * target follows what the panel occupies (see MIN_TARGET_SIZE), times
-   * `supersample` (see SUPERSAMPLE).
+   * `supersample` — by default what the eye that sees it needs (see
+   * SUPERSAMPLE, THIN_LINE_TEXELS).
    */
   _fitTarget(renderer, footprint, supersample) {
     renderer.getDrawingBufferSize(scratchSize);
     const capW = Math.max(1, Math.floor(scratchSize.x / 2));
     const capH = Math.max(1, Math.floor(scratchSize.y / 2));
-    const wantW = footprint ? bucket(footprint.texelsAcross * supersample, capW) : capW;
-    const wantH = footprint ? bucket(footprint.texelsUp * supersample, capH) : capH;
+    const texels = (covered, thin) =>
+      supersample === undefined ? supersampled(covered, thin) : covered * supersample;
+    const wantW = footprint
+      ? bucket(texels(footprint.texelsAcross, THIN_LINE_SUPERSAMPLE), capW)
+      : capW;
+    const wantH = footprint
+      ? bucket(texels(footprint.texelsUp, THIN_LINE_SUPERSAMPLE_UP), capH)
+      : capH;
     let width = Math.min(this._width, capW);
     let height = Math.min(this._height, capH);
     if (wantW > width || wantH > height) {

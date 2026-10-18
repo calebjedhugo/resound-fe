@@ -271,9 +271,11 @@ instead of "fixing" it.
 - **Door passes cost what the screen shows** (2026-10-17): each pass's
   target fits its panel's densest size ON SCREEN (`portalMath.panelFootprint`,
   `PortalView._fitTarget`: twice its texels, `SUPERSAMPLE` — 1:1 drew a far
-  door's staff visibly softer than half-res did — then power-of-two per
-  axis, 32 px floor, half-res cap — a door filling the screen keeps half-res;
-  grows at once, shrinks after 30 passes asking less). Mirror and warm-up
+  door's staff visibly softer than half-res did — and where a staff's lines
+  are about a pixel tall (a 32-64 px panel) four times across, eight up:
+  twice drew them lighter or broken; then power-of-two per axis, 32 px
+  floor, half-res cap — a door filling the screen keeps half-res; grows at
+  once, shrinks after 30 passes asking less). Mirror and warm-up
   eyes borrow the player's look and lens (`eye.pose`); a straight-on warm-up
   (first write, stale rotor) shows only through other doors' panels, far
   smaller than its stand-in eye sees it: half that eye's texels
@@ -478,4 +480,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
