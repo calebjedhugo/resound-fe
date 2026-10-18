@@ -364,15 +364,16 @@ describe('A small panel re-renders one frame in three', () => {
    * north into it shows the view north out of P2 — P1 itself, so P1's
    * picture holds a copy of the one it showed before. `expectCopyFresh`
    * checks the copy P1 shows now was drawn for the eye where it stands, as
-   * recently as two draws a beat apart leave it.
+   * recently as two draws a beat apart leave it. With P2 off P1's line
+   * (`partnerX`), that view shows no panel of P1.
    */
-  function enterOwnDoor() {
-    const gate = (id, z, partner) => ({
+  function enterOwnDoor(partnerX = 5) {
+    const gate = (id, x, z, partner) => ({
       type: 'gate',
       id,
       facing: 'north',
       link: { puzzleId: 'own-door', gateId: partner },
-      position: { x: 5, y: 0, z },
+      position: { x, y: 0, z },
       song: [{ pitch: 'C4', length: '1/4' }],
     });
     installFetchMock({});
@@ -383,7 +384,7 @@ describe('A small panel re-renders one frame in three', () => {
       gridSize: 30,
       tempo: 120,
       playerStart: { x: 5, y: 0, z: 24 },
-      entities: [gate('p1', 5, 'p2'), gate('p2', 28, 'p1')],
+      entities: [gate('p1', 5, 5, 'p2'), gate('p2', partnerX, 28, 'p1')],
     });
     const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
     for (const g of gates) g.open();
@@ -404,7 +405,7 @@ describe('A small panel re-renders one frame in three', () => {
       );
       expect(renderer.frame - copied.frame).toBeLessThan(2 * SMALL_PANEL_EVERY);
     };
-    return { renderer, eye, expectCopyFresh };
+    return { renderer, eye, panel, expectCopyFresh };
   }
 
   it('showing its own door, back on screen its copy is this eye’s from the second frame', () => {
@@ -424,6 +425,23 @@ describe('A small panel re-renders one frame in three', () => {
         expectCopyFresh();
       }
     }
+  });
+
+  it('showing no panel of its own door, a door into its own area keeps its beat from the second frame back', () => {
+    const { renderer, eye, panel } = enterOwnDoor(20);
+
+    // Back three times, five frames apart: the second frame back lands on
+    // each beat once, and rests on the two that aren't its own
+    let rested = 0;
+    for (let back = 0; back < 3; back += 1) {
+      eye.quaternion = LOOK_SOUTH;
+      for (let i = 0; i < 3; i += 1) drawFrame(renderer, eye);
+      eye.quaternion = LOOK_NORTH;
+      drawFrame(renderer, eye);
+      drawFrame(renderer, eye);
+      if (renderer.writesOf(panel).length === 0) rested += 1;
+    }
+    expect(rested).toBe(2);
   });
 
   it('showing its own door, after a jump of the eye its copy is from the new spot by the second frame', () => {

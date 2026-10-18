@@ -280,9 +280,9 @@ instead of "fixing" it.
   (`STAND_IN_SUPERSAMPLE`). A panel under `SMALL_PANEL_SHARE` (1%) of the
   screen re-renders one frame in three (`_restsThisFrame`) — never while a
   creature shows through it, after an eye jump, or when its picture is
-  another eye's, old, or outgrown, or (a door into its own area) was drawn
-  over such a picture (its door-in-a-door copies it: back on screen it
-  draws twice running)
+  another eye's, old, or outgrown, or (a door into its own area, its
+  picture showing a panel of that door) was drawn over such a picture (its
+  door-in-a-door copies it: back on screen it draws twice running)
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS
@@ -470,4 +470,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-18 — door targets at twice their panel's pixels (straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-10-18 — a door's faces all written in its opening frame; door targets at twice their panel's pixels (straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

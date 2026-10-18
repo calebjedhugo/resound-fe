@@ -200,6 +200,8 @@ class PortalManager {
     this._sightRect = { u0: 0, u1: 1, v0: 0, v1: 1 };
     this._sightPart = { u0: 0, u1: 1, v0: 0, v1: 1 };
     this._screenPlanes = new Float64Array(4 * 4);
+    // ...and a picture's, asked whether it shows its own door (_wrote)
+    this._picturePlanes = new Float64Array(SIGHT_PLANES * 4);
     this._cellCenter = { x: 0, y: 0, z: 0 };
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     this._passOptions = {}; // scratch: a player pass's PortalView.render options
@@ -692,10 +694,10 @@ class PortalManager {
    * or MIRROR_WRITER — within the last SMALL_PANEL_EVERY frames, from
    * within SMALL_PANEL_DRIFT of `eye`: a picture another pass drew (a
    * warm-up, the rotor, another eye's view), an old one, or one drawn from
-   * elsewhere is replaced at once, and so is one drawn over such a picture
-   * (it may copy it: _wrote) — and never while the panel has outgrown its
-   * picture or a creature shows through it. A footprint-less pass (no pose
-   * to measure it by) never rests.
+   * elsewhere is replaced at once, and so is one showing its own door drawn
+   * over such a picture (it copies it: _wrote) — and never while the panel
+   * has outgrown its picture or a creature shows through it. A
+   * footprint-less pass (no pose to measure it by) never rests.
    */
   _restsThisFrame(view, footprint, writer, eye, renderer) {
     if (!footprint || footprint.screenShare >= PortalManager.SMALL_PANEL_SHARE) return false;
@@ -726,12 +728,16 @@ class PortalManager {
     // writer's too, recent and from nearby. Resting on its first draw back
     // on screen kept the stale rotor's straight-on picture (or one from
     // before the eye looked away) inside its door-in-a-door two more frames.
-    // A door into another area draws a scene its panels aren't in
+    // A door into another area draws a scene its panels aren't in, and so
+    // does a picture its own door lies outside of: a pair opening in The
+    // Star drew the far door's two edge-on side panels twice running for
+    // nothing
     view._settled =
       view.neighborArea !== view.gate.area ||
       (view._writer === writer &&
         this._frameId - view._freshFrame <= PortalManager.SMALL_PANEL_EVERY &&
-        stepBetween(eye, view._writtenFrom) < PortalManager.SMALL_PANEL_DRIFT);
+        stepBetween(eye, view._writtenFrom) < PortalManager.SMALL_PANEL_DRIFT) ||
+      !this._showsOwnDoor(view, view.drawnFrom, this._picturePlanes);
     view._freshFrame = this._frameId;
     view._writer = writer;
     if (!view._writtenFrom) view._writtenFrom = { x: 0, y: 0, z: 0 };
@@ -970,7 +976,7 @@ class PortalManager {
         const [anyView] = sourceFaces.values();
         const mapped = anyView._map(eye);
         const partner = this._partnerGate(source);
-        for (const sight of sights) this._aimSight(sight, sourceFaces);
+        for (const sight of sights) this._aimSight(sight);
         for (const gate of this._linkedGates) {
           if (gate === source || gate === partner) continue; // eslint-disable-line no-continue
           if (!gate.isOpen && !(gate._fade > 0)) continue; // eslint-disable-line no-continue
@@ -1041,26 +1047,38 @@ class PortalManager {
    * picture there, shrunk (that recursion rides the double-buffered
    * cascade), so any part of it can reach the screen: such a sight takes
    * the whole panel (and SIGHT_MARGIN past it).
-   * @param {Map<string, PortalView>} ownFaces - the faces of the sight's door
    */
-  _aimSight(sight, ownFaces) {
+  _aimSight(sight) {
     const { view, apex, rect, planes } = sight;
     const margin = PortalManager.SIGHT_MARGIN;
     // Short of the whole panel and its margin: does the picture show its door?
-    if (rect.u0 > -margin || rect.u1 < 1 + margin || rect.v0 > -margin || rect.v1 < 1 + margin) {
-      view.sightPlanes(apex, WHOLE_PANEL, planes);
-      for (const own of ownFaces.values()) {
-        if (
-          own.surface.visible &&
-          own.facesToward(apex) &&
-          clipQuad(own.corners, planes, SIGHT_PLANES, this._sightPart)
-        ) {
-          reachPast(rect, WHOLE_PANEL, margin);
-          break;
-        }
-      }
+    if (
+      (rect.u0 > -margin || rect.u1 < 1 + margin || rect.v0 > -margin || rect.v1 < 1 + margin) &&
+      this._showsOwnDoor(view, apex, planes)
+    ) {
+      reachPast(rect, WHOLE_PANEL, margin);
     }
     view.sightPlanes(apex, rect, planes);
+  }
+
+  /**
+   * Can a picture of `view` drawn from `apex` (neighbor space) show a panel
+   * of its own door — the panel itself included? Conservative: what stands
+   * in front of that panel is not looked at.
+   * @param {Float64Array} planes - scratch for SIGHT_PLANES planes
+   */
+  _showsOwnDoor(view, apex, planes) {
+    view.sightPlanes(apex, WHOLE_PANEL, planes);
+    for (const own of this._views.get(view.gate).values()) {
+      if (
+        own.surface.visible &&
+        own.facesToward(apex) &&
+        clipQuad(own.corners, planes, SIGHT_PLANES, this._sightPart)
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Could any of `sights` reach into `gate`'s cell (its bounding sphere)? */
