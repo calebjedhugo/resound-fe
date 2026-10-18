@@ -78,7 +78,10 @@ edits show up in the game on a manual reload.
   git actions and the picker's reads/deletes first wait for it to land
   (`_settleAutoSave`): left to its timer it wrote the NEWLY opened puzzle and
   dropped the old one's last edit. A save landing after a swap leaves the
-  open puzzle's id lock, picker selection and status alone.
+  open puzzle's id lock, picker selection and status alone. **Revert and its
+  ⌘Z restore HOLD autosave until they reload** (`_rewriteFilesWithGit`): an
+  edit made while git rewrites the files goes with the model it replaces
+  (written back, it re-dirtied the revert / overwrote the restore).
 - **Dev endpoint** — `POST /api/puzzles/:id` is a Vite `configureServer`
   middleware in `vite.config.js` (dev-only; validates the id, matches body id,
   writes pretty-printed JSON). Browsers can't write repo files, so this bridge
@@ -94,6 +97,9 @@ edits show up in the game on a manual reload.
   Its status re-reads **after each repo write lands** (`repoPersistence.onRepoWrite`)
   and after its own actions, one read at a time — never per edit (each read
   spawns git on the dev server, and a per-edit read ran before the autosave).
+  An action's result ("Reverted — ⌘Z to restore", an error; `showResult`)
+  stays up through later reads of the SAME status, until the next action, a
+  status change, or an edit that disarms the ⌘Z restore (`clearNote`).
   **Commit and Revert scope to `public/puzzles/`** (Commit stages only that
   path, so Husky/lint-staged never sees unrelated files); **Pull/Push are
   whole-repo** (git can't push a subtree). **Revert = `git stash push -u --

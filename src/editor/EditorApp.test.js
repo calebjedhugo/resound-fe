@@ -148,6 +148,7 @@ import EditorApp from 'editor/EditorApp';
 import { loadSession } from 'editor/io/sessionPersistence';
 import { deserializePuzzle } from 'editor/model/serialization';
 import { createLink } from 'editor/io/portalLinks';
+import { savePuzzleJsonToRepo } from 'editor/io/repoPersistence';
 /* eslint-enable import/first */
 
 function setupEditorDOM() {
@@ -1206,8 +1207,10 @@ describe('EditorApp writes each edit to its own puzzle', () => {
   let app;
   let head; // the puzzle files as committed: what a revert puts back
   let disk; // puzzle id -> its file, as the fake dev server holds it
+  let stash; // the files a revert stashed: what ⌘Z (unrevert) puts back
   let log; // file writes and git actions, in the order the server got them
   let releaseDelete = null; // set while a delete's reply is held back
+  let releaseGit = null; // set while a git action's reply is held back
 
   const puzzle = (id) => ({
     id,
@@ -1224,9 +1227,10 @@ describe('EditorApp writes each edit to its own puzzle', () => {
   /**
    * The dev server: static puzzle files, the puzzle writer, git. With
    * `holdDeletes`, a delete takes effect at once but its reply waits for
-   * `releaseDelete()` (the editor is still awaiting it).
+   * `releaseDelete()` (the editor is still awaiting it); `holdGit` does the
+   * same for a git action and `releaseGit()`.
    */
-  function fakeDevServer({ holdDeletes = false } = {}) {
+  function fakeDevServer({ holdDeletes = false, holdGit = false } = {}) {
     return async (url, { method = 'GET', body } = {}) => {
       if (url === '/puzzles/manifest.json') {
         const puzzles = Object.values(disk).map(({ id, name, difficulty }) => ({
@@ -1259,8 +1263,16 @@ describe('EditorApp writes each edit to its own puzzle', () => {
       }
       const action = url.replace('/api/git/', '');
       log.push(`git ${action}`);
-      if (action === 'revert') disk = copy(head);
-      return reply({ ok: true, nothing: false });
+      let nothing = false;
+      if (action === 'revert') {
+        nothing = JSON.stringify(disk) === JSON.stringify(head);
+        if (!nothing) [stash, disk] = [disk, copy(head)];
+      }
+      if (action === 'unrevert') disk = stash;
+      if (!holdGit) return reply({ ok: true, nothing });
+      return new Promise((resolve) => {
+        releaseGit = () => resolve(reply({ ok: true, nothing }));
+      });
     };
   }
 
@@ -1273,6 +1285,9 @@ describe('EditorApp writes each edit to its own puzzle', () => {
 
   const gitButton = (label) =>
     [...document.querySelectorAll('#git-panel button')].find((b) => b.textContent === label);
+  const gitStatusText = () => document.querySelector('#git-panel .git-status').textContent;
+  const pressCmdZ = () =>
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true }));
 
   async function openEditorOn(id, server = fakeDevServer()) {
     global.fetch = jest.fn(server);
@@ -1286,8 +1301,10 @@ describe('EditorApp writes each edit to its own puzzle', () => {
     setupEditorDOM();
     head = { a: puzzle('a'), b: puzzle('b') };
     disk = copy(head);
+    stash = null;
     log = [];
     releaseDelete = null;
+    releaseGit = null;
     jest.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
   });
 
@@ -1367,6 +1384,94 @@ describe('EditorApp writes each edit to its own puzzle', () => {
       expect(log).toEqual(['write a', `git ${label.toLowerCase()}`]);
     }
   );
+
+  it.each([
+    ['fires while git runs', 1000],
+    ['is still pending when git is done', 100],
+  ])('Revert reverts an edit made while it runs too (its autosave %s)', async (_, msAfterEdit) => {
+    await openEditorOn('a', fakeDevServer({ holdGit: true }));
+    app.undoManager.setMetadata({ tempo: 99 });
+    gitButton('Revert').click();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(log).toEqual(['write a', 'git revert']); // the stash is taken; its reply is out
+
+    app.undoManager.setMetadata({ tempo: 98 });
+    await jest.advanceTimersByTimeAsync(msAfterEdit);
+    releaseGit();
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(log).toEqual(['write a', 'git revert']); // nothing re-dirties the reverted file
+    expect(disk.a).toEqual(head.a);
+    expect(app.undoManager.getMetadata().tempo).toBe(120);
+    expect(gitStatusText()).toBe('Reverted — ⌘Z to restore');
+  });
+
+  it('saves an edit made while a Revert that found nothing to revert ran', async () => {
+    await openEditorOn('a', fakeDevServer({ holdGit: true }));
+    gitButton('Revert').click();
+    await jest.advanceTimersByTimeAsync(0);
+
+    app.undoManager.setMetadata({ tempo: 98 });
+    releaseGit();
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(log).toEqual(['git revert', 'write a']);
+    expect(disk.a.tempo).toBe(98);
+  });
+
+  it('⌘Z after Revert restores the edits; an edit made while it runs is not written over them', async () => {
+    await openEditorOn('a', fakeDevServer({ holdGit: true }));
+    app.undoManager.setMetadata({ tempo: 99 });
+    gitButton('Revert').click();
+    await jest.advanceTimersByTimeAsync(0);
+    releaseGit();
+    await jest.advanceTimersByTimeAsync(1000);
+
+    pressCmdZ();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(log).toEqual(['write a', 'git revert', 'git unrevert']); // its reply is out
+    app.undoManager.setMetadata({ tempo: 98 });
+    await jest.advanceTimersByTimeAsync(1000);
+    releaseGit();
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(log).toEqual(['write a', 'git revert', 'git unrevert']);
+    expect(disk.a.tempo).toBe(99);
+    expect(app.undoManager.getMetadata().tempo).toBe(99);
+    expect(gitStatusText()).toBe('Restored reverted edits');
+  });
+
+  it.each([
+    ['Commit', 'Committed'],
+    ['Revert', 'Reverted — ⌘Z to restore'],
+  ])('%s’s result stays up through a later write git sees no change from', async (label, text) => {
+    await openEditorOn('a');
+    document.querySelector('.git-message').value = 'Slower';
+    app.undoManager.setMetadata({ tempo: 99 });
+    gitButton(label).click();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(gitStatusText()).toBe(text);
+
+    await savePuzzleJsonToRepo(copy(disk.b)); // e.g. a link partner's file, rewritten as it was
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(gitStatusText()).toBe(text);
+  });
+
+  it('takes down "⌘Z to restore" once an edit retires the restore', async () => {
+    await openEditorOn('a');
+    app.undoManager.setMetadata({ tempo: 99 });
+    gitButton('Revert').click();
+    await jest.advanceTimersByTimeAsync(1000);
+
+    app.undoManager.setMetadata({ tempo: 98 });
+    await jest.advanceTimersByTimeAsync(1000); // its save lands; git reads as it did
+
+    expect(gitStatusText()).toBe('main · 1 puzzle file changed');
+    pressCmdZ(); // a model undo now, not a restore
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(log).not.toContain('git unrevert');
+  });
 
   it('keeps a just-edited puzzle deleted: nothing writes it back', async () => {
     await openEditorOn('a', fakeDevServer({ holdDeletes: true }));
