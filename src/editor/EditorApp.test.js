@@ -1048,6 +1048,52 @@ describe('EditorApp wiring', () => {
       app.selectionManager.select(wId);
       expect(ri.hide).toHaveBeenCalled();
     });
+
+    const shiftArrowRight = () =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })
+      );
+
+    it('moves a selected creature’s spheres with it on Shift+Arrow, never rebuilding them', () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, { audibleRange: 12 }); // under the cursor
+      app.selectionManager.select(id);
+      const ri = app.rangeIndicator;
+      ri.show.mockClear();
+      ri.hide.mockClear();
+
+      shiftArrowRight();
+
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0);
+      expect(ri.hide).not.toHaveBeenCalled(); // hiding frees them
+      expect(ri.show).toHaveBeenLastCalledWith(app.undoManager.getEntity(id), mockMesh.position);
+    });
+
+    it('keeps the moved entity selected, its panel shown and scrolled into view once', () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, { audibleRange: 12 });
+      app.selectionManager.select(id);
+      const panel = document.getElementById('property-panel');
+      panel.scrollIntoView = jest.fn(); // jsdom has none
+
+      shiftArrowRight();
+
+      expect(app.selectionManager.selectedId).toBe(id);
+      expect(panel.textContent).toContain('Creature Properties');
+      expect(panel.scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(panel.scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+    });
+
+    it('deselects an entity re-selected after its mesh is gone', () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, { audibleRange: 12 });
+      app.selectionManager.select(id);
+      app.rangeIndicator.hide.mockClear();
+      app.entityPlacer.getMeshById.mockReturnValue(null); // its mesh is gone
+
+      app.selectionManager.select(id);
+
+      expect(app.selectionManager.selectedId).toBeNull();
+      expect(document.getElementById('property-panel').textContent).toBe('');
+      expect(app.rangeIndicator.hide).toHaveBeenCalled();
+    });
   });
 
   describe('viewport click vs drag', () => {

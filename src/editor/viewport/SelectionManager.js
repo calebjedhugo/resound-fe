@@ -19,8 +19,12 @@ export default class SelectionManager {
   }
 
   select(entityId) {
-    this.deselect();
     const mesh = this._entityPlacer.getMeshById(entityId);
+    // Re-selecting the selection (every Shift+Arrow move does) keeps it: a
+    // deselect in between tore down what hangs off it — a creature's range
+    // spheres, freed and rebuilt each move — just to build it again, and the
+    // panel ends up showing the entity either way.
+    if (entityId !== this._selectedId || !mesh) this.deselect();
     if (!mesh) return;
     this._selectedId = entityId;
     this._originalColor = mesh.material.color.getHex();
