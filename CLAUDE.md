@@ -78,7 +78,8 @@ AudioContexts and two instrument registries.
 - EntityManager handles lifecycle (add/remove/update/render)
 - **`Entity.dispose` frees the WHOLE mesh tree** (Group roots, child meshes).
   A geometry/material shared across instances (module-level statics, e.g.
-  `Wall`'s box) MUST set `userData.shared = true` or the first unload frees it
+  `Wall`'s and `Gate`'s boxes) MUST set `userData.shared = true` or the
+  first unload frees it
 - **Per-frame paths memoize what they pick out of an area's entity list**
   (`core/entityListMemo`: collision's blockers, a creature's possible sound
   sources), re-derived when the area's EntityManager changes the list (its

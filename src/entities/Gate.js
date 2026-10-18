@@ -8,6 +8,13 @@ import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/con
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from 'entities/Entity';
 
+// Every gate is the same box: it fills its 3x3 cell when closed. ONE
+// geometry serves every gate in every area, flagged `userData.shared` so
+// Entity.dispose leaves it alone; each gate keeps its OWN material (its
+// fade, red flash and open look are its own).
+const GATE_GEOMETRY = new THREE.BoxGeometry(3, 3, 3);
+GATE_GEOMETRY.userData.shared = true;
+
 class Gate extends Entity {
   // How long heard notes stay eligible for matching (must comfortably exceed
   // the longest target phrase at the slowest supported tempo)
@@ -93,8 +100,6 @@ class Gate extends Entity {
    * @param {{x:number, y:number, z:number}} position - base world position
    */
   static buildClosedMesh(position) {
-    // Gate fills entire grid cell (3x3 world units) when closed
-    const geometry = new THREE.BoxGeometry(3, 3, 3);
     const material = new THREE.MeshStandardMaterial({
       color: 0xffaa00,
       roughness: 0.4,
@@ -102,7 +107,7 @@ class Gate extends Entity {
       emissive: 0x331100,
       emissiveIntensity: 0.3,
     });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(GATE_GEOMETRY, material);
     mesh.position.set(position.x, position.y + 1.5, position.z);
     return mesh;
   }
@@ -432,5 +437,7 @@ class Gate extends Entity {
     super.dispose();
   }
 }
+
+Gate.GEOMETRY = GATE_GEOMETRY;
 
 export default Gate;
