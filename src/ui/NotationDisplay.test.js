@@ -472,6 +472,25 @@ describe('NotationDisplay on Gates and Fountains', () => {
       expect(shownTexture(after)).toBe(shownTexture(next));
     });
 
+    it('a staff whose image could not be drawn is tried again by the next gate', () => {
+      // The image loaded but painting it failed: forgotten like any other
+      // failure, never left for later gates to wait on a staff that can't come
+      HTMLCanvasElement.prototype.getContext.mockImplementationOnce(() => ({
+        clearRect() {},
+        drawImage() {
+          throw new DOMException('The image could not be drawn', 'InvalidStateError');
+        },
+      }));
+      const failed = gateWith({ song: song('C6', 'E6') });
+      jest.runAllTimers();
+
+      const next = gateWith({ song: song('C6', 'E6') });
+      jest.runAllTimers();
+
+      expect(shownTexture(failed)).toBeFalsy();
+      expect(shownTexture(next)).toBeInstanceOf(THREE.CanvasTexture);
+    });
+
     it('a staff whose image loads at once is shown all the same', () => {
       global.Image = class {
         set src(url) {

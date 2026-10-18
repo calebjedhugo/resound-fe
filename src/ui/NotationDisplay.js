@@ -173,6 +173,13 @@ function engrave(engraving, input, width) {
     const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
+    // The staff can't be shown after all: let go of the image, and forget it
+    const fail = () => {
+      URL.revokeObjectURL(url);
+      renderer.clear();
+      forget();
+    };
+
     const img = new Image();
     img.onload = () => {
       // Every display let go while the image loaded: nothing to show it on
@@ -182,37 +189,41 @@ function engrave(engraving, input, width) {
         return;
       }
 
-      const canvas = document.createElement('canvas');
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      const ctx = canvas.getContext('2d');
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext('2d');
 
-      // Transparent background (entity color shows through)
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Transparent background (entity color shows through)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw SVG scaled to fit canvas
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Draw SVG scaled to fit canvas
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      URL.revokeObjectURL(url);
+        URL.revokeObjectURL(url);
 
-      // Create the texture and apply it to every waiting display's meshes
-      engraving.texture = new THREE.CanvasTexture(canvas);
-      engraving.texture.needsUpdate = true;
-      engraving.aspect = canvasHeight / canvasWidth;
-      pendingUploads.add(engraving.texture);
-      scheduleUpload();
-      for (const display of engraving.waiting) display._showEngraving(engraving);
-      engraving.waiting.clear();
+        // Create the texture and apply it to every waiting display's meshes
+        engraving.texture = new THREE.CanvasTexture(canvas);
+        engraving.texture.needsUpdate = true;
+        engraving.aspect = canvasHeight / canvasWidth;
+        pendingUploads.add(engraving.texture);
+        scheduleUpload();
+        for (const display of engraving.waiting) display._showEngraving(engraving);
+        engraving.waiting.clear();
+      } catch (e) {
+        // Loaded but can't be drawn (a browser that won't paint this SVG):
+        // a staff left in the cache untextured would keep every later
+        // display of it waiting on a texture that never comes
+        fail();
+        return;
+      }
 
       // Clean up renderer
       renderer.clear();
     };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      renderer.clear();
-      forget();
-    };
+    img.onerror = fail;
 
     img.src = url;
   } catch (e) {
