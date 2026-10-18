@@ -116,9 +116,9 @@ const NEXT = {
   ],
 };
 
-function installFetchMock() {
+function installFetchMock(next = NEXT) {
   global.fetch = jest.fn((url) => {
-    const data = url === '/puzzles/pass-draws-next.json' ? NEXT : null;
+    const data = url === '/puzzles/pass-draws-next.json' ? next : null;
     if (data) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(structuredClone(data)) });
     }
@@ -337,5 +337,95 @@ describe('A door pass draws what walking the whole scene drew', () => {
     );
     // ...and passes do leave such draws out
     expect(left).toBeGreaterThan(0);
+  });
+});
+
+describe('A neighbour is on the GPU before a door into it opens', () => {
+  it("the door's opening frame draws nothing of the neighbour for the first time", async () => {
+    await loadGame();
+    seedRandom();
+    // ...with a fountain in D1's view, and a piece a warm-up step: some
+    // warm-up draws pass over a staff plane facing away from them
+    installFetchMock({
+      ...NEXT,
+      entities: [
+        ...NEXT.entities,
+        {
+          type: 'fountain',
+          position: { x: 5, y: 0, z: 2 },
+          song: [{ pitch: 'G4', length: '1/4' }],
+        },
+      ],
+    });
+    PortalManager.constructor.WARM_PIECES_PER_STEP = 1;
+    const mainScene = new THREE.Scene();
+    mainScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    PortalManager.initialize(mainScene);
+    PortalManager.enterWorld(structuredClone(WORLD));
+    await jest.runAllTimersAsync(); // the neighbour builds
+    engraveStaves(mainScene);
+    engraveStaves(PortalManager.getArea('pass-draws-next').scene);
+    const { renderer } = createRecordingRenderer();
+    // What three draws for the first time (its buffers, vertex arrays and
+    // material state are made on that draw)
+    const drawn = new WeakSet();
+    let firstDraws = [];
+    const draw = renderer.renderBufferDirect.bind(renderer);
+    renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
+      if (!drawn.has(object)) {
+        drawn.add(object);
+        firstDraws.push(object);
+      }
+      draw(camera, scene, geometry, material, object, group);
+    };
+    // Three cells south of D1, looking north into it
+    const camera = new THREE.PerspectiveCamera(75, SCREEN.width / SCREEN.height, 0.1, 500);
+    camera.position.set(10 * WORLD_SCALE, 1.8, 16 * WORLD_SCALE);
+    gameState.player.position = { x: camera.position.x, y: 1.8, z: camera.position.z };
+    const frame = () => {
+      beginFrame();
+      updateSceneMatrices(mainScene);
+      PortalManager.renderPortals(renderer, camera);
+      renderer.setRenderTarget(null);
+      renderMainView(renderer, mainScene, camera);
+    };
+    frame(); // every door shut
+    await jest.runAllTimersAsync(); // idle time
+
+    gameState.activeArea.entities.find((e) => e.gateId === 'd1').open();
+    firstDraws = [];
+    frame();
+
+    expect(firstDraws.length).toBeGreaterThan(0); // the door's own panels
+    const neighbours = firstDraws.filter((object) => !object._isPortalSurface);
+    expect(neighbours.map((object) => `${object.type}/${object.geometry.type}`)).toEqual([]);
+  });
+
+  it('a neighbour the world lets go of first is never drawn (its freed buffers stay freed)', async () => {
+    await loadGame();
+    seedRandom();
+    installFetchMock();
+    const mainScene = new THREE.Scene();
+    PortalManager.initialize(mainScene);
+    PortalManager.enterWorld(structuredClone(WORLD));
+    await jest.runAllTimersAsync(); // the neighbour builds
+    const neighbour = PortalManager.getArea('pass-draws-next');
+    const { renderer, passes } = createRecordingRenderer();
+    const camera = new THREE.PerspectiveCamera(75, SCREEN.width / SCREEN.height, 0.1, 500);
+    beginFrame();
+    PortalManager.renderPortals(renderer, camera); // its warm-up is due
+
+    PortalManager.reset(); // back to the menu: the neighbour is freed
+    const drawnBefore = passes.length;
+    const scenesDrawn = [];
+    const render = renderer.render.bind(renderer);
+    renderer.render = (scene, eye) => {
+      scenesDrawn.push(scene);
+      render(scene, eye);
+    };
+    await jest.runAllTimersAsync(); // idle time
+
+    expect(scenesDrawn).not.toContain(neighbour.scene);
+    expect(passes.length).toBe(drawnBefore);
   });
 });

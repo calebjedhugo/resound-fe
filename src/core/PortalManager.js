@@ -35,6 +35,7 @@
  *   (up to the midpoint AT the door), so tempo is continuous across a
  *   crossing. Mismatched links already draw an editor warning.
  */
+import * as THREE from 'three';
 import PuzzleLoader from 'core/PuzzleLoader';
 import PortalView from 'core/PortalView';
 import ListeningManager from 'core/ListeningManager';
@@ -60,6 +61,9 @@ import {
   viewPlanes,
 } from 'core/portalMath';
 import { getDistance } from 'core/utils';
+import { NO_CLIP_PLANES, createSceneTarget } from 'core/passContext';
+import { updateSceneMatrices } from 'core/sceneMatrices';
+import runInIdleSlices from 'core/idleSlices';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 // Stable empty list for the common no-seam case (avoids per-frame garbage)
@@ -103,6 +107,14 @@ function reachPast(out, rect, margin) {
 
 // Every panel of a door lies within this distance of its cell's center
 const CELL_REACH = (WORLD_SCALE * Math.sqrt(3)) / 2;
+
+// Where a neighbour's warm-up draws look from (PortalManager._warmPieces):
+// a pass leaves out every staff plane it sees from behind (NotationDisplay),
+// and every plane faces along x or z, so between these two each draws once
+const WARM_EYES = Object.freeze([
+  Object.freeze({ x: 1e3, y: 0, z: 1e3 }),
+  Object.freeze({ x: -1e3, y: 0, z: -1e3 }),
+]);
 
 /** How far an eye moved from `a` to `b` (summed over the axes). */
 function stepBetween(a, b) {
@@ -193,6 +205,12 @@ class PortalManager {
     this._cellCenter = { x: 0, y: 0, z: 0 };
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     this._passOptions = {}; // scratch: a player pass's PortalView.render options
+    // Neighbours registered since the last frame, waiting for their idle-time
+    // GPU warm-up (_warmInIdleTime: it needs the frame's renderer); its
+    // camera and 1x1 target, made on first use
+    this._unwarmed = [];
+    this._warmCamera = null;
+    this._warmTarget = null;
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -243,6 +261,7 @@ class PortalManager {
     this._linkedGates = [];
     // Door-pass scratch naming the old world's gates and views goes with it
     this._drawingDoors.length = 0;
+    this._unwarmed.length = 0;
     this._sweepOverflow.clear();
     // A new world is not a turn of the view
     this._lastLook = null;
@@ -373,6 +392,8 @@ class PortalManager {
    */
   renderPortals(renderer, camera) {
     this._frameId += 1;
+    for (const area of this._unwarmed) this._warmInIdleTime(area, renderer);
+    this._unwarmed.length = 0;
     if (camera.quaternion && camera.fov) {
       this._playerCamera = camera;
       this._noteTurn(camera.quaternion);
@@ -1641,6 +1662,7 @@ class PortalManager {
         // Same task as the build: complete the moment it is registered
         this._areas.set(puzzleId, area);
         this._rebuildDoors();
+        this._unwarmed.push(area);
       })
       .catch(() => {
         // Missing neighbor: crossing will retry the fetch and no-op on failure
@@ -1652,6 +1674,76 @@ class PortalManager {
       this._retained.has(puzzleId) ||
       this._linkedGates.some((g) => g.link && g.link.puzzleId === puzzleId)
     );
+  }
+
+  // How many of a neighbour's pieces one warm-up step draws
+  static WARM_PIECES_PER_STEP = 8;
+
+  /**
+   * Hand a neighbour built in idle time to the GPU in idle time too, a few
+   * pieces a step, ahead of any door into it opening: three uploads an
+   * object's buffers (and makes its vertex arrays, readies its material) on
+   * the first draw that shows it, and the first pass through a door into
+   * The Star drew all of it in that door's opening frame (VIII -> IX at 4x
+   * CPU: 16.7 ms in renderPortals, 2.8 steady; measured 2026-10-18). Each
+   * step draws the area's scene with every piece but its own few hidden,
+   * into a 1x1 scene target in the pass context every door pass shares (so
+   * the programs and vertex arrays it readies are theirs), and shows the
+   * rest again before it returns: no frame runs in between. A door opening
+   * first just finds less to do.
+   */
+  _warmInIdleTime(area, renderer) {
+    const generation = this._generation;
+    const pieces = [...area.group.children];
+    const steps = [];
+    for (let i = 0; i < pieces.length; i += PortalManager.WARM_PIECES_PER_STEP) {
+      const few = new Set(pieces.slice(i, i + PortalManager.WARM_PIECES_PER_STEP));
+      steps.push(() => this._warmPieces(area, few, renderer));
+    }
+    // Only while it is still a neighbour of this world: the main view draws
+    // an active area
+    const stillNeighbor = () =>
+      generation === this._generation &&
+      this._areas.get(area.id) === area &&
+      area !== this._activeArea;
+    runInIdleSlices(steps, stillNeighbor).catch(() => {
+      // A renderer that can't draw now (a lost context): the door's own
+      // first pass uploads instead, as it always did
+    });
+  }
+
+  /**
+   * One warm-up step (_warmInIdleTime): draw `few` of `area`'s pieces, from
+   * each of WARM_EYES.
+   */
+  _warmPieces(area, few, renderer) {
+    if (!this._warmCamera) {
+      const span = 1e4; // every piece in view: frustum culling keeps them all
+      this._warmCamera = new THREE.OrthographicCamera(-span, span, span, -span, -span, span);
+      this._warmTarget = createSceneTarget(1, 1);
+    }
+    const target = renderer.getRenderTarget();
+    const planes = renderer.clippingPlanes;
+    const hidden = [];
+    for (const piece of area.group.children) {
+      if (piece.visible && !few.has(piece)) {
+        piece.visible = false;
+        hidden.push(piece);
+      }
+    }
+    try {
+      renderer.setRenderTarget(this._warmTarget);
+      renderer.clippingPlanes = NO_CLIP_PLANES;
+      updateSceneMatrices(area.scene);
+      for (const { x, y, z } of WARM_EYES) {
+        this._warmCamera.position.set(x, y, z);
+        renderer.render(area.scene, this._warmCamera);
+      }
+    } finally {
+      renderer.setRenderTarget(target);
+      renderer.clippingPlanes = planes;
+      for (const piece of hidden) piece.visible = true;
+    }
   }
 
   /**

@@ -210,9 +210,12 @@ instead of "fixing" it.
   constructors. Staff textures are SHARED per distinct staff (song + meter
   + key; `NotationDisplay`, ref-counted) — never dispose a notation `map`
   directly (it may still be queued for its idle-time GPU upload,
-  `NotationDisplay.uploadInIdleTime`, which would revive it). Puzzle JSON
-  is cached per world (`PuzzleLoader.load`; `clearCache` at every world
-  entry, so editor saves show up)
+  `NotationDisplay.uploadInIdleTime`, which would revive it). Once
+  registered, a neighbour goes to the GPU in idle time too, before any door
+  into it opens (`PortalManager._warmInIdleTime`: a few pieces a slice drawn
+  into a 1x1 target, the rest hidden for that draw, from two eyes so every
+  staff plane draws). Puzzle JSON is cached per world (`PuzzleLoader.load`;
+  `clearCache` at every world entry, so editor saves show up)
 - **Open linked gates are see-through**: the `facing` face shows the LIVE
   neighbor area (`core/PortalView.js` renders the neighbor's `Area.scene`).
   The extra pass runs only while a linked gate is open; a closed linked gate
