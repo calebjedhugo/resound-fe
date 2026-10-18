@@ -5,13 +5,21 @@
  * three builds a program lazily: the first time a material draws under a new
  * program key. The key includes the pass's colour space, the COUNT of global
  * clipping planes, the scene's light counts and the material's flags
- * (transparent, side, map…). Two hitches came from that (measured
- * 2026-10-12):
+ * (transparent, side, map…). Hitches that came from that:
  *  - the first lit creature in view compiled the halo (+~8 ms on that frame);
  *  - the first open door drew every material of the scene behind it into a
  *    PortalView render target, and showed the gate's transparent shell and
  *    the doorway surface for the first time: 11 programs in one frame
- *    (~140 ms).
+ *    (~140 ms) (both measured 2026-10-12);
+ *  - the first key hint on screen compiled the keycap sprite (141 ms), and
+ *    the first clap the ring (2026-10-17);
+ *  - a look only some levels have (a ramp's double-sided wedge) compiled
+ *    when such a level two doors away first drew, mid-game.
+ * So beside the scenes the first portal passes will draw, it draws a
+ * STAND-IN for every program a look can need, kept forever (a disposed
+ * material releases its programs: the last ramp level unloading would
+ * otherwise free the wedge's). ShaderPrewarm.test checks every look the
+ * game builds against them.
  * A warmed program is reused only if its key matches EXACTLY, so this draws
  * for real, in the pass context EVERY gameplay pass shares (core/passContext:
  * canvas colour space, CLIP_PLANE_COUNT planes) — the main view and the
@@ -24,6 +32,7 @@
  */
 import * as THREE from 'three';
 import CreatureLook from 'entities/CreatureLook';
+import ClapVisual from 'ui/ClapVisual';
 import { NO_CLIP_PLANES, createSceneTarget, showStoredTexels } from 'core/passContext';
 
 const SPAN = 1e4;
@@ -35,7 +44,7 @@ const REWARM_FRAMES = 30;
 
 let camera = null;
 let drawTarget = null; // 1x1 scene target: every draw lands here
-let standIns = null; // scene of materials that first draw mid-game
+let standIns = null; // scene of one stand-in per program a look can need
 const standInsWarmed = new WeakSet(); // renderers
 const lastWarmed = new WeakMap(); // key (an Area) -> frame it was drawn
 let frame = 0;
@@ -66,12 +75,27 @@ function setup(mainScene) {
       showStoredTexels(new THREE.MeshBasicMaterial({ map: surfaceMap.texture }))
     )
   );
-  // A gate's shell once it fades or opens (Gate: transparent standard)
+  // The world's other looks, by the material flags their programs are keyed
+  // by (nothing else about these materials matters here)
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  const looks = [
+    // Walls, floors, closed gates, fountains, ramp posts
+    new THREE.MeshStandardMaterial(),
+    // A gate's shell as it fades, a cleansing tile, the deploy phantom
+    new THREE.MeshStandardMaterial({ transparent: true }),
+    // A ramp's wedge, readable from every side (Ramp)
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }),
+    // A notation plane until its staff texture arrives (NotationDisplay)
+    new THREE.MeshBasicMaterial({ transparent: true }),
+  ];
+  for (const material of looks) standIns.add(new THREE.Mesh(box, material));
+  // The batched walls: an instanced draw is a program of its own
+  standIns.add(new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial(), 1));
+  // A clap ring, as a clap shows it (left unfaded in this scene)
+  new ClapVisual(standIns).show({ x: 0, z: 0 }, 1);
+  // A keycap hint (KeyHints: a sprite showing its canvas-drawn keycap)
   standIns.add(
-    new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.5 })
-    )
+    new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.Texture(), transparent: true }))
   );
   // Never disposed: a disposed material releases its programs
 }

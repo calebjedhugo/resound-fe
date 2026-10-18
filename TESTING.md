@@ -36,6 +36,7 @@ src/
     helpers/
       testUtils.js         # createTestContext and test utilities
       mocks.js             # Mock implementations
+      drawList.js          # What three draws: draw lists, program keys, one pass in three's hook order
     fixtures/
       puzzles/             # Test puzzle JSON files
   core/
@@ -140,13 +141,15 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials) |
 | `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections by triad, added sixth, lone-note paleness, painter's complement + dissonance, register lightness; memoized path = reference) |
 | `src/core/AudioPrewarm.test.js` | Each built area's creature pitches are pre-rendered for the tape's piano (first strike plays from a buffer) and creature voices are built before their first note; renders wait for an idle period with room, except behind the StartGate |
-| `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share |
+| `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share; every look the game builds (levels, fades, open doors, key hints, clap ring) finds its program among the prewarm's stand-ins |
 | `src/core/FrameProfiler.test.js` | Dev profiler times each call by caller (self excludes timed children), counts draw calls and GPU time per pass, reports the worst frames first, and unwraps everything after a run |
 | `src/core/passContext.test.js` | Main view binds no-op clip planes; door targets render in the canvas colour space; panels never encode twice |
 | `src/core/doorViews.test.js` | Door views over their lifetime: the frame a door opens shows the eye's own perspective, each new face is written once, no pass samples an unwritten panel; crossings keep views (same-area teleport, round trip) and an unloading area takes its panels with it |
 | `src/core/doorPassCost.test.js` | What each door pass costs: targets sized to the panel on screen (never soft, half-res when filling the screen, grow at once, shrink lazily); small panels redraw one frame in three except while a creature shows, after an eye jump or a look away, or once outgrown; the mirror sweep draws only faces a chain shows on screen (never the off-screen part of a big panel; all of a small panel's picture, or of one showing its own door) and its cap keeps the biggest of them; the stale rotor idles while no door is drawn and, back in view, serves the faces the sweep had no room for first |
 | `src/core/sceneMatrices.test.js` | World matrices update once a frame per scene: every pass (door passes, main view) draws matrices already updated this frame, never re-derived inside a pass, and nothing drawn moved since — a door's panels born mid-frame included |
 | `src/core/ClapManager.test.js` | Clap displacing creature timing |
+| `src/ui/NotationDisplay.test.js` | Staff planes on gate/fountain faces (layout, one-sided, activation, cleanup); a pass leaves out exactly the planes it would paint at zero opacity |
+| `src/ui/ClapVisual.test.js` | Clap ring look and fade; faded rings are recycled (nothing freed, so the ring's shader program stays compiled) and look exactly like fresh ones |
 | `src/core/GameLoop.test.js` | A frame that throws (the first one included) costs that frame, not the game |
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
 | `src/editor/io/devServer.test.js` | Dev puzzle writer (vite.config.js): prettier-formatted writes, unchanged files left alone, one write at a time in arrival order (a waiting save takes the newer content); git status from one spawn (branch, ahead/behind, upstream gone, detached) in real temp repos |

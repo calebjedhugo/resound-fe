@@ -269,7 +269,6 @@ class Gate extends Entity {
    */
   _updateFade(deltaTime) {
     if (!this.mesh || !this.mesh.material) return;
-    const m = this.mesh.material;
     if (!this.isOpen && this._inProgress) {
       const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
       const songMs = this._songBeats * (60000 / tempo);
@@ -282,19 +281,36 @@ class Gate extends Entity {
         songMs > 0 ? Math.min(1, (Date.now() - this._inProgressSinceMs) / songMs) : 1;
       if (progress !== this._fade) {
         this._fade = progress;
-        m.transparent = true;
-        m.opacity = 1 - this._fade;
-        m.needsUpdate = true;
+        this._paintShell(true, 1 - this._fade);
       }
       return;
     }
     this._inProgressSinceMs = null;
     if (!this.isOpen && this._fade > 0) {
       this._fade = Math.max(0, this._fade - Gate.FADE_RECOVER_RATE_PER_S * (deltaTime || 0.016));
-      m.transparent = this._fade > 0;
-      m.opacity = 1 - this._fade;
+      this._paintShell(this._fade > 0, 1 - this._fade);
+    }
+  }
+
+  /**
+   * Set the shell's transparency. A shell faded all the way out is not
+   * drawn at all — an open gate has NO shell (DESIGN.md) — while its
+   * children (notation, door panels) still are: three skips a hidden
+   * material but not the mesh's subtree. (An opacity-0 draw painted
+   * nothing yet cost a draw call in every pass that saw it, and still
+   * wrote depth: a translucent creature in an open gate's cell could
+   * vanish behind it.) Opacity is a uniform; of these only `transparent`
+   * reaches the shader program (three's OPAQUE define), so the program is
+   * re-derived only when that flips — not every fade frame.
+   */
+  _paintShell(transparent, opacity) {
+    const m = this.mesh.material;
+    if (m.transparent !== transparent) {
+      m.transparent = transparent;
       m.needsUpdate = true;
     }
+    m.opacity = opacity;
+    m.visible = !transparent || opacity > 0;
   }
 
   /**
@@ -382,21 +398,17 @@ class Gate extends Entity {
 
   /** Paint the gate for its current open/closed state (color + transparency). */
   _applyLook() {
-    const m = this.mesh.material;
     if (this.isOpen) {
       // An open gate has NO shell at all — no green tint (ruled 2026-07-11):
       // transparency is the game's vocabulary for "open", for linked doors
       // and plain gates alike. The notation stays; the red mismatch flash
       // still lands on the CLOSED look.
-      m.transparent = true;
-      m.opacity = 0;
+      this._paintShell(true, 0);
     } else {
-      m.color.setHex(0xffaa00);
-      m.transparent = false;
-      m.opacity = 1;
+      this.mesh.material.color.setHex(0xffaa00);
+      this._paintShell(false, 1);
     }
     this._applyStateEmissive();
-    m.needsUpdate = true;
   }
 
   _applyStateEmissive() {

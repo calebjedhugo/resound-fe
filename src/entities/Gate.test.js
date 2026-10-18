@@ -1,5 +1,6 @@
 import Gate from 'entities/Gate';
 import gameState from 'core/GameState';
+import { drawnObjects } from '../__tests__/helpers/drawList';
 
 // Gates latch (ruled 2026-07-10): they open when their song is performed to
 // COMPLETION, stay open with no timer, and close only when the player walks
@@ -218,6 +219,90 @@ describe('Gate completion commit + listening fade', () => {
     gate.capturedNotes.push(heard('G4', t0 + 4 * MS_PER_BEAT, gate));
     gate.update(0.016);
     expect(gate.isOpen).toBe(true);
+  });
+});
+
+// An open gate has NO shell (DESIGN.md): a shell faded all the way out is
+// left out of the draw, while its notation and door panels (the shell
+// mesh's children) still draw. The fade itself is uniform-only (opacity):
+// the shell's shader program is re-derived only when it turns translucent
+// or solid again, never once per fade frame.
+describe('Gate shell drawing', () => {
+  const MS_PER_BEAT = 500; // no musical clock in these unit tests -> 120 BPM
+  const song = [{ pitch: 'C4', length: '1/1' }];
+  const heard = (pitch, timestamp, gate) => ({
+    pitch,
+    length: '1/1',
+    timestamp,
+    sourcePosition: gate.position,
+  });
+  const shellDrawn = (gate) => drawnObjects(gate.mesh).includes(gate.mesh);
+
+  /** A gate one beat into a correct performance of its whole-note song. */
+  function performedGate() {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+    const t0 = Date.now() - 1 * MS_PER_BEAT;
+    gate.listeningStartTime = t0;
+    gate.capturedNotes.push(heard('C4', t0, gate));
+    gate.update(0.016); // performance recognized; fade clock starts
+    return gate;
+  }
+
+  beforeEach(() => {
+    gameState.player.position = { x: 0, y: 1.8, z: 0 };
+    gameState.player.elevation = 0;
+  });
+
+  it('an open gate draws no shell, only its notation', () => {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+    expect(shellDrawn(gate)).toBe(true);
+
+    gate.open();
+
+    expect(shellDrawn(gate)).toBe(false);
+    expect(drawnObjects(gate.mesh)).toEqual(gate.notationDisplay.meshes);
+    gate.close();
+    expect(shellDrawn(gate)).toBe(true);
+  });
+
+  it('an alwaysOpen face never draws its shell', () => {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song, alwaysOpen: true });
+    expect(shellDrawn(gate)).toBe(false);
+  });
+
+  it('a fading shell draws until the song has faded it all the way out', () => {
+    const gate = performedGate();
+    gate._inProgressSinceMs = Date.now() - 2 * MS_PER_BEAT; // half the song
+    gate.update(0.016);
+    expect(gate.mesh.material.opacity).toBeCloseTo(0.5, 1);
+    expect(shellDrawn(gate)).toBe(true);
+
+    gate._inProgressSinceMs = Date.now() - 4 * MS_PER_BEAT; // the whole song
+    gate.update(0.016);
+
+    expect(gate.isOpen).toBe(false);
+    expect(gate.mesh.material.opacity).toBe(0);
+    expect(shellDrawn(gate)).toBe(false);
+  });
+
+  it('a fade re-derives the shell program once to turn translucent and once to turn solid', () => {
+    const gate = performedGate();
+    const { material } = gate.mesh;
+    const solidVersion = material.version;
+    for (let beats = 1; beats <= 3; beats += 0.5) {
+      gate._inProgressSinceMs = Date.now() - beats * MS_PER_BEAT;
+      gate.update(0.016);
+    }
+    expect(material.opacity).toBeCloseTo(0.25, 2);
+    expect(material.version).toBe(solidVersion + 1); // not once per fade frame
+
+    // The performance lapses: the shell eases back to solid over a few frames
+    gate.capturedNotes = [];
+    for (let frame = 0; frame < 30; frame += 1) gate.update(0.016);
+
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+    expect(material.version).toBe(solidVersion + 2);
   });
 });
 

@@ -1,16 +1,22 @@
 /**
  * ShaderPrewarm: while the StartGate holds the world still, draw what
- * gameplay would otherwise compile mid-game — the creature look (its halo
- * first draws on the first note) and every scene a portal pass will draw —
- * in the ONE pass context every gameplay draw shares (core/passContext:
- * CLIP_PLANE_COUNT clip planes, the canvas colour space).
+ * gameplay would otherwise compile mid-game — a stand-in for every program
+ * a look can need (the creature's halo first draws on the first note, a key
+ * hint on the first hint, a ramp in whichever level has one) and every
+ * scene a portal pass will draw — in the ONE pass context every gameplay
+ * draw shares (core/passContext: CLIP_PLANE_COUNT clip planes, the canvas
+ * colour space).
  */
 import * as THREE from 'three';
 import ShaderPrewarm from 'core/ShaderPrewarm';
 import PortalManager from 'core/PortalManager';
+import gameState from 'core/GameState';
 import CreatureLook from 'entities/CreatureLook';
+import KeyHints from 'ui/KeyHints';
+import ClapVisual from 'ui/ClapVisual';
 import { CLIP_PLANE_COUNT, renderMainView } from 'core/passContext';
-import { WORLD_SCALE } from 'core/constants';
+import { CLAP_RANGE, WORLD_SCALE } from 'core/constants';
+import { drawnObjects, objectsIn, programKey } from '../__tests__/helpers/drawList';
 
 // The parts of a pass three keys a program by that the pass itself sets: the
 // clip-plane count and the output colour space (the canvas's, or a render
@@ -42,9 +48,32 @@ function recordingRenderer() {
 
 const meshesIn = (object) => [object, ...(object.children || []).flatMap(meshesIn)];
 const contextsOf = (draws) => new Set(draws.map(({ context }) => context));
+const programsOf = (draws) =>
+  new Set(draws.flatMap(({ scene }) => drawnObjects(scene).map(programKey)));
+
+// Lit like the world (main.js): program keys count lights
+function litScene() {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  scene.add(new THREE.DirectionalLight(0xffffff, 0.8));
+  return scene;
+}
+
+// KeyHints draws its keycaps on 2D canvases; the test DOM has no 2D
+// context, so hand it one that draws nothing
+function buildKeyHints(scene) {
+  const { createElement } = document;
+  const canvas2d = new Proxy({}, { get: (target, name) => target[name] ?? (() => {}) });
+  document.createElement = (tag) => ({ ...createElement(tag), getContext: () => canvas2d });
+  try {
+    return new KeyHints(scene);
+  } finally {
+    document.createElement = createElement;
+  }
+}
 
 describe('Shader prewarm behind the start gate', () => {
-  const mainScene = new THREE.Scene();
+  const mainScene = litScene();
 
   it('draws a lit creature (halo showing) in the shared pass context', () => {
     const renderer = recordingRenderer();
@@ -104,6 +133,17 @@ describe('Shader prewarm behind the start gate', () => {
     expect(renderer.draws).toHaveLength(warmed);
   });
 
+  it('draws its stand-ins lit like the world (program keys count lights)', () => {
+    const renderer = recordingRenderer();
+
+    ShaderPrewarm.run(renderer, mainScene, []);
+
+    const lightsOf = (scene) => scene.children.filter((child) => child.isLight);
+    expect(lightsOf(renderer.draws[0].scene).map((light) => light.constructor)).toEqual(
+      lightsOf(mainScene).map((light) => light.constructor)
+    );
+  });
+
   it("leaves the renderer's target and clipping planes as it found them", () => {
     const renderer = recordingRenderer();
     const target = new THREE.WebGLRenderTarget(4, 4);
@@ -115,5 +155,83 @@ describe('Shader prewarm behind the start gate', () => {
 
     expect(renderer.getRenderTarget()).toBe(target);
     expect(renderer.clippingPlanes).toBe(planes);
+  });
+});
+
+// three compiles a program the first time anything draws under its key, so
+// a look first drawn after the gate drops — first SHOWN mid-game, or in a
+// level loaded two doors away — hitches unless the prewarm's stand-ins
+// already compiled its program. Every look's programs (every material it
+// can draw with, shown yet or not) must be among theirs. (A notation plane
+// WITH its staff texture is warmed with the scenes instead: the texture
+// arrives behind the gate, and the scenes are drawn again while it is up.)
+describe('Every look gameplay can show is compiled behind the start gate', () => {
+  /** The programs of `root`'s looks that no stand-in warmed. */
+  function coldPrograms(root) {
+    const renderer = recordingRenderer();
+    ShaderPrewarm.run(renderer, litScene(), []); // stand-ins only
+    const warmed = programsOf(renderer.draws);
+    return [...new Set(objectsIn(root).map(programKey))].filter((key) => !warmed.has(key));
+  }
+
+  beforeEach(() => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: false, statusText: 'Not Found' }));
+  });
+
+  afterEach(() => {
+    PortalManager.reset();
+    delete global.fetch;
+  });
+
+  it.each([
+    ['floors, single and batched walls, gates and their notation', 'portal-two-pairs'],
+    ['a raised floor, a ramp and a creature (halo included)', 'elevation-basic'],
+    ['a fountain', 'listening-fountain-basic'],
+    ['a cleansing tile', 'deploy-basic'],
+  ])('a level with %s', (_, puzzleId) => {
+    ctx.loadPuzzle(puzzleId);
+    expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
+  });
+
+  it('a gate fading under a correct performance', async () => {
+    const [{ song }] = ctx.loadPuzzle('listening-gate-multi-note').entities;
+    ctx.setInventorySlot(0, song);
+    ctx.setActiveSlot(0);
+    ctx.pressKey('space');
+    await ctx.advanceBeats(1.5); // mid-song
+
+    const [gate] = ctx.getGates();
+    expect(gate.isOpen).toBe(false);
+    expect(gate.mesh.material.transparent).toBe(true); // fading
+    expect(coldPrograms(gate.mesh)).toEqual([]);
+  });
+
+  it('open doors: no shell, a see-through panel on every face', () => {
+    ctx.loadPuzzle('portal-two-pairs');
+    for (const gate of ctx.getGates()) gate.open();
+    PortalManager.renderPortals(recordingRenderer(), {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE },
+    });
+
+    const panels = objectsIn(gameState.activeArea.group).filter((mesh) => mesh._isPortalSurface);
+    expect(panels.length).toBeGreaterThan(0);
+    expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
+  });
+
+  it('the keycap hints', () => {
+    const scene = litScene();
+    const hints = buildKeyHints(scene);
+
+    expect(objectsIn(scene).filter((object) => object.isSprite)).toHaveLength(3);
+    expect(coldPrograms(scene)).toEqual([]);
+    hints.dispose();
+  });
+
+  it('a clap ring', () => {
+    const scene = litScene();
+    new ClapVisual(scene).show({ x: 0, y: 1.8, z: 0 }, CLAP_RANGE);
+
+    expect(objectsIn(scene)).toHaveLength(1);
+    expect(coldPrograms(scene)).toEqual([]);
   });
 });

@@ -151,8 +151,9 @@ instead of "fixing" it.
   `userData.shared`): per-creature state lives in `look._uniforms` and is
   copied in by each mesh's `onBeforeRender` — never write a uniform on the
   material itself. Shader programs compile behind the StartGate
-  (`core/ShaderPrewarm`); a new material config that first draws mid-game
-  (or in a portal pass) hitches unless it is drawn there too
+  (`core/ShaderPrewarm`: one never-disposed STAND-IN per program a look can
+  need); a new material config hitches mid-game unless it gets a stand-in —
+  `ShaderPrewarm.test` checks every look against them (extend its looks)
 
 ### Gates & elevation
 - **Gates LATCH**: they open on the COMPLETED song, stay open with NO timer,
@@ -298,6 +299,10 @@ instead of "fixing" it.
   update each before its first pass. **Render-time code must never MOVE
   anything** (visibility/material toggles only), and an object added
   mid-frame computes its own `updateMatrixWorld()` (doorway surfaces do)
+- **Passes skip invisible staff planes**: a pass leaves out every notation
+  plane it would paint at opacity 0 (seen from behind/edge-on, texture
+  pending) via hooks `NotationDisplay` chains onto each scene's
+  `onBeforeRender`/`onAfterRender` — chain onto those, never assign them
 
 ### Onboarding
 - No controls overlay; teaching = wordless key hints (`ui/KeyHints.js` +

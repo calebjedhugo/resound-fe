@@ -1,14 +1,26 @@
 import * as THREE from 'three';
 import { CLAP_VISUAL_FADE_DURATION } from 'core/constants';
 
+const RING_OPACITY = 0.6;
+
 /**
  * ClapVisual - Manages visual feedback for clapping
  * Shows an expanding circle at clap range
+ *
+ * Rings are RECYCLED, never disposed: disposing a faded ring's material
+ * released its shader program (nothing else draws with that program), so
+ * every clap recompiled it (~4 ms, measured 2026-10-17). A faded ring
+ * leaves the scene and waits for the next clap; rings of one radius share
+ * one geometry (every clap reaches CLAP_RANGE, so in practice there is
+ * one). Each ring keeps its own material — overlapping rings fade
+ * independently.
  */
 class ClapVisual {
   constructor(scene) {
     this.scene = scene;
     this.activeFeedback = []; // Track active visual effects
+    this._idleRings = []; // faded rings, ready for the next clap
+    this._geometries = new Map(); // ring radius -> its geometry
   }
 
   /**
@@ -17,25 +29,13 @@ class ClapVisual {
    * @param {number} range - Radius of the circle
    */
   show(position, range) {
-    // Create a circle geometry on the ground plane
-    const geometry = new THREE.RingGeometry(
-      range * 0.9, // Inner radius (slightly smaller for ring effect)
-      range, // Outer radius
-      64 // Segments (smooth circle)
-    );
+    const geometry = this._ringGeometry(range);
+    const circle = this._idleRings.pop() || ClapVisual._createRing(geometry);
+    circle.geometry = geometry;
+    circle.material.opacity = RING_OPACITY;
 
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.6,
-    });
-
-    const circle = new THREE.Mesh(geometry, material);
-
-    // Position on the ground, rotate to be horizontal
+    // Position on the ground (rings lie flat: see _createRing)
     circle.position.set(position.x, 0.1, position.z); // Slightly above ground to prevent z-fighting
-    circle.rotation.x = -Math.PI / 2; // Rotate to lie flat
 
     // Add to scene
     this.scene.add(circle);
@@ -63,15 +63,13 @@ class ClapVisual {
       const progress = elapsed / feedback.duration;
 
       if (progress >= 1) {
-        // Fade complete - remove from scene
-        this.scene.remove(feedback.mesh);
-        feedback.mesh.geometry.dispose();
-        feedback.mesh.material.dispose();
+        // Fade complete - remove from scene, keep for the next clap
+        this._retire(feedback.mesh);
         return false; // Remove from array
       }
 
       // Fade out opacity
-      feedback.mesh.material.opacity = 0.6 * (1 - progress);
+      feedback.mesh.material.opacity = RING_OPACITY * (1 - progress);
 
       return true; // Keep in array
     });
@@ -81,12 +79,40 @@ class ClapVisual {
    * Clear all active feedback (e.g., when exiting puzzle)
    */
   clear() {
-    this.activeFeedback.forEach((feedback) => {
-      this.scene.remove(feedback.mesh);
-      feedback.mesh.geometry.dispose();
-      feedback.mesh.material.dispose();
-    });
+    this.activeFeedback.forEach((feedback) => this._retire(feedback.mesh));
     this.activeFeedback = [];
+  }
+
+  _retire(circle) {
+    this.scene.remove(circle);
+    this._idleRings.push(circle);
+  }
+
+  /** The (shared) ring geometry for a clap of this radius. */
+  _ringGeometry(range) {
+    let geometry = this._geometries.get(range);
+    if (!geometry) {
+      geometry = new THREE.RingGeometry(
+        range * 0.9, // Inner radius (slightly smaller for ring effect)
+        range, // Outer radius
+        64 // Segments (smooth circle)
+      );
+      this._geometries.set(range, geometry);
+    }
+    return geometry;
+  }
+
+  /** A ring mesh lying flat, with a material of its own (it fades alone). */
+  static _createRing(geometry) {
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: RING_OPACITY,
+    });
+    const circle = new THREE.Mesh(geometry, material);
+    circle.rotation.x = -Math.PI / 2; // Rotate to lie flat
+    return circle;
   }
 }
 
