@@ -1,4 +1,5 @@
 import { Random } from 'resound-sound';
+import AudioPrewarm from 'core/AudioPrewarm';
 import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
@@ -127,6 +128,9 @@ class Creature extends Entity {
 
     // Register as listener for harmony-based movement
     ListeningManager.registerListener(this);
+
+    // Its first song's notes are built ahead, like every later song's
+    this.prepareNextSong();
   }
 
   createMesh() {
@@ -282,11 +286,26 @@ class Creature extends Entity {
   sing() {
     if (!gameState.musicalClock) return;
 
-    this.instrument.play({
-      data: this.song,
-      tempo: gameState.musicalClock.tempo,
-      basis: 4,
-    });
+    this.instrument
+      .play({
+        data: this.song,
+        tempo: gameState.musicalClock.tempo,
+        basis: 4,
+      })
+      // Over (or stopped): the next song's notes can be built
+      .then(() => this.prepareNextSong());
+  }
+
+  /**
+   * Have the next song's notes built before it starts (core/AudioPrewarm),
+   * so the frame it starts in only schedules them: a world's creatures share
+   * their onsets, and The Star's start 10-11 notes in one frame.
+   */
+  prepareNextSong() {
+    const clock = gameState.musicalClock;
+    if (!clock) return;
+    const beats = Math.max(0, this.nextSingBeat - clock.getCurrentBeat());
+    AudioPrewarm.prepareSong(this.instrument, this.song, clock.beatsToMs(beats));
   }
 
   /**
@@ -303,7 +322,8 @@ class Creature extends Entity {
    * @param {number} displacement - Displacement as fraction of whole note (e.g., 0.0625 = 1/16)
    */
   handleClap(displacement) {
-    // Stop current song immediately (its notes stop sounding with it)
+    // Stop current song immediately (its notes stop sounding with it, and
+    // the notes built for the next go)
     this.stopSong();
     this.soundingNotes.length = 0;
 
@@ -311,6 +331,7 @@ class Creature extends Entity {
     // (MusicalClock counts in quarter notes, so multiply by 4)
     const displacementInBeats = displacement * 4;
     this.nextSingBeat += displacementInBeats;
+    this.prepareNextSong();
 
     // Visual feedback - a brief white flash
     if (this.look) this.look.flash();
