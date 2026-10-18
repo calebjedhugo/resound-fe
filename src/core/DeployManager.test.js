@@ -573,6 +573,70 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     expect(shownInGatePass.every((shown) => !shown)).toBe(true);
   });
 
+  it("a door between the mapped eye and the gate never paints into the gate's side panels", async () => {
+    // The Star -> poc-jam (playtest, 2026-10-18): the cleanser two cells in
+    // front of an open door, the eye a few steps south of the gate. The
+    // mapped eye then stands in that door's cell, the door's panel facing it
+    // half a unit ahead, and the gate's side walls looked through it: solid
+    // black. A side panel's pass must clip along the approach, like a door's.
+    installFetchMock({ 'portal-b': portalB });
+    ctx.loadPuzzle('portal-a');
+    await jest.runAllTimersAsync();
+    gameState.mode = 'PLAYING';
+    DeployManager.reset();
+    // portal-b's door stands at (15, 0, 21); the cleanser two cells north
+    gameState.activeCleanser = { puzzleId: 'portal-b', position: { x: 15, y: 0, z: 15 } };
+    standAt(15, 3, Math.PI); // facing +z: the gate lands at (15, 0, 9)
+    DeployManager.toggle();
+    DeployManager.toggle();
+    DeployManager.update();
+    const areaB = PortalManager._areas.get('portal-b');
+    const doorB = areaB.entityManager.getByType('gate').find((g) => g.gateId === 'south-door');
+    doorB.open();
+
+    const sideCameras = DeployManager._views
+      .filter((view) => view.facing === 'east' || view.facing === 'west')
+      .map((view) => view._camera);
+    // The door's panel on its north plane (for an eye south of it)
+    let doorPanel = null;
+    const drawnInSidePass = [];
+    const renderer = {
+      clippingPlanes: [],
+      setRenderTarget() {},
+      render(scene, cam) {
+        if (!sideCameras.includes(cam) || !doorPanel) return;
+        // Drawn unless hidden or wholly past one of the pass's clip planes
+        // (the panel: a cell-sized square across x and y)
+        const x = doorB.mesh.position.x + doorPanel.position.x;
+        const y = doorB.mesh.position.y + doorPanel.position.y;
+        const z = doorB.mesh.position.z + doorPanel.position.z;
+        const half = WORLD_SCALE / 2;
+        const clipped = this.clippingPlanes.some(({ normal, constant }) =>
+          [x - half, x + half].every((cx) =>
+            [y - half, y + half].every(
+              (cy) => normal.x * cx + normal.y * cy + normal.z * z + constant < 0
+            )
+          )
+        );
+        drawnInSidePass.push(doorPanel.visible && !clipped);
+      },
+      getDrawingBufferSize: (size) => size.set(800, 600),
+    };
+    // Five units south of the gate: mapped to (15, 1.8, 20), inside the
+    // door's cell, its panel at z = 19.5
+    const eye = { position: { x: 15, y: 1.8, z: 14 } };
+    DeployManager.renderPortal(renderer, eye);
+    doorPanel = doorB.mesh.children.find(
+      (child) => child._isPortalSurface && child.position.z < -1
+    );
+    expect(doorPanel).toBeTruthy();
+
+    for (let i = 0; i < 3; i += 1) DeployManager.renderPortal(renderer, eye);
+
+    expect(drawnInSidePass.length).toBeGreaterThanOrEqual(6); // two panels, three frames
+    expect(drawnInSidePass.every((drawn) => !drawn)).toBe(true);
+  });
+
   it('stays put when the destination cannot be loaded', async () => {
     installFetchMock({ 'portal-b': portalB });
     ctx.loadPuzzle('portal-a');

@@ -5,6 +5,7 @@ import PortalManager from 'core/PortalManager';
 import CleansingTile from 'entities/CleansingTile';
 import CleanserGatePad from 'entities/CleanserGatePad';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import { DOORWAY_OFFSET, FACING_VECTORS } from 'core/portalMath';
 
 /**
  * DeployManager — the player's deployable cleanser gate.
@@ -68,6 +69,7 @@ class DeployManager {
     this._tileMirror = null;
     this._tileMirrorGroup = null;
     this._tileMirrorSource = null; // the real tile's material, when the mirror has its own
+    this._passOptions = {}; // what each panel's pass clips with (renderPortal)
   }
 
   /** @param {THREE.Scene} scene - the render scene (phantom lives here) */
@@ -180,8 +182,19 @@ class DeployManager {
         PortalManager.renderPortalsFor(renderer, eye);
       }
     }
+    // Every panel clips along the APPROACH panel's doorway axis, as a door's
+    // do (PortalManager._renderExteriorViews): a side panel's own plane cuts
+    // only across ITS axis, so everything between the mapped eye and the
+    // gate along the approach painted into it. poc-jam's cleanser stands two
+    // cells in front of its entry door: an eye a few steps off the gate maps
+    // into that door's cell, and the door's panel facing it, half a unit
+    // ahead, filled both side walls black (2026-10-18).
+    const approach = this._approachView(camera);
+    const options = this._passOptions;
+    options.clipOverride = approach ? approach.clipPlane : null;
+    options.extraWallsBehind = approach ? approach.wallsToHide(camera) : null;
     for (const view of this._views) {
-      if (view.render(renderer, camera)) view._padFresh = this._padFrame;
+      if (view.render(renderer, camera, options)) view._padFresh = this._padFrame;
     }
     for (const view of this._views) {
       if (!view.written) {
@@ -194,6 +207,29 @@ class DeployManager {
       stalest._padFresh = this._padFrame;
     }
     if (neighborDest) PortalManager.hideAreaPortals(neighborDest);
+  }
+
+  /**
+   * The panel whose open face the eye stands furthest beyond — the side the
+   * player approaches the gate from. None while the eye is inside the box
+   * (the walk-through trigger is a disc, so its corners are reachable):
+   * there the panel opposite a face can show, and that face's plane would
+   * clip away all it sees; each panel keeps its own plane.
+   */
+  _approachView(camera) {
+    const padPos = this._pad.entity.position;
+    let approach = null;
+    let best = DOORWAY_OFFSET;
+    for (const view of this._views) {
+      const outward = FACING_VECTORS[view.facing];
+      const beyond =
+        outward.x * (camera.position.x - padPos.x) + outward.z * (camera.position.z - padPos.z);
+      if (beyond > best) {
+        best = beyond;
+        approach = view;
+      }
+    }
+    return approach;
   }
 
   /** Tear down (menu exit / new world entry). */
