@@ -45,8 +45,10 @@ upload order.
 ## Caching + compression (`deploy/nginx-resound.conf`)
 
 - `/assets/*` (Vite's hashed names: three and each resound package have their
-  own chunk, so a game edit renames only the game's): `public,
-  max-age=31536000, immutable` — never revalidated.
+  own chunk, exporting by real names (`minifyInternalExports: false`), so a
+  game edit renames only the game's, unless it starts or stops using one of
+  a package's exports): `public, max-age=31536000, immutable` — never
+  revalidated.
 - Everything else (`index.html`, `puzzles/*.json`): `no-cache` + ETag — a 304
   on every load until a deploy changes the file.
 - `gzip_static` serves the precompressed `.gz`; `gzip` (level 6) covers any

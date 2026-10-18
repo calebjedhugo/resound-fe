@@ -2,17 +2,19 @@
  * What the production build ships, and how it splits it. three and the
  * resound packages each get a chunk of their own, so a returning player keeps
  * them cached across game edits (a tuning edit to constants.js used to rename
- * the one chunk three shared with it: ~180 kB gzip re-downloaded). The game
- * page loads no editor code and one copy of each package, and its stylesheet
- * is a hashed asset too (it was an unhashed public/ file, revalidated before
- * the game script could run).
+ * the one chunk three shared with it: ~180 kB gzip re-downloaded), an edit
+ * that only moves where the game first uses a three export included (it
+ * reshuffled Rollup's mangled export names: ~113 kB gzip). The game page
+ * loads no editor code and one copy of each package, and its stylesheet is a
+ * hashed asset too (it was an unhashed public/ file, revalidated before the
+ * game script could run).
  *
  * The deploy builds the game alone (RESOUND_BUILD=game, as deploy.sh runs
  * it), and the POC stage (build-poc.mjs) ships it precompressed for nginx's
  * gzip_static, its page preloading the boot's JSON, with the asset list
  * deploy/upload.sh prunes by.
  *
- * Runs three real Vite builds (deploy/__tests__/viteBuild.mjs).
+ * Runs four real Vite builds (deploy/__tests__/viteBuild.mjs).
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -28,11 +30,12 @@ const BUILD_TIMEOUT_MS = 120000;
 let tmp;
 let full; // npm run build: game + editor
 let tuned; // the same after a tuning edit
+let reordered; // the same after an import-order edit
 let game; // the deploy's build
 
-function viteBuild(outDir, { tune = false, gameOnly = false } = {}) {
+function viteBuild(outDir, { tune = false, reorder = false, gameOnly = false } = {}) {
   const helper = path.join(__dirname, '__tests__/viteBuild.mjs');
-  const args = [helper, outDir, ...(tune ? ['--tune'] : [])];
+  const args = [helper, outDir, ...(tune ? ['--tune'] : []), ...(reorder ? ['--reorder'] : [])];
   const env = { ...process.env, ...(gameOnly ? { RESOUND_BUILD: 'game' } : {}) };
   // As from a shell: Jest's NODE_ENV=test would make Vite build the DEV flavour
   delete env.NODE_ENV;
@@ -67,6 +70,7 @@ beforeAll(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'resound-build-'));
   full = viteBuild(path.join(tmp, 'full'));
   tuned = viteBuild(path.join(tmp, 'tuned'), { tune: true });
+  reordered = viteBuild(path.join(tmp, 'reordered'), { reorder: true });
   game = viteBuild(path.join(tmp, 'game'), { gameOnly: true });
   stagePoc('game', 'poc');
   stagePoc('full', 'poc-from-full');
@@ -87,6 +91,19 @@ describe('A tuning edit to the game constants', () => {
   it.each(['three', 'resound-notation', 'resound-sound'])('keeps the %s chunk name', (name) => {
     expect(chunkNamed(full, name)).toBeDefined();
     expect(chunkNamed(tuned, name)).toBe(chunkNamed(full, name));
+  });
+});
+
+describe('An import-order edit (an early module starts using a three export)', () => {
+  it('adds no export to three: Matrix4 already ships, under its own name', () => {
+    const threeExports = (chunks) => chunks[chunkNamed(chunks, 'three')].exports;
+
+    expect(threeExports(full)).toContain('Matrix4');
+    expect(threeExports(reordered)).toEqual(threeExports(full));
+  });
+
+  it.each(['three', 'resound-notation', 'resound-sound'])('keeps the %s chunk name', (name) => {
+    expect(chunkNamed(reordered, name)).toBe(chunkNamed(full, name));
   });
 });
 
