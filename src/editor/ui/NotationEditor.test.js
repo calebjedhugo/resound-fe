@@ -262,17 +262,108 @@ describe('NotationEditor keyboard rendering', () => {
     });
   });
 
-  it('puts the overlay back after the renderer redraws on its own (a resize)', () => {
-    const { editor } = makeEditor({ song: [C4, E4] });
-    editor._renderer.setWidth(400); // what its container observer does on resize
-    nextFrame();
-    expect(staffSvg(editor).querySelector('[data-note-index]')).toBeNull();
+  describe('when the staff is resized', () => {
+    let staffWidth;
+    let observers;
 
-    keydown(editor, 'Shift'); // any key, as before
-    nextFrame();
+    // A browser that lays the staff out `staffWidth` px wide and tells every
+    // ResizeObserver watching it when that changes.
+    beforeEach(() => {
+      staffWidth = 800;
+      observers = [];
+      jest.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function width() {
+        return this.classList.contains('notation-staff') ? staffWidth : 0;
+      });
+      global.ResizeObserver = class {
+        constructor(callback) {
+          this.callback = callback;
+          this.targets = new Set();
+          observers.push(this);
+        }
 
-    expect(staffSvg(editor).querySelector('[data-note-index="1"]')).toBeTruthy();
-    expect(staffSvg(editor).querySelector('.cursor-line')).toBeTruthy();
+        observe(el) {
+          this.targets.add(el);
+        }
+
+        disconnect() {
+          this.targets.clear();
+        }
+      };
+    });
+
+    afterEach(() => {
+      delete global.ResizeObserver;
+      jest.restoreAllMocks();
+    });
+
+    function resizeStaff(editor, width) {
+      staffWidth = width;
+      observers
+        .filter((observer) => observer.targets.has(editor._staffEl))
+        .forEach((observer) => observer.callback([{ target: editor._staffEl }], observer));
+    }
+
+    it('re-engraves for the new width on the next frame, overlay and all', () => {
+      const { editor } = makeEditor({ song: [C4, E4, G4] });
+      keydown(editor, 'ArrowLeft'); // select G4: a highlight and a cursor to keep
+      nextFrame();
+      const before = staffSvg(editor);
+
+      resizeStaff(editor, 500);
+      nextFrame();
+
+      expect(staffSvg(editor)).not.toBe(before);
+      expect(Number(staffSvg(editor).getAttribute('width'))).toBeCloseTo(500);
+      expect(staffSvg(editor).querySelector('.note-selected')).toBeTruthy();
+      expect(editor._staffEl.innerHTML).toBe(fullRenderOf(editor));
+    });
+
+    it('selects a note clicked after a resize, rather than adding one', () => {
+      const { editor, changes } = makeEditor({ song: [C4, E4, G4] });
+      resizeStaff(editor, 500);
+      nextFrame();
+
+      const first = staffSvg(editor).querySelector('[data-voice-id="v0"] .note');
+      first.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      expect(changes).toHaveLength(0);
+      expect(first.classList.contains('note-selected')).toBe(true);
+    });
+
+    it('engraves once a frame, however many resizes and keys arrive in it', () => {
+      const { editor } = makeEditor({ song: [C4, E4] });
+      const render = jest.spyOn(editor._renderer, 'render');
+
+      resizeStaff(editor, 600);
+      keydown(editor, 'ArrowLeft');
+      resizeStaff(editor, 500);
+      keydown(editor, '+');
+      nextFrame();
+
+      expect(render).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the staff alone at the width it was engraved for, or under 2 px from it', () => {
+      const { editor } = makeEditor({ song: [C4, E4] });
+      const render = jest.spyOn(editor._renderer, 'render');
+
+      resizeStaff(editor, 800); // observing starts at the width it was engraved for
+      resizeStaff(editor, 801);
+      nextFrame();
+
+      expect(render).not.toHaveBeenCalled();
+    });
+
+    it('stops watching once disposed', () => {
+      const { editor } = makeEditor({ song: [C4, E4] });
+      const render = jest.spyOn(editor._renderer, 'render');
+
+      editor.dispose();
+      resizeStaff(editor, 500);
+      nextFrame();
+
+      expect(render).not.toHaveBeenCalled();
+    });
   });
 
   it('keeps the playing note lit through an edit', () => {
