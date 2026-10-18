@@ -480,6 +480,149 @@ describe('The mirror sweep spends its passes on what the screen can show', () =>
   });
 });
 
+describe('The stale rotor hurries only for faces something may see', () => {
+  // Same-area doors facing north: looking north into A1 shows the view
+  // north out of A2, where B1 stands straight ahead; B2 looks out at the
+  // north wall (nothing more to see). Grid coordinates.
+  const gate = (id, x, z, partner) => ({
+    type: 'gate',
+    id,
+    facing: 'north',
+    link: { puzzleId: 'rotor-pace', gateId: partner },
+    position: { x, y: 0, z },
+    song: [{ pitch: 'C4', length: '1/4' }],
+  });
+  const WORLD = {
+    id: 'rotor-pace',
+    name: 'Rotor pace',
+    difficulty: 1,
+    gridSize: 30,
+    tempo: 120,
+    playerStart: { x: 5, y: 0, z: 29 },
+    entities: [gate('a1', 5, 15, 'a2'), gate('a2', 15, 5, 'a1')].concat([
+      gate('b1', 15, 2, 'b2'),
+      gate('b2', 28, 1, 'b1'),
+    ]),
+  };
+  const FACE_OUT = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
+  const caps = ['MIRROR_MAX_DEPTH', 'MIRROR_MAX_FRONTIER', 'MIRROR_MAX_PASSES'];
+  const originalCaps = caps.map((cap) => PortalManager.constructor[cap]);
+
+  afterEach(() => {
+    caps.forEach((cap, i) => {
+      PortalManager.constructor[cap] = originalCaps[i];
+    });
+  });
+
+  /**
+   * Once every face but the eye's and the sweep's has gone stale: the rotor's
+   * refreshes a frame (passes drawn from a face's straight-on eye, 1.5 cells
+   * out at head height, carried through its door), and the oldest picture
+   * any panel shows (frames)
+   */
+  const rotorPace = () => {
+    installFetchMock({});
+    PortalManager.enterWorld(WORLD);
+    const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of gates) g.open();
+    const byId = (id) => gates.find((g) => g.gateId === id);
+    const straightOn = gates.flatMap((g) => {
+      const partner = byId(g.link.gateId);
+      return Object.values(FACE_OUT).map(([x, z]) => ({
+        x: partner.position.x + x * 1.5 * WORLD_SCALE,
+        z: partner.position.z + z * 1.5 * WORLD_SCALE,
+      }));
+    });
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(5 * WORLD_SCALE, 17 * WORLD_SCALE);
+    drawFrame(renderer, eye); // the doors' first frame writes every face
+    const panels = gates.flatMap((g) => Object.keys(FACE_OUT).map((f) => panelOf(g, f)));
+    let oldest = 0;
+    for (let i = 1; i < 120; i += 1) {
+      drawFrame(renderer, eye);
+      if (i >= 60) {
+        for (const panel of panels) {
+          oldest = Math.max(oldest, renderer.frame - renderer.shownBy(panel).frame);
+        }
+      }
+    }
+    const rotor = renderer.passes.filter(
+      (pass) =>
+        pass.frame > 60 &&
+        straightOn.some((at) => Math.abs(at.x - pass.from.x) + Math.abs(at.z - pass.from.z) < 1e-6)
+    );
+    return { pace: rotor.length / 60, oldest };
+  };
+
+  it('faces no sight reaches take turns: one every STALE_UNSEEN_EVERY frames', () => {
+    const { pace, oldest } = rotorPace();
+    expect(pace).toBeCloseTo(1 / PortalManager.constructor.STALE_UNSEEN_EVERY, 5);
+    expect(oldest).toBeGreaterThan(PortalManager.constructor.STALE_MAX_FRAMES + 1);
+  });
+
+  it.each([
+    ['depth', 'MIRROR_MAX_DEPTH', 1],
+    ['frontier', 'MIRROR_MAX_FRONTIER', 0],
+  ])(
+    'a sweep stopped short of its chains (the %s cap) leaves none unseen: none grows old',
+    (_, cap, value) => {
+      PortalManager.constructor[cap] = value; // B1's view goes unwalked
+      expect(rotorPace().oldest).toBeLessThanOrEqual(
+        PortalManager.constructor.STALE_MAX_FRAMES + 1
+      );
+    }
+  );
+
+  it('a face the sweep sees but has no room for keeps the full pace', async () => {
+    // Behind the eye, but straight ahead through A1 (out of A2): two doors
+    // into another area, side by side — a sweep with room for one sees
+    // both, and no chain goes on through them
+    installFetchMock({
+      'rotor-next': {
+        id: 'rotor-next',
+        name: 'Rotor next',
+        difficulty: 1,
+        gridSize: 10,
+        tempo: 120,
+        playerStart: { x: 1, y: 0, z: 9 },
+        entities: [
+          { ...gate('nb', 3, 5, 'b1'), link: { puzzleId: 'rotor-pace', gateId: 'b1' } },
+          { ...gate('nd', 7, 5, 'd1'), link: { puzzleId: 'rotor-pace', gateId: 'd1' } },
+        ],
+      },
+    });
+    PortalManager.enterWorld({
+      ...WORLD,
+      entities: [
+        gate('a1', 5, 8, 'a2'),
+        gate('a2', 15, 25, 'a1'),
+        { ...gate('b1', 15, 22, 'nb'), link: { puzzleId: 'rotor-next', gateId: 'nb' } },
+        { ...gate('d1', 16, 23, 'nd'), link: { puzzleId: 'rotor-next', gateId: 'nd' } },
+      ],
+    });
+    await jest.runAllTimersAsync(); // the neighbour loads
+    const gates = gameState.activeArea.entities.filter((e) => e.type === 'gate');
+    for (const g of gates) g.open();
+    PortalManager.constructor.MIRROR_MAX_PASSES = 1;
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(5 * WORLD_SCALE, 10 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    const faces = gates
+      .filter((g) => g.gateId === 'b1' || g.gateId === 'd1')
+      .map((g) => panelOf(g, 'south'));
+
+    let oldest = 0;
+    for (let i = 1; i < 120; i += 1) {
+      drawFrame(renderer, eye);
+      for (const panel of faces) {
+        if (i >= 60) oldest = Math.max(oldest, renderer.frame - renderer.shownBy(panel).frame);
+      }
+    }
+
+    expect(oldest).toBeLessThanOrEqual(PortalManager.constructor.STALE_MAX_FRAMES + 1);
+  });
+});
+
 describe('The mirror sweep draws only what a chain can show on screen', () => {
   // Same-area doors, every gate facing north: looking north into A1 shows
   // the view north out of A2 (and P1's north out of P2). Grid coordinates.

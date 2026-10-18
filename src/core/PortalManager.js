@@ -169,6 +169,11 @@ class PortalManager {
     // Faces the last mirror sweep reached but its cap left out -> their
     // share of the screen (the stale rotor serves them first)
     this._sweepOverflow = new Map();
+    // The last frame a mirror sweep stopped short of walking every chain
+    // (a cap): until a frame after it, faces outside every sight may still
+    // show somewhere (see _refreshStaleFaces). Each face in a sight notes
+    // the frame (view._sightFrame)
+    this._sightsCut = 0;
     // Mirror-sweep scratch, reused every sweep: the faces it schedules, its
     // sights (_takeSight) and the screen's edges (viewPlanes)
     this._sweepScheduled = new Map();
@@ -869,6 +874,7 @@ class PortalManager {
             if (!view || !view.surface.visible || !this._canLookInto(gate, f, mapped)) continue; // eslint-disable-line no-continue
             const rect = this._sightRect;
             if (!this._inSight(view, sights, rect)) continue; // eslint-disable-line no-continue
+            view._sightFrame = this._frameId;
             // Seen from here: its picture is the player's own, or the one
             // this sweep draws for the eye it was scheduled with
             let apex = view.drawnFrom;
@@ -896,12 +902,12 @@ class PortalManager {
           }
           // The chain continues through what it sees of this door's view —
           // but only same-area doors show panels to keep refreshing
-          if (
-            seen &&
-            this._isSameAreaDoor(gate) &&
-            next.length < PortalManager.MIRROR_MAX_FRONTIER
-          ) {
-            next.push({ gate, eye: mapped, bound, sights: seen });
+          if (seen && this._isSameAreaDoor(gate)) {
+            if (next.length < PortalManager.MIRROR_MAX_FRONTIER) {
+              next.push({ gate, eye: mapped, bound, sights: seen });
+            } else {
+              this._sightsCut = this._frameId; // a chain left unwalked
+            }
           }
         }
       }
@@ -910,6 +916,8 @@ class PortalManager {
       // is full, none of them could make it
       if (scheduled.size >= PortalManager.MIRROR_MAX_PASSES) break;
     }
+    // Chains left past the depth or pass cap: what they show is unknown
+    if (frontier.length > 0) this._sightsCut = this._frameId;
 
     // The walk's scratch has served: none of it may keep a view reachable
     // (and the torn-down world behind it) once that view is gone
@@ -1049,6 +1057,21 @@ class PortalManager {
 
   static STALE_REFRESH_PER_FRAME = 2;
 
+  // ...but a face outside every sight of a sweep that walked every chain
+  // can show nowhere next frame (sights reach a frame ahead): such faces
+  // take turns, one every STALE_UNSEEN_EVERY frames and only when no face
+  // in sight needs the refresh. A flick from rest (unforeseeable, see
+  // SIGHT_SLACK) that brings one into a door's view shows its last picture
+  // for that one frame: of the right door, from a straight-on eye, at most
+  // about STALE_UNSEEN_EVERY frames per such face old.
+  static STALE_UNSEEN_EVERY = 3;
+
+  /**
+   * Refresh the stalest faces (see STALE_MAX_FRAMES): what the mirror sweep
+   * reached but had no room for first, biggest on screen first (the
+   * likeliest in sight), then the oldest — where a face no sight reaches
+   * takes its turn (STALE_UNSEEN_EVERY).
+   */
   _refreshStaleFaces(renderer) {
     const stale = [];
     for (const [gate, faces] of this._views) {
@@ -1062,18 +1085,26 @@ class PortalManager {
       }
     }
     if (stale.length === 0) return;
-    // What the mirror sweep reached but had no room for goes first, biggest
-    // on screen first — those faces are the likeliest in sight; then the
-    // oldest
+    // A sight noted this frame or the last (the cleanser gate's pre-pass
+    // sweeps ahead of the frame's count) reaches it; or nothing is known
+    const known = this._sightsCut < this._frameId - 1;
+    const unseen = (view) => known && !(view._sightFrame >= this._frameId - 1);
     const overflow = this._sweepOverflow;
     stale.sort(
       (a, b) =>
         (overflow.get(b) || 0) - (overflow.get(a) || 0) ||
         (a._freshFrame || 0) - (b._freshFrame || 0)
     );
-    const budget = Math.min(PortalManager.STALE_REFRESH_PER_FRAME, stale.length);
-    for (let i = 0; i < budget; i += 1) {
-      this._warmUpView(stale[i], stale[i].gate, stale[i].facing, renderer);
+    let budget = PortalManager.STALE_REFRESH_PER_FRAME;
+    let unseenTurn = this._frameId % PortalManager.STALE_UNSEEN_EVERY === 0;
+    for (const view of stale) {
+      if (budget === 0) break;
+      if (unseen(view)) {
+        if (!unseenTurn) continue; // eslint-disable-line no-continue
+        unseenTurn = false;
+      }
+      this._warmUpView(view, view.gate, view.facing, renderer);
+      budget -= 1;
     }
   }
 

@@ -237,10 +237,14 @@ instead of "fixing" it.
   biggest-on-screen-first, so the cap keeps what is in sight; self/partner
   recursion still rides the double-buffered cascade; cross-area door
   interiors unchanged); and faces in NO sightline fall back to the stale
-  rotor (`_refreshStaleFaces`, ≤ `STALE_MAX_FRAMES` old, the sweep's
+  rotor (`_refreshStaleFaces`, past `STALE_MAX_FRAMES`, the sweep's
   overflow first, then oldest-first, bounded per frame) so nothing ever
   freezes in time — it idles in frames that draw no door panel (nothing
-  could show its faces). Keyed off `_playerFresh` (a face that was
+  could show its faces). A face outside every sight of a sweep that walked
+  all its chains (no cap hit) takes turns: one every `STALE_UNSEEN_EVERY`
+  (3) frames — so a flick from rest can show such a face's last picture
+  (the right door, straight-on) for one frame, up to ~3 frames per such
+  face old (The Star, all doors: ~2-3 s). Keyed off `_playerFresh` (a face that was
   ELIGIBLE but frustum-culled still needs a mirror render). Freshness ages
   in REAL frames: the cleanser gate's mapped-eye door pass
   (`renderPortalsFor`) counts none. Its pad panels age via their own rotor
