@@ -33,6 +33,13 @@ export const PHRASE_GAP_BEATS = 1;
 // Alignment tolerance: within one 16th-note grid slot (grid step = 0.25)
 const TOL_BEATS = 0.13;
 
+// A cached verdict's lifetime ends this much (beats) before the one turn
+// computed by subtraction, so float rounding can never place that turn
+// inside it: below 2^30 beats (10 years at 200 bpm) the rounding involved
+// is under 5e-7 beats. Ending early costs one more judgment, never a
+// different one.
+const TURN_SLACK_BEATS = 1e-6;
+
 /** Do the notes heard at one beat equal one target onset (chord-aware)? */
 function groupMatchesOnset(group, onset) {
   if (onset.notes.length === 1 && group.notes.length === 1) {
@@ -58,6 +65,81 @@ function groupMatchesOnset(group, onset) {
  */
 export default function evaluatePhrases(listener) {
   const tempo = gameState.musicalClock?.tempo || 120;
+  return judge(listener, tempo, Date.now(), null);
+}
+
+// Each listener's last verdict, and what it was judged from (see below)
+const verdicts = new WeakMap();
+
+/**
+ * evaluatePhrases, judged afresh only when its verdict could differ — what
+ * a gate or fountain calls every frame. The answer is EXACTLY evaluatePhrases'
+ * at this moment. A verdict reads the clock only by comparing the beat now
+ * against beats fixed by the heard notes and the song, and each comparison
+ * flips at most once as time moves on; judging notes the earliest beat at
+ * which any comparison it made could flip (its next TURN). Until then, with
+ * the same heard notes (append-only: the same array at the same length),
+ * tempo, epoch, trim horizon, last judged sound and song, the same
+ * comparisons come out the same way — so does the verdict. A 'mismatch' is
+ * never reused: judging one writes the listener.
+ * @param {Object} listener - as for evaluatePhrases
+ * @returns {true|'in-progress'|'mismatch'|false}
+ */
+export function evaluatePhrasesCached(listener) {
+  const tempo = gameState.musicalClock?.tempo || 120;
+  const nowMs = Date.now();
+  const nowBeat = beatAt(listener, nowMs, tempo);
+  let last = verdicts.get(listener);
+  if (
+    last &&
+    last.notes === listener.capturedNotes &&
+    last.count === listener.capturedNotes.length &&
+    last.tempo === tempo &&
+    last.startTime === listener.listeningStartTime &&
+    Object.is(last.trimHorizonMs, listener._trimHorizonMs) &&
+    Object.is(last.lastJudgedStartBeat, listener._lastJudgedStartBeat) &&
+    last.song === listener.requiredSong &&
+    nowBeat >= last.fromBeat &&
+    nowBeat < last.untilBeat
+  ) {
+    return last.result;
+  }
+
+  if (!last) {
+    last = {};
+    verdicts.set(listener, last);
+  }
+  // What the verdict is judged FROM (judging a mismatch rewrites the
+  // listener's last judged sound)
+  last.notes = listener.capturedNotes;
+  last.count = listener.capturedNotes.length;
+  last.tempo = tempo;
+  last.startTime = listener.listeningStartTime;
+  last.trimHorizonMs = listener._trimHorizonMs;
+  last.lastJudgedStartBeat = listener._lastJudgedStartBeat;
+  last.song = listener.requiredSong;
+  last.fromBeat = nowBeat;
+  last.untilBeat = Infinity;
+  last.result = judge(listener, tempo, nowMs, last);
+  if (last.result === 'mismatch') last.untilBeat = -Infinity;
+  return last.result;
+}
+
+/** The beat `nowMs` falls on, in the listener's own count. */
+function beatAt(listener, nowMs, tempo) {
+  return (nowMs - listener.listeningStartTime) / (60000 / tempo);
+}
+
+/** The verdict can turn at `beat`: keep the earliest (horizon may be null). */
+function turnAt(horizon, beat) {
+  if (horizon && beat < horizon.untilBeat) horizon.untilBeat = beat;
+}
+
+/**
+ * evaluatePhrases at `nowMs`; with a horizon, also lower horizon.untilBeat
+ * to the verdict's next turn.
+ */
+function judge(listener, tempo, nowMs, horizon) {
   const msPerBeat = 60000 / tempo;
   const groups = ListeningManager.groupNotesByBeat(
     listener.capturedNotes,
@@ -69,7 +151,7 @@ export default function evaluatePhrases(listener) {
   const timeline = SongMatcher.targetTimeline(listener.requiredSong);
   if (timeline.onsets.length === 0) return false;
 
-  const nowBeat = (Date.now() - listener.listeningStartTime) / msPerBeat;
+  const nowBeat = beatAt(listener, nowMs, tempo);
   const firstOffset = timeline.onsets[0].beat;
 
   // Beats at/before this horizon were trimmed from the buffer and are
@@ -97,7 +179,11 @@ export default function evaluatePhrases(listener) {
     if (aligned) {
       for (const onset of timeline.onsets) {
         const want = anchorBeat + onset.beat;
-        if (!windowClosed && want > nowBeat + TOL_BEATS) break; // rest is future
+        if (!windowClosed && want > nowBeat + TOL_BEATS) {
+          // The rest is future (until this onset falls due)
+          turnAt(horizon, want - TOL_BEATS - TURN_SLACK_BEATS);
+          break;
+        }
         const group = groups.find((g) => !used.has(g) && Math.abs(g.beat - want) <= TOL_BEATS);
         if (!group && !windowClosed && nowBeat <= want + TOL_BEATS) {
           // Onset-boundary grace: the due note hasn't arrived yet but is
@@ -106,6 +192,7 @@ export default function evaluatePhrases(listener) {
           // performance is still in progress, so the gate's fade never
           // snaps opaque between the notes of a correct take. A WRONG note
           // at the onset (group found, mismatched) still fails at once.
+          turnAt(horizon, want + TOL_BEATS);
           break;
         }
         if (!group || !groupMatchesOnset(group, onset)) {
@@ -123,6 +210,14 @@ export default function evaluatePhrases(listener) {
       const hi = Math.min(nowBeat, endBeat - TOL_BEATS);
       const lo = anchorBeat - TOL_BEATS;
       const extras = groups.some((g) => g.beat >= lo && g.beat <= hi && !used.has(g));
+      if (horizon && !windowClosed) {
+        // A standing anchor turns when its window closes, and a clean one
+        // when a group not yet inside it (past `hi`) comes inside. (A FAILED
+        // anchor never turns: everything it failed on only gets stricter.)
+        turnAt(horizon, endBeat);
+        const ahead = extras ? null : groups.find((g) => g.beat > hi);
+        if (ahead) turnAt(horizon, ahead.beat);
+      }
       if (!extras) {
         if (windowClosed) return true;
         inProgress = true; // could still complete — don't report a miss yet
@@ -143,7 +238,10 @@ export default function evaluatePhrases(listener) {
   // One grace: a group whose grid slot is still within tolerance may be a
   // chord mid-assembly (mates from independent sources land frames apart) —
   // hold judgment until its slot has passed.
-  if (nowBeat <= lastGroup.beat + TOL_BEATS) return false;
+  if (nowBeat <= lastGroup.beat + TOL_BEATS) {
+    turnAt(horizon, lastGroup.beat + TOL_BEATS);
+    return false;
+  }
   // One report per offending sound: stay silent until something NEW lands.
   if (
     listener._lastJudgedStartBeat !== undefined &&

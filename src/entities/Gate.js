@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import ListeningManager from 'core/ListeningManager';
-import evaluatePhrases from 'core/phraseMatching';
+import { evaluatePhrasesCached } from 'core/phraseMatching';
 import SongMatcher from 'core/SongMatcher';
 import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
@@ -196,7 +196,8 @@ class Gate extends Entity {
     // Segment everything heard into silence-delimited phrases and compare
     // against the target: `true` = the whole song landed, 'in-progress' = a
     // correct performance is underway, 'mismatch' = a wrong utterance ended.
-    const result = this.capturedNotes.length > 0 ? evaluatePhrases(this) : false;
+    // (Re-judged only when the verdict could have changed.)
+    const result = this.capturedNotes.length > 0 ? evaluatePhrasesCached(this) : false;
 
     this._inProgress = result === 'in-progress';
     if (result === true) {

@@ -133,6 +133,10 @@ instead of "fixing" it.
   deaf for the window, red glow decays across it). So a gate's song must
   START clean; it can no longer ride in behind wrong notes. Fountains
   flash immediately but don't lock out. See DESIGN.md "Matching"
+- Gates/fountains judge via `evaluatePhrasesCached` (`core/phraseMatching`):
+  re-judged only when what it reads changes or the verdict's next turn
+  passes, never per frame. So a listener's `capturedNotes` is APPEND-ONLY:
+  push, or replace the array — never edit it in place
 
 ### Creatures
 - Harmony forces apply only WHILE the creature is singing and another note
