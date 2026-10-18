@@ -305,21 +305,49 @@ function planeFade(mesh, camera) {
 // yet its draw call cost as much as a visible one — and from any eye
 // outside a gate, at least two of its four planes face away, in every pass
 // (the main view and each door pass). A scene's first notation draw hooks
-// that scene: before each later pass over it, every live plane's material
-// is shown or hidden by the very fade its onBeforeRender would apply (so
-// exactly the invisible draws drop out), and after the pass every plane is
-// drawable again — an unhooked scene still draws them all.
+// that scene: before each later pass over it, every plane the pass can
+// draw has its material hidden if the very fade its onBeforeRender would
+// apply is zero (so exactly the invisible draws drop out), and after the
+// pass those planes are drawable again — an unhooked scene still draws them
+// all. A plane the pass can't draw (another area's, or under a piece a door
+// pass leaves out) is left alone: its fade matters to no draw of this pass,
+// and weighing every loaded area's planes on every pass cost ~3% of a frame
 const livePlanes = new Set();
 const hookedScenes = new WeakSet();
+const fadedOut = []; // the planes the pass under way left out
 
-function hideFadedPlanes(camera) {
+/**
+ * Can a pass over `scene` draw `object` — is it in the scene, with nothing
+ * above it hidden (three skips a hidden object's whole subtree)?
+ */
+function drawableIn(scene, object) {
+  for (let node = object; node; node = node.parent) {
+    if (node.visible === false) return false;
+    if (node === scene) return true;
+  }
+  return false;
+}
+
+function hideFadedPlanes(scene, camera) {
+  // A display's planes hang on one entity mesh, side by side in livePlanes:
+  // one walk up from it serves them all
+  let parent;
+  let drawable = false;
   for (const mesh of livePlanes) {
-    mesh.material.visible = mesh._notationOpacity > 0 && planeFade(mesh, camera) > 0;
+    if (mesh.parent !== parent) {
+      parent = mesh.parent;
+      drawable = drawableIn(scene, parent);
+    }
+    if (drawable && mesh.visible && !(mesh._notationOpacity > 0 && planeFade(mesh, camera) > 0)) {
+      mesh.material.visible = false;
+      fadedOut.push(mesh);
+    }
   }
 }
 
-function showAllPlanes() {
-  for (const mesh of livePlanes) mesh.material.visible = true;
+function showFadedPlanes() {
+  for (const mesh of fadedOut) mesh.material.visible = true;
+  fadedOut.length = 0;
 }
 
 function hookScene(scene) {
@@ -328,11 +356,11 @@ function hookScene(scene) {
   const { onBeforeRender, onAfterRender } = scene;
   scene.onBeforeRender = function beforePass(renderer, passScene, camera, target) {
     onBeforeRender.call(this, renderer, passScene, camera, target);
-    hideFadedPlanes(camera);
+    hideFadedPlanes(passScene, camera);
   };
   scene.onAfterRender = function afterPass(renderer, passScene, camera) {
     onAfterRender.call(this, renderer, passScene, camera);
-    showAllPlanes();
+    showFadedPlanes();
   };
 }
 

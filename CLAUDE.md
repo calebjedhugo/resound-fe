@@ -210,9 +210,12 @@ instead of "fixing" it.
   constructors. Staff textures are SHARED per distinct staff (song + meter
   + key; `NotationDisplay`, ref-counted) — never dispose a notation `map`
   directly (it may still be queued for its idle-time GPU upload,
-  `NotationDisplay.uploadInIdleTime`, which would revive it). Puzzle JSON
-  is cached per world (`PuzzleLoader.load`; `clearCache` at every world
-  entry, so editor saves show up)
+  `NotationDisplay.uploadInIdleTime`, which would revive it). Once
+  registered, a neighbour goes to the GPU in idle time too, before any door
+  into it opens (`PortalManager._warmInIdleTime`: a few pieces a slice drawn
+  into a 1x1 target, the rest hidden for that draw, from two eyes so every
+  staff plane draws). Puzzle JSON is cached per world (`PuzzleLoader.load`;
+  `clearCache` at every world entry, so editor saves show up)
 - **Open linked gates are see-through**: the `facing` face shows the LIVE
   neighbor area (`core/PortalView.js` renders the neighbor's `Area.scene`).
   The extra pass runs only while a linked gate is open; a closed linked gate
@@ -268,13 +271,19 @@ instead of "fixing" it.
   off screen) skips that door pre-pass too.
 - **Door passes cost what the screen shows** (2026-10-17): each pass's
   target fits its panel's densest size ON SCREEN (`portalMath.panelFootprint`,
-  `PortalView._fitTarget`: power-of-two per axis, 32 px floor, half-res cap —
-  a door filling the screen keeps half-res; grows at once, shrinks after 30
-  passes asking less). Mirror and warm-up eyes borrow the player's look and
-  lens (`eye.pose`). A panel under `SMALL_PANEL_SHARE` (1%) of the screen
-  re-renders one frame in three (`_restsThisFrame`) — never while a
+  `PortalView._fitTarget`: twice its texels, `SUPERSAMPLE` — 1:1 drew a far
+  door's staff visibly softer than half-res did — then power-of-two per
+  axis, 32 px floor, half-res cap — a door filling the screen keeps half-res;
+  grows at once, shrinks after 30 passes asking less). Mirror and warm-up
+  eyes borrow the player's look and lens (`eye.pose`); a straight-on warm-up
+  (first write, stale rotor) shows only through other doors' panels, far
+  smaller than its stand-in eye sees it: half that eye's texels
+  (`STAND_IN_SUPERSAMPLE`). A panel under `SMALL_PANEL_SHARE` (1%) of the
+  screen re-renders one frame in three (`_restsThisFrame`) — never while a
   creature shows through it, after an eye jump, or when its picture is
-  another eye's, old, or outgrown
+  another eye's, old, or outgrown, or (a door into its own area) was drawn
+  over such a picture (its door-in-a-door copies it: back on screen it
+  draws twice running)
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS
@@ -462,4 +471,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-18 — each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-10-18 — door targets at twice their panel's pixels (straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

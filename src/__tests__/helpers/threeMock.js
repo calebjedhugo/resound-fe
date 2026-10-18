@@ -29,6 +29,21 @@ function updateMatrixWorld() {
   for (const child of this.children) child.updateMatrixWorld();
 }
 
+/** Like three's Object3D.add: an object has one parent at a time. */
+function addChild(parent, child) {
+  if (child.parent) child.parent.remove(child);
+  child.parent = parent; // eslint-disable-line no-param-reassign
+  parent.children.push(child);
+}
+
+/** Like three's Object3D.remove. */
+function removeChild(parent, child) {
+  const idx = parent.children.indexOf(child);
+  if (idx === -1) return;
+  parent.children.splice(idx, 1);
+  child.parent = null; // eslint-disable-line no-param-reassign
+}
+
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) {
     this.x = x;
@@ -371,12 +386,11 @@ class Mesh {
   }
 
   add(child) {
-    this.children.push(child);
+    addChild(this, child);
   }
 
   remove(child) {
-    const idx = this.children.indexOf(child);
-    if (idx > -1) this.children.splice(idx, 1);
+    removeChild(this, child);
   }
 
   updateMatrixWorld() {
@@ -440,12 +454,11 @@ class Group {
   }
 
   add(obj) {
-    this.children.push(obj);
+    addChild(this, obj);
   }
 
   remove(obj) {
-    const idx = this.children.indexOf(obj);
-    if (idx > -1) this.children.splice(idx, 1);
+    removeChild(this, obj);
   }
 
   updateMatrixWorld() {
@@ -487,12 +500,11 @@ class Scene {
   onAfterRender() {} // eslint-disable-line class-methods-use-this
 
   add(obj) {
-    this.children.push(obj);
+    addChild(this, obj);
   }
 
   remove(obj) {
-    const idx = this.children.indexOf(obj);
-    if (idx > -1) this.children.splice(idx, 1);
+    removeChild(this, obj);
   }
 
   updateMatrixWorld() {

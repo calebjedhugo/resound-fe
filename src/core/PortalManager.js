@@ -35,6 +35,7 @@
  *   (up to the midpoint AT the door), so tempo is continuous across a
  *   crossing. Mismatched links already draw an editor warning.
  */
+import * as THREE from 'three';
 import PuzzleLoader from 'core/PuzzleLoader';
 import PortalView from 'core/PortalView';
 import ListeningManager from 'core/ListeningManager';
@@ -60,6 +61,9 @@ import {
   viewPlanes,
 } from 'core/portalMath';
 import { getDistance } from 'core/utils';
+import { NO_CLIP_PLANES, createSceneTarget } from 'core/passContext';
+import { updateSceneMatrices } from 'core/sceneMatrices';
+import runInIdleSlices from 'core/idleSlices';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 // Stable empty list for the common no-seam case (avoids per-frame garbage)
@@ -103,6 +107,19 @@ function reachPast(out, rect, margin) {
 
 // Every panel of a door lies within this distance of its cell's center
 const CELL_REACH = (WORLD_SCALE * Math.sqrt(3)) / 2;
+
+// Where a neighbour's warm-up draws look from (PortalManager._warmPieces):
+// a pass leaves out every staff plane it sees from behind (NotationDisplay),
+// and every plane faces along x or z, so between these two each draws once
+const WARM_EYES = Object.freeze([
+  Object.freeze({ x: 1e3, y: 0, z: 1e3 }),
+  Object.freeze({ x: -1e3, y: 0, z: -1e3 }),
+]);
+
+/** How far an eye moved from `a` to `b` (summed over the axes). */
+function stepBetween(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z);
+}
 
 // Who drew what a face shows, when it was not an exterior pass's own eye
 // (that eye object itself is recorded): see _restsThisFrame
@@ -188,6 +205,12 @@ class PortalManager {
     this._cellCenter = { x: 0, y: 0, z: 0 };
     this._drawingDoors = []; // scratch: the gates a run of door passes draws
     this._passOptions = {}; // scratch: a player pass's PortalView.render options
+    // Neighbours registered since the last frame, waiting for their idle-time
+    // GPU warm-up (_warmInIdleTime: it needs the frame's renderer); its
+    // camera and 1x1 target, made on first use
+    this._unwarmed = [];
+    this._warmCamera = null;
+    this._warmTarget = null;
     // The doorway cell the player currently occupies ({ gate }, else null).
     // Crossing commits ON ENTRY, so after a swap this is the DESTINATION
     // gate; it re-arms only once the player walks fully out of the cell
@@ -238,6 +261,7 @@ class PortalManager {
     this._linkedGates = [];
     // Door-pass scratch naming the old world's gates and views goes with it
     this._drawingDoors.length = 0;
+    this._unwarmed.length = 0;
     this._sweepOverflow.clear();
     // A new world is not a turn of the view
     this._lastLook = null;
@@ -368,6 +392,8 @@ class PortalManager {
    */
   renderPortals(renderer, camera) {
     this._frameId += 1;
+    for (const area of this._unwarmed) this._warmInIdleTime(area, renderer);
+    this._unwarmed.length = 0;
     if (camera.quaternion && camera.fov) {
       this._playerCamera = camera;
       this._noteTurn(camera.quaternion);
@@ -735,9 +761,10 @@ class PortalManager {
    * or MIRROR_WRITER — within the last SMALL_PANEL_EVERY frames, from
    * within SMALL_PANEL_DRIFT of `eye`: a picture another pass drew (a
    * warm-up, the rotor, another eye's view), an old one, or one drawn from
-   * elsewhere is replaced at once — and never while the panel has outgrown
-   * its picture or a creature shows through it. A footprint-less pass (no
-   * pose to measure it by) never rests.
+   * elsewhere is replaced at once, and so is one drawn over such a picture
+   * (it may copy it: _wrote) — and never while the panel has outgrown its
+   * picture or a creature shows through it. A footprint-less pass (no pose
+   * to measure it by) never rests.
    */
   _restsThisFrame(view, footprint, writer, eye, renderer) {
     if (!footprint || footprint.screenShare >= PortalManager.SMALL_PANEL_SHARE) return false;
@@ -745,9 +772,10 @@ class PortalManager {
     // screen after a while away re-renders at once
     if (view._writer !== writer) return false;
     if (this._frameId - view._freshFrame >= PortalManager.SMALL_PANEL_EVERY) return false;
-    const from = view._writtenFrom;
-    const drift = Math.abs(eye.x - from.x) + Math.abs(eye.y - from.y) + Math.abs(eye.z - from.z);
-    if (drift >= PortalManager.SMALL_PANEL_DRIFT) return false;
+    if (stepBetween(eye, view._writtenFrom) >= PortalManager.SMALL_PANEL_DRIFT) return false;
+    // ...and so must the picture before it, where the panel's own door shows
+    // in its picture (see _wrote): back on screen, it draws twice running
+    if (!view._settled) return false;
     // Grown past its picture (approaching): re-render bigger, never soft
     if (!view.covers(footprint, renderer)) return false;
     // A creature in view always moves at full frame rate, however small
@@ -761,6 +789,18 @@ class PortalManager {
 
   /** Record a pass that drew `view` for `writer` from `eye` (_restsThisFrame). */
   _wrote(view, writer, eye) {
+    // A door into its own area can show itself in its picture, where the
+    // pass copies the picture the panel showed (the double-buffered
+    // cascade): that copy is right only once the picture before was this
+    // writer's too, recent and from nearby. Resting on its first draw back
+    // on screen kept the stale rotor's straight-on picture (or one from
+    // before the eye looked away) inside its door-in-a-door two more frames.
+    // A door into another area draws a scene its panels aren't in
+    view._settled =
+      view.neighborArea !== view.gate.area ||
+      (view._writer === writer &&
+        this._frameId - view._freshFrame <= PortalManager.SMALL_PANEL_EVERY &&
+        stepBetween(eye, view._writtenFrom) < PortalManager.SMALL_PANEL_DRIFT);
     view._freshFrame = this._frameId;
     view._writer = writer;
     if (!view._writtenFrom) view._writtenFrom = { x: 0, y: 0, z: 0 };
@@ -769,24 +809,41 @@ class PortalManager {
     view._writtenFrom.z = eye.z;
   }
 
+  // A straight-on warm-up's picture shows only through other doors' panels
+  // (a first write ahead of the pass that draws it, the stale rotor), until
+  // a pass for an eye that sees it replaces it — and far smaller than its
+  // stand-in eye sees the panel: with every door of The Star open, standing,
+  // walking, turning and flicking at each door, the biggest any chain
+  // showed was 55 px, where that eye sees the panel at ~213 (bench,
+  // 2026-10-18). Half that eye's texels is twice the biggest, as any pass
+  // draws (PortalView's SUPERSAMPLE): 256x256 targets became 128x128, The
+  // Star's 80 rotor-only ones 30 MiB -> 7.5
+  static STAND_IN_SUPERSAMPLE = 0.5;
+
   /**
    * Seed or refresh a face's buffers with one straight-on render (an eye
    * 1.5 cells out from the face, at head height) so a portal pass sampling
    * it never reads an unwritten black target — or a frozen-in-time one.
    * Bare eye: no frustum cull applies. Its target is sized for what it
-   * draws — the panel as that eye sees it through the player's lens.
+   * draws — the panel as that eye sees it through the player's lens, at
+   * STAND_IN_SUPERSAMPLE: the eye only stands in for the passes that see
+   * the picture, through other doors' panels.
    */
   _warmUpView(view, gate, facing, renderer) {
     const v = FACING_VECTORS[facing];
     const lens = this._playerCamera;
-    view.render(renderer, {
-      position: {
-        x: gate.position.x + v.x * WORLD_SCALE * 1.5,
-        y: gate.position.y + 1.8,
-        z: gate.position.z + v.z * WORLD_SCALE * 1.5,
+    view.render(
+      renderer,
+      {
+        position: {
+          x: gate.position.x + v.x * WORLD_SCALE * 1.5,
+          y: gate.position.y + 1.8,
+          z: gate.position.z + v.z * WORLD_SCALE * 1.5,
+        },
+        pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
       },
-      pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
-    });
+      { supersample: PortalManager.STAND_IN_SUPERSAMPLE }
+    );
     view._freshFrame = this._frameId;
     view._writer = null;
   }
@@ -1617,6 +1674,7 @@ class PortalManager {
         // Same task as the build: complete the moment it is registered
         this._areas.set(puzzleId, area);
         this._rebuildDoors();
+        this._unwarmed.push(area);
       })
       .catch(() => {
         // Missing neighbor: crossing will retry the fetch and no-op on failure
@@ -1628,6 +1686,76 @@ class PortalManager {
       this._retained.has(puzzleId) ||
       this._linkedGates.some((g) => g.link && g.link.puzzleId === puzzleId)
     );
+  }
+
+  // How many of a neighbour's pieces one warm-up step draws
+  static WARM_PIECES_PER_STEP = 8;
+
+  /**
+   * Hand a neighbour built in idle time to the GPU in idle time too, a few
+   * pieces a step, ahead of any door into it opening: three uploads an
+   * object's buffers (and makes its vertex arrays, readies its material) on
+   * the first draw that shows it, and the first pass through a door into
+   * The Star drew all of it in that door's opening frame (VIII -> IX at 4x
+   * CPU: 16.7 ms in renderPortals, 2.8 steady; measured 2026-10-18). Each
+   * step draws the area's scene with every piece but its own few hidden,
+   * into a 1x1 scene target in the pass context every door pass shares (so
+   * the programs and vertex arrays it readies are theirs), and shows the
+   * rest again before it returns: no frame runs in between. A door opening
+   * first just finds less to do.
+   */
+  _warmInIdleTime(area, renderer) {
+    const generation = this._generation;
+    const pieces = [...area.group.children];
+    const steps = [];
+    for (let i = 0; i < pieces.length; i += PortalManager.WARM_PIECES_PER_STEP) {
+      const few = new Set(pieces.slice(i, i + PortalManager.WARM_PIECES_PER_STEP));
+      steps.push(() => this._warmPieces(area, few, renderer));
+    }
+    // Only while it is still a neighbour of this world: the main view draws
+    // an active area
+    const stillNeighbor = () =>
+      generation === this._generation &&
+      this._areas.get(area.id) === area &&
+      area !== this._activeArea;
+    runInIdleSlices(steps, stillNeighbor).catch(() => {
+      // A renderer that can't draw now (a lost context): the door's own
+      // first pass uploads instead, as it always did
+    });
+  }
+
+  /**
+   * One warm-up step (_warmInIdleTime): draw `few` of `area`'s pieces, from
+   * each of WARM_EYES.
+   */
+  _warmPieces(area, few, renderer) {
+    if (!this._warmCamera) {
+      const span = 1e4; // every piece in view: frustum culling keeps them all
+      this._warmCamera = new THREE.OrthographicCamera(-span, span, span, -span, -span, span);
+      this._warmTarget = createSceneTarget(1, 1);
+    }
+    const target = renderer.getRenderTarget();
+    const planes = renderer.clippingPlanes;
+    const hidden = [];
+    for (const piece of area.group.children) {
+      if (piece.visible && !few.has(piece)) {
+        piece.visible = false;
+        hidden.push(piece);
+      }
+    }
+    try {
+      renderer.setRenderTarget(this._warmTarget);
+      renderer.clippingPlanes = NO_CLIP_PLANES;
+      updateSceneMatrices(area.scene);
+      for (const { x, y, z } of WARM_EYES) {
+        this._warmCamera.position.set(x, y, z);
+        renderer.render(area.scene, this._warmCamera);
+      }
+    } finally {
+      renderer.setRenderTarget(target);
+      renderer.clippingPlanes = planes;
+      for (const piece of hidden) piece.visible = true;
+    }
   }
 
   /**
