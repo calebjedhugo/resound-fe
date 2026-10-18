@@ -278,12 +278,12 @@ instead of "fixing" it.
   eyes borrow the player's look and lens (`eye.pose`); a straight-on warm-up
   (first write, stale rotor) shows only through other doors' panels, far
   smaller than its stand-in eye sees it: half that eye's texels
-  (`STAND_IN_SUPERSAMPLE`).
-  A panel under `SMALL_PANEL_SHARE` (1%) of the screen
-  re-renders one frame in three (`_restsThisFrame`) — never while a
+  (`STAND_IN_SUPERSAMPLE`). A panel under `SMALL_PANEL_SHARE` (1%) of the
+  screen re-renders one frame in three (`_restsThisFrame`) — never while a
   creature shows through it, after an eye jump, or when its picture is
-  another eye's, old, or outgrown, or was drawn over such a picture (its
-  door-in-a-door copies it: back on screen it draws twice running)
+  another eye's, old, or outgrown, or (a door into its own area) was drawn
+  over such a picture (its door-in-a-door copies it: back on screen it
+  draws twice running)
 - **Doorway sound**: cross-seam audio = listener→gate + partner-gate→source
   (the SOURCE's range rules); closed doors leak (`CLOSED_DOOR_LEAK_DISTANCE`).
   A linked pair is ONE door: same song, mirrored open state, and SHARED EARS
