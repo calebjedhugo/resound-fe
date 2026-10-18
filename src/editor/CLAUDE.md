@@ -14,7 +14,9 @@ Files (`ui/` + `model/`):
   Container + song JSON in, edited song out via `onChange`. Keyboard input
   draws once per animation frame and only what changed (`_flushRender`): an
   edit re-engraves, a selection/cursor/voice move redraws only the overlay
-  (`_drawSelection`), any other key draws nothing.
+  (`_drawSelection`), any other key draws nothing. A staff resize re-engraves
+  through the same path: the editor owns the ResizeObserver; the renderer's
+  is OFF (`observeContainer: false` — it re-engraved without the overlay).
 - **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
 - **RhythmPalette.js** — duration selector (renders note icons via `resound-notation/components/Note`).
 - **staffCoords.js** — reverse pitch mapping (click Y → pitch) via `resound-notation/lib/notePositions`.
@@ -71,7 +73,12 @@ edits show up in the game on a manual reload.
   `UndoManager.setOnChange(...)` (wired in `EditorApp.init`). No per-panel
   wiring. Skipped when the puzzle has no valid `id` yet (new puzzles need an ID
   first). Loading a level replaces the model *directly* (bypassing the mutation
-  wrappers), so opening a level never writes it back.
+  wrappers), so opening a level never writes it back. **A pending autosave is
+  FLUSHED before anything replaces the model** (`_applyRestoredModel`), and
+  git actions and the picker's reads/deletes first wait for it to land
+  (`_settleAutoSave`): left to its timer it wrote the NEWLY opened puzzle and
+  dropped the old one's last edit. A save landing after a swap leaves the
+  open puzzle's id lock, picker selection and status alone.
 - **Dev endpoint** — `POST /api/puzzles/:id` is a Vite `configureServer`
   middleware in `vite.config.js` (dev-only; validates the id, matches body id,
   writes pretty-printed JSON). Browsers can't write repo files, so this bridge

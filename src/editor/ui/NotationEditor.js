@@ -11,7 +11,8 @@
  *
  * Keyboard input renders at most once per animation frame, and only what
  * changed: an edit re-renders the score, a selection/cursor/voice move only
- * redraws the overlay, any other key draws nothing.
+ * redraws the overlay, any other key draws nothing. A change of the staff's
+ * width re-renders the same way (the editor observes it, not the renderer).
  *
  * Consumers hand over a container and a song, and receive edited songs back
  * through `onChange`. They never touch notation internals.
@@ -135,6 +136,9 @@ export default class NotationEditor {
     this._shownView = null; // the selection/cursor/voice the overlay shows
     this._cursorLine = null;
     this._renderFrameId = null; // pending keyboard render
+    this._engravedWidth = 0; // the staff's width when it was last engraved
+    this._resized = false; // its width changed since then
+    this._resizeObserver = null;
 
     this._isGrandStaff = staffGroups.length > 0 && staffGroups.some((g) => g.type === 'brace');
 
@@ -246,9 +250,16 @@ export default class NotationEditor {
     this._staffEl.tabIndex = 0; // focusable for keyboard input
     this._container.appendChild(this._staffEl);
 
-    this._renderer = new NotationRenderer({ container: this._staffEl, scale: this._scale });
+    // The staff's width is observed here, not by the renderer: its own
+    // observer re-engraves without the overlay (see _observeStaffWidth).
+    this._renderer = new NotationRenderer({
+      container: this._staffEl,
+      scale: this._scale,
+      observeContainer: false,
+    });
 
     this._renderStaff();
+    this._observeStaffWidth();
 
     this._staffEl.addEventListener('click', (e) => this._handleStaffClick(e));
     this._staffEl.addEventListener('keydown', (e) => this._handleKeyDown(e));
@@ -299,6 +310,9 @@ export default class NotationEditor {
   /** Engrave the score now (and drop any pending keyboard render). */
   _renderStaff() {
     this._cancelRenderFrame();
+    // The renderer fits each engraving to the staff's width at the time.
+    this._engravedWidth = this._staffEl.clientWidth;
+    this._resized = false;
     this._renderer.render(this._buildRenderJSON());
     this._renderedRevision = this._revision;
     const svg = this._renderer.getSvgElement();
@@ -328,18 +342,36 @@ export default class NotationEditor {
 
   /**
    * Bring the staff up to date now, doing only what changed: re-engrave after
-   * an edit (or when the renderer replaced its own SVG, e.g. on a container
-   * resize, which drops the overlay), redraw the overlay after a
+   * an edit or a change of the staff's width, redraw the overlay after a
    * selection/cursor/voice move, nothing otherwise.
    */
   _flushRender() {
     this._cancelRenderFrame();
     const svg = this._renderer.getSvgElement();
-    if (!svg || svg !== this._decoratedSvg || this._revision !== this._renderedRevision) {
+    if (!svg || this._resized || this._revision !== this._renderedRevision) {
       this._renderStaff();
     } else if (this._viewKey() !== this._shownView) {
       this._drawSelection();
     }
+  }
+
+  /**
+   * Re-engrave when the staff's width changes. The renderer's own observer
+   * re-engraved WITHOUT the overlay — the selection and cursor vanished and
+   * a click on a note appended one, until the next key — so the editor
+   * watches the width itself and re-engraves through the keyboard path:
+   * decorated, at most once a frame. A change under 2 px is observer noise
+   * (sub-pixel layout jitter), skipped as the renderer skipped it.
+   */
+  _observeStaffWidth() {
+    if (typeof ResizeObserver === 'undefined') return;
+    this._resizeObserver = new ResizeObserver(() => {
+      const width = this._staffEl.clientWidth;
+      if (!width || Math.abs(width - this._engravedWidth) < 2) return;
+      this._resized = true;
+      this._requestRender();
+    });
+    this._resizeObserver.observe(this._staffEl);
   }
 
   _cancelRenderFrame() {
@@ -713,6 +745,7 @@ export default class NotationEditor {
   dispose() {
     this.stop();
     this._cancelRenderFrame();
+    if (this._resizeObserver) this._resizeObserver.disconnect();
     if (this._renderer) this._renderer.clear();
     if (this._container) this._container.innerHTML = '';
   }
