@@ -12,7 +12,10 @@ const DEFAULT_PLAYBACK_RANGE = 15;
  * PlaybackManager - Handles playback of recorded songs from inventory
  */
 class PlaybackManager {
-  static playerInstrument = new Piano('player');
+  // The tape replays creature notes, which carry no velocity, so the piano
+  // strikes them all at its default 0.7: the one velocity layer to render.
+  // warm() (core/AudioPrewarm) renders every layer, and the default is four.
+  static playerInstrument = new Piano('player', { layers: [0.7] });
   static isPlaying = false;
   static playbackSourceRange = DEFAULT_PLAYBACK_RANGE;
 
@@ -22,9 +25,18 @@ class PlaybackManager {
   static lastPlaybackStartMs = 0;
   static lastPlaybackEndMs = 0;
 
+  // The performance in flight's start and end timers (reset cancels them)
+  static startTimer = null;
+  static endTimer = null;
+
   // Set up note callback to emit to ListeningManager and track current note
   static {
     this.playerInstrument.noteCallback = (noteEvent) => {
+      // A stopped performance still sounds the one note it was waiting on
+      // (resound-sound's stop() lets it out); reset muted it, and it must
+      // not reach the next world's listeners either
+      if (!this.playerInstrument.playbackState.isPlaying) return;
+
       // Track current note for harmony analysis
       this.playerInstrument.currentNote = noteEvent;
 
@@ -91,9 +103,19 @@ class PlaybackManager {
   }
 
   /**
-   * Reset playback state (level change / reset).
+   * Reset playback state (level change / reset): a performance under way, or
+   * still waiting for its beat, stops here instead of playing on into the
+   * next world.
    */
   static reset() {
+    clearTimeout(this.startTimer);
+    clearTimeout(this.endTimer);
+    this.startTimer = null;
+    this.endTimer = null;
+    this.playerInstrument.stop();
+    // Silences the note stop() still lets out; the next performance turns
+    // it back up as it starts
+    this.playerInstrument.updateVolume(0);
     this.isPlaying = false;
   }
 
@@ -140,7 +162,9 @@ class PlaybackManager {
     this.lastPlaybackStartMs = Date.now() + startDelay;
 
     // Wait for startDelay, then begin playback
-    setTimeout(() => {
+    this.startTimer = setTimeout(() => {
+      this.startTimer = null;
+      this.playerInstrument.updateVolume(1); // a reset muted it
       // Play the song (offsets already injected into songData)
       this.playerInstrument.play({
         data: songData,
@@ -153,7 +177,8 @@ class PlaybackManager {
     const totalDuration = this.calculateSongDuration(songData, tempo);
     const pos = { ...gameState.player.position };
     const range = this.playbackSourceRange;
-    setTimeout(() => {
+    this.endTimer = setTimeout(() => {
+      this.endTimer = null;
       this.isPlaying = false;
       this.lastPlaybackEndMs = Date.now();
 

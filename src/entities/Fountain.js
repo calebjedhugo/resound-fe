@@ -186,14 +186,15 @@ class Fountain extends Entity {
 
     // Mute all other sounds IN OUR AREA so the fountain plays alone (a
     // neighbor fountain latching behind a doorway must not silence the
-    // player's area)
+    // player's area). Creatures set their volume every frame, so they hold
+    // the hush themselves while hushCount > 0; the rest get theirs back.
     const areaEntities = this.area ? this.area.entities : gameState.entities;
+    const hushed = areaEntities.filter((entity) => entity.instrument && entity.id !== this.id);
     const savedVolumes = new Map();
-    areaEntities.forEach((entity) => {
-      if (entity.instrument && entity.id !== this.id) {
-        savedVolumes.set(entity.id, entity.instrument.volume);
-        entity.instrument.updateVolume(0);
-      }
+    hushed.forEach((entity) => {
+      savedVolumes.set(entity, entity.instrument.volumeMultiplier);
+      entity.hushCount = (entity.hushCount || 0) + 1;
+      entity.instrument.updateVolume(0);
     });
 
     // Play the solution song with Fountain instrument (flatten voices format for playback)
@@ -203,12 +204,10 @@ class Fountain extends Entity {
       basis: 4,
     });
 
-    // Restore creature volumes
-    savedVolumes.forEach((volume, entityId) => {
-      const entity = areaEntities.find((e) => e.id === entityId);
-      if (entity && entity.instrument) {
-        entity.instrument.updateVolume(volume);
-      }
+    // Restore their volumes (a creature's next frame sets its own)
+    savedVolumes.forEach((volume, entity) => {
+      entity.hushCount -= 1;
+      if (entity.hushCount === 0) entity.instrument.updateVolume(volume);
     });
 
     // Mark OUR puzzle as complete (a fountain always completes the puzzle it

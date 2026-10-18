@@ -112,6 +112,11 @@ instead of "fixing" it.
 ### Web Audio
 - AudioContext must be resumed on user interaction (handled in main.js)
 - Don't create oscillators until needed (memory leak if not stopped)
+- **Audio is built ahead** (`core/AudioPrewarm`, from `PuzzleLoader.buildArea`):
+  every area's creature voices (`Random.warm`) and creature pitches for the
+  tape's piano (the tape only holds creature notes; one velocity layer, 0.7).
+  Flat out while the StartGate is up, else only in idle periods with room
+  for the job — an unwarmed note still plays, built lazily
 
 ### Musical Timing
 - **NEVER use `Date.now()` or `performance.now()` for music** - always use MusicalClock
