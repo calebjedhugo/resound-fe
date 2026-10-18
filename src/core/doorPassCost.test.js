@@ -338,6 +338,27 @@ describe('A small panel re-renders one frame in three', () => {
     }
   });
 
+  it('a door into another area keeps its beat from the second frame back (it never shows itself)', async () => {
+    const door = await openPortalA();
+    const renderer = createRecordingRenderer();
+    const eye = eyeAt(DOOR.x, 9 * WORLD_SCALE);
+    drawFrame(renderer, eye);
+    const panel = panelOf(door, 'south');
+
+    // Back three times, five frames apart: the second frame back lands on
+    // each beat once, and rests on the two that aren't its own
+    let rested = 0;
+    for (let back = 0; back < 3; back += 1) {
+      eye.quaternion = LOOK_SOUTH;
+      for (let i = 0; i < 3; i += 1) drawFrame(renderer, eye);
+      eye.quaternion = LOOK_NORTH;
+      drawFrame(renderer, eye);
+      drawFrame(renderer, eye);
+      if (renderer.writesOf(panel).length === 0) rested += 1;
+    }
+    expect(rested).toBe(2);
+  });
+
   /**
    * P1 seen from far down its own line (under 1% of the screen): looking
    * north into it shows the view north out of P2 — P1 itself, so P1's

@@ -789,16 +789,18 @@ class PortalManager {
 
   /** Record a pass that drew `view` for `writer` from `eye` (_restsThisFrame). */
   _wrote(view, writer, eye) {
-    // A panel's picture can show its own door, where the pass copies the
-    // picture the panel showed (the double-buffered cascade): that copy is
-    // right only once the picture before was this writer's too, recent and
-    // from nearby. Resting on its first draw back on screen kept the stale
-    // rotor's straight-on picture (or one from before the eye looked away)
-    // inside its door-in-a-door two more frames
+    // A door into its own area can show itself in its picture, where the
+    // pass copies the picture the panel showed (the double-buffered
+    // cascade): that copy is right only once the picture before was this
+    // writer's too, recent and from nearby. Resting on its first draw back
+    // on screen kept the stale rotor's straight-on picture (or one from
+    // before the eye looked away) inside its door-in-a-door two more frames.
+    // A door into another area draws a scene its panels aren't in
     view._settled =
-      view._writer === writer &&
-      this._frameId - view._freshFrame <= PortalManager.SMALL_PANEL_EVERY &&
-      stepBetween(eye, view._writtenFrom) < PortalManager.SMALL_PANEL_DRIFT;
+      view.neighborArea !== view.gate.area ||
+      (view._writer === writer &&
+        this._frameId - view._freshFrame <= PortalManager.SMALL_PANEL_EVERY &&
+        stepBetween(eye, view._writtenFrom) < PortalManager.SMALL_PANEL_DRIFT);
     view._freshFrame = this._frameId;
     view._writer = writer;
     if (!view._writtenFrom) view._writtenFrom = { x: 0, y: 0, z: 0 };
