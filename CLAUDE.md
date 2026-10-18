@@ -123,7 +123,9 @@ instead of "fixing" it.
 - **A Random voice is ~0.6 MB** of Chrome wavetable per (creature, pitch),
   ~2.8 MB at 96 kHz (measured 2026-10-17): `Creature.dispose` calls
   `instrument.dispose()` (not `stop()`), which frees them and lets no
-  straggler note out of a song in progress
+  straggler note out of a song in progress; `Fountain.dispose` too (its song
+  never outlives its area). A fountain's song hushes its area's creatures,
+  never another fountain
 
 ### Musical Timing
 - **NEVER use `Date.now()` or `performance.now()` for music** - always use MusicalClock

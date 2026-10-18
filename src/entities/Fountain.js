@@ -185,12 +185,13 @@ class Fountain extends Entity {
     this.mesh.material.emissiveIntensity = 1.0; // Bright glow
     this.mesh.material.needsUpdate = true; // Force material update
 
-    // Mute all other sounds IN OUR AREA so the fountain plays alone (a
-    // neighbor fountain latching behind a doorway must not silence the
-    // player's area). Creatures set their volume every frame, so they hold
-    // the hush themselves while hushCount > 0; the rest get theirs back.
+    // Hush the creatures IN OUR AREA so the fountain plays alone (a neighbor
+    // fountain latching behind a doorway must not silence the player's
+    // area). Not other fountains: one only sounds in its own activate(), so
+    // hushing it would only silence its song. Creatures set their volume
+    // every frame, so they hold the hush themselves while hushCount > 0.
     const areaEntities = this.area ? this.area.entities : gameState.entities;
-    const hushed = areaEntities.filter((entity) => entity.instrument && entity.id !== this.id);
+    const hushed = areaEntities.filter((entity) => entity.type === 'creature');
     const savedVolumes = new Map();
     hushed.forEach((entity) => {
       savedVolumes.set(entity, entity.instrument.volumeMultiplier);
@@ -198,18 +199,21 @@ class Fountain extends Entity {
       entity.instrument.updateVolume(0);
     });
 
-    // Play the solution song with Fountain instrument (flatten voices format for playback)
-    await this.instrument.play({
-      data: SongMatcher.flattenSong(this.requiredSong),
-      tempo: gameState.musicalClock?.tempo || 120,
-      basis: 4,
-    });
-
-    // Restore their volumes (a creature's next frame sets its own)
-    savedVolumes.forEach((volume, entity) => {
-      entity.hushCount -= 1;
-      if (entity.hushCount === 0) entity.instrument.updateVolume(volume);
-    });
+    try {
+      // Play the solution song with Fountain instrument (flatten voices format for playback)
+      await this.instrument.play({
+        data: SongMatcher.flattenSong(this.requiredSong),
+        tempo: gameState.musicalClock?.tempo || 120,
+        basis: 4,
+      });
+    } finally {
+      // Restore their volumes (a creature's next frame sets its own), even
+      // after a song that failed: a stuck hushCount hushes them for good
+      savedVolumes.forEach((volume, entity) => {
+        entity.hushCount -= 1;
+        if (entity.hushCount === 0) entity.instrument.updateVolume(volume);
+      });
+    }
 
     // Mark OUR puzzle as complete (a fountain always completes the puzzle it
     // lives in, even when activated through a doorway) — but only pause the
@@ -226,6 +230,11 @@ class Fountain extends Entity {
   }
 
   dispose() {
+    // A song still playing goes with the fountain (a stop() would let one
+    // more note of it out)
+    if (this.instrument) {
+      this.instrument.dispose();
+    }
     if (this.notationDisplay) {
       this.notationDisplay.dispose();
     }

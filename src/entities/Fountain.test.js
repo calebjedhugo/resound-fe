@@ -5,6 +5,7 @@
  * fountain's song inside the first frame; these tests run world frames
  * directly and step the timers between them to look in mid-song.
  */
+import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
 
 const frame = () => PortalManager.updateAreas(0.016);
@@ -40,19 +41,64 @@ describe('A fountain playing its song', () => {
     expect(creature.instrument.volumeMultiplier).toBe(heard);
   });
 
-  it('gives a silenced fountain its volume back', async () => {
-    const other = ctx.addFountain({
+  it('lets a second fountain sing over the first: neither silences the other', async () => {
+    const longer = ctx.addFountain({
       position: { x: 2, y: 0, z: 2 },
-      song: [{ pitch: 'E4', length: '1/4' }],
+      song: [{ pitch: 'E4', length: '1/1' }], // 2 s
     });
-    expect(other.instrument.volumeMultiplier).toBe(1);
+    const started = [];
+    [fountain, longer].forEach(({ instrument }) => {
+      const startNote = instrument.startNote.bind(instrument);
+      jest.spyOn(instrument, 'startNote').mockImplementation((pitch, ...rest) => {
+        started.push({ pitch, volume: instrument.volumeMultiplier });
+        startNote(pitch, ...rest);
+      });
+    });
 
-    const song = fountain.activate();
-    expect(other.instrument.volumeMultiplier).toBe(0);
-    await jest.advanceTimersByTimeAsync(1000);
+    const first = longer.activate();
+    await jest.advanceTimersByTimeAsync(250); // into its whole note
+    const second = fountain.activate();
+    expect(longer.instrument.volumeMultiplier).toBe(1); // not cut off
+
+    await jest.advanceTimersByTimeAsync(3000);
+    await Promise.all([first, second]);
+    expect(started).toEqual([
+      { pitch: 'E4', volume: 1 },
+      { pitch: 'C4', volume: 1 },
+    ]);
+  });
+
+  it('gives the creatures their volume back even when its song fails', async () => {
+    const heard = creature.instrument.volumeMultiplier;
+    // A listener that throws on the song's first note fails the playback
+    ListeningManager.registerListener({
+      onNoteCaptured() {
+        throw new Error('listener failed');
+      },
+    });
+
+    await expect(fountain.activate()).rejects.toThrow('listener failed');
+    frame();
+    expect(creature.instrument.volumeMultiplier).toBe(heard);
+  });
+
+  it('takes its song with it when its area goes', async () => {
+    const singer = ctx.addFountain({
+      position: { x: 2, y: 0, z: 2 },
+      song: [
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'F4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ],
+    });
+    ctx.clearEmittedNotes();
+    const song = singer.activate();
+
+    ctx.loadPuzzle('listening-fountain-basic'); // a new world: this one goes
+    await jest.advanceTimersByTimeAsync(2000);
     await song;
 
-    expect(other.instrument.volumeMultiplier).toBe(1);
+    expect(ctx.getEmittedNotes().map((n) => n.pitch)).toEqual(['E4']);
   });
 
   it('keeps a creature hushed until the LAST of two fountains has finished', async () => {
