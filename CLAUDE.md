@@ -389,8 +389,9 @@ instead of "fixing" it.
   so every key listener just works — map new pad actions to a key, don't
   teach listeners about pads. Sticks are analog `gameState.input.stick`
   (exactly 0 at rest, so motion's at-rest skip holds), rest outside play.
-  A pad press is NO user activation: the StartGate wakes on one only with
-  audio running (`_wakeFromPad`); never let it drop into a silent world
+  A pad press is NO user activation, nor is Esc (HTML spec): the StartGate
+  wakes on either only with audio running (`_wakeIntoSound`); never let it
+  drop into a silent world
 - Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
   `syncCameraToPlayer` for scripted browser verification (reposition +
   screenshot), `setTapImpulse(true)` to re-enable the tap-impulse

@@ -10,7 +10,8 @@
  * user-interaction requirement before any audio plays. With nothing moving,
  * it is also when the world's audio is built ahead (core/AudioPrewarm).
  *
- * A controller button wakes it only into a world with sound (_wakeFromPad).
+ * A controller button or Esc wakes it only into a world with sound
+ * (_wakeIntoSound).
  */
 import { audioContextManager } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
@@ -79,7 +80,7 @@ class StartGate {
     this.dismissHandler = (event) => {
       event.stopPropagation();
       if (!this.wakeable || (event.type !== 'keydown' && event.type !== 'click')) return;
-      if (event.fromGamepad) this._wakeFromPad();
+      if (event.fromGamepad || event.code === 'Escape') this._wakeIntoSound();
       else this.hide();
     };
     window.addEventListener('keydown', this.dismissHandler, true);
@@ -88,15 +89,15 @@ class StartGate {
   }
 
   /**
-   * A controller button (core/Gamepad) while the world can wake. Browsers
-   * don't count a pad press as the user activation that lets audio start,
-   * so a gate it dropped could leave the world silent: it wakes the world
-   * only with audio running, already (an earlier gate's gesture started
-   * it) or once the resume it asks for starts it (a page already clicked
-   * or keyed may). Otherwise the gate stays up for a key or a click, and
-   * says so.
+   * A controller button (core/Gamepad) or Esc while the world can wake.
+   * Browsers count neither as the user activation that lets audio start
+   * (the HTML spec leaves Esc out), so a gate one dropped could leave the
+   * world silent: it wakes the world only with audio running, already (an
+   * earlier gate's gesture started it) or once the resume it asks for
+   * starts it (a page already clicked or keyed may). Otherwise the gate
+   * stays up for a key or a click, and says so.
    */
-  _wakeFromPad() {
+  _wakeIntoSound() {
     const context = audioContextManager.getContext();
     if (context.state === 'running') {
       this.hide();

@@ -252,8 +252,8 @@ automated playtesters can observe them.)
   Options = Esc; any other button is an unbound key (it still wakes the
   start gate and dismisses the ending card). A held key drives its axis
   alone (stick + key never doubles the speed). Browsers don't count a pad
-  press as the gesture that unlocks audio, so a pad press wakes the start
-  gate only into a world with sound; on a fresh page the gate stays up and
+  press (or Esc) as the gesture that unlocks audio, so either wakes the
+  start gate only into a world with sound; on a fresh page the gate stays up and
   shows its one line, "press a key or click to start sound" — settings
   feedback like the mouse-look toast, not gameplay words. The key hints
   still show keyboard glyphs.
