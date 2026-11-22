@@ -11,6 +11,13 @@ class PauseMenu extends Menu {
     this.onNextPuzzle = onNextPuzzle;
   }
 
+  /** Backing out of pause resumes. */
+  back() {
+    if (this.onContinue) {
+      this.onContinue();
+    }
+  }
+
   render() {
     this.clear();
 

@@ -46,6 +46,12 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
     }
   };
 
+  // The world's actions answer only in play: in a menu (paused, the main
+  // menu) Space and C are the menu's, to choose and to back out (ui/Menu),
+  // and nothing should act behind it. Held keys still track, so a key let
+  // go of in a menu is up when play resumes.
+  const acting = value && gameState.mode === 'PLAYING';
+
   switch (code) {
     case 'KeyA':
       press('latLeft');
@@ -86,7 +92,7 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
       break;
     case 'Space':
       // Perform the whole tape (all filled slots, concatenated)
-      if (value) {
+      if (acting) {
         PlaybackManager.playTape();
       }
       break;
@@ -94,7 +100,7 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
       // Hybrid recording control: a tap toggles recording on/off; a long
       // hold records while held and stops on release.
       if (value) {
-        if (repeat) break;
+        if (repeat || !acting) break;
         if (!RecordingManager.isRecording()) {
           RecordingManager.startRecording();
           recordStartedAt = Date.now();
@@ -110,25 +116,25 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
       break;
     case 'ArrowLeft':
       // Tape cursor left
-      if (value) {
+      if (acting) {
         Tape.left();
       }
       break;
     case 'ArrowRight':
       // Tape cursor right; on a filled last slot this appends a new one
-      if (value) {
+      if (acting) {
         Tape.right();
       }
       break;
     case 'KeyC':
       // Clap (quantized to 16th notes)
-      if (value) {
+      if (acting) {
         ClapManager.requestClap();
       }
       break;
     case 'KeyG':
       // Deployable cleanser gate: aim -> deploy -> remove (core/DeployManager)
-      if (value && !repeat) {
+      if (acting && !repeat) {
         DeployManager.toggle();
       }
       break;

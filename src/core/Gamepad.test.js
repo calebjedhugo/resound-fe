@@ -3,7 +3,8 @@
  * The game controller (core/Gamepad), polled once a frame. Its buttons are
  * the keys they stand for: each press goes out once as its key's keydown and
  * each release as its keyup, so the game's own key listeners act on them
- * (the tape, recording, claps, the cleanser gate, the ending card). Its
+ * (the tape, recording, claps, the cleanser gate, the ending card; the
+ * menus: see ui/Menu.test.js). Its
  * sticks are analog (walking and looking: see motion.test.js) and rest
  * outside play. A pad that leaves lets go of everything it held. The start
  * gate wakes on a pad press only into a world with sound: a pad press is no
@@ -33,6 +34,8 @@ const R2 = 7;
 const SHARE = 8;
 const OPTIONS = 9;
 const L3 = 10;
+const DPAD_UP = 12;
+const DPAD_DOWN = 13;
 const DPAD_LEFT = 14;
 const DPAD_RIGHT = 15;
 
@@ -104,6 +107,8 @@ describe("A controller's buttons are the keys they stand for", () => {
     ['Triangle', TRIANGLE, 'KeyG'],
     ['L1', L1, 'ArrowLeft'],
     ['R1', R1, 'ArrowRight'],
+    ['the d-pad up', DPAD_UP, 'ArrowUp'],
+    ['the d-pad down', DPAD_DOWN, 'ArrowDown'],
     ['the d-pad left', DPAD_LEFT, 'ArrowLeft'],
     ['the d-pad right', DPAD_RIGHT, 'ArrowRight'],
     ['Options', OPTIONS, 'Escape'],

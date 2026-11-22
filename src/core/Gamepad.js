@@ -9,12 +9,13 @@ import gameState from 'core/GameState';
  * a radial dead zone, exactly 0 at rest, which motion.js (left: walk and
  * strafe) and CameraController (right: look) read beside the key flags.
  * Holding L2 runs; so does clicking L3, until the left stick comes back to
- * rest.
+ * rest. Outside play the sticks rest, but while a menu is open the left
+ * stick steps through it, pressing the d-pad's up/down keys (_step).
  *
  * The buttons stand in for keys: a press dispatches its key's keydown on
  * window and a release its keyup, so every listener (the actions, the key
- * hints, the ending card, pause) answers the controller without knowing it
- * exists. A button with no key of its own presses an unbound one, as any
+ * hints, the ending card, pause, the menus) answers the controller without
+ * knowing it exists. A button with no key of its own presses an unbound one, as any
  * other key would: it still wakes the StartGate and dismisses the ending
  * card. The events carry `fromGamepad`, for the StartGate: a pad press is no
  * user activation, so it can't be the gesture that lets audio start.
@@ -31,6 +32,8 @@ BUTTON_KEYS[3] = 'KeyG'; // Triangle: the cleanser gate (aim -> deploy -> remove
 BUTTON_KEYS[4] = 'ArrowLeft'; // L1: tape cursor left
 BUTTON_KEYS[5] = 'ArrowRight'; // R1: tape cursor right
 BUTTON_KEYS[9] = 'Escape'; // Options: pause / resume
+BUTTON_KEYS[12] = 'ArrowUp'; // d-pad up: the menus' focus up
+BUTTON_KEYS[13] = 'ArrowDown'; // d-pad down: the menus' focus down
 BUTTON_KEYS[14] = 'ArrowLeft'; // d-pad left
 BUTTON_KEYS[15] = 'ArrowRight'; // d-pad right
 const UNBOUND_KEY = 'Unidentified';
@@ -43,6 +46,15 @@ const L3 = 10;
 const DEAD_ZONE = 0.15;
 // The right stick's response: its tilt squared, so a small tilt aims finely
 const LOOK_CURVE = 2;
+
+// The left stick in a menu: tilted up or down past STEP_TILT it presses that
+// arrow, and held there presses it again after STEP_DELAY_MS, then every
+// STEP_REPEAT_MS, as a held key repeats. It lets go only below
+// STEP_RELEASE_TILT, so a stick wavering at the edge doesn't chatter.
+const STEP_TILT = 0.5;
+const STEP_RELEASE_TILT = 0.3;
+const STEP_DELAY_MS = 400;
+const STEP_REPEAT_MS = 150;
 
 /** An axis's reading; 0 for one this pad doesn't have. */
 const axis = (pad, index) => pad.axes[index] || 0;
@@ -79,8 +91,8 @@ const findPad = () => {
   return fallback;
 };
 
-const sendKey = (type, code) => {
-  const event = new KeyboardEvent(type, { code, repeat: false });
+const sendKey = (type, code, repeat = false) => {
+  const event = new KeyboardEvent(type, { code, repeat });
   event.fromGamepad = true;
   window.dispatchEvent(event);
 };
@@ -97,6 +109,12 @@ class Gamepad {
   // L3 was clicked and the left stick hasn't come back to rest since
   static _runLatched = false;
 
+  // The arrow the left stick holds down in a menu (null: none), and when it
+  // presses it again
+  static _stepKey = null;
+
+  static _stepAt = 0;
+
   /** Listen for pads coming and going (the game page only, once). */
   static initialize() {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
@@ -112,10 +130,11 @@ class Gamepad {
    * Read the pad: its buttons' presses and releases go out as keys, and its
    * sticks drive the player while the world is `awake` (playing, start gate
    * down). Otherwise the sticks rest, as no key moves the player behind the
-   * start gate either.
+   * start gate either; in a `menu` the left stick steps through it instead.
    * @param {boolean} awake
+   * @param {boolean} [menu] - a menu is open (and nothing in front of it)
    */
-  static poll(awake) {
+  static poll(awake, menu = false) {
     if (!this._connected) return;
     const pad = findPad();
     if (!pad) {
@@ -133,6 +152,7 @@ class Gamepad {
       }
     }
 
+    this._step(menu ? axis(pad, 1) : 0);
     const { stick } = gameState.input;
     if (!awake) {
       this._rest();
@@ -147,6 +167,32 @@ class Gamepad {
     stick.running = this._runLatched || !!this._down[L2];
   }
 
+  /**
+   * Step through a menu with the left stick: `y` is its vertical tilt
+   * (positive down, as the pad reports it; 0 lets go).
+   */
+  static _step(y) {
+    const held = this._stepKey;
+    let code = null;
+    if (y <= -STEP_TILT || (held === 'ArrowUp' && y < -STEP_RELEASE_TILT)) code = 'ArrowUp';
+    else if (y >= STEP_TILT || (held === 'ArrowDown' && y > STEP_RELEASE_TILT)) code = 'ArrowDown';
+
+    const now = performance.now();
+    if (code === held) {
+      if (code && now >= this._stepAt) {
+        sendKey('keydown', code, true);
+        this._stepAt = now + STEP_REPEAT_MS;
+      }
+      return;
+    }
+    if (held) sendKey('keyup', held);
+    this._stepKey = code;
+    if (code) {
+      sendKey('keydown', code);
+      this._stepAt = now + STEP_DELAY_MS;
+    }
+  }
+
   /** After a pad leaves: if none is left, let go of everything it held. */
   static _rescan() {
     this._connected = findPad() !== null;
@@ -157,6 +203,7 @@ class Gamepad {
         sendKey('keyup', BUTTON_KEYS[i] || UNBOUND_KEY);
       }
     }
+    this._step(0);
     this._rest();
   }
 

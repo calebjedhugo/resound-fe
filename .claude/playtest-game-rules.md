@@ -104,6 +104,7 @@ unlocks/activates it. Activating fountains completes the puzzle.
 | R | Recording toggle (tap on/tap off); long-hold = hold-to-record; records into the cursor slot |
 | Space | Perform the whole tape (all filled slots, in order) |
 | ←/→ | Move the tape cursor (→ on a filled last slot adds a new one) |
+| ↑/↓, Enter or Space, C | In a menu (pause, main): move the focus (wraps), choose, back out (resume) |
 | (clear the tape) | Walk over a pulsing **cleansing tile** — empties the whole tape (no delete key) |
 | C | Clap |
 | N | Metronome |
@@ -126,10 +127,12 @@ A game controller (PS4 DualShock 4, or any pad the browser maps to the
 | Triangle | Cleanser gate (G) |
 | L1 / R1, d-pad ←/→ | Tape cursor (←/→) |
 | Options | Pause / resume (Esc) |
+| D-pad ↑/↓, left stick ↑/↓ | In a menu: move the focus (↑/↓; the stick repeats while held) |
+| Cross / Circle in a menu | Choose (Space) / back out, resume from pause (C) |
 
 Any button wakes the start gate, but only into a world with sound: on a
-fresh page a pad press can't unlock audio, so the gate stays up and asks for
-a key or a click.
+fresh page a pad press (or Esc) can't unlock audio, so the gate stays up and
+asks for a key or a click.
 
 - **Movement/look are HELD-KEY for players** (2026-07-12): the camera
   moves/turns every frame a key is DOWN and stops exactly on release — no

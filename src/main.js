@@ -191,8 +191,12 @@ async function nextPuzzle() {
 // Game loop callbacks
 function update(deltaTime) {
   // The controller first: its buttons go out as their keys, and its sticks
-  // feed this frame's motion and look (render) while the world is awake
-  Gamepad.poll(gameState.mode === 'PLAYING' && !startGate.visible);
+  // feed this frame's motion and look (render) while the world is awake, or
+  // step through the menu that's open
+  Gamepad.poll(
+    gameState.mode === 'PLAYING' && !startGate.visible,
+    gameState.mode !== 'PLAYING' && !startGate.visible
+  );
   stateMachine.update(deltaTime);
   // The world holds still while the start gate is up: creatures don't sing
   // (a self-solving layout would otherwise complete silently before the

@@ -87,6 +87,16 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+/* The focused entry (the arrow keys, a controller's d-pad or left stick;
+   the mouse moves it too): the hover look, held, with a solid white ring */
+.puzzle-item:focus {
+  outline: 3px solid white;
+  outline-offset: 3px;
+  background: white;
+  transform: translateX(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .puzzle-name {
   font-size: 1.1rem;
   color: #333;
@@ -124,6 +134,14 @@ body {
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.menu-button:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.3);
+  border-color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .menu-button:active {

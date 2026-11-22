@@ -70,6 +70,7 @@ class MainMenu extends Menu {
   createPuzzleItem(puzzle) {
     const item = document.createElement('div');
     item.className = 'puzzle-item';
+    item.tabIndex = 0; // an entry the focus moves through (ui/Menu)
 
     const name = document.createElement('span');
     name.className = 'puzzle-name';

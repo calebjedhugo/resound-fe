@@ -388,10 +388,18 @@ instead of "fixing" it.
   Buttons dispatch SYNTHETIC keydown/keyup (`fromGamepad: true`) on window,
   so every key listener just works — map new pad actions to a key, don't
   teach listeners about pads. Sticks are analog `gameState.input.stick`
-  (exactly 0 at rest, so motion's at-rest skip holds), rest outside play.
+  (exactly 0 at rest, so motion's at-rest skip holds), rest outside play;
+  in a menu (`poll(awake, menu)`) the left stick presses ↑/↓ (repeating).
   A pad press is NO user activation, nor is Esc (HTML spec): the StartGate
   wakes on either only with audio running (`_wakeIntoSound`); never let it
   drop into a silent world
+- **Menus** (`ui/Menu.js`): entries = buttons + `[tabindex]`, real DOM
+  focus; ↑/↓ move it (wraps), Enter/Space click it, C = `back()` (pause:
+  resume). Pad = the same keys (d-pad ↑/↓ = ArrowUp/Down). World actions in
+  `createEventListeners` act only while PLAYING, so menu keys never fall
+  through; held-key flags still track (no stuck keys on resume). Menus
+  listen on window in the BUBBLE phase, so a StartGate in front (capture +
+  stopPropagation, e.g. loading the next puzzle) swallows their keys
 - Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
   `syncCameraToPlayer` for scripted browser verification (reposition +
   screenshot), `setTapImpulse(true)` to re-enable the tap-impulse
@@ -481,4 +489,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-22 — menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

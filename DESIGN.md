@@ -251,7 +251,16 @@ automated playtesters can observe them.)
   held), Circle = C, Triangle = G, L1/R1 and d-pad ←/→ = the tape cursor,
   Options = Esc; any other button is an unbound key (it still wakes the
   start gate and dismisses the ending card). A held key drives its axis
-  alone (stick + key never doubles the speed). Browsers don't count a pad
+  alone (stick + key never doubles the speed).
+  **Menus** (pause, main; 2026-11-22) play the same way, through keys: the
+  d-pad's ↑/↓ (keys ↑/↓) move a visible focus between the entries,
+  wrapping around at the ends, and the left stick steps it too (repeating
+  after 0.4 s held, then every 0.15 s); Cross (Space, Enter) chooses, Circle
+  (C) backs out (resumes from pause), Options (Esc) still toggles pause.
+  The focus starts on the first entry each time a menu opens and follows
+  the mouse. Nothing in the world answers while a menu is up (no tape, clap
+  or tape-cursor move behind it). The ending card's link stays mouse-only:
+  a pad press can't open a tab. Browsers don't count a pad
   press (or Esc) as the gesture that unlocks audio, so either wakes the
   start gate only into a world with sound; on a fresh page the gate stays up and
   shows its one line, "press a key or click to start sound" — settings
