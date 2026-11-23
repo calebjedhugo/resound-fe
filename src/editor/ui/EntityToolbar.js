@@ -38,6 +38,7 @@ export default class EntityToolbar {
     ];
 
     this._buttons = {};
+    this._order = tools.map((t) => t.type);
     tools.forEach(({ type, label: lbl, key, color }) => {
       const btn = document.createElement('button');
       btn.className = 'tool-btn';
@@ -63,6 +64,21 @@ export default class EntityToolbar {
       this._buttons[type].classList.add('active');
       this._onToolSelect(type);
     }
+  }
+
+  /**
+   * Step to the previous (-1) or next (+1) tool, wrapping (a controller's
+   * L1 / R1); from none, +1 is the first and -1 the last.
+   * @returns {string} the tool now chosen
+   */
+  cycle(step) {
+    const n = this._order.length;
+    const at = this._order.indexOf(this._activeTool);
+    let next;
+    if (at < 0) next = step > 0 ? 0 : n - 1;
+    else next = (at + step + n) % n;
+    if (this._order[next] !== this._activeTool) this._selectTool(this._order[next]);
+    return this._activeTool;
   }
 
   deselect() {

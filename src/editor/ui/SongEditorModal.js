@@ -13,6 +13,20 @@
 import NotationEditor from 'editor/ui/NotationEditor';
 import { Synth } from 'resound-sound';
 import { noteSeconds } from 'editor/audio/SongAudition';
+import { DURATIONS } from 'editor/ui/RhythmPalette';
+
+// The controller's song-editing actions -> the staff's own keys (NotationEditor)
+const PAD_KEYS = {
+  left: 'ArrowLeft', // edit cursor left
+  right: 'ArrowRight', // edit cursor right
+  up: '+', // the selected note a step up
+  down: '-', // ...a step down
+  delete: 'Delete', // remove the selected note
+  dot: '.', // dot / undot it
+  rest: 'r', // a rest of the chosen duration at the cursor
+  voice: 'Enter', // grand staff: the other staff
+};
+const ACCIDENTALS = ['#', 'b', 'n'];
 
 export default class SongEditorModal {
   /**
@@ -290,6 +304,61 @@ export default class SongEditorModal {
 
   dispose() {
     this.close();
+  }
+
+  /**
+   * A controller's song-editing action (editor/input/EditorGamepad): move
+   * the edit cursor (left/right), the selected note's pitch (up/down),
+   * insert a note of the chosen duration at the cursor (insert), delete,
+   * choose a shorter/longer duration (shorter/longer), dot, rest, cycle the
+   * selected note's accidental (accidental: sharp, flat, natural), switch
+   * staff (voice), play/stop (play), close. Each is the staff's own key or
+   * control, so it edits exactly as the keyboard and mouse do.
+   * @param {string} action
+   */
+  padAction(action) {
+    if (!this._isOpen || !this._notationEditor) return;
+    const staff = this._backdropEl.querySelector('.notation-staff');
+    const pressKey = (key) => {
+      if (staff) staff.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    };
+    if (PAD_KEYS[action]) {
+      pressKey(PAD_KEYS[action]);
+      return;
+    }
+    const rhythm = [...this._backdropEl.querySelectorAll('.rhythm-btn')];
+    const active = Math.max(
+      0,
+      rhythm.findIndex((b) => b.classList.contains('active'))
+    );
+    switch (action) {
+      case 'insert': {
+        const duration = DURATIONS.find((d) => d.length === rhythm[active]?.dataset.length);
+        pressKey((duration || DURATIONS[2]).key);
+        break;
+      }
+      case 'shorter':
+      case 'longer': {
+        // The palette runs whole -> 32nd: a shorter value is further along
+        const next = active + (action === 'shorter' ? 1 : -1);
+        if (rhythm[next]) rhythm[next].click();
+        break;
+      }
+      case 'accidental':
+        this._padAccidental = ((this._padAccidental ?? -1) + 1) % ACCIDENTALS.length;
+        pressKey(ACCIDENTALS[this._padAccidental]);
+        break;
+      case 'play':
+        if (this._notationEditor.isPlaying) this._notationEditor.stop();
+        else this._notationEditor.play();
+        break;
+      case 'close':
+        this.close();
+        break;
+      default:
+        break;
+    }
+    if (staff && document.activeElement !== staff) staff.focus();
   }
 
   _onKeyDown(e) {

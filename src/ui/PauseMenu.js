@@ -10,7 +10,7 @@ class PauseMenu extends Menu {
    * @param {Function} onExit
    * @param {Function} onNextPuzzle
    * @param {?Function} [onBackToEditor] - given when the editor's Play
-   *   launched this game (core/editorLink): the menu offers "Back to Editor"
+   *   launched this game (core/playLink): the menu offers "Back to Editor"
    */
   constructor(onContinue, onExit, onNextPuzzle, onBackToEditor = null) {
     super('pause-menu');

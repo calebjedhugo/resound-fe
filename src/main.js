@@ -40,7 +40,7 @@ import Fountain from 'entities/Fountain';
 import Waystone from 'entities/Waystone';
 import WaystoneGatePad from 'entities/WaystoneGatePad';
 import { calmStorm, tickEnvironment } from 'entities/EnvironmentLook';
-import { playRequest, backToEditor } from 'core/editorLink';
+import { playRequest, backToEditor } from 'core/playLink';
 
 // Three.js scene
 const scene = new THREE.Scene();
@@ -294,7 +294,7 @@ async function initializeGame() {
   startGate.showLoading();
 
   // A deep link — the editor's Play (?puzzle=<id>&from=editor,
-  // core/editorLink) or a plain ?puzzle=<id> — fetches its puzzle alongside
+  // core/playLink) or a plain ?puzzle=<id> — fetches its puzzle alongside
   // the manifest instead of after it. It is entered only if the manifest
   // lists it; startPuzzle reports a failed load.
   const { puzzleId: requestedPuzzle, fromEditor } = playRequest(window.location.search);

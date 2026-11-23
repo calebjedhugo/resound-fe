@@ -10,6 +10,26 @@
  * refresh() to keep it in sync, and supplies the undo/redo/play/look callbacks.
  */
 
+import { buttonGlyph } from 'core/inputGlyphs';
+import { EDITOR_MAPPING } from 'editor/input/EditorGamepad';
+
+// The controller's mapping in the help, in a DualShock's names
+const PAD_SECTIONS = [
+  ['viewport', 'Controller'],
+  ['viewport+l2', 'Controller — L2 held'],
+  ['viewport+r2', 'Controller — R2 held'],
+  ['panel', 'Controller — sidebar (touchpad)'],
+  ['song', 'Controller — song editor'],
+];
+const padName = (buttons) =>
+  buttons
+    .split('/')
+    .map((b) => {
+      const glyph = buttonGlyph(b, 'playstation');
+      return glyph ? glyph.name.replace(/^the /, '') : b;
+    })
+    .join(' / ');
+
 const SHORTCUTS = [
   ['Arrows', 'Move the cursor (they follow the camera)'],
   ['Click a tile', 'Cursor there; select what stands on it'],
@@ -18,7 +38,7 @@ const SHORTCUTS = [
   ['Option + Up/Down', 'Storey up / down (an empty one starts a floor)'],
   ['Shift + Option + Up/Down', 'Carry the entity up / down a storey'],
   ['F', 'Start a floor region here; arrows size, Enter commits'],
-  ['Enter', "The entity's menu (song, links)"],
+  ['Enter', "The entity's menu (song, links); with a tool chosen, place it"],
   ['Double-click', "Edit a creature's or gate's song"],
   ['A', 'Play / stop the song under the cursor (its creature lights)'],
   ['Delete / Backspace', 'Delete the entity, or the floor region on an empty cell'],
@@ -71,7 +91,9 @@ export default class EditorToolbar {
     });
     this._lookBtn.classList.add('toolbar-look');
 
-    this._helpBtn = this._iconBtn('?', 'Keyboard shortcuts', () => this._toggleHelp());
+    this._helpBtn = this._iconBtn('?', 'Keyboard and controller shortcuts', () =>
+      this._toggleHelp()
+    );
 
     row.appendChild(this._undoBtn);
     row.appendChild(this._redoBtn);
@@ -88,9 +110,17 @@ export default class EditorToolbar {
     this._helpEl = document.createElement('div');
     this._helpEl.className = 'shortcut-help';
     this._helpEl.style.display = 'none';
-    this._helpEl.innerHTML = SHORTCUTS.map(
-      ([keys, desc]) => `<div class="shortcut-row"><kbd>${keys}</kbd><span>${desc}</span></div>`
+    const helpRow = ([keys, desc]) =>
+      `<div class="shortcut-row"><kbd>${keys}</kbd><span>${desc}</span></div>`;
+    const pad = PAD_SECTIONS.map(
+      ([mapping, title]) =>
+        `<div class="shortcut-title">${title}</div>${EDITOR_MAPPING[mapping]
+          .map(([buttons, desc]) => helpRow([padName(buttons), desc]))
+          .join('')}`
     ).join('');
+    this._helpEl.innerHTML = `<div class="shortcut-title">Keyboard</div>${SHORTCUTS.map(
+      helpRow
+    ).join('')}${pad}`;
     wrapper.appendChild(this._helpEl);
 
     this._container.appendChild(wrapper);

@@ -40,9 +40,15 @@ import { importPuzzle } from 'editor/io/importPuzzle';
 import { loadLook, saveLook } from 'editor/io/lookPreference';
 import SongAudition from 'editor/audio/SongAudition';
 import { serializePuzzle } from 'editor/model/serialization';
-import { playUrl, editorRequest, PLAY_WINDOW_NAME, BACK_TO_EDITOR_MESSAGE } from 'core/editorLink';
+import { playUrl, editorRequest, PLAY_WINDOW_NAME, BACK_TO_EDITOR_MESSAGE } from 'core/playLink';
 import { availableElevations } from 'editor/util/elevations';
-import { ELEVATION_HEIGHT } from 'core/constants';
+import { ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
+import InputDevice from 'core/InputDevice';
+import EditorGamepad from 'editor/input/EditorGamepad';
+import PadFocus from 'editor/input/PadFocus';
+import PadLegend from 'editor/ui/PadLegend';
+import { orbit, zoom, pan, glideToward } from 'editor/viewport/cameraMoves';
+import { gridToWorld } from 'editor/viewport/gridUtils';
 
 // Entity types that carry a song (Edit Song menu item, dbl-click to edit).
 const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
@@ -277,6 +283,7 @@ export default class EditorApp {
     this._setupRenderInvalidation();
     this._onMessage = (event) => this._onBackFromGame(event);
     window.addEventListener('message', this._onMessage);
+    this._setupGamepad();
     this._requestFrame(); // initial render
     window.addEventListener('resize', () => this._onResize());
   }
@@ -319,7 +326,9 @@ export default class EditorApp {
       ? `Cell (${grid.x}, ${grid.z}) · E${this.editorScene.activeElevation}`
       : '';
     const tool = this.entityToolbar ? this.entityToolbar.activeTool : null;
-    const toolText = tool ? `Placing ${tool} — click a tile (Esc cancels)` : '';
+    const toolText = tool
+      ? `Placing ${tool} — Enter (or ✕) places it at the cursor; Esc cancels`
+      : '';
     const pickText =
       this._linkPickSourceId !== null ? 'Teleport: click another gate to link (Esc cancels)' : '';
     const draftText = this._floorDraft
@@ -705,6 +714,230 @@ export default class EditorApp {
     this.toolbar.refresh();
   }
 
+  // --- The controller (editor/input/EditorGamepad) ------------------------
+
+  _setupGamepad() {
+    // The sidebar and the world map, stepped through with the d-pad
+    this.panelFocus = new PadFocus(() => document.getElementById('editor-sidebar'));
+    this.mapFocus = new PadFocus(() =>
+      this.worldOverview.isOpen ? document.querySelector('.world-modal') : null
+    );
+    this._panelMode = false;
+    // Which device is in hand: the legend shows the pad's glyphs, or hides
+    InputDevice.initialize();
+    this.padLegend = new PadLegend(document.body);
+    this._stopDeviceWatch = InputDevice.onChange(() => this.onPadChange());
+    this.gamepad = new EditorGamepad(this);
+    this.gamepad.start();
+  }
+
+  /** What the controller is driving now: song, menu, map, panel or viewport. */
+  padContext() {
+    if (this.songEditorModal.isOpen) return 'song';
+    if (this.contextMenu.isOpen) return 'menu';
+    if (this.worldOverview.isOpen) return 'map';
+    if (this._panelMode) return 'panel';
+    return 'viewport';
+  }
+
+  /** Keep the controller legend in step with the device, context and modifiers. */
+  onPadChange() {
+    if (!this.padLegend) return;
+    const mods = this.gamepad ? this.gamepad.modifiers : {};
+    this.padLegend.update(InputDevice.family, this.padContext(), mods);
+  }
+
+  /**
+   * Press one of the editor's keys for the controller: a synthetic keydown
+   * (marked fromGamepad, as the game's Gamepad sends) to the same listeners
+   * the keyboard reaches, so the two can't drift apart.
+   * @param {string} key
+   * @param {{shiftKey?: boolean, altKey?: boolean, ctrlKey?: boolean}} [mods]
+   */
+  pressKey(key, mods = {}) {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...mods });
+    event.fromGamepad = true;
+    document.dispatchEvent(event);
+  }
+
+  /** L1 / R1: the previous / next type to place (Cross places it). */
+  cyclePalette(step) {
+    const tool = this.entityToolbar.cycle(step);
+    const name = tool === 'player' ? 'player spawn' : tool;
+    this._showToast(`Placing: ${name}`, 'success');
+    this._requestFrame();
+  }
+
+  /**
+   * Cross: commit a floor draft; on an empty cell place the chosen type; on
+   * an entity select it, and on the selected one open its menu.
+   */
+  padConfirm() {
+    if (this._floorDraft) {
+      this._commitFloorDraft();
+      return;
+    }
+    const cell = this.editorScene.getHoveredGrid();
+    const entityId = this._entityIdAtCell(cell);
+    const tool = this.entityToolbar.activeTool;
+    if (
+      entityId === null ||
+      (tool === 'waystone' &&
+        !this._isCellOccupied(cell.x, this.editorScene.activeElevation, cell.z, tool))
+    ) {
+      if (tool) this._placeAtCursor(tool);
+      else this._showToast('Choose what to place with L1 / R1, then ✕ places it');
+      return;
+    }
+    if (this.selectionManager.selectedId === entityId) this._openContextMenuAtCursor();
+    else this._selectAndShow(entityId);
+  }
+
+  /** Triangle: the song editor for what is under the cursor (else the selection). */
+  padSongEditor() {
+    const atCursor = this._entityIdAtCell(this.editorScene.getHoveredGrid());
+    const id = atCursor !== null ? atCursor : this.selectionManager.selectedId;
+    const entity = id !== null ? this.undoManager.getEntity(id) : null;
+    if (!entity || !SONG_ENTITY_TYPES.includes(entity.type)) {
+      this._showToast('Put the cursor on a creature or gate to edit its song');
+      return;
+    }
+    this.selectionManager.select(id);
+    this.openSongEditor(id);
+  }
+
+  /** L2 + Triangle: hear the song under the cursor (A). */
+  padAudition() {
+    this._auditionAtCursor();
+  }
+
+  /** Options: the editor's menu — Play, puzzles, undo, the look… */
+  openEditorMenu() {
+    const atCursor = this._entityIdAtCell(this.editorScene.getHoveredGrid());
+    const songId = [atCursor, this.selectionManager.selectedId].find((id) => {
+      const entity = id !== null && id !== undefined ? this.undoManager.getEntity(id) : null;
+      return entity && SONG_ENTITY_TYPES.includes(entity.type);
+    });
+    const items = [{ label: 'Play this level', action: () => this.play() }];
+    if (songId !== undefined) {
+      items.push({ label: 'Edit song', action: () => this.openSongEditor(songId) });
+      items.push({
+        label: this.audition.playingId === songId ? 'Stop song' : 'Play song',
+        action: () => this.auditionSong(songId),
+      });
+    }
+    items.push(
+      { label: 'Properties (sidebar)', action: () => this.togglePanelFocus(true) },
+      { label: 'Open puzzle…', action: () => this.openPuzzlePicker() },
+      { label: 'World map', action: () => this.worldOverview.open() },
+      { label: 'Start a floor here', action: () => this._startFloorAtCursor() },
+      { label: 'Undo', action: () => this._undo(), disabled: !this.undoManager.canUndo() },
+      { label: 'Redo', action: () => this._redo(), disabled: !this.undoManager.canRedo() },
+      {
+        label: this._look === 'game' ? 'Schematic look' : 'Game look',
+        action: () => this.toggleLook(),
+      }
+    );
+    const container = document.getElementById('editor-viewport');
+    const x = Math.max(0, container.clientWidth / 2 - 90);
+    const y = Math.max(0, container.clientHeight / 2 - 140);
+    this.controls.enabled = false;
+    this.contextMenu.show(x, y, items);
+    const checkHidden = () => {
+      if (!this.contextMenu.isOpen) this.controls.enabled = true;
+      else requestAnimationFrame(checkHidden);
+    };
+    requestAnimationFrame(checkHidden);
+  }
+
+  /**
+   * The touchpad: the controller's focus into the sidebar (the selection's
+   * properties first) or back to the level.
+   * @param {boolean} [on] - default: the other way from now
+   * @param {string|Element} [target] - the control to land on
+   */
+  togglePanelFocus(on = !this._panelMode, target = null) {
+    this._panelMode = on;
+    if (on) {
+      const first =
+        target ||
+        (this.selectionManager.selectedId !== null
+          ? '#property-panel input, #property-panel select, #property-panel button'
+          : null);
+      this.panelFocus.enter(first);
+    } else {
+      this.panelFocus.leave();
+    }
+    this.onPadChange();
+  }
+
+  /** The puzzle dropdown, focused for the controller (←/→ choose, ✕ opens). */
+  openPuzzlePicker() {
+    this.togglePanelFocus(true, '.puzzle-select');
+  }
+
+  /** The camera glides to keep the controller's cursor well inside the view. */
+  followCursor() {
+    const cell = this.editorScene.getHoveredGrid();
+    const container = document.getElementById('editor-viewport');
+    const { x, y } = this.editorScene.cellToContainerXY(cell, this.camera);
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    const inside = x > w * 0.22 && x < w * 0.78 && y > h * 0.2 && y < h * 0.8;
+    if (!inside) this.centerCameraOnCursor();
+  }
+
+  /** R3: glide the camera to centre on the cursor. */
+  centerCameraOnCursor() {
+    const cell = this.editorScene.getHoveredGrid();
+    const world = gridToWorld(cell.x, cell.z);
+    this._glideTo = {
+      x: world.x,
+      y: this.editorScene.activeElevation * ELEVATION_HEIGHT,
+      z: world.z,
+    };
+    this._requestFrame();
+  }
+
+  /** L3: the camera back to where it starts, over the whole level. */
+  resetCamera() {
+    const center = (this.undoManager.getMetadata().gridSize * WORLD_SCALE) / 2;
+    this._glideTo = null;
+    this.controls.target.set(center, 0, center);
+    this.camera.position.set(center + 30, 40, center + 30);
+    this.controls.update();
+    this._requestFrame();
+  }
+
+  /** Right stick: orbit (radians round, radians of tilt). */
+  orbitCamera(azimuth, polar) {
+    orbit(this.camera, this.controls, azimuth, polar);
+    this.controls.update();
+    this._requestFrame();
+  }
+
+  /** L2 + right stick: nearer (factor < 1) or further. */
+  zoomCamera(factor) {
+    zoom(this.camera, this.controls, factor);
+    this.controls.update();
+    this._requestFrame();
+  }
+
+  /** L2 + left stick: slide the view, in shares of the camera's distance. */
+  panCamera(rightShare, forwardShare) {
+    const { position } = this.camera;
+    const { target } = this.controls;
+    const distance = Math.hypot(
+      position.x - target.x,
+      position.y - target.y,
+      position.z - target.z
+    );
+    this._glideTo = null;
+    pan(this.camera, this.controls, rightShare * distance, forwardShare * distance);
+    this.controls.update();
+    this._requestFrame();
+  }
+
   // --- Songs: the song editor and quick audition --------------------------
 
   /**
@@ -714,8 +947,8 @@ export default class EditorApp {
    */
   openSongEditor(entityId) {
     this.audition.stop();
-    this._frameAboveEditor(entityId);
     this.songEditorModal.open(entityId);
+    this._frameAboveEditor(entityId);
   }
 
   /**
@@ -749,26 +982,36 @@ export default class EditorApp {
   }
 
   /**
-   * Move the camera (keeping its angle) so the entity sits in the upper part
-   * of the viewport, clear of the docked song editor.
+   * Move the camera (keeping its angle and distance) so the entity shows in
+   * the middle of the band of viewport left above the docked song editor.
    */
   _frameAboveEditor(entityId) {
     const mesh = this.entityPlacer.getMeshById(entityId);
-    if (!mesh || !mesh.position || !this.camera.position.sub) return;
-    const { target } = this.controls;
-    const offset = this.camera.position.clone().sub(target);
-    // Toward the camera along the ground: the entity then shows above centre
-    const toward = offset.clone();
-    toward.y = 0;
-    if (toward.lengthSq() > 0) toward.normalize();
-    const along = offset.length() * 0.28;
-    target.set(
-      mesh.position.x + toward.x * along,
-      this.editorScene.activeElevation * ELEVATION_HEIGHT,
-      mesh.position.z + toward.z * along
-    );
-    this.camera.position.copy(target).add(offset);
+    const container = document.getElementById('editor-viewport');
+    const modal = document.querySelector('.song-modal');
+    if (!mesh || !mesh.position || !mesh.position.clone || !container || !modal) return;
+    const rect = container.getBoundingClientRect();
+    if (!(rect.height > 0)) return;
+    // Centre the entity first, then slide the view until it sits mid-band
+    glideToward(this.camera, this.controls, mesh.position, 1);
     this.controls.update();
+    const bandMiddle = (Math.max(modal.getBoundingClientRect().top, rect.top + 40) - rect.top) / 2;
+    const { position } = this.camera;
+    const { target } = this.controls;
+    const distance = Math.hypot(
+      position.x - target.x,
+      position.y - target.y,
+      position.z - target.z
+    );
+    for (let i = 0; i < 4; i += 1) {
+      this.camera.updateMatrixWorld();
+      const projected = mesh.position.clone().project(this.camera);
+      const y = (-projected.y * 0.5 + 0.5) * rect.height;
+      // Screen pixels to ground units, roughly (refined by the next pass)
+      const perPixel = (distance * 1.6) / rect.height;
+      pan(this.camera, this.controls, 0, (bandMiddle - y) * perPixel);
+      this.controls.update();
+    }
     this._requestFrame();
   }
 
@@ -826,7 +1069,7 @@ export default class EditorApp {
 
   /**
    * Save the level and open the game on it, at its player spawn (the menu
-   * skipped, the start gate kept: core/editorLink). In the one game tab the
+   * skipped, the start gate kept: core/playLink). In the one game tab the
    * editor reuses (a second Play reloads it, no pile of tabs) — or, with no
    * user gesture to open a tab (a controller press) or a blocked popup, in
    * this tab, the undo history kept for the way back (the game's pause menu:
@@ -1631,7 +1874,14 @@ export default class EditorApp {
         case 'Enter':
           e.preventDefault();
           if (this._floorDraft) this._commitFloorDraft();
-          else this._openContextMenuAtCursor();
+          else if (
+            this.entityToolbar.activeTool &&
+            this._entityIdAtCell(this.editorScene.getHoveredGrid()) === null
+          ) {
+            // A chosen tool on an empty cell: place it (the tool buttons'
+            // place-at-cursor; a click only ever selects)
+            this._placeAtCursor(this.entityToolbar.activeTool);
+          } else this._openContextMenuAtCursor();
           return;
         case 'Delete':
         case 'Backspace':
@@ -1693,6 +1943,13 @@ export default class EditorApp {
       this.gameLook.update(dt);
       this._requestFrame();
     }
+    // The camera gliding after the controller's cursor (followCursor)
+    if (this._glideTo) {
+      const left = glideToward(this.camera, this.controls, this._glideTo, 0.2);
+      if (left < 0.05) this._glideTo = null;
+      this.controls.update();
+      this._requestFrame();
+    }
     this.editorScene.update();
     this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this._updateHud();
@@ -1732,6 +1989,9 @@ export default class EditorApp {
     if (this._frameId) cancelAnimationFrame(this._frameId);
     document.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('message', this._onMessage);
+    if (this.gamepad) this.gamepad.stop();
+    if (this._stopDeviceWatch) this._stopDeviceWatch();
+    if (this.padLegend) this.padLegend.dispose();
     if (this._invalidateRender) {
       this.controls.removeEventListener?.('change', this._invalidateRender);
       document.removeEventListener('keydown', this._invalidateOnKey);

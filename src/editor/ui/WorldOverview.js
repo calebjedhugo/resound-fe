@@ -265,6 +265,7 @@ export default class WorldOverview {
       if (node.loadError) cls += ' world-node-error';
       g.setAttribute('class', cls);
       g.setAttribute('data-puzzle-id', node.id);
+      g.setAttribute('data-pad-focus', ''); // a controller's d-pad steps through them
       g.addEventListener('click', () => this._nodeClicked(node.id));
 
       const circle = document.createElementNS(SVG_NS, 'circle');

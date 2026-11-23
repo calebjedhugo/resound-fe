@@ -19,7 +19,7 @@ const DIM_RIM = 'rgba(255, 255, 255, 0.4)';
 const MARK = '#ffd97a';
 
 // A glyph's canvas width per unit of its height
-const ASPECT = { key: 1, space: 320 / 112, face: 1, stick: 1, shoulder: 1.5 };
+const ASPECT = { key: 1, space: 320 / 112, face: 1, stick: 1, shoulder: 1.5, pill: 2.6, dpad: 1 };
 
 /** Trace a rounded rectangle: `top` and `bottom` are the corner radii. */
 function roundedRect(c, x, y, w, h, top, bottom = top) {
@@ -147,6 +147,32 @@ function drawStick(c, glyph, w, h, m) {
   label(c, glyph.label, x, y, h * (glyph.label.length > 1 ? 0.24 : 0.3));
 }
 
+/** The d-pad: a cross of four arms, the ones meant (glyph.arms) in gold. */
+function drawDpad(c, glyph, w, h, m) {
+  const x = w / 2;
+  const y = h / 2;
+  const r = h / 2 - m;
+  const arm = r * 0.42; // half an arm's width
+  const lit = {
+    all: ['up', 'down', 'left', 'right'],
+    vertical: ['up', 'down'],
+    horizontal: ['left', 'right'],
+  }[glyph.arms] || [glyph.arms];
+  const arms = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  Object.entries(arms).forEach(([name, [dx, dy]]) => {
+    const cx = x + dx * r * 0.5;
+    const cy = y + dy * r * 0.5;
+    const hw = dx ? r * 0.5 : arm;
+    const hh = dy ? r * 0.5 : arm;
+    roundedRect(c, cx - hw, cy - hh, hw * 2, hh * 2, arm * 0.35);
+    c.fillStyle = lit.includes(name) ? MARK : CAP;
+    c.fill();
+    c.lineWidth = Math.max(2, h * 0.04);
+    c.strokeStyle = RIM;
+    c.stroke();
+  });
+}
+
 /**
  * Draw `glyph` filling a w x h canvas context.
  * @param {CanvasRenderingContext2D} c
@@ -156,10 +182,16 @@ export function drawGlyph(c, glyph, w, h) {
   const m = Math.round(h / 16);
   if (glyph.kind === 'face') drawFace(c, glyph, w, h, m);
   else if (glyph.kind === 'stick') drawStick(c, glyph, w, h, m);
+  else if (glyph.kind === 'dpad') drawDpad(c, glyph, w, h, m);
   else if (glyph.kind === 'shoulder') {
     roundedRect(c, m, m, w - 2 * m, h - 2 * m, h * 0.36, h * 0.12);
     cap(c, h);
     label(c, glyph.label, w / 2, h / 2, h * 0.46);
+  } else if (glyph.kind === 'pill') {
+    // A small menu button (Options, Share, the touchpad): its name, smaller
+    roundedRect(c, m, m, w - 2 * m, h - 2 * m, h * 0.4);
+    cap(c, h);
+    label(c, glyph.label, w / 2, h / 2, h * (glyph.label.length > 5 ? 0.3 : 0.36));
   } else {
     // A key (or the spacebar, unlabelled)
     roundedRect(c, m, m, w - 2 * m, h - 2 * m, Math.min(w, h) * 0.16);
@@ -178,7 +210,8 @@ export function makeGlyphCanvas(glyph, height) {
   canvas.width = Math.round(height * (ASPECT[glyph.kind] || 1));
   canvas.dataset.glyph = glyph.name;
   canvas.setAttribute('aria-label', glyph.name);
-  drawGlyph(canvas.getContext('2d'), glyph, canvas.width, canvas.height);
+  const context = canvas.getContext('2d');
+  if (context) drawGlyph(context, glyph, canvas.width, canvas.height);
   return canvas;
 }
 

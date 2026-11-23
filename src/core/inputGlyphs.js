@@ -98,3 +98,101 @@ export const nameFor = (action, family, padId = '') => {
   if (action === 'sound' && family === 'playstation' && DUALSENSE.test(padId)) return 'Create';
   return glyphFor(action, family).name;
 };
+
+// ---- Every button by name (the level editor's controller legend) ----------
+
+// Each family's printed names for the buttons the editor maps (positions of
+// the standard layout): shoulders, triggers, stick clicks, the two menu
+// buttons and the PlayStation touchpad
+const PAD_BUTTON_NAMES = {
+  playstation: {
+    l1: 'L1',
+    r1: 'R1',
+    l2: 'L2',
+    r2: 'R2',
+    l3: 'L3',
+    r3: 'R3',
+    options: 'OPTIONS',
+    share: 'SHARE',
+    touchpad: 'PAD',
+  },
+  xbox: {
+    l1: 'LB',
+    r1: 'RB',
+    l2: 'LT',
+    r2: 'RT',
+    l3: 'LS',
+    r3: 'RS',
+    options: 'MENU',
+    share: 'VIEW',
+    touchpad: 'GUIDE',
+  },
+  switch: {
+    l1: 'L',
+    r1: 'R',
+    l2: 'ZL',
+    r2: 'ZR',
+    l3: 'LS',
+    r3: 'RS',
+    options: '+',
+    share: '−',
+    touchpad: 'CAPTURE',
+  },
+  generic: {
+    l1: 'LB',
+    r1: 'RB',
+    l2: 'LT',
+    r2: 'RT',
+    l3: 'L3',
+    r3: 'R3',
+    options: 'START',
+    share: 'SELECT',
+    touchpad: '17',
+  },
+};
+const FACE_BUTTONS = { cross: 'bottom', circle: 'right', square: 'left', triangle: 'top' };
+const DPAD_ARMS = {
+  dpad: 'all',
+  up: 'up',
+  down: 'down',
+  left: 'left',
+  right: 'right',
+  updown: 'vertical',
+  leftright: 'horizontal',
+};
+
+const buttonGlyphs = {};
+Object.entries(PAD_LABELS).forEach(([family, { face, sticks }]) => {
+  const names = PAD_BUTTON_NAMES[family];
+  const glyphs = {};
+  Object.entries(FACE_BUTTONS).forEach(([button, position]) => {
+    glyphs[button] = face
+      ? { kind: 'face', position, mark: face[position], name: face[position] }
+      : { kind: 'face', position, mark: null, name: `the ${position} button` };
+  });
+  ['l1', 'r1', 'l2', 'r2'].forEach((button) => {
+    glyphs[button] = { kind: 'shoulder', label: names[button], name: names[button] };
+  });
+  glyphs.l3 = { kind: 'stick', side: 'left', label: names.l3, name: names.l3, click: true };
+  glyphs.r3 = { kind: 'stick', side: 'right', label: names.r3, name: names.r3, click: true };
+  glyphs.lstick = { kind: 'stick', side: 'left', label: sticks[0], name: 'the left stick' };
+  glyphs.rstick = { kind: 'stick', side: 'right', label: sticks[1], name: 'the right stick' };
+  ['options', 'share', 'touchpad'].forEach((button) => {
+    glyphs[button] = { kind: 'pill', label: names[button], name: names[button] };
+  });
+  Object.entries(DPAD_ARMS).forEach(([button, arms]) => {
+    glyphs[button] = { kind: 'dpad', arms, name: `d-pad ${arms === 'all' ? '' : arms}`.trim() };
+  });
+  buttonGlyphs[family] = glyphs;
+});
+
+/**
+ * A controller button's glyph on a family, by the button's name: cross,
+ * circle, square, triangle (by position), l1, r1, l2, r2, l3, r3, lstick,
+ * rstick, options, share, touchpad, and the d-pad (dpad, up, down, left,
+ * right, updown, leftright). The same object every call.
+ * @param {string} button
+ * @param {string} family - a pad family (anything else reads as generic)
+ */
+export const buttonGlyph = (button, family) =>
+  (buttonGlyphs[family] || buttonGlyphs.generic)[button];

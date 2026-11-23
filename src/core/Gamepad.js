@@ -25,7 +25,9 @@ import InputDevice from 'core/InputDevice';
  * core/InputDevice the pad is in hand (the key hints show its buttons); a
  * pad connected, or held with its sticks at rest, says nothing.
  *
- * Game only: the editor never polls it.
+ * The game's polling is the game's only; the level editor drives its own
+ * mapping (editor/input/EditorGamepad) from the same reading of the pad:
+ * findPad, readStick and DEAD_ZONE are shared from here.
  */
 
 // Standard-layout button index -> the key it presses
@@ -49,7 +51,7 @@ const L3 = 10;
 // How far a stick tilts before it counts, as a share of its throw. A
 // DualShock at rest reads a few hundredths off center (more as it wears);
 // past this, the tilt ramps up from 0, so nothing jumps at the edge.
-const DEAD_ZONE = 0.15;
+export const DEAD_ZONE = 0.15;
 // The right stick's response: its tilt squared, so a small tilt aims finely
 const LOOK_CURVE = 2;
 
@@ -71,7 +73,7 @@ const axis = (pad, index) => pad.axes[index] || 0;
  * a diagonal keeps its direction instead of snapping toward an axis. The
  * pad's y axis points down; `out.y` is up (or ahead).
  */
-const readStick = (x, y, curve, out) => {
+export const readStick = (x, y, curve, out) => {
   const length = Math.hypot(x, y);
   if (length <= DEAD_ZONE) {
     out.x = 0;
@@ -84,7 +86,7 @@ const readStick = (x, y, curve, out) => {
 };
 
 /** The pad to play with: the first connected one, standard layout first. */
-const findPad = () => {
+export const findPad = () => {
   const pads = navigator.getGamepads();
   let fallback = null;
   for (let i = 0; i < pads.length; i += 1) {

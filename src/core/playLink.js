@@ -1,5 +1,5 @@
 /**
- * editorLink — the way between the level editor and the game, both ends.
+ * playLink — the way between the level editor and the game, both ends.
  *
  * The editor's Play saves the level and opens the game on it:
  * `/?puzzle=<id>&from=editor` (playUrl). The game boots straight into that

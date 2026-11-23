@@ -170,18 +170,20 @@ import { savePuzzleJsonToRepo } from 'editor/io/repoPersistence';
 function setupEditorDOM() {
   document.body.innerHTML = `
     <div id="editor-root">
-      <div id="editor-sidebar"><h2>Editor</h2></div>
+      <div id="editor-sidebar">
+        <h2>Editor</h2>
+        <div id="toolbar-panel"></div>
+        <div id="puzzle-panel"></div>
+        <div id="world-panel"></div>
+        <div id="git-panel"></div>
+        <div id="elevation-panel"></div>
+        <div id="floor-panel"></div>
+        <div id="entity-toolbar"></div>
+        <div id="property-panel"></div>
+        <div id="metadata-panel"></div>
+        <div id="validation-panel"></div>
+      </div>
       <div id="editor-viewport" style="width:800px;height:600px;"></div>
-      <div id="toolbar-panel"></div>
-      <div id="puzzle-panel"></div>
-      <div id="world-panel"></div>
-      <div id="git-panel"></div>
-      <div id="elevation-panel"></div>
-      <div id="floor-panel"></div>
-      <div id="entity-toolbar"></div>
-      <div id="property-panel"></div>
-      <div id="metadata-panel"></div>
-      <div id="validation-panel"></div>
     </div>
   `;
 }
@@ -1219,6 +1221,266 @@ describe('EditorApp wiring', () => {
     it('says why when there is no song under the cursor', () => {
       press('a');
       expect(document.querySelector('.viewport-toast').textContent).toMatch(/creature or gate/);
+    });
+  });
+
+  describe('building with a controller (a DualShock 4)', () => {
+    // A pad as Chrome reports a DualShock 4, at rest
+    let pad;
+    const B = { cross: 0, circle: 1, square: 2, triangle: 3, l1: 4, r1: 5, l2: 6, r2: 7 };
+    Object.assign(B, { share: 8, options: 9, up: 12, down: 13, left: 14, right: 15, touchpad: 17 });
+
+    beforeEach(() => {
+      pad = {
+        id: 'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)',
+        connected: true,
+        mapping: 'standard',
+        axes: [0, 0, 0, 0],
+        buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })),
+      };
+      Object.defineProperty(navigator, 'getGamepads', {
+        value: () => [pad],
+        configurable: true,
+      });
+      app.gamepad.start();
+    });
+
+    afterEach(() => {
+      delete navigator.getGamepads;
+    });
+
+    const poll = () => app.gamepad.poll();
+    const tap = (button) => {
+      pad.buttons[B[button]].pressed = true;
+      poll();
+      pad.buttons[B[button]].pressed = false;
+      poll();
+    };
+    const hold = (button) => {
+      pad.buttons[B[button]].pressed = true;
+      pad.buttons[B[button]].value = 1;
+      poll();
+    };
+    const letGo = (button) => {
+      pad.buttons[B[button]].pressed = false;
+      pad.buttons[B[button]].value = 0;
+      poll();
+    };
+
+    it('the d-pad steps the cursor, and repeats while held', () => {
+      const move = app.editorScene.moveCursor;
+      hold('right');
+      expect(move).toHaveBeenCalledTimes(1);
+      expect(move).toHaveBeenLastCalledWith(1, 0);
+
+      jest.advanceTimersByTime(290);
+      poll();
+      expect(move).toHaveBeenCalledTimes(1); // not yet: a held key's delay
+      jest.advanceTimersByTime(20);
+      poll();
+      jest.advanceTimersByTime(100);
+      poll();
+      expect(move).toHaveBeenCalledTimes(3);
+      letGo('right');
+    });
+
+    it('the left stick glides the cursor, faster the longer it is held', () => {
+      const move = app.editorScene.moveCursor;
+      pad.axes[1] = -1; // pushed up
+      poll();
+      expect(move).toHaveBeenLastCalledWith(0, -1);
+      const stepsIn = (ms) => {
+        const before = move.mock.calls.length;
+        for (let t = 0; t < ms; t += 16) {
+          jest.advanceTimersByTime(16);
+          poll();
+        }
+        return move.mock.calls.length - before;
+      };
+      const early = stepsIn(500);
+      stepsIn(1000);
+      const late = stepsIn(500);
+      expect(late).toBeGreaterThan(early);
+      pad.axes[1] = 0;
+      poll();
+    });
+
+    it('L1 / R1 choose what to place, and Cross places it at the cursor', () => {
+      tap('r1');
+      expect(app.entityToolbar.activeTool).toBe('player');
+      tap('r1');
+      expect(app.entityToolbar.activeTool).toBe('creature');
+      tap('l1');
+      tap('l1');
+      expect(app.entityToolbar.activeTool).toBe('waystone'); // wraps round
+
+      tap('r1'); // back to the player spawn
+      tap('r1'); // the creature
+      tap('cross');
+      expect(app.entityPlacer.placeEntity).toHaveBeenLastCalledWith('creature', 7, 7, 0);
+    });
+
+    it('Cross on an entity selects it, again opens its menu, which the d-pad and Cross play', () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, {
+        song: [{ pitch: 'E4', length: '1/4' }],
+      });
+      tap('cross');
+      expect(app.selectionManager.selectedId).toBe(id);
+
+      tap('cross');
+      expect(app.padContext()).toBe('menu');
+      const menu = document.querySelector('.context-menu');
+      expect(menu.textContent).toContain('Edit Song');
+
+      tap('cross'); // its first item: Edit Song
+      expect(app.songEditorModal.isOpen).toBe(true);
+    });
+
+    it('Circle closes a menu without choosing', () => {
+      app.undoManager.addEntity('creature', 7, 0, 7, { song: [{ pitch: 'E4', length: '1/4' }] });
+      tap('cross');
+      tap('cross');
+      tap('circle');
+      expect(app.contextMenu.isOpen).toBe(false);
+      expect(app.songEditorModal.isOpen).toBe(false);
+    });
+
+    it('Square deletes what is under the cursor', () => {
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
+      tap('square');
+      expect(app.entityPlacer.removeEntityById).not.toHaveBeenCalled(); // releases links first
+      return Promise.resolve().then(() => {
+        expect(app.entityPlacer.removeEntityById).toHaveBeenCalledWith(id);
+      });
+    });
+
+    it('R2 held carries the entity under the cursor with the d-pad (Shift+arrows)', () => {
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
+      hold('r2');
+      tap('right');
+      letGo('r2');
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0);
+    });
+
+    it('L2 held: d-pad left / right undo and redo', () => {
+      app.undoManager.addEntity('wall', 2, 0, 2, {});
+      hold('l2');
+      tap('left');
+      expect(app.undoManager.getEntities()).toHaveLength(0);
+      tap('right');
+      expect(app.undoManager.getEntities()).toHaveLength(1);
+      letGo('l2');
+    });
+
+    it('L2 held: d-pad up climbs a storey (an empty one starts a floor, Cross commits it)', () => {
+      hold('l2');
+      tap('up');
+      letGo('l2');
+      expect(app.editorScene.setFloorDraft).toHaveBeenCalled();
+      tap('cross');
+      expect(app.undoManager.getFloors()).toHaveLength(1);
+    });
+
+    it('Share switches the look', () => {
+      tap('share');
+      expect(app.look).toBe('schematic');
+      tap('share');
+      expect(app.look).toBe('game');
+    });
+
+    it('Options opens the editor menu, Play first', () => {
+      tap('options');
+      const items = [...document.querySelectorAll('.context-menu-item')].map((b) => b.textContent);
+      expect(items[0]).toBe('Play this level');
+      expect(items).toEqual(expect.arrayContaining(['Open puzzle…', 'Undo', 'Redo']));
+    });
+
+    it('Triangle opens the song under the cursor; there the pad writes notes, and Circle closes it', () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, {
+        song: [{ pitch: 'C4', length: '1/4' }],
+      });
+      tap('triangle');
+      expect(app.padContext()).toBe('song');
+
+      tap('right'); // the edit cursor past the note
+      tap('cross'); // a note of the chosen duration
+      const song = () => app.undoManager.getEntity(id).data.song;
+      expect(song()).toHaveLength(2);
+
+      tap('up'); // the new note a step up
+      expect(song()[1].pitch).not.toBe(song()[0].pitch);
+
+      tap('square');
+      expect(song()).toHaveLength(1);
+
+      tap('circle');
+      expect(app.songEditorModal.isOpen).toBe(false);
+    });
+
+    it("the touchpad steps into the sidebar: the selection's fields, values on left / right", () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, {
+        song: [],
+        interval: 8,
+        audibleRange: 15,
+      });
+      app.selectionManager.select(id);
+      tap('touchpad');
+      expect(app.padContext()).toBe('panel');
+      // The first field of the creature's properties: X
+      expect(document.activeElement.closest('#property-panel')).not.toBeNull();
+
+      // Down to Interval (X, Z, Interval), then step it up
+      tap('down');
+      tap('down');
+      tap('right');
+      expect(app.undoManager.getEntity(id).data.interval).toBe(9);
+
+      tap('circle');
+      expect(app.padContext()).toBe('viewport');
+    });
+
+    it('a dropdown steps with left / right and opens only the one Cross confirms', () => {
+      tap('touchpad');
+      app.togglePanelFocus(true, '.puzzle-select');
+      const select = document.querySelector('.puzzle-select');
+      const changed = jest.fn();
+      select.addEventListener('change', changed);
+      select.innerHTML = '<option value="a">A</option><option value="b">B</option>';
+      tap('right');
+      expect(select.value).toBe('b');
+      expect(changed).not.toHaveBeenCalled();
+      tap('cross');
+      expect(changed).toHaveBeenCalledTimes(1);
+    });
+
+    it('a dropdown stepped but not confirmed shows what it holds again when the focus leaves', () => {
+      tap('touchpad');
+      app.togglePanelFocus(true, '.puzzle-select');
+      const select = document.querySelector('.puzzle-select');
+      select.innerHTML = '<option value="a">A</option><option value="b">B</option>';
+      tap('right');
+      tap('circle');
+      expect(select.value).toBe('a');
+    });
+
+    it("shows a legend of the pad's buttons once the pad is in hand, its L2 layer while L2 is held", () => {
+      expect(document.querySelector('.pad-legend').hidden).toBe(true);
+      tap('circle');
+      const legend = document.querySelector('.pad-legend');
+      expect(legend.hidden).toBe(false);
+      expect(legend.dataset.mapping).toBe('viewport');
+      expect(legend.querySelector('[data-glyph="Cross"]')).not.toBeNull();
+
+      hold('l2');
+      expect(legend.dataset.mapping).toBe('viewport+l2');
+      letGo('l2');
+      expect(legend.dataset.mapping).toBe('viewport');
+    });
+
+    it('the legend steps aside when a real key is pressed', () => {
+      tap('circle');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      expect(document.querySelector('.pad-legend').hidden).toBe(true);
     });
   });
 

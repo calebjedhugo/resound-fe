@@ -688,6 +688,11 @@ export default class NotationEditor {
     this._animateCursor(data);
   }
 
+  /** Whether Play is sounding the song now. */
+  get isPlaying() {
+    return this._playing;
+  }
+
   /** Stop audio and the playback cursor. */
   stop() {
     this._playing = false;

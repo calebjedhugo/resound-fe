@@ -14,7 +14,7 @@ import {
   editorRequest,
   backToEditor,
   BACK_TO_EDITOR_MESSAGE,
-} from 'core/editorLink';
+} from 'core/playLink';
 import PauseMenu from 'ui/PauseMenu';
 import Gamepad from 'core/Gamepad';
 
@@ -43,7 +43,7 @@ describe('The play link', () => {
 });
 
 describe('Back to Editor', () => {
-  const origin = window.location.origin;
+  const { origin } = window.location;
 
   /** A game window: what it was opened by, whether it may close itself. */
   function gameWindow({ opener = null, closable = false } = {}) {

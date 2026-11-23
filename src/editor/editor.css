@@ -96,14 +96,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .context-menu-item.active { background: #0f3460; }
 .context-menu-item:disabled { color: #556677; cursor: default; }
 .song-modal-backdrop { position: fixed; inset: 0; background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.15) 40%, rgba(0, 0, 0, 0.55) 100%); display: flex; align-items: flex-end; justify-content: center; z-index: 200; padding-bottom: 12px; }
-.song-modal { background: #1a1a2e; border: 1px solid #0f3460; border-radius: 8px; width: 80vw; max-width: 1200px; height: 54vh; max-height: 640px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+.song-modal { background: #1a1a2e; border: 1px solid #0f3460; border-radius: 8px; width: 80vw; max-width: 1200px; height: calc(100vh - 210px); max-height: 720px; min-height: 360px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
 .world-modal-backdrop { align-items: center; padding-bottom: 0; background: rgba(0, 0, 0, 0.6); }
 .song-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #0f3460; }
 .song-modal-title { font-size: 14px; color: #8899aa; text-transform: uppercase; letter-spacing: 1px; }
 .song-modal-close { background: none; border: none; color: #8899aa; font-size: 20px; cursor: pointer; padding: 0 4px; }
 .song-modal-close:hover { color: #e0e0e0; }
-.song-modal-body { flex: 1; padding: 16px; overflow: auto; }
-.song-modal-footer { padding: 12px 16px; border-top: 1px solid #0f3460; display: flex; justify-content: flex-end; }
+.song-modal-body { flex: 1; padding: 10px 16px; overflow: auto; }
+.song-modal-footer { padding: 8px 16px; border-top: 1px solid #0f3460; display: flex; justify-content: flex-end; }
 .world-modal { width: 90vw; max-width: 1100px; height: 80vh; max-height: 800px; }
 .world-map-body { display: flex; flex-direction: column; gap: 8px; }
 .world-map-svg { flex: 1; min-height: 0; width: 100%; background: #0a1628; border: 1px solid #0f3460; border-radius: 4px; }
@@ -124,3 +124,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .world-issue-one-way { color: #ffaa44; }
 .world-issue-dangling { color: #ff4444; }
 .toolbar-look.active { color: #cfd8ea; border-color: #5a6a8a; }
+.pad-legend { position: fixed; top: 12px; right: 12px; z-index: 300; padding: 8px 10px; background: rgba(10, 16, 30, 0.86); border: 1px solid #2a3a5a; border-radius: 6px; font-size: 12px; color: #cfd8ea; pointer-events: none; max-width: 330px; }
+.pad-legend-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8899aa; margin-bottom: 4px; }
+.pad-legend-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.pad-legend-glyphs { display: inline-flex; gap: 2px; min-width: 58px; justify-content: flex-end; }
+.pad-legend-text { line-height: 1.25; }
+.pad-focus { outline: 2px solid #ffd97a !important; outline-offset: 2px; }
+.world-node.pad-focus circle { stroke: #ffd97a; stroke-width: 4; }
+.pad-legend[data-mapping="song"] { left: 12px; right: 12px; max-width: none; display: flex; flex-wrap: wrap; column-gap: 14px; row-gap: 2px; align-items: center; }
+.pad-legend[data-mapping="song"] .pad-legend-title { margin: 0 4px 0 0; }
+.pad-legend[data-mapping="song"] .pad-legend-glyphs { min-width: 0; }
+.shortcut-title { margin: 8px 0 2px; color: #cfd8ea; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
+.shortcut-title:first-child { margin-top: 0; }
