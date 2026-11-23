@@ -232,7 +232,7 @@ automated playtesters can observe them.)
   Space on an empty slot, R with no creature close, an empty take). The
   target itself still red-flashes on a heard-but-wrong phrase. The recording
   note-count sentence is gone — the live count ticks up on the active slot.
-  Remaining words (mouse-look toggle, metronome, puzzle-load errors) are
+  Remaining words (mouse-look toggle, sound on/off, metronome, puzzle-load errors) are
   settings/dev feedback, not gameplay.
 - **Mouse-position camera is intended** (ruled 2026-07-03): the cursor's
   offset from screen center steers the view, and a cursor resting outside
@@ -249,8 +249,8 @@ automated playtesters can observe them.)
   speed). Buttons ARE keys (each press goes out once as its key, no
   auto-repeat): Cross = Space, Square = R (tap toggles, hold records while
   held), Circle = C, Triangle = G, L1/R1 and d-pad ←/→ = the tape cursor,
-  Options = Esc; any other button is an unbound key (it still wakes the
-  start gate and dismisses the ending card). A held key drives its axis
+  Options = Esc, Share = P (sound on/off); any other button is an unbound
+  key (it still wakes the start gate and dismisses the ending card). A held key drives its axis
   alone (stick + key never doubles the speed).
   **Menus** (pause, main; 2026-11-22) play the same way, through keys: the
   d-pad's ↑/↓ (keys ↑/↓) move a visible focus between the entries,
@@ -269,6 +269,20 @@ automated playtesters can observe them.)
 - **Invert Look** (pause menu, 2026-10-18): pushing the right stick or the
   mouse up looks down. The I/K keys keep their named directions. Remembered
   across visits (`core/Settings`, localStorage `resound-settings`).
+- **Sound on/off** (asked for 2026-11-22: "a way to toggle the mute on and
+  off", for playing silently beside other listening): the pause menu's
+  "Sound: On/Off" entry (under Invert Look; Cross / Enter / Space flips it,
+  the focus stays), the **P** key, or a controller's **Share**, in play and
+  while paused alike. The key shows a brief toast ("Sound off — P to turn it
+  on" / "Sound on"; Share's names Share), settings feedback like the
+  mouse-look toast. Off is silence ONLY: it fades resound-sound's master
+  output to 0 in 20 ms, and the audio context keeps running, so the musical
+  clock, the creatures' songs, recording, listening and judgments go on
+  exactly as with sound on. Remembered across visits (`core/Settings`
+  `muted`, in force as the game loads, before anything sounds). Behind the
+  start gate P / Share only wake the gate (the gate swallows every key), and
+  a muted game still needs the gate's key or click to unlock audio. (N stays
+  the metronome; M is mouse-look.) `core/Sound`.
 
 ## Creature look (ruled 2026-10-02; colour reworked 2026-10-17)
 
@@ -812,8 +826,8 @@ rulings, in the designer's words where it matters:
   cleansers, and whether re-crossing area II's tile mid-puzzle (wiping fresh
   room-1 takes) is an acceptable foot-gun or wants guarding.
 - (gameplay word-toasts were RESOLVED 2026-07-10: replaced by the slot-flash
-  language. Mouse-look toggle, metronome, and puzzle-load-error toasts
-  remain as settings/dev feedback.)
+  language. Mouse-look toggle, sound on/off, metronome, and puzzle-load-error
+  toasts remain as settings/dev feedback.)
 
 ## Related docs
 
