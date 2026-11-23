@@ -40,7 +40,7 @@ import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import CleansingTile from 'entities/CleansingTile';
 import CleanserGatePad from 'entities/CleanserGatePad';
-import { tickEnvironment } from 'entities/EnvironmentLook';
+import { calmStorm, tickEnvironment } from 'entities/EnvironmentLook';
 
 // Three.js scene
 const scene = new THREE.Scene();
@@ -123,6 +123,7 @@ async function startPuzzle(puzzleId, pendingLoad = null) {
     const [puzzleData] = await Promise.all([pendingLoad || PuzzleLoader.load(puzzleId), painted]);
     PortalManager.enterWorld(puzzleData);
     DeployManager.reset(); // fresh world: no phantom, no deployed gate
+    calmStorm(); // ...and a calm sky: nothing of the last world's storm
     stateMachine.setState('PLAYING');
     // A world entry is a fresh playthrough: forget performed hints (doorway
     // crossings within it don't — each lesson happens once per playthrough).
@@ -213,7 +214,8 @@ function update(deltaTime) {
     // Crossing an open linked gate hands the world to the neighbor puzzle
     PortalManager.update();
     DeployManager.update();
-    tickEnvironment(deltaTime); // the sky's drift and lightning
+    // The sky: its drift, its lightning, and its answer to a gate being solved
+    tickEnvironment(deltaTime, PortalManager.getActiveArea());
     clapVisual.update();
     recordingUI.update();
     keyHints.update(deltaTime);

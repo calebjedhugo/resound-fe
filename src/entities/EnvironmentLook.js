@@ -1,6 +1,6 @@
 /**
  * EnvironmentLook — the sky, walls and floor (DESIGN.md "Environment look",
- * DRAFT pending the designer's review).
+ * the approved direction).
  *
  * The creatures are ball lightning; the world is the storm they were born
  * in, at night. Everything here is near-neutral, low-chroma and DARK, so a
@@ -14,6 +14,13 @@
  *   four times round: every door and the cleanser gate turn the view by a
  *   multiple of 90 degrees, so a door shows the same sky, the same way
  *   round, as the sky beside it.
+ * - THE STORM ANSWERS A GATE BEING SOLVED (tickEnvironment): the deck
+ *   gathers and turns faster, the eye overhead closes and glows, and the
+ *   deck, the eye and the horizon take the light of the harmony the gate
+ *   hears — the one exception to "no environment hue", the chord's own
+ *   colour, as the creatures show it; the gate's opening strikes lightning
+ *   in that colour across the sky, walls and floor. One response for the
+ *   whole world (uniforms every scene shares), so every door agrees.
  * - WALLS: dark layered stone, darker at the foot, a lighter cap and a thin
  *   pale rim along every top edge, so walls silhouette against the horizon
  *   glow and openings read at a glance.
@@ -33,8 +40,11 @@
  * the StartGate (core/ShaderPrewarm: standInMaterials).
  */
 import * as THREE from 'three';
+import gameState from 'core/GameState';
 import memoizeOnEntityList from 'core/entityListMemo';
+import { messiaenColourCached } from 'core/messiaenColour';
 import { WALL_HIDE_GLSL } from 'core/portalMath';
+import { harmonyLightInto, HARMONY_COLOUR_TAU } from 'entities/CreatureLook';
 
 // ---- Palette (sRGB hex; the shaders work in linear and encode on output) --
 const PALETTE = {
@@ -66,6 +76,8 @@ const LIGHT_REACH = 4.5;
 const LIGHT_GAIN = 0.55;
 
 const srgbToLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const linearOf = (hex) => [16, 8, 0].map((shift) => srgbToLinear(((hex >> shift) & 0xff) / 255)); // eslint-disable-line no-bitwise
+const linearToSrgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 /**
  * A palette colour as a GLSL vec3 literal, as DISPLAYED (sRGB, 0..1). Every
  * pass writes in the canvas's colour space (core/passContext), so these
@@ -79,7 +91,7 @@ function vec3Of(hex) {
   const channels = [16, 8, 0].map((shift) => ((hex >> shift) & 0xff) / 255); // eslint-disable-line no-bitwise
   return `vec3(${channels.map((c) => c.toFixed(5)).join(', ')})`;
 }
-const PALETTE_GLSL = Object.entries(PALETTE)
+export const PALETTE_GLSL = Object.entries(PALETTE)
   .map(
     ([name, hex]) =>
       `const vec3 ${name.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase()} = ${vec3Of(hex)};`
@@ -89,30 +101,211 @@ const PALETTE_GLSL = Object.entries(PALETTE)
 // ---- The world's clock and its lightning (one for every material) --------
 
 // Shared uniform OBJECTS: every environment material holds these same ones,
-// so one write a frame reaches them all
-const WORLD_UNIFORMS = {
+// so one write a frame reaches them all (the entities' looks too:
+// entities/EntityLook)
+export const WORLD_UNIFORMS = {
   uEnvTime: { value: 0 },
   uFlash: { value: 0 },
   uCloud: { value: null }, // CLOUD_TEXTURE, once made (below)
+  // The storm's answer to a gate being solved (tickEnvironment): how far
+  // the solve has come, the deck's own clock (it rushes as the storm
+  // builds), the harmony's light (display values, already scaled by how
+  // much of it shows) and the opening's lightning (likewise)
+  uStorm: { value: 0 },
+  uDeckTime: { value: 0 },
+  uStormCol: { value: [0, 0, 0] },
+  uStrike: { value: [0, 0, 0] },
 };
 
 // Sheet lightning: a strike every STRIKE_GAP seconds or so, of one to three
-// quick pulses. Soft and rare on purpose: atmosphere, not an event.
+// quick pulses. Soft and rare on purpose: atmosphere, not an event (until a
+// gate is being solved: it comes more often as the storm builds).
 const STRIKE_GAP = [9, 22];
 const PULSE_GAP = [0.08, 0.22];
 const PULSE_DECAY = 0.11; // seconds
 const lightning = { untilStrike: 6, pulses: [], level: 0 };
 const between = ([lo, hi]) => lo + Math.random() * (hi - lo);
 
+// ---- The storm answers a gate being solved --------------------------------
+//
+// While a correct performance is under way at a gate (Gate.solveProgress),
+// the storm builds with it: the deck gathers and turns faster, the eye
+// overhead closes and glows, sheet lightning comes more often, and the
+// deck, the eye and the horizon take the LIGHT of the harmony the gate
+// hears at that moment (its own ear: Gate.soundingHeardInto) — the chord's
+// colour exactly as a creature singing it glows (CreatureLook
+// harmonyLightInto), following chord changes at the creatures' pace and
+// gone with the music. The gate's opening strikes: a burst of lightning in
+// that colour lights the sky, the walls and the floor. ONE response for the
+// whole world — the gate in the player's area that is furthest along
+// (nearer counts more) drives it, and every scene's sky shares it, so every
+// door shows the same storm: the sky stays a function of view direction
+// (everything it does is about the zenith, the horizon or the whole deck).
+
+// Gates further than NEAR from the player answer more faintly, down to FAR
+const STORM_NEAR = 12;
+const STORM_FAR = 36;
+const STORM_FAR_WEIGHT = 0.35;
+const STORM_RISE_TAU = 0.25; // seconds: the storm follows the song's progress
+const STORM_FALL_TAU = 1.2; // ...and settles slowly once nothing is solved
+const STORM_LIT_ATTACK = 0.05; // the harmony's light comes on with a note
+const STORM_LIT_RELEASE = 0.35; // ...and goes with the music
+const DECK_RUSH = 6; // the deck turns and gathers this much faster at full storm
+const STORM_LIGHTNING = 3; // sheet lightning this much more often at full storm
+// The opening's strike: three pulses (seconds in, amplitude), then an afterglow
+const STRIKE_PULSES = [
+  [0, 1],
+  [0.09, 0.55],
+  [0.22, 0.85],
+];
+const STRIKE_DECAY = 0.14;
+const STRIKE_AFTERGLOW = 0.3;
+const STRIKE_AFTERGLOW_TAU = 0.9;
+// How much of the strike's light is the neutral flash (so a pale lone note's
+// opening still reads), the rest the harmony's
+const STRIKE_NEUTRAL = 0.35;
+
+const storm = {
+  level: 0,
+  lit: 0,
+  colour: [0, 0, 0], // linear: the light showing
+  target: [0, 0, 0], // linear: the light of what the driving gate hears now
+  strikeColour: [0, 0, 0], // linear
+  pulses: [],
+  afterglow: 0,
+  strike: 0,
+  heard: [], // scratch: MIDI notes the driving gate hears
+  openings: new WeakMap(), // gate -> its opening count when last seen
+};
+
+const gatesOf = memoizeOnEntityList((entities) => entities.filter((e) => e.type === 'gate'));
+const FLASH_LINEAR = linearOf(PALETTE.flash);
+
+/** How strongly a gate this far from the player stirs the storm. */
+function stormWeightAt(distance) {
+  const t = Math.min(1, Math.max(0, (distance - STORM_NEAR) / (STORM_FAR - STORM_NEAR)));
+  return 1 - t * (1 - STORM_FAR_WEIGHT);
+}
+
+function distanceToPlayer(gate) {
+  const { position } = gameState.player;
+  const dx = gate.position.x - position.x;
+  const dz = gate.position.z - position.z;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+/** A gate just opened: lightning strikes, in the light the storm shows now. */
+function strike(weight) {
+  const colourShare = storm.lit > 0.05 ? 1 - STRIKE_NEUTRAL : 0;
+  for (let i = 0; i < 3; i += 1) {
+    storm.strikeColour[i] =
+      FLASH_LINEAR[i] * (1 - colourShare) + Math.min(1, storm.colour[i] * 1.6) * colourShare;
+  }
+  storm.pulses.length = 0;
+  for (const [at, amplitude] of STRIKE_PULSES)
+    storm.pulses.push({ in: at, amplitude: amplitude * weight });
+  storm.afterglow = Math.max(storm.afterglow, STRIKE_AFTERGLOW * weight);
+}
+
+function tickStorm(dt, area) {
+  let driver = null;
+  let target = 0;
+  const gates = area ? gatesOf(area.entities) : [];
+  for (let i = 0; i < gates.length; i += 1) {
+    const gate = gates[i];
+    const seen = storm.openings.get(gate);
+    if (seen !== gate.openings) {
+      storm.openings.set(gate, gate.openings);
+      if (seen !== undefined) strike(stormWeightAt(distanceToPlayer(gate)));
+    }
+    const progress = gate.solveProgress;
+    if (progress > 0) {
+      const weight = progress * stormWeightAt(distanceToPlayer(gate));
+      if (weight > target) {
+        target = weight;
+        driver = gate;
+      }
+    }
+  }
+  const tau = target > storm.level ? STORM_RISE_TAU : STORM_FALL_TAU;
+  storm.level += (target - storm.level) * (1 - Math.exp(-dt / tau));
+  if (target === 0 && storm.level < 1e-3) storm.level = 0;
+
+  // The light of what the driving gate hears, now
+  let sounding = false;
+  if (driver) {
+    storm.heard.length = 0;
+    driver.soundingHeardInto(storm.heard);
+    const harmony = messiaenColourCached(storm.heard);
+    if (harmony.main !== null) {
+      harmonyLightInto(harmony, storm.target);
+      sounding = true;
+    }
+  }
+  if (sounding) {
+    // A first light takes its colour outright (as a creature's does)
+    if (storm.lit < 0.05) for (let i = 0; i < 3; i += 1) storm.colour[i] = storm.target[i];
+    storm.lit = Math.min(1, storm.lit + dt / STORM_LIT_ATTACK);
+  } else {
+    // ...and goes with the music (an opening's strike holds it while it glows)
+    storm.lit = Math.max(storm.lit * Math.exp(-dt / STORM_LIT_RELEASE), Math.min(1, storm.strike));
+    if (storm.lit < 1e-3) storm.lit = 0;
+  }
+  const a = 1 - Math.exp(-dt / HARMONY_COLOUR_TAU);
+  for (let i = 0; i < 3; i += 1) storm.colour[i] += (storm.target[i] - storm.colour[i]) * a;
+
+  // The strike
+  let level = 0;
+  for (let i = storm.pulses.length - 1; i >= 0; i -= 1) {
+    const pulse = storm.pulses[i];
+    pulse.in -= dt;
+    if (pulse.in <= 0) {
+      const glow = pulse.amplitude * Math.exp(pulse.in / STRIKE_DECAY);
+      if (glow < 0.005) storm.pulses.splice(i, 1);
+      else level = Math.max(level, glow);
+    }
+  }
+  storm.afterglow *= Math.exp(-dt / STRIKE_AFTERGLOW_TAU);
+  if (storm.afterglow < 1e-3) storm.afterglow = 0;
+  storm.strike = Math.max(level, storm.afterglow);
+
+  // Into the shared uniforms, as display values
+  const shown = storm.lit * storm.level;
+  const col = WORLD_UNIFORMS.uStormCol.value;
+  const flash = WORLD_UNIFORMS.uStrike.value;
+  for (let i = 0; i < 3; i += 1) {
+    col[i] = linearToSrgb(storm.colour[i]) * shown;
+    flash[i] = linearToSrgb(storm.strikeColour[i]) * storm.strike;
+  }
+  WORLD_UNIFORMS.uStorm.value = storm.level;
+}
+
+/** Settle the storm at once (a fresh world): no build, no colour, no strike. */
+export function calmStorm() {
+  storm.level = 0;
+  storm.lit = 0;
+  storm.strike = 0;
+  storm.afterglow = 0;
+  storm.pulses.length = 0;
+  WORLD_UNIFORMS.uStorm.value = 0;
+  WORLD_UNIFORMS.uStormCol.value.fill(0);
+  WORLD_UNIFORMS.uStrike.value.fill(0);
+}
+
 /**
- * Advance the sky's drift and its lightning. Called once a frame while the
- * world runs (main.js update); render passes only read the result.
+ * Advance the sky's drift, its lightning and its answer to a gate being
+ * solved. Called once a frame while the world runs (main.js update);
+ * render passes only read the result.
  * @param {number} deltaTime - seconds
+ * @param {?import('core/Area').default} [area] - the player's area, whose
+ *   gates the storm answers
  */
-export function tickEnvironment(deltaTime) {
+export function tickEnvironment(deltaTime, area = null) {
   const dt = Math.max(0, Math.min(deltaTime, 0.1));
   WORLD_UNIFORMS.uEnvTime.value += dt;
-  lightning.untilStrike -= dt;
+  tickStorm(dt, area);
+  WORLD_UNIFORMS.uDeckTime.value += dt * (1 + DECK_RUSH * storm.level);
+  lightning.untilStrike -= dt * (1 + STORM_LIGHTNING * storm.level);
   if (lightning.untilStrike <= 0) {
     lightning.untilStrike = between(STRIKE_GAP);
     let at = 0;
@@ -139,6 +332,20 @@ export function tickEnvironment(deltaTime) {
 /** The lightning's brightness now, 0..1 (0 between strikes). */
 export function lightningLevel() {
   return WORLD_UNIFORMS.uFlash.value;
+}
+
+/**
+ * The storm's answer to gate solving, now: how far it has built (0..1),
+ * the harmony's light it shows (display rgb, scaled by how much shows: all
+ * zero for the neutral storm) and the opening strike's light (likewise).
+ * @returns {{level: number, colour: number[], strike: number[]}}
+ */
+export function stormResponse() {
+  return {
+    level: WORLD_UNIFORMS.uStorm.value,
+    colour: [...WORLD_UNIFORMS.uStormCol.value],
+    strike: [...WORLD_UNIFORMS.uStrike.value],
+  };
 }
 
 // ---- Cloud noise -----------------------------------------------------------
@@ -200,7 +407,7 @@ WORLD_UNIFORMS.uCloud.value = CLOUD_TEXTURE;
 // Creature light: each light falls off smoothly to nothing at its reach and
 // lights only surfaces facing it (no shadows: walls are thicker than the
 // reach is long, so little shows through)
-const LIGHT_GLSL = /* glsl */ `
+export const LIGHT_GLSL = /* glsl */ `
   uniform vec4 uLightPos[${MAX_LIGHTS}];
   uniform vec3 uLightCol[${MAX_LIGHTS}];
   uniform int uLightCount;
@@ -223,10 +430,10 @@ const LIGHT_GLSL = /* glsl */ `
 
 // The scene's key light direction (main.js / Area: the directional light at
 // (50, 100, 50)): faces shade by it, so corners read like the lit gates'
-const KEY_GLSL = 'const vec3 KEY_DIR = vec3(0.4082, 0.8165, 0.4082);';
+export const KEY_GLSL = 'const vec3 KEY_DIR = vec3(0.4082, 0.8165, 0.4082);';
 
 // A surface's display colour plus the creature light it catches, written out
-const FINISH_GLSL = /* glsl */ `
+export const FINISH_GLSL = /* glsl */ `
   vec4 finish(vec3 display, vec3 light) {
     return vec4(sqrt(display * display + light), 1.0);
   }
@@ -248,8 +455,6 @@ const smoothstep = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
-const linearOf = (hex) => [16, 8, 0].map((shift) => srgbToLinear(((hex >> shift) & 0xff) / 255)); // eslint-disable-line no-bitwise
-const linearToSrgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 
 /** The sky's colour (linear) looking at height `h` (-1 down .. 1 up). */
 function skyColourAt(h) {
@@ -287,11 +492,13 @@ function createSkyRamp() {
 }
 
 const SKY_VERTEX = /* glsl */ `
-  uniform float uEnvTime;
+  uniform float uDeckTime;
+  uniform float uStorm;
   varying float vH;
   varying vec2 vCloudUv;
   varying vec4 vCloud; // the deck's colour here, and how much deck there is
   varying float vSheet; // how much of the sky's own glow lightning lifts
+  varying vec3 vStormAt; // where the storm's light gathers: eye rim, horizon, zenith
   #include <common>
   #include <clipping_planes_pars_vertex>
   ${PALETTE_GLSL}
@@ -304,13 +511,21 @@ const SKY_VERTEX = /* glsl */ `
     // about the zenith — the azimuth (the sphere's own u, seamless) one
     // noise tile per QUARTER turn, as doors turn the view by quarter
     // turns, so every door sees the same deck. It turns slowly and drifts
-    // in toward a clear eye overhead.
+    // in toward a clear eye overhead; as a gate is solved (uStorm) it
+    // rushes (uDeckTime) and the eye closes.
     float r = length(position.xz) / (up + 0.12);
-    vCloudUv = vec2(uv.x * 4.0 + uEnvTime * 0.004, r * 0.16 + uEnvTime * 0.007);
+    vCloudUv = vec2(uv.x * 4.0 + uDeckTime * 0.004, r * 0.16 + uDeckTime * 0.007);
+    float eye = mix(0.7, 0.3, uStorm);
     vCloud = vec4(
       mix(CLOUD_LIT, CLOUD_DARK, smoothstep(0.1, 0.7, up)), // lit from the horizon
-      smoothstep(0.0, 0.08, position.y) * smoothstep(0.25, 1.1, r) * (1.0 - smoothstep(4.5, 9.0, r)));
+      smoothstep(0.0, 0.08, position.y) * smoothstep(eye * 0.35, eye * 1.6, r)
+        * (1.0 - smoothstep(4.5, 9.0, r)));
     vSheet = 0.12 * smoothstep(-0.05, 0.3, position.y);
+    float rim = (r - eye) / 0.45;
+    vStormAt = vec3(
+      exp(-rim * rim) * smoothstep(0.2, 0.5, up),
+      exp(-abs(position.y) * 14.0),
+      smoothstep(0.8, 1.0, up));
 
     vec4 mvPosition = viewMatrix * vec4(cameraPosition + position * ${SKY_RADIUS.toFixed(1)}, 1.0);
     gl_Position = projectionMatrix * mvPosition;
@@ -320,14 +535,18 @@ const SKY_VERTEX = /* glsl */ `
 `;
 
 const SKY_FRAGMENT = /* glsl */ `
-  uniform float uEnvTime;
+  uniform float uDeckTime;
   uniform float uFlash;
+  uniform float uStorm;
+  uniform vec3 uStormCol;
+  uniform vec3 uStrike;
   uniform sampler2D uCloud;
   uniform sampler2D uSkyRamp;
   varying float vH;
   varying vec2 vCloudUv;
   varying vec4 vCloud;
   varying float vSheet;
+  varying vec3 vStormAt;
   #include <common>
   #include <clipping_planes_pars_fragment>
   ${PALETTE_GLSL}
@@ -336,12 +555,19 @@ const SKY_FRAGMENT = /* glsl */ `
     #include <clipping_planes_fragment>
     vec3 col = texture2D(uSkyRamp, vec2(vH * 0.5 + 0.5, 0.5)).rgb;
     float n = texture2D(uCloud, vCloudUv).r * 0.65
-            + texture2D(uCloud, vCloudUv * vec2(2.0, 2.3) + vec2(0.37, uEnvTime * 0.004)).r * 0.35;
-    float deck = smoothstep(0.42, 0.68, n) * vCloud.a;
-    col = mix(col, vCloud.rgb, deck * 0.85);
+            + texture2D(uCloud, vCloudUv * vec2(2.0, 2.3) + vec2(0.37, uDeckTime * 0.004)).r * 0.35;
+    // A gate being solved gathers the deck: more of it, and heavier
+    float deck = smoothstep(0.42 - 0.12 * uStorm, 0.68 - 0.06 * uStorm, n) * vCloud.a;
+    col = mix(col, vCloud.rgb * (1.0 - 0.3 * uStorm), deck * 0.85);
     // Sheet lightning lights the deck from inside: its thin parts most
     float thin = deck * (1.0 - smoothstep(0.5, 0.8, n));
     col += FLASH * uFlash * (vSheet + 0.4 * thin);
+    // ...and the harmony the gate hears glows in it: around the closing
+    // eye, along the horizon, through the deck's thin parts
+    col += uStormCol * (0.6 * vStormAt.x + 0.4 * vStormAt.y + 0.3 * vStormAt.z
+                        + deck * (0.08 + 0.5 * thin));
+    // The opening's strike lights all of it
+    col += uStrike * (0.3 + 0.8 * vStormAt.y + 0.6 * vStormAt.z + 1.1 * deck + 0.8 * thin);
     gl_FragColor = vec4(col, 1.0); // already display values: no encode
   }
 `;
@@ -447,7 +673,7 @@ export class AreaLight {
 }
 
 // A light-less stand-in for surfaces built outside any area (tools, tests)
-const NO_LIGHT = new AreaLight();
+export const NO_LIGHT = new AreaLight();
 
 // ---- Walls ----------------------------------------------------------------
 
@@ -491,6 +717,8 @@ const WALL_VERTEX = /* glsl */ `
 
 const WALL_FRAGMENT = /* glsl */ `
   uniform float uFlash;
+  uniform vec3 uStormCol;
+  uniform vec3 uStrike;
   varying vec3 vWorld;
   varying vec3 vNormalW;
   varying float vUp;
@@ -517,7 +745,7 @@ const WALL_FRAGMENT = /* glsl */ `
       col *= 0.78 + 0.32 * max(dot(n, KEY_DIR), 0.0);
       // Polished faces catch the horizon's glow at a glancing angle
       float glance = pow(1.0 - max(dot(n, v), 0.0), 4.0);
-      col += HORIZON * glance * 0.1;
+      col += (HORIZON + uStormCol) * glance * 0.1;
       // The pale rim along the top edge: walls silhouette against the sky.
       // Never thinner than about a pixel (no shimmer far off), and no
       // brighter in total for being widened
@@ -527,6 +755,9 @@ const WALL_FRAGMENT = /* glsl */ `
       col = mix(col, WALL_RIM * (1.0 + 0.4 * uFlash), clamp(rim, 0.0, 1.0));
       col += FLASH * uFlash * 0.05 * vUp;
     }
+    // A gate's opening strikes lightning across the world: the faces it
+    // falls on from above most
+    col += uStrike * (0.1 + 0.18 * vUp);
     gl_FragColor = finish(col, creatureLight(vWorld, n));
   }
 `;
@@ -580,6 +811,8 @@ const FLOOR_VERTEX = /* glsl */ `
 
 const FLOOR_FRAGMENT = /* glsl */ `
   uniform float uFlash;
+  uniform vec3 uStormCol;
+  uniform vec3 uStrike;
   uniform sampler2D uCloud;
   varying vec3 vWorld;
   varying vec3 vNormalW;
@@ -604,9 +837,11 @@ const FLOOR_FRAGMENT = /* glsl */ `
       col = raised ? FLOOR_RAISED : FLOOR;
       // Slate mottling, very faint
       col *= 0.93 + 0.14 * texture2D(uCloud, vWorld.xz * 0.04 + vWorld.y * 0.13).r;
-      // Polished: the horizon's glow on the far floor
+      // Polished: the horizon's glow on the far floor (the storm's colour
+      // in it while a gate is being solved, the opening's strike after)
       float glance = pow(1.0 - max(dot(n, v), 0.0), 5.0);
-      col += HORIZON * glance * 0.18 * (1.0 + 1.5 * uFlash);
+      col += (HORIZON * (1.0 + 1.5 * uFlash) + uStormCol + uStrike * 2.0) * glance * 0.18;
+      col += uStrike * 0.09;
     } else if (n.y < -0.5) {
       col = SLAB_UNDER; // the underside of a storey you walk beneath
     } else {

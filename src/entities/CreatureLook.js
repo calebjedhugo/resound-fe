@@ -564,6 +564,25 @@ const rainbowOf = (harmony) => (harmony.rainbow === undefined ? 0 : harmony.rain
 const OPAL_FROM = 0.85;
 const OPAL_SPAN = 0.4;
 const opalOf = (chroma) => Math.min(1, Math.max(0, (OPAL_FROM - chroma) / OPAL_SPAN));
+/**
+ * The LIGHT a harmony glows with, as a lit creature shows it (its glow
+ * colour, chroma faded in OKLab, a lone note lifted toward pearl): linear
+ * rgb written into `out`. The sky's answer to a gate being solved
+ * (EnvironmentLook) takes its colour from here, so it is the same light.
+ * @param {object} harmony - core/messiaenColour's answer (main not null)
+ * @param {number[]|Float32Array} out
+ */
+export function harmonyLightInto(harmony, out) {
+  const chroma = chromaOf(harmony);
+  return liftToPearl(
+    saturate3(hexToLinearInto(glowOf(harmony), out), chroma),
+    PEARL_LIFT * opalOf(chroma)
+  );
+}
+
+/** How fast a creature's colour follows a change of harmony (seconds). */
+export const HARMONY_COLOUR_TAU = COLOUR_TAU;
+
 const dissonanceOf = (harmony) =>
   harmony.dissonance === undefined || harmony.complement == null ? 0 : harmony.dissonance;
 

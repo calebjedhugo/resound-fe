@@ -6,7 +6,13 @@
  */
 import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
-import { MAX_LIGHTS, lightningLevel, tickEnvironment } from 'entities/EnvironmentLook';
+import {
+  MAX_LIGHTS,
+  calmStorm,
+  lightningLevel,
+  stormResponse,
+  tickEnvironment,
+} from 'entities/EnvironmentLook';
 import Floor from 'entities/Floor';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
@@ -211,5 +217,122 @@ describe('Lightning', () => {
       settled.push(lightningLevel());
     }
     expect(settled.some((level) => level === 0)).toBe(true);
+  });
+});
+
+// While a correct performance is under way at a gate, the storm builds with
+// it, in the light of the harmony the gate hears (the colour a creature
+// singing that chord glows), and the gate's opening strikes lightning in
+// that light. One response for the whole world (shared uniforms).
+describe('The storm answers a gate being solved', () => {
+  const N = (pitch, length = '1/1') => ({ pitch, length });
+  const E_MAJOR = [N('E4'), N('G#4'), N('B4')];
+  const A_MAJOR = [N('A3'), N('C#4'), N('E4')];
+
+  /**
+   * Run the world (and its sky) for `ms`, frame by frame as the game loop
+   * does — the tape's notes landing in their own frames (ctx.tick flushes
+   * every pending timer at its end, which would play a whole song at once)
+   */
+  async function frames(ms) {
+    for (let t = 0; t < ms; t += 16) {
+      const area = gameState.activeArea;
+      gameState.musicalClock.update(0.016);
+      if (area !== PortalManager.getActiveArea()) area.update(0.016);
+      PortalManager.updateAreas(0.016);
+      await jest.advanceTimersByTimeAsync(16); // eslint-disable-line no-await-in-loop
+      tickEnvironment(0.016, area);
+    }
+  }
+
+  /** A gate beside the player wanting `song`, and the tape holding it. */
+  function gateWanting(song, distance = WORLD_SCALE) {
+    ctx.loadPuzzle('listening-gate-multi-note'); // no creatures: the gate hears the tape alone
+    const player = ctx.getPlayerPosition();
+    const gate = ctx.addGate({ position: { x: player.x, y: 0, z: player.z + distance }, song });
+    ctx.setInventorySlot(0, song);
+    ctx.setActiveSlot(0);
+    return gate;
+  }
+
+  const brightness = (rgb) => Math.max(...rgb);
+
+  beforeEach(() => calmStorm());
+
+  it('is the calm, neutral storm while no gate is being solved', async () => {
+    gateWanting([E_MAJOR]);
+    await frames(500);
+
+    const { level, colour, strike } = stormResponse();
+    expect(level).toBe(0);
+    expect(brightness(colour)).toBe(0);
+    expect(brightness(strike)).toBe(0);
+  });
+
+  it('builds with the performance, in the light of the chord the gate hears', async () => {
+    const gate = gateWanting([E_MAJOR, A_MAJOR]);
+    ctx.pressKey('space');
+    await frames(1200); // into E major
+
+    const early = stormResponse();
+    expect(gate.solveProgress).toBeGreaterThan(0);
+    expect(early.level).toBeGreaterThan(0);
+    const [r, g, b] = early.colour;
+    expect(r).toBeGreaterThan(b * 1.5); // E major glows red
+    expect(r).toBeGreaterThan(g);
+
+    await frames(2000); // A major, further on
+    const later = stormResponse();
+    expect(later.level).toBeGreaterThan(early.level);
+    expect(later.colour[2]).toBeGreaterThan(later.colour[0]); // A major: sapphire
+  });
+
+  it('strikes lightning when the gate opens, and the strike dies away', async () => {
+    const gate = gateWanting([E_MAJOR]);
+    ctx.pressKey('space');
+    let peak = 0;
+    for (let i = 0; i < 300 && !gate.isOpen; i += 1) {
+      await frames(16); // eslint-disable-line no-await-in-loop
+    }
+    expect(gate.isOpen).toBe(true);
+    for (let i = 0; i < 30; i += 1) {
+      tickEnvironment(0.016, gameState.activeArea);
+      peak = Math.max(peak, brightness(stormResponse().strike));
+    }
+    expect(peak).toBeGreaterThan(0.3);
+
+    for (let t = 0; t < 6; t += 0.016) tickEnvironment(0.016, gameState.activeArea);
+    expect(brightness(stormResponse().strike)).toBe(0);
+  });
+
+  it('goes back to the neutral storm when the music stops', async () => {
+    gateWanting([E_MAJOR, A_MAJOR]);
+    ctx.setInventorySlot(0, [E_MAJOR]); // the tape holds only half the song
+    ctx.pressKey('space');
+    await frames(1200);
+    expect(brightness(stormResponse().colour)).toBeGreaterThan(0);
+
+    await frames(12000); // the tape ran out: silence, the gate gave up, the storm settled
+
+    const { level, colour, strike } = stormResponse();
+    expect(level).toBe(0);
+    expect(brightness(colour)).toBe(0);
+    expect(brightness(strike)).toBe(0); // it never opened
+  });
+
+  it('a gate far from the player stirs it less than one beside them', async () => {
+    gateWanting([E_MAJOR], WORLD_SCALE);
+    ctx.pressKey('space');
+    await frames(1500);
+    const near = stormResponse().level;
+
+    calmStorm();
+    // Far, but still within the tape's reach
+    const far = gateWanting([E_MAJOR], 12 * WORLD_SCALE);
+    far.audibleRange = 60;
+    ctx.pressKey('space');
+    await frames(1500);
+
+    expect(stormResponse().level).toBeLessThan(near * 0.8);
   });
 });

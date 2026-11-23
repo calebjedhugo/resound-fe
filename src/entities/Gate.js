@@ -5,6 +5,7 @@ import SongMatcher from 'core/SongMatcher';
 import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
 import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
+import { midiOf } from 'core/messiaenColour';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from 'entities/Entity';
 
@@ -45,6 +46,10 @@ class Gate extends Entity {
   // ends when the gate is listening again.
   static MISMATCH_LOCKOUT_MS = 1500;
 
+  // No note is longer than this (a whole note at the slowest tempo the
+  // game plays, with room): older heard notes have stopped sounding
+  static LONGEST_NOTE_MS = 8000;
+
   constructor(position, data = {}) {
     super('gate', position, data);
 
@@ -82,6 +87,9 @@ class Gate extends Entity {
     this._fade = 0;
     this._wasPlayerInside = false;
     this._lockoutUntilMs = 0;
+    // How many times this gate has opened (the storm strikes on each:
+    // entities/EnvironmentLook)
+    this.openings = 0;
 
     // Listening state
     this.capturedNotes = [];
@@ -267,6 +275,40 @@ class Gate extends Entity {
   }
 
   /**
+   * How far a correct performance has come toward opening this gate, 0..1
+   * (the shell's fade): 0 while nothing correct is under way, or once open.
+   * The storm answers it (entities/EnvironmentLook).
+   */
+  get solveProgress() {
+    return this.isOpen || !this._inProgress ? 0 : this._fade;
+  }
+
+  /**
+   * The notes this gate hears sounding NOW (its own ear: what it captured,
+   * by the source's range and through doors, still within its notated
+   * length), as MIDI numbers pushed onto `out` — the harmony whose colour
+   * the storm shows while the gate is being solved. Visual only.
+   * @param {number[]} out
+   * @returns {number[]} out
+   */
+  soundingHeardInto(out) {
+    const now = Date.now();
+    const msPerBeat = 60000 / (gameState.musicalClock ? gameState.musicalClock.tempo : 120);
+    const notes = this.capturedNotes;
+    // Newest last: walk back until notes are too old to still sound
+    for (let i = notes.length - 1; i >= 0; i -= 1) {
+      const note = notes[i];
+      const age = now - note.timestamp;
+      if (age > Gate.LONGEST_NOTE_MS) break;
+      if (age >= 0 && age < SongMatcher.lengthToBeats(note.length) * msPerBeat) {
+        const midi = midiOf(note.pitch);
+        if (Number.isFinite(midi)) out.push(midi);
+      }
+    }
+    return out;
+  }
+
+  /**
    * While the gate is CLOSED and a correct performance is underway, the
    * shell fades from opaque to FULLY transparent in step with the song's
    * progress (opacity = fraction of the song still to come) — previewing
@@ -376,6 +418,7 @@ class Gate extends Entity {
     this._fade = 0;
     if (this.isOpen) return;
     this.isOpen = true;
+    this.openings += 1;
     this._applyLook();
   }
 
