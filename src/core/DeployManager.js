@@ -192,7 +192,7 @@ class DeployManager {
     const approach = this._approachView(camera);
     const options = this._passOptions;
     options.clipOverride = approach ? approach.clipPlane : null;
-    options.extraWallsBehind = approach ? approach.wallsToHide(camera) : null;
+    options.extraWallHide = approach ? approach.wallHide(camera) : null;
     for (const view of this._views) {
       if (view.render(renderer, camera, options)) view._padFresh = this._padFrame;
     }

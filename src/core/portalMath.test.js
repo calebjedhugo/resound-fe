@@ -11,7 +11,7 @@ import {
   portalMapping,
   sphereInView,
   panelFootprint,
-  inPortalHideBand,
+  wallHiddenBy,
   viewPlanes,
   pyramidPlanes,
   clipQuad,
@@ -226,33 +226,49 @@ describe('panelFootprint (what a door pass needs to draw)', () => {
   });
 });
 
-describe('inPortalHideBand (static-wall batching split)', () => {
-  // Walls outside every linked gate's band merge into one InstancedMesh and
-  // can never be hidden per portal pass, so the band must cover exactly the
-  // walls whose hiding is visible: the gate's own row/column (flush jambs,
-  // any lateral distance) and one cell off it (the strip wall the doorway
-  // clip plane cannot fully remove). Two cells off is entirely clipped.
+describe('wallHiddenBy (the eye-side walls a door pass leaves out)', () => {
+  // A north-facing door at grid (5, 7): its window is half a cell north of
+  // the gate, looking out north (-z); the area behind it (+z) is the eye's
+  // side in a pass seen through its partner. Every wall draws in one batch,
+  // so this is how a pass leaves a wall out.
   const gate = { x: 5 * WORLD_SCALE, z: 7 * WORLD_SCALE };
-  const wallAtCell = (gx, gz) => ({ x: gx * WORLD_SCALE, y: 0, z: gz * WORLD_SCALE });
+  const spec = (latEye = 0) => ({
+    x: gate.x,
+    z: gate.z - WORLD_SCALE / 2,
+    outX: 0,
+    outZ: -1,
+    latEye,
+  });
+  const hidden = (s, gx, gz) => wallHiddenBy(s, gx * WORLD_SCALE, gz * WORLD_SCALE);
 
-  it('keeps the row and column through the gate at any distance (flush jambs)', () => {
-    expect(inPortalHideBand(wallAtCell(5, -1), gate)).toBe(true); // far up the column
-    expect(inPortalHideBand(wallAtCell(-1, 7), gate)).toBe(true); // far down the row
+  it('hides every wall a full cell or more behind the window, at any distance', () => {
+    expect(hidden(spec(), 5, 8)).toBe(true); // the strip right behind
+    expect(hidden(spec(), 0, 8)).toBe(true); // off to the side
+    expect(hidden(spec(), 9, 12)).toBe(true); // far behind (wholly clipped anyway)
   });
 
-  it('keeps walls one cell off the row/column (the doorway strip)', () => {
-    expect(inPortalHideBand(wallAtCell(4, 0), gate)).toBe(true);
-    expect(inPortalHideBand(wallAtCell(0, 8), gate)).toBe(true);
+  it('never hides walls beyond the window: the room the door shows', () => {
+    expect(hidden(spec(), 5, 6)).toBe(false);
+    expect(hidden(spec(), 2, 0)).toBe(false);
   });
 
-  it('releases walls two or more cells off both axes to the batch', () => {
-    expect(inPortalHideBand(wallAtCell(3, 5), gate)).toBe(false);
-    expect(inPortalHideBand(wallAtCell(7, 9), gate)).toBe(false);
-    expect(inPortalHideBand(wallAtCell(0, 0), gate)).toBe(false);
+  it('keeps the flush jambs while the eye stands inside them, hides one the eye is beyond', () => {
+    expect(hidden(spec(0), 4, 7)).toBe(false); // dead on: both jambs frame the doorway
+    expect(hidden(spec(0), 6, 7)).toBe(false);
+    // Three cells to the east (lateral runs along right = (out.z, -out.x):
+    // west, for a north window): the eye faces the east jamb's outside
+    expect(hidden(spec(-3 * WORLD_SCALE), 6, 7)).toBe(true);
+    expect(hidden(spec(-3 * WORLD_SCALE), 4, 7)).toBe(false); // the west one stays
   });
 
-  it('ignores elevation, matching the hide-sets', () => {
-    expect(inPortalHideBand({ x: gate.x, y: 99, z: gate.z - 5 * WORLD_SCALE }, gate)).toBe(true);
+  it('hides nothing for a spec with no outward (no door pass)', () => {
+    const none = { x: 0, z: 0, outX: 0, outZ: 0, latEye: 0 };
+    expect(hidden(none, 5, 8)).toBe(false);
+    expect(hidden(none, 0, 0)).toBe(false);
+  });
+
+  it('ignores elevation: walls are judged by where they stand on the grid', () => {
+    expect(wallHiddenBy(spec(), gate.x, gate.z + WORLD_SCALE)).toBe(true);
   });
 });
 

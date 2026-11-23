@@ -34,6 +34,7 @@
 import * as THREE from 'three';
 import CreatureLook from 'entities/CreatureLook';
 import ClapVisual from 'ui/ClapVisual';
+import { createSky, standInMaterials } from 'entities/EnvironmentLook';
 import { NO_CLIP_PLANES, createSceneTarget, showStoredTexels } from 'core/passContext';
 
 const SPAN = 1e4;
@@ -80,7 +81,7 @@ function setup(mainScene) {
   // by (nothing else about these materials matters here)
   const box = new THREE.BoxGeometry(1, 1, 1);
   const looks = [
-    // Walls, floors, closed gates, fountains, ramp posts
+    // Closed gates, fountains, ramp posts
     new THREE.MeshStandardMaterial(),
     // A gate's shell as it fades, a cleansing tile, the deploy phantom
     new THREE.MeshStandardMaterial({ transparent: true }),
@@ -94,8 +95,12 @@ function setup(mainScene) {
     new THREE.MeshBasicMaterial({ map: new THREE.Texture(), transparent: true, depthWrite: false }),
   ];
   for (const material of looks) standIns.add(new THREE.Mesh(box, material));
-  // The batched walls: an instanced draw is a program of its own
-  standIns.add(new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial(), 1));
+  // The environment (entities/EnvironmentLook): the sky, a floor, and the
+  // walls, instanced as every area draws them
+  const environment = standInMaterials();
+  standIns.add(createSky());
+  standIns.add(new THREE.Mesh(box, environment.floor));
+  standIns.add(new THREE.InstancedMesh(box, environment.wall, 1));
   // A clap ring, as a clap shows it (left unfaded in this scene)
   new ClapVisual(standIns).show({ x: 0, z: 0 }, 1);
   // A keycap hint (KeyHints: a sprite showing its canvas-drawn keycap)

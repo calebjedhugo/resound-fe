@@ -719,7 +719,12 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
     delete global.fetch;
   });
 
-  /** Renderer that snapshots the three witness walls' visibility per pass. */
+  // Does the pass drawing now draw `wall`? Every wall of an area is an
+  // instance of its one wall batch; a pass leaves its eye-side walls out
+  // through it (Area.hideWalls)
+  const drawn = (wall) => !wall.area.isWallHidden(wall);
+
+  /** Renderer that snapshots whether each witness wall draws, per pass. */
   function wallWatchingRenderer(walls, seen) {
     return {
       clippingPlanes: [],
@@ -732,9 +737,9 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
           // (back-culled or clipped to slivers), so per-wall visibility is
           // asserted on the approach pass.
           isApproach: this.clippingPlanes[0] === this.clippingPlanes[1],
-          behind: walls.behind.mesh.visible,
-          frame: walls.frame.mesh.visible,
-          interior: walls.interior.mesh.visible,
+          behind: drawn(walls.behind),
+          frame: drawn(walls.frame),
+          interior: drawn(walls.interior),
         });
       },
       getDrawingBufferSize: (size) => size.set(800, 600),
@@ -785,9 +790,9 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
       expect(pass.interior).toBe(true); // the room beyond the window stays
     }
     // Restored the instant the passes finish (reappears normally on crossing).
-    expect(walls.behind.mesh.visible).toBe(true);
-    expect(walls.frame.mesh.visible).toBe(true);
-    expect(walls.interior.mesh.visible).toBe(true);
+    expect(drawn(walls.behind)).toBe(true);
+    expect(drawn(walls.frame)).toBe(true);
+    expect(drawn(walls.interior)).toBe(true);
   });
 
   it('a dead-on approach keeps the arrival JAMBS at any distance — a door reads as a doorway in a wall', () => {
@@ -870,8 +875,8 @@ describe('PortalManager doorway strip (perimeter wall behind the arrival cell, 2
       expect(pass.frame).toBe(true); // the arrival cell keeps its frame
       expect(pass.interior).toBe(true);
     }
-    expect(walls.behind.mesh.visible).toBe(true);
-    expect(walls.frame.mesh.visible).toBe(true);
+    expect(drawn(walls.behind)).toBe(true);
+    expect(drawn(walls.frame)).toBe(true);
   });
 });
 
@@ -961,8 +966,8 @@ describe('PortalManager freestanding door (same-area teleport pair, 2026-07-14)'
       render() {
         seen.push({
           isApproach: this.clippingPlanes[0] === this.clippingPlanes[1], // shared == own
-          far: farWall.mesh.visible,
-          diag: diagWall.mesh.visible,
+          far: !farWall.area.isWallHidden(farWall),
+          diag: !diagWall.area.isWallHidden(diagWall),
         });
       },
       getDrawingBufferSize: (size) => size.set(800, 600),

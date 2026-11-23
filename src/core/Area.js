@@ -23,6 +23,11 @@
  */
 import * as THREE from 'three';
 import EntityManager from 'entities/EntityManager';
+import { AreaLight, createSky } from 'entities/EnvironmentLook';
+import { wallHiddenBy } from 'core/portalMath';
+
+// What a wall-hide spec slot holds while it hides nothing
+const HIDE_NOTHING = { x: 0, z: 0, outX: 0, outZ: 0, latEye: 0 };
 
 class Area {
   /**
@@ -49,13 +54,20 @@ class Area {
     directionalLight.position.set(50, 100, 50);
     this.scene.add(directionalLight);
     this.scene.add(this.group);
+    // The sky (entities/EnvironmentLook) travels with the area's content:
+    // the main view draws the active area's, a door pass the area beyond's
+    this.group.add(createSky());
+    // The creature light its floor and walls show (refreshed in update)
+    this.light = new AreaLight();
 
     this.entityManager = new EntityManager(this.group, this);
     this.elevationGrid = null;
 
-    // ONE InstancedMesh holding every batched wall (PuzzleLoader.buildArea):
-    // static scenery drawn in a single call instead of one per wall
+    // ONE InstancedMesh holding every wall (PuzzleLoader.buildArea): static
+    // scenery drawn in a single call instead of one per wall. A door pass
+    // hides its eye-side walls through it (hideWalls)
     this.staticWalls = null;
+    this._wallHides = [HIDE_NOTHING, HIDE_NOTHING];
 
     // Materials many of this area's meshes share (its walls': flagged
     // userData.shared, so no single entity frees them) — freed with the area
@@ -68,9 +80,33 @@ class Area {
     this.group.add(batch);
   }
 
+  /**
+   * Hide, for the door pass about to draw this area, the walls either
+   * wall-hide spec covers (portalMath.wallHiddenBy; PortalView.wallHide);
+   * `hideWalls(null, null)` shows them all again. The batch's vertex shader
+   * leaves those instances out.
+   * @param {?object} spec
+   * @param {?object} [extra] - the door's approach panel's spec
+   */
+  hideWalls(spec, extra = null) {
+    this._wallHides[0] = spec || HIDE_NOTHING;
+    this._wallHides[1] = extra || HIDE_NOTHING;
+    if (!this.staticWalls) return;
+    const u = this.staticWalls.material.uniforms;
+    writeHide(u.uHideA, u.uHideLatA, this._wallHides[0]);
+    writeHide(u.uHideB, u.uHideLatB, this._wallHides[1]);
+  }
+
+  /** Is `wall` (one of this area's) left out of the pass drawing now? */
+  isWallHidden(wall) {
+    const { x, z } = wall.position;
+    return this._wallHides.some((spec) => wallHiddenBy(spec, x, z));
+  }
+
   /** Advance this area's simulation by one tick. */
   update(deltaTime) {
     this.entityManager.update(deltaTime);
+    this.light.update(this.entities);
   }
 
   /** Tear down every entity (meshes, listeners, instruments). */
@@ -86,6 +122,16 @@ class Area {
     for (const material of this.ownedMaterials) material.dispose();
     this.ownedMaterials = [];
   }
+}
+
+/** A wall-hide spec into the wall material's uniforms. */
+function writeHide(window, lat, spec) {
+  const w = window.value;
+  w[0] = spec.x;
+  w[1] = spec.z;
+  w[2] = spec.outX;
+  w[3] = spec.outZ;
+  lat.value = spec.latEye; // eslint-disable-line no-param-reassign
 }
 
 export default Area;

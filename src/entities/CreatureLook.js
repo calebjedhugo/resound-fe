@@ -700,6 +700,30 @@ class CreatureLook {
     return this._lit * (SUSTAIN_GLOW + (1 - SUSTAIN_GLOW) * this._flare);
   }
 
+  /**
+   * The light this creature throws on the floor and walls around it
+   * (EnvironmentLook's pools): where it shines from and its colour, linear,
+   * already scaled by how brightly it shines — its glow (onset flares
+   * included) at its register's lightness, or the clap's white flash.
+   * @param {Float32Array} position - xyz written at `index * 4`
+   * @param {Float32Array} colour - rgb written at `index * 3`
+   * @param {number} index
+   * @returns {number} the strength written in (0: silent, casts nothing)
+   */
+  lightInto(position, colour, index) {
+    const strength = Math.max(this.glow * Math.min(1.4, this._lum), this._flash);
+    if (strength <= 0) return 0;
+    const { x, y, z } = this.object.position;
+    position[index * 4] = x;
+    position[index * 4 + 1] = y + this.float.position.y;
+    position[index * 4 + 2] = z;
+    const white = this._flash / Math.max(strength, 1e-6);
+    for (let i = 0; i < 3; i += 1) {
+      colour[index * 3 + i] = (this._glow[i] + (1 - this._glow[i]) * white) * strength;
+    }
+    return strength;
+  }
+
   /** The harmony colour the look is showing/moving toward (core/messiaenColour's answer). */
   get harmonyColour() {
     return this._harmony;

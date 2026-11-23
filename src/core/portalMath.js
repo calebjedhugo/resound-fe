@@ -69,31 +69,52 @@ export function doorwayCorners(gatePosition, facing) {
 }
 
 /**
- * Could a PortalView hide-set ever NEED to hide a wall at `wallPosition` for
- * a door at `gatePosition`? Drives the static-wall batching split
- * (PuzzleLoader.buildArea): walls outside every linked gate's band merge into
- * one InstancedMesh per area, so they can no longer be hidden individually —
- * this predicate must cover every wall whose hiding has a visible effect.
- *
- * Derivation (see PortalView's _wallsStrictBehind/_wallsFlushLateral): a
- * door's window plane sits half a cell from the gate center along one of the
- * four facings, and per-pass hiding matters only for
- * - flush-lateral walls: outward·(wall - gate) = 0 — the gate's own row or
- *   column, at ANY lateral distance (the jamb rule needs each one toggleable
- *   by eye position), and
- * - strictly-behind walls the doorway clip plane doesn't fully remove:
- *   outward·(wall - gate) = -WORLD_SCALE (one cell). Anything deeper is
- *   entirely behind the clip plane in every pass (shared clip included), so
- *   hiding it is visually redundant and it can merge.
- * Over all four facings that is: x or z distance to the gate of 0 or 1 cell
- * (positions are exact grid multiples; y is ignored, matching the hide-sets).
+ * Does a door pass hide the wall centred at (x, z)? Its WALL-HIDE spec
+ * (PortalView.wallHide) is the pass's window centre and outward direction
+ * (in the area beyond) and the eye's lateral offset from the window; a
+ * spec with a zero outward hides nothing. Walls on the EYE side of the
+ * window would paint their outside faces into the doorway (the clip plane
+ * overreaches one cell to paint the arrival cell), so:
+ * - a wall a full cell or more behind the window is always hidden (only a
+ *   thin strip of its near face could show, "the rectangle that shouldn't
+ *   be there", ruled 2026-07-12; deeper walls are wholly clipped anyway);
+ * - a wall flush with the window, off to one side (a jamb), is hidden only
+ *   while the eye stands laterally BEYOND it (its outer face showing);
+ *   otherwise it frames the doorway (ruled 2026-07-14);
+ * - walls straddling or beyond the window always stay.
+ * (Trimming the clip instead would gap the floor at the far corner: the
+ * floor's far edge and a flush wall's near face coincide.) Each panel's
+ * spec follows its own outward; a door's APPROACH panel's applies in every
+ * panel's pass too, as its clip plane does.
+ * Every wall of an area draws in ONE instanced batch, so the walls' vertex
+ * shader applies this per instance (WALL_HIDE_GLSL, its twin: change both).
+ * @param {{x:number, z:number, outX:number, outZ:number, latEye:number}} spec
+ * @returns {boolean}
  */
-export function inPortalHideBand(wallPosition, gatePosition) {
-  const dx = Math.abs(wallPosition.x - gatePosition.x);
-  const dz = Math.abs(wallPosition.z - gatePosition.z);
-  const band = WORLD_SCALE * 1.5; // covers axis distances {0, WORLD_SCALE}
-  return dx < band || dz < band;
+export function wallHiddenBy(spec, x, z) {
+  const dx = x - spec.x;
+  const dz = z - spec.z;
+  const proj = dx * spec.outX + dz * spec.outZ;
+  if (proj >= -WORLD_SCALE / 2 + PANEL_EPSILON * 2) return false;
+  if (proj < -WORLD_SCALE / 2 - PANEL_EPSILON * 2) return true;
+  const lat = dx * spec.outZ - dz * spec.outX; // along right = (out.z, -out.x)
+  return (
+    Math.sign(spec.latEye) === Math.sign(lat) &&
+    Math.abs(spec.latEye) > Math.abs(lat) - WORLD_SCALE / 2
+  );
 }
+
+/** wallHiddenBy in GLSL: `w` = (window x, z, outward x, z). */
+export const WALL_HIDE_GLSL = /* glsl */ `
+  bool wallHiddenBy(vec4 w, float latEye, vec2 c) {
+    vec2 d = c - w.xy;
+    float proj = dot(d, w.zw);
+    if (proj >= ${(-WORLD_SCALE / 2 + PANEL_EPSILON * 2).toFixed(4)}) return false;
+    if (proj < ${(-WORLD_SCALE / 2 - PANEL_EPSILON * 2).toFixed(4)}) return true;
+    float lat = d.x * w.w - d.y * w.z;
+    return sign(latEye) == sign(lat) && abs(latEye) > abs(lat) - ${(WORLD_SCALE / 2).toFixed(4)};
+  }
+`;
 
 /** Rotate a plain {x,y,z} vector by a plain {x,y,z,w} quaternion. */
 function rotate(q, v) {
