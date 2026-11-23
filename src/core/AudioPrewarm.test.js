@@ -5,6 +5,7 @@
  */
 import { audioContextManager } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
+import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
 import StartGate from 'ui/StartGate';
 
@@ -314,6 +315,36 @@ describe("Building each creature's next song ahead", () => {
     await ctx.tick(16); // both sing their first song
 
     expect(ctx.getEmittedNotes()).toHaveLength(2);
+    expect(built.atOnset).toBe(0);
+  });
+
+  it('a creature let out of the pole has its voice and first song built at the press: its first note builds nothing', async () => {
+    onMachine(jest.fn(() => 1)); // no idle time to speak of
+    ctx.loadPuzzle('playback-basic');
+    gameState.mode = 'PLAYING';
+    gameState.camera.viewCenter = [-Math.PI / 2, 0]; // east: open floor
+    ctx.setInventorySlot(0, {
+      song: [
+        { pitch: 'A4', length: '1/8' },
+        [
+          { pitch: 'C5', length: '1/8' },
+          { pitch: 'E5', length: '1/8' },
+        ],
+      ],
+      interval: 8,
+      audibleRange: 10,
+      size: 0.9,
+      maxSpeed: 8,
+    });
+    await ctx.advanceBeats(1.5);
+
+    ctx.pressKey('space'); // its first note on beat 2
+    const [creature] = ctx.getCreatures();
+    const built = watchNodeBuilds([creature]);
+    await ctx.advanceBeats(1);
+    gameState.mode = 'MENU';
+
+    expect(sungBy(creature)).toHaveLength(3);
     expect(built.atOnset).toBe(0);
   });
 

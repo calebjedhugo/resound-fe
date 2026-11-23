@@ -30,6 +30,7 @@
  * duplicating or losing one.
  */
 import gameState from 'core/GameState';
+import AudioPrewarm from 'core/AudioPrewarm';
 import CameraController from 'core/CameraController';
 import CollisionDetector from 'core/CollisionDetector';
 import WorldMemory from 'core/WorldMemory';
@@ -42,6 +43,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   ELEVATION_HEIGHT,
   RELEASE_DISTANCE,
+  RELEASE_LATE_GRACE_BEATS,
   WORLD_SCALE,
 } from 'core/constants';
 import Creature from 'entities/Creature';
@@ -56,6 +58,26 @@ export const POLE_TIMES = Object.freeze({
   flare: 0.12, // the tip flares in the creature's colour
   retract: 0.25, // back into the hand
 });
+
+// A release's reach-out, flare and pour (extend + flare + draw) fit into
+// the time left before the beat it sings on, finishing this long before it
+// (a frame's margin) — but never quicker than RELEASE_MIN_EMERGE_S: past
+// that the creature starts singing while it still pours out
+const RELEASE_EMERGE_MARGIN_S = 0.03;
+export const RELEASE_MIN_EMERGE_S = 0.25;
+const RELEASE_EMERGE_S = POLE_TIMES.extend + POLE_TIMES.flare + POLE_TIMES.draw;
+
+/**
+ * The beat a Space pressed at `beat` releases on: the beat just past, within
+ * RELEASE_LATE_GRACE_BEATS of it (it sounds at once, as the tape's playback
+ * started), else the next one. (A press exactly on a beat is that beat.)
+ * @param {number} beat
+ * @returns {number}
+ */
+export function releaseBeatFor(beat) {
+  const last = Math.floor(beat + 1e-9);
+  return beat - last < RELEASE_LATE_GRACE_BEATS ? last : last + 1;
+}
 
 // The tip rests this far out from the body's surface (a fraction of its
 // radius): touching it, never inside it
@@ -153,19 +175,32 @@ class AbsorbManager {
       flashSlot('silent');
       return false;
     }
+    // Its first note sounds on the beat of the press (the late grace) or
+    // the next, and its schedule starts again from that beat
+    const clock = gameState.musicalClock;
+    const now = clock ? clock.getCurrentBeat() : 0;
+    const firstSingBeat = releaseBeatFor(now);
     // Out of the slot and into the world, dormant (all of it still in the
-    // tip) until the pole is back
+    // tip, out of reach and still) until the pole is back — singing from
+    // that beat whatever the pole is doing
     const creature = new Creature(
       { x: spot.x, y: spot.y, z: spot.z },
-      { ...held.spec, dormant: true }
+      { ...held.spec, dormant: true, firstSingBeat }
     );
     area.entityManager.add(creature);
+    // Its voice and first song built NOW, so the beat it sings on builds
+    // nothing (a fresh instrument has no voice yet; core/AudioPrewarm)
+    AudioPrewarm.prepareNow(creature.instrument, creature.song);
     WorldMemory.release(creature, area.id);
     inventory[activeSlot] = null;
     for (let i = 0; i < 3; i += 1) this._colour[i] = held.colour[i];
     this._contactOn(creature, this._tip);
     creature.look.setSuck(1, this._tip);
-    this._action = { kind: 'release', phase: 'extend', t: 0, creature };
+    // ...and the pole out, the flare and the pour fit before that beat
+    const untilBeat = clock ? clock.beatsToMs(Math.max(0, firstSingBeat - now)) / 1000 : 0;
+    const fit = Math.max(RELEASE_MIN_EMERGE_S, untilBeat - RELEASE_EMERGE_MARGIN_S);
+    const scale = Math.min(1, fit / RELEASE_EMERGE_S);
+    this._action = { kind: 'release', phase: 'extend', t: 0, creature, scale };
     this._showPole(0, 0);
     return true;
   }
@@ -220,8 +255,11 @@ class AbsorbManager {
   }
 
   _advanceRelease(action) {
-    const { creature } = action;
-    const { extend, draw, flare, retract } = POLE_TIMES;
+    const { creature, scale } = action;
+    const { retract } = POLE_TIMES;
+    const extend = POLE_TIMES.extend * scale;
+    const flare = POLE_TIMES.flare * scale;
+    const draw = POLE_TIMES.draw * scale;
     if (action.phase === 'extend') {
       this._showPole(ease(action.t / extend), 0);
       if (action.t < extend) return;
@@ -250,7 +288,9 @@ class AbsorbManager {
 
   /** The next phase starts with the time the last one overran. */
   _next(action, phase) {
-    const spent = POLE_TIMES[action.phase === 'pour' ? 'draw' : action.phase];
+    let spent = POLE_TIMES[action.phase === 'pour' ? 'draw' : action.phase];
+    // A release's way out is fitted to its beat (release)
+    if (action.kind === 'release' && action.phase !== 'retract') spent *= action.scale;
     action.t = Math.max(0, action.t - spent);
     action.phase = phase;
   }

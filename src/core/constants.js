@@ -85,6 +85,13 @@ export const ELEVATION_COLLISION_THRESHOLD = 0.5;
 // creature this far ahead along the camera heading (world units).
 export const RELEASE_DISTANCE = 2.5;
 
+// A released creature's first note sounds on the beat Space was pressed on
+// (ruled 2026-11-23): a press this little (in BEATS) past a beat counts as
+// that beat and sounds at once, the rest of its song snapped back onto the
+// grid; a later one waits for the next beat. The tape's playback start used
+// the same grace, kept under the matcher's 0.13-beat tolerance.
+export const RELEASE_LATE_GRACE_BEATS = 0.1;
+
 // Puzzle JSON entity types that were renamed: the old string still loads
 // (POC levels and saved levels keep it), and the editor writes the new one.
 // The cleanser became the WAYSTONE (2026-11-23: it no longer cleans anything).

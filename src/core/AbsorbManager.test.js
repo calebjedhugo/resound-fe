@@ -412,7 +412,7 @@ describe('Releasing a creature (Space)', () => {
     expect(ctx.getCreatures()).toHaveLength(1);
   });
 
-  it('stays silent and still until the pole is back, then sings and a gate nearby hears it', async () => {
+  it('stays still and out of reach until the pole is back; it sings, and a gate nearby hears it', async () => {
     ctx.loadPuzzle('listening-gate-basic'); // the gate wants C4 1/4, 3 north
     ctx.setInventorySlot(0, SPEC);
     face(-Math.PI / 2); // east: open floor
@@ -422,10 +422,11 @@ describe('Releasing a creature (Space)', () => {
     ctx.pressKey('space');
     await ctx.tick(16);
     const [creature] = ctx.getCreatures();
-    ctx.clearEmittedNotes();
-    await ctx.tick(800); // the pole still out
-    expect(onsetsOf(creature)).toEqual([]);
+    const at = { ...creature.position };
+    await ctx.tick(100); // the pole still out
     expect(creature.held).toBe(true);
+    expect(ctx.getCreaturesInRange()).toEqual([]);
+    expect(creature.position).toEqual(at);
 
     await ctx.finishPole();
     expect(creature.held).toBe(false);
@@ -476,29 +477,122 @@ describe('A creature taken and let out again is the same creature', () => {
     expect(after.song).toEqual(before.song);
     expect(after.audibleRange).toBe(before.audibleRange);
   });
+});
 
-  it('sings on its old beat: its onsets keep their phase modulo its interval', async () => {
-    ctx.loadPuzzle('recording-basic'); // C4 every 4 beats from beat 0
+describe('A released creature sings its first note on the beat it is let out', () => {
+  /** Run the clock on to `beat` (from below it). */
+  const untilBeat = (beat) => ctx.advanceBeats(beat - ctx.getCurrentBeat());
+
+  /** Release the cursor slot's creature (east, open floor) and wait for its first note. */
+  const releaseAndListen = async () => {
+    const pressedAt = ctx.getCurrentBeat();
+    ctx.pressKey('space');
+    const [creature] = ctx.getCreatures();
+    for (let i = 0; i < 100 && onsetsOf(creature).length === 0; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await ctx.tick(8);
+    }
+    return { pressedAt, creature, firstAt: onsetsOf(creature)[0] };
+  };
+
+  beforeEach(async () => {
+    ctx.loadPuzzle('playback-basic'); // an empty room, 120 bpm
+    ctx.setInventorySlot(0, SPEC); // C4 every 4 beats
+    face(-Math.PI / 2);
     await ctx.tick(16);
-    const [before] = ctx.getCreatures();
-    await ctx.advanceBeats(9);
-    const phaseOf = (beats) => beats.map((beat) => ((beat % 4) + 4) % 4);
-    const old = phaseOf(onsetsOf(before).slice(1));
-    expect(old.length).toBeGreaterThan(0);
-    old.forEach((phase) => expect(phase).toBeCloseTo(0, 1));
+  });
 
-    await ctx.advanceBeats(0.6); // off the beat
+  it('pressed mid-beat, on the next beat', async () => {
+    await untilBeat(5.5);
+    const { firstAt } = await releaseAndListen();
+
+    expect(firstAt).toBeGreaterThanOrEqual(6);
+    expect(firstAt).toBeLessThan(6.05);
+  });
+
+  it('pressed just past a beat (the late grace), on that beat: at once', async () => {
+    await untilBeat(5.04);
+    const { pressedAt, firstAt } = await releaseAndListen();
+
+    expect(pressedAt % 1).toBeLessThan(0.1);
+    expect(firstAt).toBeLessThan(5.1);
+  });
+
+  it('its schedule starts again from that beat, whatever beat it sang on before', async () => {
+    // Absorbed singing on beats 0, 4, 8...; let out on beat 10
+    ctx.setInventorySlot(0, null);
+    ctx.loadPuzzle('recording-basic');
+    face(0); // facing it
+    await ctx.tick(16);
     ctx.pressKey('r');
     await ctx.finishPole();
-    await ctx.advanceBeats(1.3);
-    ctx.pressKey('space');
-    await ctx.finishPole();
-    const [after] = ctx.getCreatures();
-    await ctx.advanceBeats(10);
+    expect(ctx.getInventorySlot(0)).not.toBeNull();
+    face(Math.PI / 2); // west: open floor
+    await untilBeat(9.5);
+    const { creature } = await releaseAndListen();
+    await ctx.advanceBeats(9);
 
-    const now = phaseOf(onsetsOf(after));
-    expect(now.length).toBeGreaterThan(1);
-    now.forEach((phase) => expect(phase).toBeCloseTo(0, 1));
+    const onsets = onsetsOf(creature);
+    expect(onsets.length).toBe(3);
+    onsets.forEach((beat, n) => {
+      expect(beat).toBeGreaterThanOrEqual(10 + 4 * n);
+      expect(beat).toBeLessThan(10 + 4 * n + 0.05);
+    });
+  });
+
+  it('a song begun in the late grace snaps its later notes back onto the grid', async () => {
+    // (The harness runs an instrument's timers all at once, so what it is
+    // told to play is checked here: the resound-sound instrument plays each
+    // note at its place in the song plus its offset)
+    const run = [
+      { pitch: 'C4', length: '1/4' },
+      { pitch: 'D4', length: '1/4' },
+      [
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ],
+    ];
+    ctx.setInventorySlot(0, { ...SPEC, song: run, interval: 8 });
+    await untilBeat(5.06);
+    const played = [];
+    ctx.pressKey('space');
+    const [creature] = ctx.getCreatures();
+    const late = ctx.getCurrentBeat() - 5;
+    jest.spyOn(creature.instrument, 'play').mockImplementation(({ data }) => {
+      played.push(data);
+      return Promise.resolve();
+    });
+    await ctx.tick(16);
+
+    // It sings on the frame after the press: as late as the clock is then
+    const offsetOf = (element) => (Array.isArray(element) ? element[0] : element).offset || 0;
+    const ms = (beats) => gameState.musicalClock.beatsToMs(beats);
+    expect(played).toHaveLength(1);
+    expect(offsetOf(played[0][0])).toBe(0); // the first note: now
+    const back = offsetOf(played[0][1]); // the rest: drawn back onto the grid
+    expect(back).toBeLessThanOrEqual(-ms(late) + 1e-6);
+    expect(back).toBeGreaterThan(-ms(late + 0.05));
+    played[0][2].forEach((note) => expect(note.offset).toBe(back));
+    expect(late).toBeGreaterThan(0.01);
+    expect(creature.song[1].offset).toBeUndefined(); // its song itself untouched
+  });
+
+  it('with time before the beat, it has poured all the way out of the pole by then', async () => {
+    await untilBeat(5.15);
+    const { creature } = await releaseAndListen();
+
+    expect(creature.look.suck).toBe(0);
+  });
+
+  it('with the beat close, it starts singing while it still pours out', async () => {
+    await untilBeat(5.8);
+    const { creature, firstAt } = await releaseAndListen();
+
+    expect(firstAt).toBeLessThan(6.05);
+    expect(creature.held).toBe(true);
+    expect(creature.look.suck).toBeGreaterThan(0);
+    await ctx.finishPole();
+    expect(creature.look.suck).toBe(0);
   });
 });
 

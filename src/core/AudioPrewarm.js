@@ -224,6 +224,28 @@ const AudioPrewarm = {
   },
 
   /**
+   * Build a creature's voice and next song NOW, whatever it costs — for the
+   * one moment that cannot wait: a creature let out of the pole sings on the
+   * beat of the press, at most a beat away, on a fresh instrument with no
+   * voice built (core/AbsorbManager). Paid on the key press, not in a frame.
+   * Its waiting song request, if any, is done with. Not priced: it builds
+   * several voices at once, and the idle-time prices are one job's.
+   * @param {Instrument} instrument
+   * @param {Array} song - notes and chords
+   */
+  prepareNow(instrument, song) {
+    noteJobs.delete(instrument);
+    const pitches = songPitches(song);
+    if (typeof instrument.warm === 'function' && !instrument.isWarm(pitches)) {
+      instrument.warm(pitches);
+    }
+    const notes = notePitches(song);
+    if (typeof instrument.prepare === 'function' && !instrument.isPrepared(notes)) {
+      instrument.prepare(notes);
+    }
+  },
+
+  /**
    * The world was torn down (PortalManager.reset): its creatures' queued
    * voices and songs go, as their instruments did. A run already scheduled
    * stays (it serves the next world's jobs, or finds nothing and stops).

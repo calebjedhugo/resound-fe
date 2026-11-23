@@ -128,9 +128,8 @@ class Creature extends Entity {
 
     // Set up note callback to emit to ListeningManager (for gates/fountains/creatures)
     this.instrument.noteCallback = (noteEvent) => {
-      // Once the pole has it (or before it is out), nothing more of its
-      // song reaches anyone
-      if (this.held) return;
+      // Once the pole has it, nothing more of its song reaches anyone
+      if (this.silenced) return;
 
       // Track current note for harmony analysis
       this.currentNote = noteEvent;
@@ -154,9 +153,18 @@ class Creature extends Entity {
     this.nextSingBeat = Math.ceil(currentBeat); // Next integer beat
     // A creature released from the pole keeps its old schedule's phase
     // (data.phase: its next sing beat modulo its interval; see wake)
-    this._phase = typeof data.phase === 'number' ? data.phase : null;
-    if (this._phase !== null) {
-      this.nextSingBeat = nextBeatInPhase(currentBeat, this._phase, this.interval);
+    const phase = typeof data.phase === 'number' ? data.phase : null;
+    if (phase !== null) {
+      this.nextSingBeat = nextBeatInPhase(currentBeat, phase, this.interval);
+    }
+    // ...unless it was just let out: its first note sounds on the beat it
+    // was released on, and its schedule starts again from there
+    // (core/AbsorbManager). A beat a moment past (the late grace) sounds at
+    // once, the rest of that song snapped back onto the grid
+    this._snapBack = false;
+    if (typeof data.firstSingBeat === 'number') {
+      this.nextSingBeat = data.firstSingBeat;
+      this._snapBack = true;
     }
 
     // Can the pole reach it from the player? (active area, absorbRange, in
@@ -166,8 +174,12 @@ class Creature extends Entity {
 
     // HELD by the pole (core/AbsorbManager): being drawn in, or not yet out
     // (data.dormant: a released creature pouring out of the tip). A held
-    // creature sings nothing, feels no force and stays where it is.
+    // creature feels no force, stays where it is and is out of the pole's
+    // reach. One being drawn in is SILENCED too (hold): it sings nothing
+    // more. One pouring out sings on its schedule — its first note on the
+    // beat it was released on, out of the tip or not.
     this.held = !!data.dormant;
+    this.silenced = false;
 
     // Fountains playing their song in our area (Fountain.activate): silent
     // while any is
@@ -201,9 +213,9 @@ class Creature extends Entity {
     // Skip if no musical clock initialized
     if (!gameState.musicalClock) return;
 
-    if (this.held) {
-      // On the pole: it only looks (the pole deforms it), out of reach of a
-      // second absorb, singing nothing and going nowhere
+    if (this.silenced) {
+      // Being drawn into the pole: it only looks (the pole deforms it), out
+      // of reach of a second absorb, singing nothing and going nowhere
       this.isAbsorbable = false;
       this.reachScore = Infinity;
       this.updateAbsorbState();
@@ -215,7 +227,8 @@ class Creature extends Entity {
 
     // Check if it's time to sing (deterministic based on musical time)
     if (currentBeat >= this.nextSingBeat && !this.instrument.playbackState.isPlaying) {
-      this.sing();
+      this.sing(this._snapBack ? currentBeat - this.nextSingBeat : 0);
+      this._snapBack = false;
       // Maintain schedule to prevent drift
       this.nextSingBeat += this.interval;
     }
@@ -250,12 +263,20 @@ class Creature extends Entity {
       this.isAbsorbable = false;
       this.reachScore = Infinity;
     }
+    // Still pouring out of the pole: not yet within its reach
+    if (this.held) {
+      this.isAbsorbable = false;
+      this.reachScore = Infinity;
+    }
 
     // Keep the absorbable list (key hint, R, the range badge) current
     this.updateAbsorbState();
 
     // Visual "now singing" cue (audio has no visual equivalent otherwise)
     this.updateLook(deltaTime);
+
+    // Out of the pole only once the pole is back (wake): no physics before
+    if (this.held) return;
 
     // Force-based movement: CREATURE_PHYSICS_PASSES full-deltaTime passes,
     // recomputing forces between passes (a source's pull changes as the
@@ -345,14 +366,24 @@ class Creature extends Entity {
 
   /**
    * Creature sings its song
+   * @param {number} [lateBeats] - how far past its beat this starts: every
+   *   note after the first is drawn back by as much, onto the grid (a
+   *   release's late grace; the tape's playback did the same)
    */
-  sing() {
+  sing(lateBeats = 0) {
     if (!gameState.musicalClock) return;
+    const clock = gameState.musicalClock;
+    const lateMs = lateBeats > 0 ? clock.beatsToMs(lateBeats) : 0;
+    const snap = (element, index) => {
+      if (index === 0 || lateMs <= 0) return element;
+      if (Array.isArray(element)) return element.map((note) => ({ ...note, offset: -lateMs }));
+      return { ...element, offset: -lateMs };
+    };
 
     this.instrument
       .play({
-        data: this.song,
-        tempo: gameState.musicalClock.tempo,
+        data: lateMs > 0 ? this.song.map(snap) : this.song,
+        tempo: clock.tempo,
         basis: 4,
       })
       // Over (or stopped): the next song's notes can be built
@@ -449,8 +480,9 @@ class Creature extends Entity {
    * stops moving. Its area removes it once the pole has drawn it in.
    */
   hold() {
-    if (this.held) return;
+    if (this.silenced) return;
     this.held = true;
+    this.silenced = true;
     if (this.instrument) this.instrument.dispose();
     this.currentNote = null;
     this.soundingNotes.length = 0;
@@ -464,18 +496,12 @@ class Creature extends Entity {
 
   /**
    * Out of the pole (a released creature, built dormant): it comes alive —
-   * physics, and singing on its old schedule's phase from here on.
+   * physics, and within the pole's reach. Its singing already keeps the
+   * schedule its release started (data.firstSingBeat).
    */
   wake() {
-    if (!this.held) return;
+    if (!this.held || this.silenced) return;
     this.held = false;
-    const clock = gameState.musicalClock;
-    if (clock && this._phase !== null) {
-      this.nextSingBeat = nextBeatInPhase(clock.getCurrentBeat(), this._phase, this.interval);
-    } else if (clock) {
-      this.nextSingBeat = Math.ceil(clock.getCurrentBeat());
-    }
-    this.prepareNextSong();
   }
 
   /**
