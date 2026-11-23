@@ -17,10 +17,10 @@
  * - WALLS: dark layered stone, darker at the foot, a lighter cap and a thin
  *   pale rim along every top edge, so walls silhouette against the horizon
  *   glow and openings read at a glance.
- * - FLOOR: polished dark slate with a faint cell grid that fades with
- *   distance, catching the horizon's glow at grazing angles; raised storeys
- *   a shade lighter, their CLIFF edges (where you can't walk on) traced by a
- *   pale line — ramps and abutting storeys get none.
+ * - FLOOR: polished dark slate, faintly mottled, catching the horizon's
+ *   glow at grazing angles; raised storeys a shade lighter, their CLIFF
+ *   edges (where you can't walk on) traced by a pale line — ramps and
+ *   abutting storeys get none.
  * - CREATURE LIGHT: a singing creature lights the floor and walls around it
  *   in its own colour (no three.js lights: a per-area list of up to
  *   MAX_LIGHTS lights the floor and wall shaders add up — AreaLight).
@@ -52,7 +52,6 @@ const PALETTE = {
   wallRim: 0x9ca5ba,
   floor: 0x31353f,
   floorRaised: 0x3a3f4a,
-  floorLine: 0x4a5160,
   slabSide: 0x1f232b,
   slabUnder: 0x121418,
   cliffEdge: 0xb4bccf,
@@ -605,14 +604,6 @@ const FLOOR_FRAGMENT = /* glsl */ `
       col = raised ? FLOOR_RAISED : FLOOR;
       // Slate mottling, very faint
       col *= 0.93 + 0.14 * texture2D(uCloud, vWorld.xz * 0.04 + vWorld.y * 0.13).r;
-      // The cell grid: cells are 3 wide, centred on multiples of 3. Lines
-      // stay about a pixel wide and fade out with distance (no moire)
-      vec2 g = (vWorld.xz + 1.5) / 3.0;
-      vec2 fw = fwidth(g);
-      vec2 toLine = min(fract(g), 1.0 - fract(g));
-      vec2 lines = 1.0 - smoothstep(vec2(0.006), vec2(0.006) + fw * 1.2, toLine);
-      float line = max(lines.x, lines.y) * (1.0 - smoothstep(0.02, 0.09, max(fw.x, fw.y)));
-      col = mix(col, FLOOR_LINE, line * 0.55);
       // Polished: the horizon's glow on the far floor
       float glance = pow(1.0 - max(dot(n, v), 0.0), 5.0);
       col += HORIZON * glance * 0.18 * (1.0 + 1.5 * uFlash);
@@ -637,7 +628,6 @@ export function createFloorMaterial(light = NO_LIGHT) {
     vertexShader: FLOOR_VERTEX,
     fragmentShader: FLOOR_FRAGMENT,
     clipping: true,
-    extensions: { derivatives: true },
   });
 }
 
