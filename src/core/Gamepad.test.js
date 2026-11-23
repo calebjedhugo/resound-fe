@@ -112,6 +112,7 @@ describe("A controller's buttons are the keys they stand for", () => {
     ['the d-pad left', DPAD_LEFT, 'ArrowLeft'],
     ['the d-pad right', DPAD_RIGHT, 'ArrowRight'],
     ['Options', OPTIONS, 'Escape'],
+    ['Share', SHARE, 'KeyP'],
   ])('%s presses %s', (_name, button, code) => {
     const pad = connectPad();
 
@@ -135,8 +136,8 @@ describe("A controller's buttons are the keys they stand for", () => {
   it('a button with no key of its own presses an unbound key', () => {
     const pad = connectPad();
 
-    press(pad, SHARE);
-    release(pad, SHARE);
+    press(pad, R2);
+    release(pad, R2);
 
     expect(heard).toEqual(['keydown Unidentified', 'keyup Unidentified']);
   });

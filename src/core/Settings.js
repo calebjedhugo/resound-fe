@@ -10,6 +10,8 @@ class Settings {
     // Pushing the right stick or the mouse up looks down (the I/K keys are
     // named for their direction, so they never flip)
     invertLookY: false,
+    // Sound off (core/Sound): the game is silent, but time runs on as usual
+    muted: false,
   };
 
   static _values = null;

@@ -6,6 +6,7 @@ import PlaybackManager from 'core/PlaybackManager';
 import ClapManager from 'core/ClapManager';
 import DeployManager from 'core/DeployManager';
 import Tape from 'core/Tape';
+import Sound from 'core/Sound';
 import showToast from 'ui/Toast';
 
 const randomInstrument = new Random();
@@ -21,7 +22,7 @@ const RECORD_HOLD_THRESHOLD_MS = 400;
 const keyPressedAt = {};
 const TAP_THRESHOLD_MS = 250;
 
-const dispatchKeyboardActions = ({ code, type, repeat }) => {
+const dispatchKeyboardActions = ({ code, type, repeat, fromGamepad }) => {
   let value;
   if (type === 'keydown') value = true;
   else if (type === 'keyup') value = false;
@@ -88,6 +89,16 @@ const dispatchKeyboardActions = ({ code, type, repeat }) => {
         showToast(enabled ? 'Mouse look on' : 'Mouse look off — look with I/J/K/L', {
           duration: 3000,
         });
+      }
+      break;
+    case 'KeyP':
+      // Sound on/off (a controller's Share), in play and in menus alike.
+      // Behind the start gate it never gets here: the gate swallows every
+      // key (a press there only wakes it).
+      if (value && !repeat) {
+        const on = Sound.toggle();
+        const key = fromGamepad ? 'Share' : 'P';
+        showToast(on ? 'Sound on' : `Sound off — ${key} to turn it on`, { duration: 3000 });
       }
       break;
     case 'Space':

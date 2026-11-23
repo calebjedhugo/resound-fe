@@ -1,6 +1,7 @@
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import Settings from 'core/Settings';
+import Sound from 'core/Sound';
 import Menu from 'ui/Menu';
 
 class PauseMenu extends Menu {
@@ -9,6 +10,13 @@ class PauseMenu extends Menu {
     this.onContinue = onContinue;
     this.onExit = onExit;
     this.onNextPuzzle = onNextPuzzle;
+    this.soundButton = null;
+    // Sound toggled by its key (P, Share) while paused: the entry follows
+    Sound.onChange(() => this._labelSound());
+  }
+
+  _labelSound() {
+    if (this.soundButton) this.soundButton.textContent = `Sound: ${Sound.isOn() ? 'On' : 'Off'}`;
   }
 
   /** Backing out of pause resumes. */
@@ -78,6 +86,13 @@ class PauseMenu extends Menu {
       labelInvert();
     });
     buttonContainer.appendChild(invertButton);
+
+    // Sound on/off: time runs on either way (core/Sound)
+    this.soundButton = document.createElement('button');
+    this.soundButton.className = 'menu-button';
+    this._labelSound();
+    this.soundButton.addEventListener('click', () => Sound.toggle());
+    buttonContainer.appendChild(this.soundButton);
 
     // Exit button
     const exitButton = document.createElement('button');

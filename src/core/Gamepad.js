@@ -31,6 +31,7 @@ BUTTON_KEYS[2] = 'KeyR'; // Square: record (a tap toggles, a hold records while 
 BUTTON_KEYS[3] = 'KeyG'; // Triangle: the cleanser gate (aim -> deploy -> remove)
 BUTTON_KEYS[4] = 'ArrowLeft'; // L1: tape cursor left
 BUTTON_KEYS[5] = 'ArrowRight'; // R1: tape cursor right
+BUTTON_KEYS[8] = 'KeyP'; // Share: sound on/off
 BUTTON_KEYS[9] = 'Escape'; // Options: pause / resume
 BUTTON_KEYS[12] = 'ArrowUp'; // d-pad up: the menus' focus up
 BUTTON_KEYS[13] = 'ArrowDown'; // d-pad down: the menus' focus down

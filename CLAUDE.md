@@ -430,7 +430,17 @@ instead of "fixing" it.
   in a menu (`poll(awake, menu)`) the left stick presses ↑/↓ (repeating).
   A pad press is NO user activation, nor is Esc (HTML spec): the StartGate
   wakes on either only with audio running (`_wakeIntoSound`); never let it
-  drop into a silent world
+  drop into a silent world. Share = KeyP (sound on/off)
+- **Sound on/off** (`core/Sound.js`, DESIGN.md "Sound on/off"): Settings
+  `muted` -> resound-sound `audioContextManager.setMuted()` (fades the
+  library's master output; needs resound-sound with `getOutput`/`setMuted`).
+  Applied when the module loads (main.js -> createEventListeners imports it),
+  before any sound. Toggled by P / Share (`createEventListeners`, any mode;
+  the StartGate's capture listener swallows it while up) and the pause
+  menu's "Sound" entry (relabels via `Sound.onChange`). **IMPORTANT: NEVER
+  mute by suspending the AudioContext** — the musical clock and every
+  schedule run off it; mute is the master gain only. Any new game audio
+  must connect to `audioContextManager.getOutput()`, never `.destination`
 - **Menus** (`ui/Menu.js`): entries = buttons + `[tabindex]`, real DOM
   focus; ↑/↓ move it (wraps), Enter/Space click it, C = `back()` (pause:
   resume). Pad = the same keys (d-pad ↑/↓ = ArrowUp/Down). World actions in
@@ -527,4 +537,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-11-22 — environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-22 — sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

@@ -95,7 +95,7 @@ afterEach(() => {
 
 describe('The focus', () => {
   it('starts on the first entry whenever a menu opens', () => {
-    expect(labels(menu)).toEqual(['Resume', 'Invert Look: Off', 'Main Menu']);
+    expect(labels(menu)).toEqual(['Resume', 'Invert Look: Off', 'Sound: On', 'Main Menu']);
     expect(focused()).toBe('Resume');
 
     tap(pad, DPAD_DOWN);
@@ -108,6 +108,8 @@ describe('The focus', () => {
   it("moves with the d-pad's up and down, wrapping around at the ends", () => {
     tap(pad, DPAD_DOWN);
     expect(focused()).toBe('Invert Look: Off');
+    tap(pad, DPAD_DOWN);
+    expect(focused()).toBe('Sound: On');
     tap(pad, DPAD_DOWN);
     expect(focused()).toBe('Main Menu');
     tap(pad, DPAD_DOWN);
@@ -127,7 +129,7 @@ describe('The focus', () => {
   });
 
   it('follows the mouse', () => {
-    const exit = menu.entries()[2];
+    const exit = menu.entries()[3];
 
     exit.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
 
@@ -187,7 +189,7 @@ describe('The left stick', () => {
     frame();
     pad.axes[1] = 0.6;
     frame();
-    expect(focused()).toBe('Main Menu');
+    expect(focused()).toBe('Sound: On');
   });
 
   it('steps nothing in play (it walks there)', () => {
