@@ -298,18 +298,23 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
   });
 
-  it("an open door's rippling frame", () => {
-    const gate = new Gate(
-      { x: 0, y: 0, z: 0 },
-      {
-        ...staffSong('E3'),
-        link: { puzzleId: 'elsewhere', gateId: 'beyond' },
-      }
-    );
-    gate.open();
-    gate.mesh.material.visible = true; // as the main view draws it
-    expect(coldPrograms(gate.mesh)).toEqual([]);
-    gate.dispose();
+  it("open doors as the main view draws them: each panel with its outline's seam", () => {
+    ctx.loadPuzzle('portal-two-pairs');
+    for (const gate of ctx.getGates()) gate.open();
+    PortalManager.renderPortals(recordingRenderer(), {
+      position: { x: 5 * WORLD_SCALE, y: 1.8, z: 7 * WORLD_SCALE },
+    });
+
+    let cold = null;
+    const { group } = gameState.activeArea;
+    const mainView = {
+      clippingPlanes: [],
+      render() {
+        cold = coldPrograms(group);
+      },
+    };
+    renderMainView(mainView, group, {});
+    expect(cold).toEqual([]);
   });
 
   it('a gate glowing red, locked out by a wrong note', async () => {
@@ -362,6 +367,17 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     expect(looks.some((mesh) => mesh._isCleanserMirror)).toBe(true); // the tile, at the gate
     expect(coldPrograms(phantom)).toEqual([]);
     expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
+    // ...and its panels as the main view draws them (the gold seam)
+    let cold = null;
+    const { group } = gameState.activeArea;
+    const mainView = {
+      clippingPlanes: [],
+      render() {
+        cold = coldPrograms(group);
+      },
+    };
+    renderMainView(mainView, group, {});
+    expect(cold).toEqual([]);
   });
 
   it('the keycap hints', () => {

@@ -262,7 +262,7 @@ describe('Gate shell drawing', () => {
     expect(shellDrawn(gate)).toBe(true);
   });
 
-  it('an open plain gate draws nothing at all: an empty opening (only doors ripple)', () => {
+  it('an open plain gate draws nothing at all: an empty opening', () => {
     const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
 
     gate.open();
@@ -278,20 +278,20 @@ describe('Gate shell drawing', () => {
     expect(shellDrawn(gate)).toBe(true);
   });
 
-  it('an open door keeps only its rippling frame: no slab, nothing hidden behind it', () => {
+  it("an open door draws no shell either: its outline is its view panels' seam", () => {
     const gate = new Gate({ x: 30, y: 0, z: 30 }, { song, link });
 
     gate.open();
+    renderMainView(
+      { clippingPlanes: [], render: () => expect(gate.mesh.material.visible).toBe(false) },
+      gate.mesh,
+      {}
+    );
 
-    const { material } = gate.mesh;
-    // The frame draws in the main view alone (EntityLook.test), never here
     expect(shellDrawn(gate)).toBe(false);
-    expect(material.opacity).toBe(0); // no slab
-    expect(material.transparent).toBe(true);
-    // A creature in the open cell never vanishes behind it
-    expect(material.depthWrite).toBe(false);
+    expect(drawnObjects(gate.mesh)).toEqual(gate.notationDisplay.meshes);
     gate.close();
-    expect(material.depthWrite).toBe(true);
+    expect(shellDrawn(gate)).toBe(true);
   });
 
   it('an alwaysOpen face never draws its slab', () => {

@@ -23,9 +23,10 @@ import * as THREE from 'three';
 // eslint-disable-next-line import/extensions
 import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
-import { createSceneTarget, showStoredTexels } from 'core/passContext';
+import { createSceneTarget, showStoredTexels, wearInMainView } from 'core/passContext';
 import { scenePieces, updateSceneMatrices } from 'core/sceneMatrices';
 import memoizeOnEntityList from 'core/entityListMemo';
+import { PANEL_RENDER_ORDER, createSeamMaterial } from 'entities/EntityLook';
 import {
   FACING_VECTORS,
   DOORWAY_OFFSET,
@@ -230,12 +231,15 @@ class PortalView {
    * @param {string} [options.partnerFacing] - the partner face the view
    *   looks out of (opposite the source face — the pair maps by
    *   translation); defaults to the partner's authored facing.
+   * @param {?number} [options.seamTint] - sRGB hex the panel's seam leans
+   *   toward (the cleanser gate's gold; entities/EntityLook)
    */
   constructor(gate, partnerGate, neighborArea, options = {}) {
     const {
       sceneOverride = null,
       sourceFacing = gate.facing,
       partnerFacing = partnerGate.facing,
+      seamTint = null,
     } = options;
     this.gate = gate;
     // The face this view SERVES (the approach direction), and which side of
@@ -401,22 +405,30 @@ class PortalView {
     this._inViewMemo = new EyeMemo();
     this._footprintMemo = new EyeMemo();
 
-    this._buildDoorwaySurface();
+    this._buildDoorwaySurface(seamTint);
   }
 
-  _buildDoorwaySurface() {
+  _buildDoorwaySurface(seamTint) {
     const geometry = new THREE.PlaneGeometry(WORLD_SCALE, WORLD_SCALE);
-    // Shows the READ buffer (the one not being written this frame). Plain
-    // OPAQUE: two rounds of grazing-fade transparency each regressed —
-    // semi-transparent walls on ordinary sightlines and sort-order flicker
-    // (QA, 2026-07-16). A doorway wall is never translucent; near-plane
-    // coherence is the render camera's job (MIN_RENDER_EYE_DISTANCE).
-    // The buffer already holds canvas-space colour: shown as stored, never
-    // encoded a second time (core/passContext).
-    const material = showStoredTexels(
-      new THREE.MeshBasicMaterial({ map: this._targets[1].texture })
-    );
+    // Shows the READ buffer (the one not being written this frame), as
+    // stored: the buffer already holds canvas-space colour, never encoded a
+    // second time (core/passContext). Plain OPAQUE in every pass but the
+    // main view, which dresses it in its seam material (wearInMainView):
+    // opaque there too but for the open portal's seam, a thin band just
+    // inside its outline (entities/EntityLook createSeamMaterial). Two
+    // rounds of grazing-fade transparency over the WHOLE panel each
+    // regressed — semi-transparent walls on ordinary sightlines and
+    // sort-order flicker (QA, 2026-07-16) — so the way through never fades,
+    // and the seam material draws first among transparent things, writing
+    // depth (PANEL_RENDER_ORDER): everything translucent sorts against it
+    // as against an opaque panel. Near-plane coherence is the render
+    // camera's job (MIN_RENDER_EYE_DISTANCE).
+    const { texture } = this._targets[1];
+    const material = showStoredTexels(new THREE.MeshBasicMaterial({ map: texture }));
     this.surface = new THREE.Mesh(geometry, material);
+    this.surface.renderOrder = PANEL_RENDER_ORDER;
+    this._seamMaterial = createSeamMaterial(texture, seamTint);
+    wearInMainView(this.surface, this._seamMaterial);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
     // OPPOSITE panel, facing back at the viewer
     const inset = DOORWAY_OFFSET - PANEL_EPSILON;
@@ -821,9 +833,10 @@ class PortalView {
     for (const child of frontOnlyNotation) child.material.side = THREE.DoubleSide;
     if (partnerMesh) partnerMesh.material.visible = partnerMaterialWasVisible;
 
-    // Swap: the freshly written buffer becomes what the surface shows; the
-    // other becomes next frame's write target.
+    // Swap: the freshly written buffer becomes what the surface shows (in
+    // the main view too); the other becomes next frame's write target.
     this.surface.material.map = writeTarget.texture;
+    this._seamMaterial.map = writeTarget.texture;
     this._writeIndex = 1 - this._writeIndex;
     if (!this._written) {
       this._written = true;
@@ -945,8 +958,10 @@ class PortalView {
     if (this.gate.mesh) {
       this.gate.mesh.remove(this.surface);
     }
+    wearInMainView(this.surface, null);
     this.surface.geometry.dispose();
     this.surface.material.dispose();
+    this._seamMaterial.dispose();
     for (const target of this._targets) target.dispose();
     // The neighbor scene belongs to its Area — not ours to dispose
   }

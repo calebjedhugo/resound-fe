@@ -35,7 +35,7 @@ import * as THREE from 'three';
 import CreatureLook from 'entities/CreatureLook';
 import ClapVisual from 'ui/ClapVisual';
 import { createSky, standInMaterials } from 'entities/EnvironmentLook';
-import { standInMaterials as entityStandIns } from 'entities/EntityLook';
+import { createSeamMaterial, standInMaterials as entityStandIns } from 'entities/EntityLook';
 import { NO_CLIP_PLANES, createSceneTarget, showStoredTexels } from 'core/passContext';
 
 const SPAN = 1e4;
@@ -70,17 +70,19 @@ function setup(mainScene) {
   standIns.add(look.object);
   // A doorway surface exactly as PortalView builds one (opaque, showing a
   // scene target's stored texels; its map is a second target, never the one
-  // drawn into)
+  // drawn into), and as the main view dresses it (the open portal's seam: a
+  // door's and the cleanser gate's differ only in a uniform)
   const surfaceMap = createSceneTarget(1, 1);
+  const panel = new THREE.PlaneGeometry(1, 1);
   standIns.add(
     new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
+      panel,
       showStoredTexels(new THREE.MeshBasicMaterial({ map: surfaceMap.texture }))
     )
   );
-  // The entities (entities/EntityLook): a gate sealed, and fading or open
-  // (an open gate's frame, the cleanser gate's too); a ramp; a cleansing
-  // tile (the deploy phantom and tile mirrors are its clones)
+  standIns.add(new THREE.Mesh(panel, createSeamMaterial(surfaceMap.texture)));
+  // The entities (entities/EntityLook): a gate sealed, and fading; a ramp;
+  // a cleansing tile (the deploy phantom and tile mirrors are its clones)
   const box = new THREE.BoxGeometry(1, 1, 1);
   const entities = entityStandIns();
   for (const name of ['gateSealed', 'gateFading', 'ramp', 'cleanser']) {

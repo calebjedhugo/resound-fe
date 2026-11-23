@@ -361,23 +361,27 @@ instead of "fixing" it.
   and area-independent (no per-gate direction in the sky)
 - **Entity look** (`entities/EntityLook.js`, DESIGN.md "Entity look"):
   gates are a per-gate unlit ShaderMaterial (`createGateMaterial`: state in
-  uniforms uOpacity/uProgress/uLockout/uOpen, `bindAreaLight` on first
-  update; `Gate.lockoutGlow` reads the red). An open PLAIN gate draws no
-  shell at all (ruled 2026-11-22: only doors ripple). **An open door's shell is its
-  rippling frame, drawn ONLY by the main view** (`showOpenFrame` →
-  `passContext.showInMainViewOnly`: `renderMainView` shows those materials
-  for its own render, every other pass skips them) **and ONLY around the
-  portal's silhouette from the eye** (an edge where one face turns toward
-  the eye and the other away: `outlineAt`/`edgeShown`/`portalBandAt` + their
-  GLSL twins — change both); a thin band just inside it, never over the way
-  through, no depth. A CLOSED gate lights every edge of its faces toward
-  the eye ("normal corners"). Door view panels are plain
-  (PortalView's MeshBasicMaterial + `showStoredTexels`). The deployed
-  cleanser gate gets a gold frame of its own (`createOpenFrame`, freed by
-  `releaseOpenFrame` in `CleanserGatePad.dispose`). Ramps share ONE geometry
-  (wedge + posts) and ONE material, lit per ramp via `onBeforeRender` →
-  `bindRampLight` (uniformsNeedUpdate, like creatures). Cleansers stay
-  MeshStandardMaterial with the shared `CLEANSER_RING_MAP` emissive map
+  uniforms uOpacity/uProgress/uLockout, `bindAreaLight` on first update;
+  `Gate.lockoutGlow` reads the red). A CLOSED gate lights every edge of its
+  faces toward the eye ("normal corners"). An OPEN gate, door or plain,
+  draws no shell at all. **An open door's outline is a soft seam in its
+  view panels, drawn ONLY by the main view** (each PortalView panel is
+  plain opaque `showStoredTexels` everywhere, and wears its
+  `createSeamMaterial` while `renderMainView` draws:
+  `passContext.wearInMainView`) **and ONLY along the portal's outline from
+  the eye** (an edge where one box face turns toward the eye and the other
+  away, gone by the time the face across is edge-on: `outlineAt` /
+  `portalBandAt` / `portalSeamAt` + their GLSL twins — change both): over
+  a thin band where the sight enters the box the panel's picture blurs and
+  fades into the world behind it; past it the panel is untouched. The seam
+  material is transparent but drawn first among transparent things
+  (`PANEL_RENDER_ORDER`), writing depth. Its hook gets the eye from the
+  view matrix (three hands MeshBasicMaterial no `cameraPosition`). The
+  deployed cleanser gate's seam leans gold (`seamTint`, PortalManager).
+  Ramps share ONE geometry (wedge + posts) and ONE material, lit per ramp
+  via `onBeforeRender` → `bindRampLight` (uniformsNeedUpdate, like
+  creatures). Cleansers stay MeshStandardMaterial with the shared
+  `CLEANSER_RING_MAP` emissive map
 - **ONE pass context for every scene draw** (`core/passContext.js`; ruled
   2026-10-16). three keys a material's shader program by clip-plane COUNT,
   output colour space, instancing and the scene's lights; a material drawn
@@ -551,4 +555,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-11-22 — key hints follow the device in hand (controller glyphs by family: PlayStation, Xbox, Switch, generic; `core/InputDevice`, `core/inputGlyphs`); sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-23 — an open door's outline is a soft seam in its view panels (blur + fade into the world, main view only, gone before the emerging side shows), no open shell; the cleanser gate's seam leans gold; 2026-11-22 — key hints follow the device in hand (controller glyphs by family: PlayStation, Xbox, Switch, generic; `core/InputDevice`, `core/inputGlyphs`); sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

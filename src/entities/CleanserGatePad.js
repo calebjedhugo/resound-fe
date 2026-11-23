@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import gameState from 'core/GameState';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Entity from 'entities/Entity';
-import { CLEANSER_GOLD, createOpenFrame, releaseOpenFrame } from 'entities/EntityLook';
 
 /**
  * CleanserGatePad — the deployed half of the player's cleanser gate
@@ -16,8 +15,9 @@ import { CLEANSER_GOLD, createOpenFrame, releaseOpenFrame } from 'entities/Entit
  *
  * The pad looks like any other open gate — a box of see-through portal
  * panels (DeployManager builds one PortalView per face on this entity's
- * mesh anchor) showing the destination live, gold cleanser included — with
- * a GOLD rippling frame where an open gate's is pale (entities/EntityLook).
+ * mesh anchor) showing the destination live, gold cleanser included — whose
+ * seam along the outline leans GOLD (entities/EntityLook: PortalManager
+ * gives its panels the tint).
  * The mesh is an anchor at gate-box-center height so the panels parent
  * exactly like a real gate's. Position is free-form, not grid-quantized, so the
  * trigger is a disc of floor rather than a cell.
@@ -41,19 +41,6 @@ class CleanserGatePad extends Entity {
     // where a real gate's do.
     this.mesh = new THREE.Group();
     this.mesh.position.set(this.position.x, this.position.y + WORLD_SCALE / 2, this.position.z);
-    // ...and a GOLD rippling frame on the face the player looks into — the
-    // one they step through (main view only; it leads to the gold tile)
-    this.frame = createOpenFrame(CLEANSER_GOLD);
-    this.mesh.add(this.frame);
-  }
-
-  dispose() {
-    if (this.frame) {
-      this.mesh.remove(this.frame);
-      releaseOpenFrame(this.frame);
-      this.frame = null;
-    }
-    super.dispose();
   }
 
   update() {

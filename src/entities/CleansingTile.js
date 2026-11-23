@@ -33,9 +33,9 @@ class CleansingTile extends Entity {
 
   // Resting look — dark glass, a pale ring — and the ACTIVE cleanser's, its
   // ring burning gold: the last tile the player stepped on, where a
-  // deployed cleanser gate leads (core/DeployManager; its panels ripple the
-  // same gold). One tile is active at a time, world-wide. Gold is the one
-  // accent the world's entities keep (entities/EntityLook).
+  // deployed cleanser gate leads (core/DeployManager; its panels' seam
+  // leans the same gold). One tile is active at a time, world-wide. Gold is
+  // the one accent the world's entities keep (entities/EntityLook).
   static BASE_COLOR = 0x252a34;
   static BASE_EMISSIVE = 0xb4c2de;
   static ACTIVE_COLOR = 0x3a3121;

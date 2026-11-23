@@ -64,6 +64,7 @@ import { getDistance } from 'core/utils';
 import { NO_CLIP_PLANES, createSceneTarget } from 'core/passContext';
 import { updateSceneMatrices } from 'core/sceneMatrices';
 import runInIdleSlices from 'core/idleSlices';
+import { CLEANSER_GOLD } from 'entities/EntityLook';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 // Stable empty list for the common no-seam case (avoids per-frame garbage)
@@ -1723,6 +1724,7 @@ class PortalManager {
         sceneOverride,
         sourceFacing,
         partnerFacing: OPPOSITE_FACING[sourceFacing] || 'south',
+        seamTint: CLEANSER_GOLD, // the gate that leads to the gold tile
       });
       view.setVisible(true);
       return view;

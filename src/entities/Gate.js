@@ -8,7 +8,7 @@ import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/con
 import { midiOf } from 'core/messiaenColour';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from 'entities/Entity';
-import { bindAreaLight, createGateMaterial, showOpenFrame } from 'entities/EntityLook';
+import { bindAreaLight, createGateMaterial } from 'entities/EntityLook';
 
 // Every gate is the same box: it fills its 3x3 cell when closed. ONE
 // geometry serves every gate in every area, flagged `userData.shared` so
@@ -349,10 +349,8 @@ class Gate extends Entity {
    * not the mesh's subtree. (An opacity-0 draw painted nothing yet cost a
    * draw call in every pass that saw it, and still wrote depth: a
    * translucent creature in an open gate's cell could vanish behind it.)
-   * The one exception is an open DOOR's rippling frame (entities/EntityLook:
-   * the face the player looks into, where walking in crosses): drawn in the
-   * main view only, writing no depth — every door pass skips it. An open
-   * plain gate draws nothing (only doors ripple).
+   * An open door's outline is its view panels' own seam
+   * (entities/EntityLook createSeamMaterial), never the shell.
    * Opacity is a uniform; of these only `transparent` reaches the shader
    * program (three's OPAQUE define), so the program is re-derived only
    * when that flips — not every fade frame.
@@ -367,12 +365,7 @@ class Gate extends Entity {
     const u = m.uniforms;
     u.uOpacity.value = opacity;
     u.uProgress.value = this.isOpen ? 0 : this._fade;
-    // An open DOOR: its rippling frame, in the main view only (that owns
-    // its visibility). An open plain gate: nothing at all, an empty opening
-    // (ruled 2026-11-22: only doors ripple)
-    const frame = this.isOpen && Boolean(this.link);
-    showOpenFrame(m, frame);
-    if (!frame) m.visible = !this.isOpen && (!transparent || opacity > 0);
+    m.visible = !this.isOpen && (!transparent || opacity > 0);
   }
 
   /** The wrong note's red on the shell now, 0..1 (decaying over the lockout). */
@@ -465,8 +458,8 @@ class Gate extends Entity {
     if (this.isOpen) {
       // An open gate has NO slab — no tint (ruled 2026-07-11): transparency
       // is the game's vocabulary for "open", for linked doors and plain
-      // gates alike (a plain one keeps its rippling frame, a door's panels
-      // ripple at their edges). The notation stays; the red mismatch
+      // gates alike (a door's panels melt into the world at its outline).
+      // The notation stays; the red mismatch
       // flash only ever shows on the CLOSED look.
       this._paintShell(true, 0);
     } else {
@@ -480,7 +473,6 @@ class Gate extends Entity {
     if (this.notationDisplay) {
       this.notationDisplay.dispose();
     }
-    if (this.mesh) showOpenFrame(this.mesh.material, false); // no frame left drawing
     // Unregister from listening manager
     ListeningManager.unregisterListener(this);
     super.dispose();

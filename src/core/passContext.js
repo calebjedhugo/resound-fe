@@ -31,41 +31,63 @@ export const NO_CLIP_PLANES = Object.freeze(
   Array.from({ length: CLIP_PLANE_COUNT }, () => NO_CLIP)
 );
 
-// Materials only the MAIN view draws (showInMainViewOnly): hidden in every
-// other pass — doors, the cleanser gate, the prewarm — so those passes skip
-// them outright (no draw, no cost)
-const mainViewOnly = new Set();
+// Meshes that wear a material of their own while the main view draws, and
+// for each the material it is not wearing now (wearInMainView). A look that
+// belongs to the player's own eye alone (an open door's seam,
+// entities/EntityLook) lives there, so every other pass — doors, the
+// cleanser gate, the prewarm — draws the mesh as it always did. Each of the
+// two materials keeps its own program: swapping them re-derives nothing.
+// Parallel arrays, walked by index: the swap runs twice a frame and makes
+// no garbage (a Map's entries would, one array per mesh per walk)
+const dressedMeshes = [];
+const otherMaterials = [];
 
 /**
- * Draw `material` in the main view alone (or, `only` false, everywhere
- * again — the caller then owns its visibility). An open gate's rippling
- * frame belongs to the player's own eye: never on a gate seen through a
- * door (entities/EntityLook). Whoever registers a material unregisters it
- * before freeing it.
- * @param {THREE.Material} material
- * @param {boolean} [only]
+ * Dress `mesh` in `material` while the main view draws, in its own material
+ * everywhere else (or, `material` null, in its own everywhere again).
+ * Whoever dresses a mesh undresses it before freeing either material.
+ * @param {THREE.Mesh} mesh
+ * @param {?THREE.Material} material
  */
-export function showInMainViewOnly(material, only = true) {
-  if (only) {
-    mainViewOnly.add(material);
-    material.visible = false; // eslint-disable-line no-param-reassign
-  } else {
-    mainViewOnly.delete(material);
+export function wearInMainView(mesh, material) {
+  const at = dressedMeshes.indexOf(mesh);
+  if (material && at < 0) {
+    dressedMeshes.push(mesh);
+    otherMaterials.push(material);
+  } else if (material) {
+    otherMaterials[at] = material;
+  } else if (at >= 0) {
+    dressedMeshes.splice(at, 1);
+    otherMaterials.splice(at, 1);
+  }
+}
+
+/** Swap each dressed mesh's material for the one it is not wearing. */
+function swapMainViewMaterials() {
+  for (let i = 0; i < dressedMeshes.length; i += 1) {
+    const mesh = dressedMeshes[i];
+    const other = otherMaterials[i];
+    otherMaterials[i] = mesh.material;
+    mesh.material = other;
   }
 }
 
 /**
  * Draw the main view to the canvas under the shared context: it clips
- * nothing, but binds CLIP_PLANE_COUNT (no-op) planes like every other pass.
- * Restores the renderer's planes afterwards.
+ * nothing, but binds CLIP_PLANE_COUNT (no-op) planes like every other pass,
+ * and dresses meshes in their main-view materials (wearInMainView).
+ * Restores the renderer's planes and the meshes' materials afterwards.
  */
 export function renderMainView(renderer, scene, camera) {
   const previousPlanes = renderer.clippingPlanes;
   renderer.clippingPlanes = NO_CLIP_PLANES;
-  for (const material of mainViewOnly) material.visible = true;
-  renderer.render(scene, camera);
-  for (const material of mainViewOnly) material.visible = false;
-  renderer.clippingPlanes = previousPlanes;
+  swapMainViewMaterials();
+  try {
+    renderer.render(scene, camera);
+  } finally {
+    swapMainViewMaterials();
+    renderer.clippingPlanes = previousPlanes;
+  }
 }
 
 /**
@@ -107,9 +129,12 @@ export function createSceneTarget(width = 1, height = 1) {
 // The r153 output-encode chunk (renamed colorspace_fragment in r154)
 const OUTPUT_ENCODE_CHUNK = '#include <encodings_fragment>';
 
-// ONE shared function: three's default program cache key for a material is
-// onBeforeCompile.toString(), so every material using it shares one program
-function skipOutputEncode(shader) {
+/**
+ * An onBeforeCompile hook's part for a material showing a scene target's
+ * stored texels (showStoredTexels): drop the output encode. A hook that
+ * does more (entities/EntityLook's door panels) calls it first.
+ */
+export function skipOutputEncode(shader) {
   if (!shader.fragmentShader.includes(OUTPUT_ENCODE_CHUNK)) {
     console.warn('passContext: output-encode chunk not found (three upgraded?)');
   }
@@ -125,6 +150,9 @@ function skipOutputEncode(shader) {
  * @returns {THREE.Material} the same material
  */
 export function showStoredTexels(material) {
+  // ONE shared function: three's default program cache key for a material
+  // is onBeforeCompile.toString(), so every material using it shares one
+  // program
   material.onBeforeCompile = skipOutputEncode;
   return material;
 }

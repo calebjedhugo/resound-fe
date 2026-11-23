@@ -140,7 +140,8 @@ automated playtesters can observe them.)
     (2026-11-22, designer request: an open gate glows "in motion, like a
     rippling portal" — doors only (a plain gate stays an empty opening),
     only around the portal's silhouette from the eye, in the main view,
-    the way through completely clear. See "Entity look".)
+    the way through completely clear; 2026-11-23 that glow became a soft
+    seam where the door's view and the world blend. See "Entity look".)
   - The notation **stays displayed forever**; there is still no permanent
     `isActivated` on gates.
     Fountains are unchanged (latch on the exact full match). Re-crossing a
@@ -536,40 +537,57 @@ entity TYPES, not for any level. Visual only.
   - **Wrong note (lockout)**: slab and edges flood red, decaying over the
     lockout (`Gate.lockoutGlow`). Red is the gate's own meaning; it shows
     only on the closed look.
-  - **Open: the portal's silhouette ripples.** No slab. The glow follows
-    the open portal's OUTLINE as seen from the eye — the aggregate visible
-    outline of the door's box (designer, 2026-11-22: "There should be the
-    silhouette when the portal is open"; earlier: "only the outline of the
-    aggregate visible outline should be visible. So I should see a square
-    only when facing a panel directly. When looking at a corner, that
-    corner line should not be visible"). An edge is on it where one of its
-    two faces turns toward the eye and the other away: head-on, the near
-    face's four edges (a square); off a corner, the outer outline (a
-    hexagon) with no line between the two faces seen; from above, the edge
-    between the top and the face seen is hidden too. An edge fades over a
-    few degrees as the face across it turns past edge-on, so walking round
-    never pops it (`EntityLook.outlineAt` / `edgeShown`, twins of the
-    GLSL). The edge line and light rippling in over a thin band (~0.22)
-    just inside that outline, on the faces toward the eye
-    (`EntityLook.portalBandAt`); everything else on those faces draws
-    nothing, no depth written ("Direct view into the portal should be
-    completely unobstructed. The ripple should only be around the edges").
-    In the main view only ("Any part of the gate seen through the gate
-    should not have the border around it"): it is the door's own shell,
-    drawn by the main view alone (`passContext.showInMainViewOnly`), so
-    every gate seen inside a door view, a door-in-a-door or the cleanser
-    gate draws no border — door passes skip it outright. On DOORS only: an
-    open plain gate draws nothing (ruled 2026-11-22, below). A door's view
-    panels (at the back of the cell) are plain: the view is untouched.
-    (This replaced a frame on the NEAR face alone, which off a corner
-    poked over a wall as a stray triangle.)
+  - **Open: the portal's outline is a soft seam** (2026-11-23, replacing
+    the rippling glow; designer: "Instead of a vivid white line, I think I
+    actually just want the line to be a blur effect. So the outline of the
+    portal should be quite subtle, fading from one view to the other").
+    No slab and no shell at all: the door's view panels (at the back of
+    the cell) do it. Where the eye's sight of a panel enters the door's box
+    within a thin band (~0.22 world units, wider on a face seen aslant so
+    it looks about as wide) of the open portal's OUTLINE, the panel's
+    picture blurs (a few taps of its own target, widest at the outline)
+    and fades out, so what stands behind the doorway in THIS world shows
+    through: the jamb beside a door in a wall, the room behind a
+    freestanding one. No glow, no ripple, no motion. Past the band the
+    panel is exactly its picture, fully opaque ("Direct view into the
+    portal should be completely unobstructed"). The outline is the
+    aggregate visible outline of the door's box (designer, 2026-11-22:
+    "only the outline of the aggregate visible outline should be visible.
+    So I should see a square only when facing a panel directly. When
+    looking at a corner, that corner line should not be visible"): an edge
+    is on it where one of its two faces turns toward the eye and the other
+    away — head-on the near face's four edges, off a corner the outer
+    hexagon with no corner line, from above not the edge between the top
+    and the face seen. An edge's seam fades out as the face across it
+    turns toward edge-on and is GONE by the time that face is edge-on,
+    before the emerging side of the box can show (designer, 2026-11-23:
+    "Let's have the line fade a little sooner so that it's completely gone
+    by the time you can see the emerging side of the cube"; smooth, never
+    popping). (`EntityLook.outlineAt` / `portalBandAt` / `portalSeamAt`,
+    twins of the GLSL.) At a door in a wall the side face beyond an edge
+    is buried in the wall, so seen well off to the side that edge's seam
+    is gone too: the edge stays crisp there. In the main view only ("Any
+    part of the gate seen through the gate should not have the border
+    around it"): a panel wears its seam material only while the main view
+    draws (`passContext.wearInMainView`), so a door seen inside a door
+    view, a door-in-a-door or the cleanser gate's view shows plain,
+    opaque panels — as every door pass always drew them. The seam
+    material is transparent (so the fade shows the world behind) but
+    drawn first among transparent things and writing depth, so everything
+    translucent sorts against it as against an opaque panel. On DOORS
+    only: an open plain gate draws nothing (ruled 2026-11-22, below).
+    (The glow it replaced: 2026-11-22, a pale rippling band on the door's
+    shell just inside the outline, faded over a few degrees PAST edge-on;
+    before that a frame on the NEAR face alone, which off a corner poked
+    over a wall as a stray triangle.)
   - **Linked vs plain**: identical while closed ("A closed linked gate
     looks like any closed gate", ruled 2026-07-06, reaffirmed 2026-11-22);
-    open, a door shows its view and rippling silhouette, a plain gate is
-    an empty opening.
-  - **The deployed cleanser gate**: the same frame in GOLD — it is a
-    portal, so the same silhouette rule — leading to the gold tile (main
-    view only; `EntityLook.createOpenFrame`).
+    open, a door shows its view, softly seamed into the world at its
+    outline, a plain gate is an empty opening.
+  - **The deployed cleanser gate**: the same seam — it is a portal, so
+    the same outline rule — leaning faintly GOLD toward the outline, so
+    it stays the gate to the gold tile at a glance (main view only;
+    PortalManager gives its panels `seamTint`). It has no frame mesh.
 - **Ramps**: a wedge of the storeys' slate (one shared geometry, posts
   included: one draw a ramp). Chevrons point UP the slope and crawl slowly
   that way (the way up at a glance); pale lines along its sides (drops,
@@ -590,7 +608,8 @@ entity TYPES, not for any level. Visual only.
   wrong note, gold = your cleanser and its gate); never a saturated hue a
   chord could own on a surface. Unlit ShaderMaterials in display values,
   honouring the clip planes, each with a ShaderPrewarm stand-in; an open
-  door's frame is its shell's one draw, in the main view only.
+  door draws no shell, and its seam is its panels' own, in the main view
+  only.
 
 Rulings (designer, 2026-11-22):
 
@@ -598,7 +617,8 @@ Rulings (designer, 2026-11-22):
   empty opening, its floating staff the only cue (no other cue added — the
   missing slab and the clear cell read as open). Doors keep the ripple
   (now on their silhouette); the deployed cleanser gate keeps its gold
-  frame (it is a portal: silhouette too).
+  frame (it is a portal: silhouette too). (2026-11-23: the ripple became
+  the soft seam above; the cleanser gate's seam leans gold.)
 - **Cleansers are pale, the active one gold** (replacing "the rest stay
   cyan") — fine.
 - **The cleanser's gold matching the key hints' gold labels** — fine.
@@ -776,8 +796,8 @@ rulings, in the designer's words where it matters:
 - **Doors are omnidirectional (ruled 2026-07-07):** every side of a linked
   gate can be walked through, and EVERY face the player can see shows the
   view through the door (two at a corner — a working open door never shows
-  a shell from any angle; unlinked and dangling gates show only their
-  rippling open frame). Applies to ALL links — same-puzzle teleports and
+  a shell from any angle; unlinked and dangling gates are an empty
+  opening once open). Applies to ALL links — same-puzzle teleports and
   cross-puzzle doors are one mechanism. `facing` still exists in the schema
   (default "north") but the editor's Facing dropdown is PARKED (commented
   in PropertyPanel); Caleb may bring it back.
