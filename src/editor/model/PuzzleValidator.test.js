@@ -143,12 +143,21 @@ describe('PuzzleValidator', () => {
   // -- Warning tests --
 
   describe('warnings', () => {
-    it('warns when no fountain is defined', () => {
+    it('warns when the puzzle has nothing to solve (no gate)', () => {
       model.setPlayerSpawn(5, 0, 5);
 
       const { warnings } = validatePuzzle(model);
 
-      expect(warnings.some((w) => /fountain/i.test(w))).toBe(true);
+      expect(warnings.some((w) => /nothing to solve/i.test(w))).toBe(true);
+    });
+
+    it('does not ask for a fountain: a level of gates is complete', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      model.addEntity('gate', 7, 0, 7, { song: [{ pitch: 'C4', length: '1/4' }] });
+
+      const { warnings } = validatePuzzle(model);
+
+      expect(warnings.some((w) => /fountain|nothing to solve/i.test(w))).toBe(false);
     });
 
     it('warns when gate has no adjacent walls', () => {
@@ -175,7 +184,7 @@ describe('PuzzleValidator', () => {
       expect(warnings.some((w) => /gate/i.test(w) && /wall/i.test(w))).toBe(false);
     });
 
-    it('warns when creature audibleRange does not reach any gate or fountain', () => {
+    it('does not warn about a creature whose range reaches no gate (the player carries it)', () => {
       model.setPlayerSpawn(5, 0, 5);
       model.addEntity('creature', 0, 0, 0, {
         song: [{ pitch: 'C4', length: '1/4' }],
@@ -186,30 +195,38 @@ describe('PuzzleValidator', () => {
         song: [{ pitch: 'C4', length: '1/4' }],
       });
       model.addEntity('wall', 14, 0, 13, {}); // wall adjacent to gate
-      model.addEntity('fountain', 14, 0, 14, {
-        song: [{ pitch: 'C4', length: '1/4' }],
-      });
-
-      const { warnings } = validatePuzzle(model);
-
-      expect(warnings.some((w) => /creature/i.test(w) && /range/i.test(w))).toBe(true);
-    });
-
-    it('does not warn about range when creature audibleRange reaches a gate', () => {
-      model.setPlayerSpawn(5, 0, 5);
-      model.addEntity('creature', 7, 0, 7, {
-        song: [{ pitch: 'C4', length: '1/4' }],
-        interval: 8,
-        audibleRange: 30,
-      });
-      model.addEntity('gate', 8, 0, 8, {
-        song: [{ pitch: 'C4', length: '1/4' }],
-      });
-      model.addEntity('wall', 8, 0, 7, {}); // wall adjacent to gate
 
       const { warnings } = validatePuzzle(model);
 
       expect(warnings.some((w) => /creature/i.test(w) && /range/i.test(w))).toBe(false);
+    });
+
+    it('warns, softly, when a creature sings a gate its exact song from where it starts', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      const song = [{ pitch: 'C4', length: '1/4' }];
+      model.addEntity('creature', 7, 0, 7, { song, interval: 8, audibleRange: 30 });
+      model.addEntity('gate', 8, 0, 8, { song, gateId: 'gate-1' });
+      model.addEntity('wall', 8, 0, 7, {});
+
+      const { warnings } = validatePuzzle(model);
+
+      const selfSolve = warnings.find((w) => /exact song/.test(w));
+      expect(selfSolve).toMatch(/from where it starts/);
+      expect(selfSolve).toMatch(/opens on its own/);
+      expect(selfSolve).toMatch(/fine if intended/);
+      // ...a warning, never an error: creatures may open gates by design
+      expect(validatePuzzle(model).errors).toEqual([]);
+    });
+
+    it('does not warn about self-solving when the singer is out of hearing', () => {
+      model.setPlayerSpawn(5, 0, 5);
+      const song = [{ pitch: 'C4', length: '1/4' }];
+      model.addEntity('creature', 0, 0, 0, { song, interval: 8, audibleRange: 3 });
+      model.addEntity('gate', 14, 0, 14, { song, gateId: 'gate-1' });
+
+      const { warnings } = validatePuzzle(model);
+
+      expect(warnings.some((w) => /exact song/.test(w))).toBe(false);
     });
 
     it('warns when ramp has no floor region at upper elevation', () => {
@@ -256,7 +273,11 @@ describe('PuzzleValidator', () => {
 
       const { warnings } = validatePuzzle(model);
 
-      expect(warnings.some((w) => /unsolvable/i.test(w) && /G5/.test(w))).toBe(true);
+      const unsolvable = warnings.find((w) => /unsolvable/i.test(w));
+      expect(unsolvable).toMatch(/G5/);
+      // Said in today's terms: creatures are the only singers (no recording)
+      expect(unsolvable).toMatch(/creatures are the only singers/);
+      expect(unsolvable).not.toMatch(/record/i);
     });
 
     it('does not warn about solvability when creatures cover the target pitches', () => {
@@ -322,13 +343,13 @@ describe('PuzzleValidator', () => {
     });
 
     it('keeps warnings and errors in separate arrays', () => {
-      // No player spawn (error) and no fountain (warning)
+      // No player spawn (error) and nothing to solve (warning)
       const result = validatePuzzle(model);
 
       // Should have at least one error (no player spawn)
       expect(result.errors.some((e) => /player spawn/i.test(e))).toBe(true);
-      // Should have at least one warning (no fountain)
-      expect(result.warnings.some((w) => /fountain/i.test(w))).toBe(true);
+      // Should have at least one warning (nothing to solve)
+      expect(result.warnings.some((w) => /nothing to solve/i.test(w))).toBe(true);
 
       // Errors should not appear in warnings and vice versa
       expect(result.warnings.some((w) => /player spawn/i.test(w))).toBe(false);

@@ -1,5 +1,5 @@
 /**
- * RangeIndicator — the selected creature's audible/recordable spheres.
+ * RangeIndicator — the selected creature's audible-range and absorb-reach spheres.
  *
  * EditorApp re-shows them on every model change while a creature is
  * selected, so the same range must move the spheres it has, and any other
@@ -44,12 +44,23 @@ describe('RangeIndicator', () => {
     indicator = new RangeIndicator(scene);
   });
 
-  it('draws the audible and recordable spheres around the creature', () => {
+  it('draws the audible-range and absorb-reach spheres around the creature', () => {
     indicator.show(creature(12), { x: 1, y: 2, z: 3 });
 
     expect(scene.children).toHaveLength(1);
     expect(radii()).toEqual([12, 12 * ABSORB_RANGE_PERCENTAGE]);
     expect(shown().position).toMatchObject({ x: 1, y: 2, z: 3 });
+  });
+
+  it('rings each range flat at the creature, readable from the overhead camera', () => {
+    indicator.show(creature(12), { x: 1, y: 2, z: 3 });
+
+    const rings = shown().children.map((sphere) => sphere.children[0]);
+    expect(rings.map((r) => r.geometry.parameters.outerRadius)).toEqual([
+      12,
+      12 * ABSORB_RANGE_PERCENTAGE,
+    ]);
+    rings.forEach((ring) => expect(ring.rotation.x).toBeCloseTo(-Math.PI / 2));
   });
 
   it('moves the spheres it has when the creature moves or anything else changes', () => {

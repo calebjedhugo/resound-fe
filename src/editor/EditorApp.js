@@ -564,7 +564,7 @@ export default class EditorApp {
   }
 
   /**
-   * Show the audible/recordable range spheres for the selected creature (and
+   * Show the audible-range / absorb-reach spheres for the selected creature (and
    * nothing otherwise). Called on selection changes and on every mutation, so
    * the spheres track the creature as it moves or its Audible Range is edited.
    */

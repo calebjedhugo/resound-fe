@@ -11,13 +11,18 @@
  */
 
 const SHORTCUTS = [
-  ['Click tool, then grid', 'Place entity'],
-  ['Esc, then click entity', 'Select it (needs no active tool)'],
-  ['Drag selection, or edit X/Z', 'Move an entity'],
-  ['Right-click entity', 'Edit its song'],
-  ['Delete / Backspace', 'Delete entity, or the floor region on an empty cell'],
-  ['F', 'Start a floor region here (above ground); arrows size, Enter commits'],
-  ['Escape', 'Deselect / cancel placement'],
+  ['Arrows', 'Move the cursor (they follow the camera)'],
+  ['Click a tile', 'Cursor there; select what stands on it'],
+  ['P C G W R L', 'Place spawn / creature / gate / wall / ramp / waystone'],
+  ['Shift + Arrows', 'Move the entity under the cursor'],
+  ['Option + Up/Down', 'Storey up / down (an empty one starts a floor)'],
+  ['Shift + Option + Up/Down', 'Carry the entity up / down a storey'],
+  ['F', 'Start a floor region here; arrows size, Enter commits'],
+  ['Enter', "The entity's menu (song, links)"],
+  ['Double-click', "Edit a creature's or gate's song"],
+  ['Delete / Backspace', 'Delete the entity, or the floor region on an empty cell'],
+  ['Escape', 'Deselect / cancel'],
+  ['Drag / Shift-drag / wheel', 'Orbit / pan / zoom the camera'],
   ['Cmd/Ctrl + Z', 'Undo'],
   ['Cmd/Ctrl + Shift + Z', 'Redo'],
 ];

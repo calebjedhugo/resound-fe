@@ -19,8 +19,9 @@ function capitalize(str) {
 
 /**
  * The distinct pitches a song contains (flattening voices and chords). Used to
- * check solvability: a played song is a recording of creatures, so every pitch
- * a gate/fountain requires must be sung by some creature.
+ * check solvability: creatures are the only sound sources (the player sings
+ * nothing; they carry creatures with the pole and release them elsewhere), so
+ * every pitch a gate/fountain requires must be sung by some creature.
  */
 function songPitches(song) {
   const pitches = new Set();
@@ -197,9 +198,11 @@ export function validatePuzzle(model) {
   const ramps = entities.filter((e) => e.type === 'ramp');
   const gatesAndFountains = [...gates, ...fountains];
 
-  // 1. No fountain defined
-  if (fountains.length === 0) {
-    warnings.push('No fountain defined (no win condition)');
+  // 1. Nothing to solve. (Fountains are parked — the levels are a chain of
+  // gates and doors — so a level without a fountain is normal; one with
+  // neither has nothing for its creatures to open.)
+  if (gatesAndFountains.length === 0) {
+    warnings.push('Nothing to solve: no gate in this puzzle');
   }
 
   // 2. Gate with no adjacent walls
@@ -215,9 +218,11 @@ export function validatePuzzle(model) {
     }
   }
 
-  // 3b. Creature in range of a target it satisfies by itself: the puzzle will
-  // solve without the player. Legal by design (creatures CAN activate
-  // targets), but almost always a layout mistake — warn loudly.
+  // 3b. Creature that, WHERE IT STARTS, sings a target's exact song within
+  // hearing: that gate opens on its own before the player does anything.
+  // Legal by design (creatures CAN open targets) and sometimes intended —
+  // the player can always carry the creature away with the pole — but more
+  // often a layout slip, so it is still flagged.
   for (const creature of creatures) {
     const creatureSong = creature.data?.song;
     const creatureSings = creatureSong && creatureSong.length > 0;
@@ -241,33 +246,22 @@ export function validatePuzzle(model) {
           warnings.push(
             `${capitalize(target.type)} (id=${target.id}) hears creature (id=${
               creature.id
-            }) singing its exact target — the puzzle will solve itself without the player`
+            }) singing its exact song from where it starts — it opens on its own ` +
+              'before the player moves anything (fine if intended)'
           );
         }
       }
     }
   }
 
-  // 3. Creature audibleRange doesn't reach any gate/fountain
-  for (const creature of creatures) {
-    const range = creature.data?.audibleRange ?? 0;
-    const reachesTarget = gatesAndFountains.some((target) => {
-      const dx = (creature.x - target.x) * WORLD_SCALE;
-      const dy = (creature.y - target.y) * ELEVATION_HEIGHT;
-      const dz = (creature.z - target.z) * WORLD_SCALE;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      return distance <= range;
-    });
-    if (!reachesTarget) {
-      warnings.push(
-        `Creature (id=${creature.id}) audible range (${range}) does not reach any gate or fountain`
-      );
-    }
-  }
+  // (No "creature's range reaches no gate" warning any more: the player
+  // carries creatures to where they are needed, so a creature placed far
+  // from every gate is the usual layout, not a mistake.)
 
-  // 6. Gate/fountain target requires a pitch no creature sings. A played song
-  // is a recording of creatures, so an uncovered pitch can never be produced —
-  // a strong (harmony-safe) signal the target is unsolvable.
+  // 6. Gate/fountain target requires a pitch no creature sings. Creatures are
+  // the only sound sources (the player carries and releases them, never
+  // sings), so an uncovered pitch can never be produced — a strong
+  // (harmony-safe) signal the target is unsolvable.
   const creaturePitches = new Set();
   for (const creature of creatures) {
     songPitches(creature.data?.song).forEach((p) => creaturePitches.add(p));
@@ -279,7 +273,8 @@ export function validatePuzzle(model) {
       warnings.push(
         `${capitalize(target.type)} (id=${
           target.id
-        }) target uses pitch(es) no creature sings (${missing.join(', ')}) — may be unsolvable`
+        }) needs pitch(es) no creature sings (${missing.join(', ')}) — ` +
+          'creatures are the only singers, so it may be unsolvable'
       );
     }
   }
