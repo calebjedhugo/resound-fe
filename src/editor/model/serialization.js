@@ -6,7 +6,9 @@
  * Key differences between model and JSON format:
  *  - Model stores all entity-specific data in a flat `data` object
  *  - JSON format places fields differently per entity type:
- *    - Creature: song/interval/audibleRange/clapDisplacement inside `data`
+ *    - Creature: song/interval/audibleRange inside `data`
+ *  - `clapDisplacement` (puzzle or creature) is IGNORED on import and never
+ *    written: clapping is gone (2026-11-23); old files still load
  *    - Gate/Fountain: song at entity root
  *    - Ramp: direction at entity root
  *    - Wall: position only
@@ -33,11 +35,6 @@ export function serializePuzzle(model) {
     gridSize: metadata.gridSize,
     tempo: metadata.tempo,
   };
-
-  // Only include clapDisplacement if non-null
-  if (metadata.clapDisplacement != null) {
-    json.clapDisplacement = metadata.clapDisplacement;
-  }
 
   json.keySignature = metadata.keySignature;
   json.timeSignature = metadata.timeSignature;
@@ -80,9 +77,6 @@ function serializeEntity(entity) {
       if (entity.data.song) data.song = entity.data.song;
       if (entity.data.interval != null) data.interval = entity.data.interval;
       if (entity.data.audibleRange != null) data.audibleRange = entity.data.audibleRange;
-      if (entity.data.clapDisplacement != null) {
-        data.clapDisplacement = entity.data.clapDisplacement;
-      }
       return { type: 'creature', position, data };
     }
 
@@ -181,7 +175,6 @@ export function deserializePuzzle(json) {
     difficulty: json.difficulty,
     tempo: json.tempo,
     gridSize: json.gridSize,
-    clapDisplacement: json.clapDisplacement ?? null,
     keySignature,
     timeSignature,
     teaches: Array.isArray(json.teaches) ? json.teaches : null,
@@ -249,9 +242,6 @@ function deserializeEntity(model, entity) {
         song: entity.data.song,
         interval: entity.data.interval,
         audibleRange: entity.data.audibleRange,
-        ...(entity.data.clapDisplacement != null
-          ? { clapDisplacement: entity.data.clapDisplacement }
-          : {}),
       });
       break;
 

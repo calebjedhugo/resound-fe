@@ -2,7 +2,7 @@
 /**
  * The key hints show the device in hand (jsdom, fake pads polled as main.js
  * polls them): keycaps on the keyboard; on a controller its own buttons, by
- * family — the face button for R / Space / C / G (PlayStation's shapes, an
+ * family — the face button for R / Space / G (PlayStation's shapes, an
  * Xbox's or a Switch's letter, a generic pad's lit diamond position) and
  * the two sticks for the move cluster. A hint on screen swaps its glyph in
  * place. Each glyph is
@@ -81,34 +81,32 @@ const moveCluster = () =>
   [...document.querySelectorAll('#hint-move [data-glyph]')].map((el) => el.dataset.glyph);
 const deployGlyph = () => document.querySelector('#hint-deploy').firstElementChild.dataset.glyph;
 
-/** Stand beside a creature: the absorb and clap hints float over it. */
+/** Stand beside a creature: the absorb hint floats over it. */
 async function standBesideACreature() {
-  ctx.loadPuzzle('clap-basic');
+  ctx.loadPuzzle('recording-basic');
   await ctx.tick(32);
   hints.update(0.016);
 }
 
 describe('Each hint shows the glyph of the device in hand', () => {
   it.each([
-    // family, absorb (R), release (Space), clap (C), deploy (G), move cluster
-    ['keyboard', 'R', 'Space', 'C', 'G', ['W', 'A', 'S', 'D']],
-    ['playstation', 'Square', 'Cross', 'Circle', 'Triangle', ['the left stick', 'the right stick']],
-    ['xbox', 'X', 'A', 'B', 'Y', ['the left stick', 'the right stick']],
-    ['switch', 'Y', 'B', 'A', 'X', ['the left stick', 'the right stick']],
+    // family, absorb (R), release (Space), deploy (G), move cluster
+    ['keyboard', 'R', 'Space', 'G', ['W', 'A', 'S', 'D']],
+    ['playstation', 'Square', 'Cross', 'Triangle', ['the left stick', 'the right stick']],
+    ['xbox', 'X', 'A', 'Y', ['the left stick', 'the right stick']],
+    ['switch', 'Y', 'B', 'X', ['the left stick', 'the right stick']],
     [
       'generic',
       'the left button',
       'the bottom button',
-      'the right button',
       'the top button',
       ['the left stick', 'the right stick'],
     ],
-  ])('on %s: %s, %s, %s, %s', (family, absorb, release, clap, deploy, move) => {
+  ])('on %s: %s, %s, %s', (family, absorb, release, deploy, move) => {
     if (family !== 'keyboard') pickUpPad(family);
 
     expect(shown(hints.absorbSprite)).toBe(absorb);
     expect(shown(hints.releaseSprite)).toBe(release);
-    expect(shown(hints.clapSprite)).toBe(clap);
     expect(deployGlyph()).toBe(deploy);
     expect(moveCluster()).toEqual(move);
   });
@@ -127,19 +125,18 @@ describe('A hint on screen swaps its glyph in place', () => {
   it('the floating hints keep their place and stay up', async () => {
     await standBesideACreature();
     expect(hints.absorbSprite.visible).toBe(true);
-    expect(hints.clapSprite.visible).toBe(true);
-    const where = hints.clapSprite.position.clone();
+    const where = hints.absorbSprite.position.clone();
 
     pickUpPad('xbox');
 
-    expect(hints.clapSprite.visible).toBe(true);
-    expect(hints.clapSprite.position).toEqual(where);
-    expect(shown(hints.clapSprite)).toBe('B');
-    expect(scene.children.filter((child) => child.isSprite)).toHaveLength(3);
+    expect(hints.absorbSprite.visible).toBe(true);
+    expect(hints.absorbSprite.position).toEqual(where);
+    expect(shown(hints.absorbSprite)).toBe('X');
+    expect(scene.children.filter((child) => child.isSprite)).toHaveLength(2);
   });
 
   it('the move cluster stays up as the pad is taken up and put down', async () => {
-    ctx.loadPuzzle('clap-basic');
+    ctx.loadPuzzle('recording-basic');
     for (let i = 0; i < 120; i += 1) hints.update(0.016); // standing still: it shows
     const cluster = document.getElementById('hint-move');
     expect(cluster.style.opacity).toBe('1');
@@ -171,13 +168,13 @@ describe('No frame draws or uploads a glyph', () => {
   it('frames with hints up, on a pad, draw nothing new', async () => {
     pickUpPad('playstation');
     await standBesideACreature();
-    const { map } = hints.clapSprite.material;
+    const { map } = hints.absorbSprite.material;
     const canvases = countCanvases();
 
     for (let i = 0; i < 300; i += 1) hints.update(0.016);
 
     expect(canvases).toHaveLength(0);
-    expect(hints.clapSprite.material.map).toBe(map);
+    expect(hints.absorbSprite.material.map).toBe(map);
   });
 
   it('each family is drawn the first time it shows, and only then', () => {
@@ -191,8 +188,8 @@ describe('No frame draws or uploads a glyph', () => {
     pressKey();
     pickUpPad('playstation');
 
-    // Three sprites, two sticks and the deploy button
-    expect(drawn).toBe(6);
+    // Two sprites, two sticks and the deploy button
+    expect(drawn).toBe(5);
     expect(canvases).toHaveLength(drawn);
     expect(hints.releaseSprite.material.map).toBe(cross);
   });

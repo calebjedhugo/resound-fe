@@ -95,7 +95,7 @@ const CreatureRegistry = {
 
   /**
    * An area is about to be pruned: remember where each creature released
-   * there stands now, and its spec as it is (its phase moves with claps).
+   * there stands now, and its spec as it is (its phase).
    * @param {Area} area
    */
   snapshot(area) {

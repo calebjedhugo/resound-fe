@@ -1,6 +1,5 @@
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 import { randomInstrument } from 'createEventListeners';
-import ClapManager from 'core/ClapManager';
 
 class PlayingState {
   /**
@@ -14,9 +13,6 @@ class PlayingState {
     // Sync camera to player start position
     syncCameraToPlayer(this.gameState.player.position);
 
-    // Initialize clap manager
-    ClapManager.initialize();
-
     // Resume music if it was paused
     if (randomInstrument.playbackState.isPaused) {
       randomInstrument.resume();
@@ -24,8 +20,6 @@ class PlayingState {
   }
 
   update() {
-    // Update clap manager (handles quantization)
-    ClapManager.update();
     // Areas/entities are NOT updated here: main.js's update() drives the
     // world exactly once per frame, gated on the start gate (the world must
     // hold still while the gate is up).

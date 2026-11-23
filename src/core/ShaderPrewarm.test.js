@@ -20,9 +20,8 @@ import PoleLook from 'entities/PoleLook';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import KeyHints from 'ui/KeyHints';
-import ClapVisual from 'ui/ClapVisual';
 import { CLIP_PLANE_COUNT, renderMainView } from 'core/passContext';
-import { CLAP_RANGE, WORLD_SCALE } from 'core/constants';
+import { WORLD_SCALE } from 'core/constants';
 import {
   drawnObjects,
   objectsIn,
@@ -379,7 +378,7 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     const scene = litScene();
     const hints = buildKeyHints(scene);
 
-    expect(objectsIn(scene).filter((object) => object.isSprite)).toHaveLength(3);
+    expect(objectsIn(scene).filter((object) => object.isSprite)).toHaveLength(2);
     expect(coldPrograms(scene)).toEqual([]);
     hints.dispose();
   });
@@ -398,13 +397,5 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
 
     expect(look.body.visible).toBe(true);
     expect(coldPrograms(look.object)).toEqual([]);
-  });
-
-  it('a clap ring', () => {
-    const scene = litScene();
-    new ClapVisual(scene).show({ x: 0, y: 1.8, z: 0 }, CLAP_RANGE);
-
-    expect(objectsIn(scene)).toHaveLength(1);
-    expect(coldPrograms(scene)).toEqual([]);
   });
 });

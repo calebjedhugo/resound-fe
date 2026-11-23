@@ -9,8 +9,8 @@ class GameState {
 
     // The area the player stands in. Linked puzzles are one world of many
     // live areas (core/Area); `currentPuzzle`/`entities`/`elevationGrid`
-    // below delegate here, so player-scoped systems (UI, input, the pole,
-    // claps) always mean "the player's area" without knowing about areas.
+    // below delegate here, so player-scoped systems (UI, input, the pole)
+    // always mean "the player's area" without knowing about areas.
     this.activeArea = null;
 
     // The world orchestrator (PortalManager registers itself here) — lets

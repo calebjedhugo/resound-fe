@@ -31,7 +31,7 @@ import InputDevice from 'core/InputDevice';
 // Standard-layout button index -> the key it presses
 const BUTTON_KEYS = [];
 BUTTON_KEYS[0] = 'Space'; // Cross: release the cursor slot's creature
-BUTTON_KEYS[1] = 'KeyC'; // Circle: clap
+BUTTON_KEYS[1] = 'KeyC'; // Circle: the menus' back (C); nothing in the world
 BUTTON_KEYS[2] = 'KeyR'; // Square: absorb the nearest creature in reach
 BUTTON_KEYS[3] = 'KeyG'; // Triangle: the waystone gate (aim -> deploy -> remove)
 BUTTON_KEYS[4] = 'ArrowLeft'; // L1: tape cursor left

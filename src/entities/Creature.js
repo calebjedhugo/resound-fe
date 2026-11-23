@@ -303,7 +303,7 @@ class Creature extends Entity {
     if (!this.look) return;
 
     // Drop notes that have ended (musical clock), or all of them once the
-    // instrument has stopped (song over, clap, dispose) — filtered in place
+    // instrument has stopped (song over, stop, dispose) — filtered in place
     const notes = this.soundingNotes;
     if (!this.instrument.playbackState.isPlaying) {
       notes.length = 0;
@@ -370,26 +370,6 @@ class Creature extends Entity {
     if (this.instrument) {
       this.instrument.stop();
     }
-  }
-
-  /**
-   * Handle being clapped - stop current song and displace timing
-   * @param {number} displacement - Displacement as fraction of whole note (e.g., 0.0625 = 1/16)
-   */
-  handleClap(displacement) {
-    // Stop current song immediately (its notes stop sounding with it, and
-    // the notes built for the next go)
-    this.stopSong();
-    this.soundingNotes.length = 0;
-
-    // Convert displacement from whole-note fraction to quarter-note beats
-    // (MusicalClock counts in quarter notes, so multiply by 4)
-    const displacementInBeats = displacement * 4;
-    this.nextSingBeat += displacementInBeats;
-    this.prepareNextSong();
-
-    // Visual feedback - a brief white flash
-    if (this.look) this.look.flash();
   }
 
   /** Keep gameState.absorb.inRange in step with isAbsorbable. */

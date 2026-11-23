@@ -2,7 +2,6 @@ import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import { Random } from 'resound-sound';
 import AbsorbManager from 'core/AbsorbManager';
-import ClapManager from 'core/ClapManager';
 import DeployManager from 'core/DeployManager';
 import Tape from 'core/Tape';
 import Sound from 'core/Sound';
@@ -121,12 +120,6 @@ const dispatchKeyboardActions = (event) => {
       // Tape cursor right; on a filled last slot this appends a new one
       if (acting) {
         Tape.right();
-      }
-      break;
-    case 'KeyC':
-      // Clap (quantized to 16th notes)
-      if (acting) {
-        ClapManager.requestClap();
       }
       break;
     case 'KeyG':

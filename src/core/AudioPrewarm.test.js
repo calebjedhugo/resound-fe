@@ -302,23 +302,6 @@ describe("Building each creature's next song ahead", () => {
     expect(built.atOnset).toBe(0);
   });
 
-  it("builds a clapped creature's next song again: the clap's stop let the built one go", async () => {
-    grantIdleTime();
-    ctx.loadPuzzle('clap-basic'); // a creature in clap range, singing every 4 beats
-    await ctx.advanceBeats(2); // its first song over, its next one built
-    const [creature] = ctx.getCreatures();
-    const built = watchNodeBuilds([creature]);
-    ctx.clearEmittedNotes();
-
-    ctx.pressKey('c');
-    await ctx.tick(200); // the clap lands on the next 16th
-    expect(built.oscillatorsAhead).toBe(1); // built again, for the displaced song
-    await ctx.advanceBeats(4);
-
-    expect(sungBy(creature)).toHaveLength(1);
-    expect(built.atOnset).toBe(0);
-  });
-
   it("builds each creature's first song behind the StartGate", async () => {
     onMachine(jest.fn(() => 1)); // no idle time to speak of
     const gate = new StartGate();

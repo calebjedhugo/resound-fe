@@ -123,21 +123,6 @@ export default class PropertyPanel {
       this._undoManager.updateEntity(this._selectedId, { data: newData });
     });
 
-    // Clap Displacement (optional)
-    this._addTextField(
-      wrapper,
-      'Clap Displacement',
-      data.clapDisplacement || '',
-      (val) => {
-        const newData = {
-          ...this._undoManager.getEntity(this._selectedId).data,
-          clapDisplacement: val || undefined,
-        };
-        this._undoManager.updateEntity(this._selectedId, { data: newData });
-      },
-      'Optional, 0–1: when the player claps, this creature restarts its song shifted by this fraction of a whole note (e.g. 0.0625 = one 16th). Empty = no shift.'
-    );
-
     // Song editor button
     this._renderSongEditor(wrapper, entity);
   }

@@ -273,22 +273,28 @@ describe("A pad's family, from its id", () => {
 
 describe("Each action's glyph", () => {
   it.each([
-    // family, release (Space), clap (C), absorb (R), deploy (G), tape cursor right
-    [KEYBOARD, 'Space', 'C', 'R', 'G', 'Right arrow'],
-    ['playstation', 'Cross', 'Circle', 'Square', 'Triangle', 'R1'],
-    ['xbox', 'A', 'B', 'X', 'Y', 'RB'],
-    ['switch', 'B', 'A', 'Y', 'X', 'R'],
-    ['generic', 'the bottom button', 'the right button', 'the left button', 'the top button', 'RB'],
-  ])('on %s: %s, %s, %s, %s, %s', (family, release, clap, absorb, deploy, tapeRight) => {
-    expect(
-      ['release', 'clap', 'absorb', 'deploy', 'tapeRight'].map((a) => nameFor(a, family))
-    ).toEqual([release, clap, absorb, deploy, tapeRight]);
+    // family, release (Space), absorb (R), deploy (G), tape cursor right
+    [KEYBOARD, 'Space', 'R', 'G', 'Right arrow'],
+    ['playstation', 'Cross', 'Square', 'Triangle', 'R1'],
+    ['xbox', 'A', 'X', 'Y', 'RB'],
+    ['switch', 'B', 'Y', 'X', 'R'],
+    ['generic', 'the bottom button', 'the left button', 'the top button', 'RB'],
+  ])('on %s: %s, %s, %s, %s', (family, release, absorb, deploy, tapeRight) => {
+    expect(['release', 'absorb', 'deploy', 'tapeRight'].map((a) => nameFor(a, family))).toEqual([
+      release,
+      absorb,
+      deploy,
+      tapeRight,
+    ]);
   });
 
-  it("a pad's face buttons are its standard layout's positions", () => {
-    expect(
-      ['release', 'clap', 'absorb', 'deploy'].map((a) => glyphFor(a, 'generic').position)
-    ).toEqual(['bottom', 'right', 'left', 'top']);
+  it("a pad's face buttons are its standard layout's positions (the right one names no action)", () => {
+    expect(['release', 'absorb', 'deploy'].map((a) => glyphFor(a, 'generic').position)).toEqual([
+      'bottom',
+      'left',
+      'top',
+    ]);
+    expect(glyphFor('clap', KEYBOARD)).toBeUndefined();
   });
 
   it('on a pad the sticks walk and look; on the keyboard W/A/S/D and I/J/K/L', () => {

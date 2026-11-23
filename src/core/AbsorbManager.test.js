@@ -297,12 +297,11 @@ describe('A creature taken and let out again is the same creature', () => {
     ctx.loadPuzzle('recording-basic'); // C4 every 4 beats from beat 0
     await ctx.tick(16);
     const [before] = ctx.getCreatures();
-    ctx.pressKey('c'); // a clap shifts its schedule a 16th (a quarter beat)
     await ctx.advanceBeats(9);
     const phaseOf = (beats) => beats.map((beat) => ((beat % 4) + 4) % 4);
     const old = phaseOf(onsetsOf(before).slice(1));
     expect(old.length).toBeGreaterThan(0);
-    old.forEach((phase) => expect(phase).toBeCloseTo(0.25, 1));
+    old.forEach((phase) => expect(phase).toBeCloseTo(0, 1));
 
     await ctx.advanceBeats(0.6); // off the beat
     ctx.pressKey('r');
@@ -315,7 +314,7 @@ describe('A creature taken and let out again is the same creature', () => {
 
     const now = phaseOf(onsetsOf(after));
     expect(now.length).toBeGreaterThan(1);
-    now.forEach((phase) => expect(phase).toBeCloseTo(0.25, 1));
+    now.forEach((phase) => expect(phase).toBeCloseTo(0, 1));
   });
 });
 

@@ -44,8 +44,6 @@ const FLARE_TAU = 0.22; // onset flare decay
 const RELEASE_TAU = 0.2; // fade back to the bubble after the last note ends
 const ATTACK_TIME = 0.05; // ramp-up if a note is sounding without a seen onset
 const COLOUR_TAU = 0.12; // harmony colour transition
-const FLASH_HOLD = 0.1; // clap flash: full white this long...
-const FLASH_TAU = 0.05; // ...then a quick fade
 const LIGHT_FROM_DARK = 0.05; // below this a fresh onset snaps (no colour lerp)
 const SWIRL_ONSET_RUSH = 2.5; // swirl speed-up at an onset (x1 + this), decaying with the flare
 
@@ -163,7 +161,6 @@ const BODY_FRAGMENT = /* glsl */ `
   uniform float uTime;
   uniform float uExcite;
   uniform float uFlare;
-  uniform float uFlash;
   uniform float uSeed;
   uniform float uLum;
   uniform float uFlicker;
@@ -327,8 +324,6 @@ const BODY_FRAGMENT = /* glsl */ `
       col = mix(col, uGlow * (0.6 + 0.6 * vDraw) + vec3(0.15 * vDraw), energy * 0.8);
       a = mix(a, 0.45 + 0.5 * vDraw, energy);
     }
-    col = mix(col, vec3(1.0), uFlash); // clap flash
-    a = mix(a, 1.0, uFlash);
     gl_FragColor = vec4(col, a);
     #include <tonemapping_fragment>
     #include <encodings_fragment>
@@ -431,7 +426,6 @@ const BODY_MATERIAL = new THREE.ShaderMaterial({
     uTime: { value: 0 },
     uExcite: { value: 0 },
     uFlare: { value: 0 },
-    uFlash: { value: 0 },
     uSeed: { value: 0 },
     uSuck: { value: 0 },
     uTip: { value: new THREE.Vector3(0, 0, 1) },
@@ -499,7 +493,6 @@ function bindBody(look) {
   const from = look._uniforms;
   to.uTime.value = from.uTime.value;
   to.uExcite.value = from.uExcite.value;
-  to.uFlash.value = from.uFlash.value;
   to.uSeed.value = from.uSeed.value;
   to.uSuck.value = from.uSuck.value;
   if (from.uSuck.value > 0) to.uTip.value.copy(from.uTip.value);
@@ -717,8 +710,6 @@ class CreatureLook {
     // Envelope state (visual only)
     this._lit = 0; // 0 bubble .. 1 ball lightning
     this._flare = 0; // onset flare, decays while the note holds
-    this._flash = 0; // clap flash
-    this._flashHold = 0;
     this._snapColour = true; // first light takes its colour without a lerp
     this._time = Math.random() * 100;
     this._bobPhase = Math.random() * Math.PI * 2;
@@ -761,7 +752,6 @@ class CreatureLook {
       uTime: { value: this._time },
       uExcite: { value: 0 },
       uFlare: { value: 0 },
-      uFlash: { value: 0 },
       uSeed: { value: Math.random() * 10 },
       uIntensity: { value: 0 },
       uFloorY: { value: 0 },
@@ -819,12 +809,6 @@ class CreatureLook {
     this._flare = 1;
   }
 
-  /** Clap: a brief white flash. */
-  flash() {
-    this._flash = 1;
-    this._flashHold = FLASH_HOLD;
-  }
-
   /**
    * Overall glow: 0 = the silent bubble; > 0 while lit, highest at a note's
    * onset, settling to the sustain glow while the note holds.
@@ -837,7 +821,7 @@ class CreatureLook {
    * The light this creature throws on the floor and walls around it
    * (EnvironmentLook's pools): where it shines from and its colour, linear,
    * already scaled by how brightly it shines — its glow (onset flares
-   * included) at its register's lightness, or the clap's white flash.
+   * included) at its register's lightness.
    * @param {Float32Array} position - xyz written at `index * 4`
    * @param {Float32Array} colour - rgb written at `index * 3`
    * @param {number} index
@@ -845,16 +829,13 @@ class CreatureLook {
    */
   lightInto(position, colour, index) {
     // Drawn into the pole, its light goes with it
-    const strength = Math.max(this.glow * Math.min(1.4, this._lum), this._flash) * (1 - this._suck);
+    const strength = this.glow * Math.min(1.4, this._lum) * (1 - this._suck);
     if (strength <= 0) return 0;
     const { x, y, z } = this.object.position;
     position[index * 4] = x;
     position[index * 4 + 1] = y + this.float.position.y;
     position[index * 4 + 2] = z;
-    const white = this._flash / Math.max(strength, 1e-6);
-    for (let i = 0; i < 3; i += 1) {
-      colour[index * 3 + i] = (this._glow[i] + (1 - this._glow[i]) * white) * strength;
-    }
+    for (let i = 0; i < 3; i += 1) colour[index * 3 + i] = this._glow[i] * strength;
     return strength;
   }
 
@@ -942,12 +923,6 @@ class CreatureLook {
       if (this._lit < 1e-3) this._lit = 0;
     }
     this._flare *= Math.exp(-dt / FLARE_TAU);
-    if (this._flashHold > 0) {
-      this._flashHold -= dt;
-    } else {
-      this._flash *= Math.exp(-dt / FLASH_TAU);
-      if (this._flash < 1e-3) this._flash = 0;
-    }
 
     const coloured = harmony !== null && harmony.main !== null;
     // A first light takes its luminosity outright, like its colour
@@ -1053,7 +1028,6 @@ class CreatureLook {
     u.uTime.value = this._time;
     u.uExcite.value = this._lit;
     u.uFlare.value = this._flare;
-    u.uFlash.value = this._flash;
     u.uIntensity.value = glow;
     u.uLum.value = this._lum;
     u.uFlicker.value =

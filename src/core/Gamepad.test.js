@@ -3,8 +3,8 @@
  * The game controller (core/Gamepad), polled once a frame. Its buttons are
  * the keys they stand for: each press goes out once as its key's keydown and
  * each release as its keyup, so the game's own key listeners act on them
- * (the pole's absorb and release, the tape cursor, claps, the waystone
- * gate, the ending card; the
+ * (the pole's absorb and release, the tape cursor, the waystone gate,
+ * the ending card; the
  * menus: see ui/Menu.test.js). Its
  * sticks are analog (walking and looking: see motion.test.js) and rest
  * outside play. A pad that leaves lets go of everything it held. The start
@@ -15,7 +15,6 @@
 import { audioContextManager } from 'resound-sound';
 import gameState from 'core/GameState';
 import Gamepad from 'core/Gamepad';
-import ClapManager from 'core/ClapManager';
 import DeployManager from 'core/DeployManager';
 import createEventListeners from 'createEventListeners';
 import StartGate from 'ui/StartGate';
@@ -156,19 +155,25 @@ describe("A controller's buttons are the keys they stand for", () => {
     expect(ctx.getInventorySlot(0)).toBeNull();
   });
 
-  it('Circle claps', async () => {
-    ctx.loadPuzzle('clap-basic');
+  it('Circle does nothing in the world (clapping is gone; it backs out of menus)', async () => {
+    ctx.loadPuzzle('recording-basic'); // a creature singing C4 every 4 beats from beat 0
     await ctx.tick(16);
-    const claps = jest.fn();
-    ClapManager.setVisualCallback(claps);
+    const [creature] = ctx.getCreatures();
     const pad = connectPad();
 
     press(pad, CIRCLE);
     release(pad, CIRCLE);
-    await ctx.advanceBeats(1);
-    ClapManager.setVisualCallback(null);
+    await ctx.advanceBeats(5);
 
-    expect(claps).toHaveBeenCalledTimes(1);
+    expect(ctx.getCreatures()).toEqual([creature]);
+    expect(ctx.getInventorySlot(0)).toBeNull();
+    // ...and its song keeps its beat (C4 every 4 beats, from beat 0)
+    const onsets = ctx
+      .getEmittedNotes()
+      .filter((note) => note.source === creature.id)
+      .map((note) => note.capturedAtBeat % 4);
+    expect(onsets.length).toBeGreaterThan(0);
+    onsets.forEach((phase) => expect(Math.min(phase, 4 - phase)).toBeLessThan(0.1));
   });
 
   it('Triangle aims the waystone gate', async () => {

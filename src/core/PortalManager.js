@@ -2044,6 +2044,6 @@ class PortalManager {
   }
 }
 
-// Singleton (mirrors ClapManager / ListeningManager)
+// Singleton (mirrors ListeningManager)
 const portalManager = new PortalManager();
 export default portalManager;

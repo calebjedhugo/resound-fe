@@ -18,7 +18,7 @@ describe('HintMemory', () => {
   it('a hint the puzzle does NOT teach never shows', () => {
     HintMemory.arm(['move']);
     expect(HintMemory.isRetired('record')).toBe(true);
-    expect(HintMemory.isRetired('clap')).toBe(true);
+    expect(HintMemory.isRetired('deploy')).toBe(true);
   });
 
   it('performing the action retires the hint', () => {
@@ -49,9 +49,9 @@ describe('HintMemory', () => {
   it('a puzzle with no teaches list keeps every hint eligible (dev/legacy levels)', () => {
     HintMemory.arm(undefined);
     expect(HintMemory.isRetired('move')).toBe(false);
-    expect(HintMemory.isRetired('clap')).toBe(false);
-    HintMemory.retire('clap');
-    expect(HintMemory.isRetired('clap')).toBe(true);
+    expect(HintMemory.isRetired('deploy')).toBe(false);
+    HintMemory.retire('deploy');
+    expect(HintMemory.isRetired('deploy')).toBe(true);
   });
 
   it('nothing persists across sessions (no browser storage)', () => {

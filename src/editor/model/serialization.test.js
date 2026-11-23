@@ -185,23 +185,6 @@ describe('Puzzle Serialization', () => {
       expect(creature.song).toBeUndefined();
     });
 
-    it('serializes creature clapDisplacement inside data when present', () => {
-      const model = new EditorPuzzleModel();
-      model.setMetadata({ id: 'creature-clap-test' });
-      model.setPlayerSpawn(0, 0, 0);
-      model.addEntity('creature', 3, 1, 5, {
-        song: [{ pitch: 'C4', length: '1/4' }],
-        interval: 4,
-        audibleRange: 10,
-        clapDisplacement: '1/8',
-      });
-
-      const json = serializePuzzle(model);
-      const creature = json.entities[0];
-
-      expect(creature.data.clapDisplacement).toBe('1/8');
-    });
-
     it('serializes gate with song at entity root, not in data', () => {
       const model = new EditorPuzzleModel();
       model.setMetadata({ id: 'gate-test' });
@@ -286,32 +269,37 @@ describe('Puzzle Serialization', () => {
       expect(waystone.direction).toBeUndefined();
     });
 
-    it('omits clapDisplacement from JSON when null', () => {
-      const model = new EditorPuzzleModel();
-      model.setMetadata({
-        id: 'no-clap',
-        name: 'No Clap',
-        clapDisplacement: null,
+    it('loads an old puzzle with clapDisplacement (puzzle and creature) and saves it without', () => {
+      const model = deserializePuzzle({
+        id: 'old-clap',
+        name: 'Old Clap',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        clapDisplacement: 0.25,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [
+          {
+            type: 'creature',
+            position: { x: 3, y: 0, z: 5 },
+            data: {
+              song: [{ pitch: 'C4', length: '1/4' }],
+              interval: 4,
+              audibleRange: 10,
+              clapDisplacement: 0.125,
+            },
+          },
+        ],
       });
-      model.setPlayerSpawn(0, 0, 0);
 
       const json = serializePuzzle(model);
 
       expect(Object.prototype.hasOwnProperty.call(json, 'clapDisplacement')).toBe(false);
-    });
-
-    it('includes clapDisplacement in JSON when set', () => {
-      const model = new EditorPuzzleModel();
-      model.setMetadata({
-        id: 'has-clap',
-        name: 'Has Clap',
-        clapDisplacement: '1/4',
+      expect(json.entities[0].data).toEqual({
+        song: [{ pitch: 'C4', length: '1/4' }],
+        interval: 4,
+        audibleRange: 10,
       });
-      model.setPlayerSpawn(0, 0, 0);
-
-      const json = serializePuzzle(model);
-
-      expect(json.clapDisplacement).toBe('1/4');
     });
 
     it('serializes keySignature and timeSignature', () => {
@@ -544,8 +532,7 @@ describe('Puzzle Serialization', () => {
 
       const model = deserializePuzzle(minimalJson);
 
-      const meta = model.getMetadata();
-      expect(meta.clapDisplacement).toBeNull();
+      expect(model.getMetadata().teaches).toBeNull();
       expect(model.getFloors()).toEqual([]);
     });
 

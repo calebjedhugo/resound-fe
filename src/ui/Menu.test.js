@@ -6,11 +6,10 @@
  * while held), wrapping around at the ends; Enter or Space chooses the
  * focused entry (a controller's Cross); C backs out (its Circle), which
  * resumes from pause. The keys a menu takes act on the menu alone: nothing
- * in the world (the pole, a clap, the tape cursor) answers behind it.
+ * in the world (the pole, the tape cursor) answers behind it.
  */
 import gameState from 'core/GameState';
 import Gamepad from 'core/Gamepad';
-import ClapManager from 'core/ClapManager';
 import Settings from 'core/Settings';
 import createEventListeners from 'createEventListeners';
 import PauseMenu from 'ui/PauseMenu';
@@ -255,23 +254,18 @@ describe('Choosing and backing out', () => {
 });
 
 describe('Nothing in the world answers a menu', () => {
-  it('Cross releases no creature, and Circle claps no clap', async () => {
+  it('Cross releases no creature', async () => {
     ctx.loadPuzzle('playback-basic');
     await ctx.tick(16);
     ctx.setInventorySlot(0, { song: [{ pitch: 'C4', length: '1/4' }] });
     ctx.clearEmittedNotes();
-    const claps = jest.fn();
-    ClapManager.setVisualCallback(claps);
     tap(pad, DPAD_DOWN); // onto Invert Look: Cross only flips it
 
     tap(pad, CROSS);
-    tap(pad, CIRCLE);
     await ctx.advanceBeats(2);
-    ClapManager.setVisualCallback(null);
 
     expect(ctx.getCreatures()).toEqual([]);
     expect(ctx.getInventorySlot(0)).not.toBeNull();
-    expect(claps).not.toHaveBeenCalled();
   });
 
   it('the tape cursor stays where it was (L1/R1, the d-pad left/right)', () => {

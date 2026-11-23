@@ -11,7 +11,6 @@ const DEFAULT_METADATA = {
   difficulty: 1,
   tempo: 120,
   gridSize: 15,
-  clapDisplacement: null,
   keySignature: 'C',
   timeSignature: [4, 4],
   // Key-hint verbs this puzzle teaches (see puzzles/schema.md). null =

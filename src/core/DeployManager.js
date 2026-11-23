@@ -451,6 +451,6 @@ class DeployManager {
   }
 }
 
-// Singleton (mirrors ClapManager / ListeningManager / PortalManager)
+// Singleton (mirrors ListeningManager / PortalManager)
 const deployManager = new DeployManager();
 export default deployManager;

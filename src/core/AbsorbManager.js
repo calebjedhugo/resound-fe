@@ -465,6 +465,6 @@ class AbsorbManager {
   }
 }
 
-// Singleton (mirrors DeployManager / ClapManager)
+// Singleton (mirrors DeployManager)
 const absorbManager = new AbsorbManager();
 export default absorbManager;

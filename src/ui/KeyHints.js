@@ -6,8 +6,6 @@ import DeployManager from 'core/DeployManager';
 import InputDevice, { KEYBOARD } from 'core/InputDevice';
 import { glyphFor } from 'core/inputGlyphs';
 import { makeGlyphCanvas, makeGlyphElement } from 'ui/glyphCanvas';
-import { getDistance } from 'core/utils';
-import { CLAP_RANGE } from 'core/constants';
 
 /**
  * KeyHints - wordless contextual key hints.
@@ -27,10 +25,9 @@ import { CLAP_RANGE } from 'core/constants';
  *              first release
  *   (slots   - the tape's grow hint, gone 2026-11-23: an absorb never
  *              overwrites a slot, so there is nothing to warn of)
- *   clap     - "C" sprite over the nearest creature within clap range,
- *              shown steadily whenever a clap could land (not gated on the
- *              fleeting moment two creatures sing at once — that was flaky);
- *              retires on the first C pressed while the hint is up
+ *   (clap    - the "C" over a creature in clap range, gone 2026-11-23
+ *              with clapping: a released creature's first note lands on
+ *              the beat it is let out instead)
  *   deploy   - "G" keycap, bottom-center HUD (above the move cluster): the
  *              deployable waystone gate (core/DeployManager). Shows once an
  *              ACTIVE waystone exists (the mechanic leads to it — before
@@ -40,7 +37,7 @@ import { CLAP_RANGE } from 'core/constants';
  *
  * The glyphs follow the device in hand (core/InputDevice): keycaps on the
  * keyboard, a controller's own buttons on a pad — its family's face-button
- * marks for R / Space / C / G, the left and right sticks for the move
+ * marks for R / Space / G, the left and right sticks for the move
  * cluster (core/inputGlyphs, drawn by ui/glyphCanvas). A hint on screen
  * swaps its glyph in place. Each glyph is drawn once per family and kept:
  * nothing is drawn or uploaded per frame.
@@ -161,15 +158,12 @@ class KeyHints {
     // In-world sprites, by the action each one hints
     this.absorbSprite = makeHintSprite();
     this.releaseSprite = makeHintSprite();
-    this.clapSprite = makeHintSprite();
     this._sprites = [
       ['absorb', this.absorbSprite],
       ['release', this.releaseSprite],
-      ['clap', this.clapSprite],
     ];
     this.scene.add(this.absorbSprite);
     this.scene.add(this.releaseSprite);
-    this.scene.add(this.clapSprite);
 
     // Every glyph drawn so far, by family: each hint's sprite texture (and
     // its world size), the move cluster and the deploy glyph. Drawn the
@@ -181,20 +175,6 @@ class KeyHints {
     this._bobPhase = 0;
     this._stillTime = 0;
     this._startPosition = null;
-
-    // Clapping is a discrete keypress with no polled state, so observe the
-    // key directly. Non-capture: the start gate's capture-phase dismissal
-    // stops propagation, so the waking keypress can't retire the hint.
-    // (Absorb and release retire their own hints: core/AbsorbManager.)
-    this._keyHandler = (event) => {
-      if (gameState.mode !== 'PLAYING') return;
-      if (event.code === 'KeyC' && this.clapSprite.visible) {
-        // Clapping at the hinted moment (a clashing chorus in clap range)
-        // is the lesson performed.
-        HintMemory.retire('clap');
-      }
-    };
-    window.addEventListener('keydown', this._keyHandler);
   }
 
   /**
@@ -261,7 +241,6 @@ class KeyHints {
     this._updateMove(deltaTime);
     this._updateAbsorb();
     this._updateRelease();
-    this._updateClap();
     this._updateDeploy();
   }
 
@@ -327,31 +306,6 @@ class KeyHints {
     this._floatOver(this.releaseSprite, spot, RELEASE_HINT_HEIGHT);
   }
 
-  _updateClap() {
-    if (HintMemory.isRetired('clap')) {
-      this.clapSprite.visible = false;
-      return;
-    }
-    // The clap invitation: ANY creature within clap reach — the hint stays up
-    // steadily whenever a clap could land, not only during the fleeting moment
-    // two creatures happen to sing at once (that timing-gated version was
-    // flaky). 3D clap reach — the clap pair may sit on plinths (visible pens);
-    // a creature within true clap range is a clap invitation regardless of
-    // level. (Puzzles that DON'T teach clap never show this hint at all —
-    // hints are gated by the puzzle's `teaches` list.)
-    const { position } = gameState.player;
-    const inClapRange = gameState.entities
-      .filter((e) => e.type === 'creature')
-      .map((c) => ({ c, d: getDistance(position, c.position) }))
-      .filter(({ d }) => d <= CLAP_RANGE)
-      .sort((a, b) => a.d - b.d);
-    if (inClapRange.length === 0) {
-      this.clapSprite.visible = false;
-      return;
-    }
-    this._floatOver(this.clapSprite, inClapRange[0].c.position);
-  }
-
   _floatOver(sprite, position, height = SPRITE_HEIGHT) {
     sprite.position.set(
       position.x,
@@ -368,13 +322,11 @@ class KeyHints {
     this.deployEl.style.opacity = '0';
     this.absorbSprite.visible = false;
     this.releaseSprite.visible = false;
-    this.clapSprite.visible = false;
     this._stillTime = 0;
     this._startPosition = null;
   }
 
   dispose() {
-    window.removeEventListener('keydown', this._keyHandler);
     this._stopFollowing();
     Object.values(this._glyphs).forEach(({ sprites }) =>
       Object.values(sprites).forEach(({ texture }) => texture.dispose())
@@ -383,7 +335,6 @@ class KeyHints {
     this.deployEl.remove();
     this.scene.remove(this.absorbSprite);
     this.scene.remove(this.releaseSprite);
-    this.scene.remove(this.clapSprite);
   }
 }
 

@@ -2,7 +2,7 @@
  * MetadataPanel
  *
  * Collapsible panel for puzzle-level metadata: name, difficulty, tempo,
- * grid size, clap displacement, key signature, time signature.
+ * grid size, key signature, time signature.
  *
  * The puzzle id is NOT hand-editable. It is derived from the name (slugified)
  * while the puzzle is still new/unsaved, then locked once it has been written
@@ -138,18 +138,6 @@ export default class MetadataPanel {
         this._undoManager.setMetadata({ gridSize: Number(val) });
       },
       { min: 1, max: 100, step: 1 }
-    );
-
-    // Clap Displacement
-    this._addField(
-      content,
-      'number',
-      'Clap Displacement',
-      meta.clapDisplacement ?? '',
-      (val) => {
-        this._undoManager.setMetadata({ clapDisplacement: val === '' ? null : Number(val) });
-      },
-      { min: 0, max: 1, step: 0.05 }
     );
 
     // Key Signature

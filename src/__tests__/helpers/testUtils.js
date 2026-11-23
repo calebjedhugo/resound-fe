@@ -8,7 +8,6 @@ import Area from 'core/Area';
 import ListeningManager from 'core/ListeningManager';
 import { Random } from 'resound-sound';
 import AbsorbManager from 'core/AbsorbManager';
-import ClapManager from 'core/ClapManager';
 import Tape from 'core/Tape';
 import PortalManager from 'core/PortalManager';
 import PuzzleLoader from 'core/PuzzleLoader';
@@ -27,11 +26,6 @@ import recordingOutOfRange from '../fixtures/puzzles/recording-out-of-range.json
 import recordingTwoCreatures from '../fixtures/puzzles/recording-two-creatures.json';
 import recordingChord from '../fixtures/puzzles/recording-chord.json';
 import recordingLongInterval from '../fixtures/puzzles/recording-long-interval.json';
-import clapBasic from '../fixtures/puzzles/clap-basic.json';
-import clapOutOfRange from '../fixtures/puzzles/clap-out-of-range.json';
-import clapCustomDisplacement from '../fixtures/puzzles/clap-custom-displacement.json';
-import clapPerCreatureDisplacement from '../fixtures/puzzles/clap-per-creature-displacement.json';
-import clapTwoCreatures from '../fixtures/puzzles/clap-two-creatures.json';
 import playbackBasic from '../fixtures/puzzles/playback-basic.json';
 import listeningGateBasic from '../fixtures/puzzles/listening-gate-basic.json';
 import listeningFountainBasic from '../fixtures/puzzles/listening-fountain-basic.json';
@@ -130,11 +124,6 @@ const TEST_PUZZLES = {
   'recording-two-creatures': recordingTwoCreatures,
   'recording-chord': recordingChord,
   'recording-long-interval': recordingLongInterval,
-  'clap-basic': clapBasic,
-  'clap-out-of-range': clapOutOfRange,
-  'clap-custom-displacement': clapCustomDisplacement,
-  'clap-per-creature-displacement': clapPerCreatureDisplacement,
-  'clap-two-creatures': clapTwoCreatures,
   'playback-basic': playbackBasic,
   'listening-gate-basic': listeningGateBasic,
   'listening-fountain-basic': listeningFountainBasic,
@@ -184,7 +173,6 @@ function createTestContext(options = {}) {
   PuzzleLoader.clearCache();
   gameState.reset();
   ListeningManager.clear();
-  ClapManager.reset();
   AbsorbManager.reset();
 
   // The world's render scene (the active area's content group lives here)
@@ -276,9 +264,6 @@ function createTestContext(options = {}) {
 
         // Process player movement based on held keys
         this.processMovement(dt);
-
-        // Update clap manager
-        ClapManager.update();
 
         // Update every loaded area (the sandbox area is not registered with
         // the world orchestrator, so tick it directly)
@@ -385,7 +370,7 @@ function createTestContext(options = {}) {
     },
 
     /**
-     * Handle key-down actions (the pole, claps, the tape cursor) as
+     * Handle key-down actions (the pole, the tape cursor) as
      * createEventListeners does in play
      */
     handleKeyAction(key, isDown) {
@@ -397,9 +382,6 @@ function createTestContext(options = {}) {
           break;
         case 'space':
           AbsorbManager.release();
-          break;
-        case 'c':
-          ClapManager.requestClap();
           break;
         case 'arrowleft':
           Tape.left();

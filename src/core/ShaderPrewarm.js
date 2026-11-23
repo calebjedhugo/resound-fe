@@ -11,8 +11,7 @@
  *    PortalView render target, and showed the gate's transparent shell and
  *    the doorway surface for the first time: 11 programs in one frame
  *    (~140 ms) (both measured 2026-10-12);
- *  - the first key hint on screen compiled the keycap sprite (141 ms), and
- *    the first clap the ring (2026-10-17);
+ *  - the first key hint on screen compiled the keycap sprite (141 ms);
  *  - a look only some levels have (a ramp's double-sided wedge) compiled
  *    when such a level two doors away first drew, mid-game.
  * So beside the scenes the first portal passes will draw, it draws a
@@ -34,7 +33,6 @@
 import * as THREE from 'three';
 import CreatureLook from 'entities/CreatureLook';
 import { standInMaterials as poleStandIns } from 'entities/PoleLook';
-import ClapVisual from 'ui/ClapVisual';
 import { createSky, standInMaterials } from 'entities/EnvironmentLook';
 import { createSeamMaterial, standInMaterials as entityStandIns } from 'entities/EntityLook';
 import { NO_CLIP_PLANES, createSceneTarget, showStoredTexels } from 'core/passContext';
@@ -112,8 +110,6 @@ function setup(mainScene) {
   standIns.add(createSky());
   standIns.add(new THREE.Mesh(box, environment.floor));
   standIns.add(new THREE.InstancedMesh(box, environment.wall, 1));
-  // A clap ring, as a clap shows it (left unfaded in this scene)
-  new ClapVisual(standIns).show({ x: 0, z: 0 }, 1);
   // A keycap hint (KeyHints: a sprite showing its canvas-drawn keycap)
   standIns.add(
     new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.Texture(), transparent: true }))

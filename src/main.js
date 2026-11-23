@@ -20,9 +20,7 @@ import PauseMenu from 'ui/PauseMenu';
 import InventoryUI from 'ui/InventoryUI';
 import EndingOverlay from 'ui/EndingOverlay';
 import DebugUI from 'ui/DebugUI';
-import ClapVisual from 'ui/ClapVisual';
 import NotationDisplay from 'ui/NotationDisplay';
-import ClapManager from 'core/ClapManager';
 import AbsorbManager from 'core/AbsorbManager';
 import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
@@ -59,16 +57,10 @@ let mainMenu = null;
 let pauseMenu = null;
 const inventoryUI = new InventoryUI();
 const debugUI = new DebugUI();
-const clapVisual = new ClapVisual(scene);
 const startGate = new StartGate();
 const keyHints = new KeyHints(scene);
 const cameraModeBadge = new CameraModeBadge();
 const endingOverlay = new EndingOverlay();
-
-// Set up clap visual callback
-ClapManager.setVisualCallback((position, range) => {
-  clapVisual.show(position, range);
-});
 
 // The world orchestrator: owns the active area + live neighbor areas; the
 // active area's content group is parented into this render scene.
@@ -168,8 +160,6 @@ function exitToMenu() {
   PortalManager.reset();
   DeployManager.reset();
   gameState.reset();
-  clapVisual.clear();
-  ClapManager.reset();
   AbsorbManager.reset();
   startGate.hide();
   endingOverlay.hide();
@@ -226,7 +216,6 @@ function update(deltaTime) {
     DeployManager.update();
     // The sky: its drift, its lightning, and its answer to a gate being solved
     tickEnvironment(deltaTime, PortalManager.getActiveArea());
-    clapVisual.update();
     inventoryUI.update();
     keyHints.update(deltaTime);
     debugUI.update();
@@ -442,7 +431,6 @@ if (import.meta.env.DEV) {
           [PortalManager, '_updateTempoGradient', 'areas.tempoGradient'],
           [PortalManager, 'update', 'update.crossing'],
           [DeployManager, 'update', 'update.deploy'],
-          [clapVisual, 'update', 'update.clapVisual'],
           [AbsorbManager, 'update', 'update.pole'],
           [inventoryUI, 'update', 'update.inventoryUI'],
           [keyHints, 'update', 'update.keyHints'],
@@ -487,9 +475,7 @@ if (import.meta.env.DEV) {
     },
     startGate,
     keyHints,
-    clapVisual,
     DeployManager,
-    ClapManager,
     PuzzleLoader,
     ShaderPrewarm,
   };
