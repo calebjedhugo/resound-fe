@@ -150,6 +150,155 @@ describe('Absorbing a creature (R)', () => {
   });
 });
 
+describe('The pole takes only a creature in front of the player, in sight', () => {
+  /** A 10x10 room, the player at its middle (15, 15) facing north. */
+  const enterRoom = ({ entities = [], floors = [] } = {}) => {
+    PortalManager.enterWorld(
+      PuzzleLoader.validate({
+        id: 'reach-room',
+        name: 'Reach room',
+        difficulty: 1,
+        gridSize: 10,
+        tempo: 120,
+        playerStart: { x: 5, y: 0, z: 5 },
+        floors,
+        entities,
+      })
+    );
+    face(0);
+  };
+  const creatureAt = (x, y, z, audibleRange = 15) => ({
+    type: 'creature',
+    position: { x, y, z },
+    data: { song: [C4], interval: 4, audibleRange },
+  });
+  const C4_GATE = { type: 'gate', position: { x: 5, y: 0, z: 4 }, song: [C4] };
+
+  /** What the reach mark, the hint and R each make of the moment. */
+  const pressR = async () => {
+    await ctx.tick(16);
+    const promised = { count: ctx.getCreaturesInRange().length, target: AbsorbManager.target() };
+    ctx.pressKey('r');
+    await ctx.finishPole();
+    return { promised, taken: ctx.getInventorySlot(0) };
+  };
+
+  it('takes a creature it faces, and refuses one behind (grey flash)', async () => {
+    ctx.loadPuzzle('recording-basic'); // C4, 3 north
+    face(Math.PI); // facing south: it is behind
+    const behind = await pressR();
+    expect(behind.taken).toBeNull();
+    expect(flashes).toEqual(['silent']);
+
+    face(0);
+    const ahead = await pressR();
+    expect(ahead.taken).toEqual(expect.objectContaining({ song: [C4] }));
+  });
+
+  it("reaches 40° either side of the heading, to the body's edge", async () => {
+    // 3 away, the body (radius 0.9) spans 17.5° either side of its centre
+    ctx.loadPuzzle('recording-basic');
+    const spread = (Math.asin(0.9 / 3) * 180) / Math.PI;
+    const degrees = (d) => (d * Math.PI) / 180;
+
+    face(degrees(40 + spread + 3)); // its nearest edge 43° off
+    expect((await pressR()).taken).toBeNull();
+    face(-degrees(40 + spread + 3)); // ...the other way
+    expect((await pressR()).taken).toBeNull();
+
+    face(degrees(40 + spread - 3)); // 37° off
+    expect((await pressR()).taken).not.toBeNull();
+  });
+
+  it('turning the view with the mouse turns the reach (the effective heading)', async () => {
+    ctx.loadPuzzle('recording-basic'); // C4, 3 north
+    const { mouse } = gameState.input;
+    const was = { ...mouse };
+    // The mouse far to the left of the screen's centre turns the view a
+    // quarter turn left
+    Object.assign(mouse, { screenCenter: [500, 400], position: [0, 400], centered: true });
+    try {
+      face(0); // north, turned to the west: it is off to the right
+      await ctx.tick(16);
+      expect(ctx.getCreaturesInRange()).toHaveLength(0);
+
+      face(-Math.PI / 2); // east, turned to the north: dead ahead
+      expect((await pressR()).taken).not.toBeNull();
+    } finally {
+      Object.assign(mouse, was);
+    }
+  });
+
+  it('prefers the creature it faces over a nearer one off to the side', async () => {
+    enterRoom({ entities: [creatureAt(5, 0, 4)] }); // 3 north, dead ahead
+    const side = ctx.addCreature({ position: { x: 16.8, y: 0, z: 13 } }); // 2.7 away, 42° off
+    side.song = [{ pitch: 'G4', length: '1/4' }];
+
+    const { promised, taken } = await pressR();
+
+    expect(promised.count).toBe(2);
+    expect(taken.song[0].pitch).toBe('C4');
+    expect(ctx.getCreatures()).toEqual([side]);
+  });
+
+  it('a wall between them blocks it — the reach mark, the hint and R alike', async () => {
+    enterRoom({
+      entities: [{ type: 'wall', position: { x: 5, y: 0, z: 4 } }, creatureAt(5, 0, 3)],
+    });
+    const blocked = await pressR();
+    expect(blocked.promised).toEqual({ count: 0, target: null });
+    expect(blocked.taken).toBeNull();
+    expect(flashes).toEqual(['silent']);
+
+    enterRoom({ entities: [creatureAt(5, 0, 3)] }); // no wall: 6 away, in reach
+    expect((await pressR()).taken).not.toBeNull();
+  });
+
+  it('a closed gate between them blocks it; open, the way is clear', async () => {
+    enterRoom({ entities: [C4_GATE, creatureAt(5, 0, 3)] });
+    expect((await pressR()).taken).toBeNull();
+
+    ctx.getGates()[0].open();
+    expect((await pressR()).taken).not.toBeNull();
+  });
+
+  it("a raised floor blocks it: a creature on top can't be reached from beneath", async () => {
+    const floors = [{ elevation: 1, x1: 2, z1: 1, x2: 8, z2: 4 }];
+    enterRoom({ floors, entities: [creatureAt(5, 1, 3)] });
+    expect((await pressR()).taken).toBeNull();
+
+    // Up on the floor with it, the same distance away
+    enterRoom({ floors, entities: [creatureAt(5, 1, 2)] });
+    ctx.setPlayerPosition({ x: 15, z: 12 });
+    expect((await pressR()).taken).not.toBeNull();
+  });
+
+  it('the reach mark and the hint promise exactly what R does, all the way round', async () => {
+    const outcomes = [];
+    for (let step = 0; step < 24; step += 1) {
+      const walled = step % 2 === 1;
+      enterRoom({
+        entities: [
+          ...(walled ? [{ type: 'wall', position: { x: 6, y: 0, z: 4 } }] : []),
+          creatureAt(5, 0, 4),
+          creatureAt(6, 0, 3),
+        ],
+      });
+      ctx.setInventorySlot(0, null);
+      face((step * Math.PI * 2) / 24);
+      // eslint-disable-next-line no-await-in-loop
+      const { promised, taken } = await pressR();
+      expect(Boolean(taken)).toBe(promised.count > 0);
+      expect(Boolean(taken)).toBe(promised.target !== null);
+      if (taken) expect(taken.song).toEqual(promised.target.song);
+      outcomes.push(Boolean(taken));
+    }
+    // Both answers came up
+    expect(outcomes).toContain(true);
+    expect(outcomes).toContain(false);
+  });
+});
+
 describe('Releasing a creature (Space)', () => {
   it("lets the cursor slot's creature out 2.5 ahead, on the floor, and empties the slot", async () => {
     ctx.loadPuzzle('playback-basic'); // an empty room, the player at (15, 15)
@@ -213,6 +362,41 @@ describe('Releasing a creature (Space)', () => {
 
     expect(flashes).toEqual(['silent', 'silent']);
     expect(ctx.getCreatures()).toHaveLength(0);
+  });
+
+  it("is refused (grey flash) past a wall's corner, where the player can't see it land", async () => {
+    // Two walls meeting corner to corner: the spot ahead lies beyond them
+    const squeeze = (walls) =>
+      PortalManager.enterWorld(
+        PuzzleLoader.validate({
+          id: 'corner-room',
+          name: 'Corner room',
+          difficulty: 1,
+          gridSize: 10,
+          tempo: 120,
+          playerStart: { x: 5, y: 0, z: 5 },
+          entities: walls
+            ? [5, 6].map((x) => ({ type: 'wall', position: { x, y: 0, z: x - 1 } }))
+            : [],
+        })
+      );
+    const releaseNorthEast = async () => {
+      ctx.setPlayerPosition({ x: 15.3, z: 14.7 });
+      face(-Math.PI / 4); // north-east, straight at the corner the walls share
+      ctx.setInventorySlot(0, { ...SPEC, size: 0.3 });
+      await ctx.tick(16);
+      ctx.pressKey('space');
+      await ctx.finishPole();
+    };
+
+    squeeze(true);
+    await releaseNorthEast();
+    expect(flashes).toEqual(['silent']);
+    expect(ctx.getCreatures()).toHaveLength(0);
+
+    squeeze(false);
+    await releaseNorthEast();
+    expect(ctx.getCreatures()).toHaveLength(1);
   });
 
   it('is refused (grey flash) where another creature is in the way', async () => {

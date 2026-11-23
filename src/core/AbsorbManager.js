@@ -35,7 +35,7 @@ import CollisionDetector from 'core/CollisionDetector';
 import CreatureRegistry from 'core/CreatureRegistry';
 import HintMemory from 'core/HintMemory';
 import Tape from 'core/Tape';
-import { getDistance } from 'core/utils';
+import { lineOfSight } from 'core/poleReach';
 import { messiaenColourCached, midiOf } from 'core/messiaenColour';
 import {
   CREATURE_HOVER_HEIGHT,
@@ -83,6 +83,7 @@ class AbsorbManager {
     this._slowmo = 1;
     this._spot = { x: 0, y: 0, z: 0, valid: false, level: 0 };
     this._tip = { x: 0, y: 0, z: 0 };
+    this._releaseCentre = { x: 0, y: 0, z: 0 };
     this._colour = [1, 1, 1];
   }
 
@@ -114,19 +115,15 @@ class AbsorbManager {
     return this._slowmo;
   }
 
-  /** The nearest creature R would absorb now, or null. */
+  /**
+   * The creature R would absorb now, or null: of those in the pole's reach
+   * (in range, in front, in sight: core/poleReach — the very list the ×N
+   * reach mark counts), the best centred and nearest (`reachScore`).
+   */
   target() {
-    const { position } = gameState.player;
     let best = null;
-    let bestDistance = Infinity;
     for (const creature of gameState.absorb.inRange) {
-      if (!creature.held) {
-        const d = getDistance(position, creature.position);
-        if (d < bestDistance) {
-          best = creature;
-          bestDistance = d;
-        }
-      }
+      if (!creature.held && (!best || creature.reachScore < best.reachScore)) best = creature;
     }
     return best;
   }
@@ -334,8 +331,10 @@ class AbsorbManager {
    * waystone gate aims), on the player's own layer. Valid only if every
    * cell the body covers is walkable at that layer (no cliff edge under
    * it, off-grid, ramp) and holds no wall, gate (open or not), fountain or
-   * waystone, nothing on the way there is a wall or closed gate, and the
-   * body collides with nothing (creatures, the player). The same object
+   * waystone, nothing on the way there is a wall or closed gate, the player
+   * can SEE where it lands (core/poleReach lineOfSight: never past a wall's
+   * corner, a closed gate or a door), and the body collides with nothing
+   * (creatures, the player). The same object
    * every call (no garbage: the release hint asks every frame).
    * @param {number} [radius]
    * @returns {{x:number, y:number, z:number, valid:boolean}}
@@ -375,6 +374,11 @@ class AbsorbManager {
       );
       if (!this._cellTakes(area, cell.x, cell.z, level, false)) return spot;
     }
+    const centre = this._releaseCentre;
+    centre.x = spot.x;
+    centre.y = spot.y + radius + CREATURE_HOVER_HEIGHT;
+    centre.z = spot.z;
+    if (!lineOfSight(area, position, centre)) return spot;
     const blocked = CollisionDetector.checkCollision(
       { x: spot.x, y: spot.y, z: spot.z },
       radius,

@@ -6,6 +6,7 @@ import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
 import SongMatcher from 'core/SongMatcher';
 import resolveSlide from 'core/SlideResolver';
 import memoizeOnEntityList from 'core/entityListMemo';
+import { reachScore } from 'core/poleReach';
 import { messiaenColourCached, midiOf, registerLuminosity } from 'core/messiaenColour';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
@@ -158,8 +159,10 @@ class Creature extends Entity {
       this.nextSingBeat = nextBeatInPhase(currentBeat, this._phase, this.interval);
     }
 
-    // Can the pole reach it from the player? (active area, absorbRange)
+    // Can the pole reach it from the player? (active area, absorbRange, in
+    // front, in sight: core/poleReach) — and how well (lower is better)
     this.isAbsorbable = false;
+    this.reachScore = Infinity;
 
     // HELD by the pole (core/AbsorbManager): being drawn in, or not yet out
     // (data.dormant: a released creature pouring out of the tip). A held
@@ -202,6 +205,7 @@ class Creature extends Entity {
       // On the pole: it only looks (the pole deforms it), out of reach of a
       // second absorb, singing nothing and going nowhere
       this.isAbsorbable = false;
+      this.reachScore = Infinity;
       this.updateAbsorbState();
       this.updateLook(deltaTime);
       return;
@@ -235,12 +239,16 @@ class Creature extends Entity {
 
       // Within the pole's reach? Absorbing takes real proximity, never a
       // doorway: a creature audible through a door (neighbor area OR an
-      // in-level teleport) must be approached on its own side.
-      this.isAbsorbable = inActiveArea && direct <= this.absorbRange;
+      // in-level teleport) must be approached on its own side. And it must
+      // be in front of the player, in sight (core/poleReach)
+      this.reachScore =
+        inActiveArea && direct <= this.absorbRange ? reachScore(this, direct) : Infinity;
+      this.isAbsorbable = this.reachScore < Infinity;
     } else {
       // Too far - silence
       this.instrument.updateVolume(0);
       this.isAbsorbable = false;
+      this.reachScore = Infinity;
     }
 
     // Keep the absorbable list (key hint, R, the range badge) current
@@ -420,6 +428,7 @@ class Creature extends Entity {
     this.velocity.z = 0;
     this.forces.length = 0;
     this.isAbsorbable = false;
+    this.reachScore = Infinity;
     this.updateAbsorbState();
   }
 

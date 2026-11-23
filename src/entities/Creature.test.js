@@ -477,6 +477,7 @@ describe("Creature audible range and the pole's reach", () => {
   it('is absorbed when the player is within its absorb range', async () => {
     ctx.loadPuzzle('creature-audible-range');
     ctx.setPlayerPosition({ x: 11, y: 0, z: 0 }); // distance 4 < 5
+    ctx.face(-Math.PI / 2); // facing it (east)
     await ctx.tick(16);
 
     ctx.pressKey('r');

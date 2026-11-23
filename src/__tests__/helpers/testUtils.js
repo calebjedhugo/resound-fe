@@ -514,6 +514,21 @@ function createTestContext(options = {}) {
       }
     },
 
+    /**
+     * Face a heading, the mouse at rest: yaw 0 looks north (-z), -PI/2
+     * east (+x), PI/2 west, PI south
+     * @param {number} yaw
+     */
+    face(yaw) {
+      gameState.camera.viewCenter = [yaw, gameState.camera.viewCenter[1] || 0];
+    },
+
+    /** Face a point (horizontally), the mouse at rest. */
+    faceToward(pos) {
+      const { position } = gameState.player;
+      this.face(Math.atan2(-(pos.x - position.x), -(pos.z - position.z)));
+    },
+
     // --- Inventory ---
 
     /**
