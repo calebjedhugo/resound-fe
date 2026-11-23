@@ -138,8 +138,9 @@ automated playtesters can observe them.)
     doors and plain gates alike, so `isOpen` drives collision + full
     transparency. The red mismatch flash still lands on the CLOSED look.
     (2026-11-22, designer request: an open gate glows "in motion, like a
-    rippling portal" — only on the opening the player looks into, in the
-    main view, the way through completely clear. See "Entity look".)
+    rippling portal" — only on the near opening the player looks into,
+    in the main view, the way through completely clear. See "Entity
+    look".)
   - The notation **stays displayed forever**; there is still no permanent
     `isActivated` on gates.
     Fountains are unchanged (latch on the exact full match). Re-crossing a
@@ -503,26 +504,25 @@ entity TYPES, not for any level. Visual only.
   - **Open**: no slab. Only the opening the player is looking INTO glows,
     and only in the main view (designer: "The only part of the gate that
     should have the glow is the part you are looking into. Any part of the
-    gate seen through the gate should not have the border around it"): the
-    one face whose outward axis is the eye's dominant offset from the
-    gate's centre (`EntityLook.looksInto`, twin of its GLSL). Its other
-    faces, and every gate seen inside a door view, a door-in-a-door or the
-    cleanser gate, draw no border (`passContext.MAIN_VIEW` is 1 only while
-    the main view draws). On a plain gate that face keeps a rippling frame
-    (its edges, light rippling in over a band ~0.3 wide, no depth
-    written); on a door it is the panel showing the room beyond, the
-    ripple only in a band round its edges: **the view inside is
-    untouched** (designer: "Direct view into the portal should be
-    completely unobstructed. The ripple should only be around the
-    edges" — checked by pixel readback with the world held still: an
-    open door's pixels inside the band are unchanged with the ripple on
-    and off). A door's ripple sits on that panel, at the back of the
-    cell, framing the view.
+    gate seen through the gate should not have the border around it"; and
+    "transport actually happens when you walk through the part of the gate
+    that is closest to you. That's what should be glowing"): the gate's
+    NEAR face, the one a walk in crosses (a door commits its crossing on
+    entering the cell) — the one face whose outward axis is the eye's
+    dominant offset from the gate's centre (`EntityLook.looksInto`, twin of
+    its GLSL). It keeps a rippling frame: its edge line and light rippling
+    in over a thin band (~0.22) at its edges, nothing over the way through,
+    no depth written. It is the gate's own shell, drawn by the main view
+    alone (`passContext.showInMainViewOnly`): its other faces, and every
+    gate seen inside a door view, a door-in-a-door or the cleanser gate,
+    draw no border — door passes skip it outright. A door's view panels
+    (at the back of the cell) are plain: the view is untouched.
   - **Linked vs plain**: identical while closed ("A closed linked gate
     looks like any closed gate", ruled 2026-07-06); open, a door shows its
     view, a plain gate its frame.
-  - **The deployed cleanser gate**: the panel looked into ripples GOLD —
-    it leads to the gold tile (same rules: one face, main view only).
+  - **The deployed cleanser gate**: the same frame in GOLD on the face you
+    step through — it leads to the gold tile (same rules: one face, main
+    view only; `EntityLook.createOpenFrame`).
 - **Ramps**: a wedge of the storeys' slate (one shared geometry, posts
   included: one draw a ramp). Chevrons point UP the slope and crawl slowly
   that way (the way up at a glance); pale lines along its sides (drops,
@@ -542,8 +542,8 @@ entity TYPES, not for any level. Visual only.
 - **Rules**: low-chroma and value-led; colour only for meaning (red =
   wrong note, gold = your cleanser and its gate); never a saturated hue a
   chord could own on a surface. Unlit ShaderMaterials in display values,
-  honouring the clip planes, each with a ShaderPrewarm stand-in; no new
-  draw calls (a plain open gate's frame is its shell's one draw).
+  honouring the clip planes, each with a ShaderPrewarm stand-in; an open
+  gate's frame is its shell's one draw, in the main view only.
 
 Open questions for the designer: the cleanser's gold vs the key hints'
 gold labels; whether open plain gates should keep their frame at all, or

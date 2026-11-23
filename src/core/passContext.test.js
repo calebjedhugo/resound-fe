@@ -100,15 +100,12 @@ describe('Door passes render in the canvas colour space', () => {
     expect(surfaces.length).toBeGreaterThan(0);
 
     for (const { material } of surfaces) {
-      // A shader of its own (the open door's ripple, entities/EntityLook)
-      // that writes the texel out as it is: three adds no output encode to
-      // a ShaderMaterial, and this one asks for none
-      expect(material.fragmentShader).toContain('texture2D(uMap, vUv)');
-      expect(material.fragmentShader).not.toContain(OUTPUT_ENCODE);
-      expect(material.fragmentShader).not.toContain('linearToOutputTexel');
-      expect(material.uniforms.uMap.value).toBe(material.map);
+      const shader = { fragmentShader: `void main() {\n  ${OUTPUT_ENCODE}\n}` };
+      material.onBeforeCompile(shader);
+      expect(shader.fragmentShader).not.toContain(OUTPUT_ENCODE);
     }
-    // ONE program for every doorway surface
-    expect(new Set(surfaces.map(({ material }) => material.fragmentShader)).size).toBe(1);
+    // ONE shared hook: three's program cache key is the hook's source, so
+    // every doorway surface keeps compiling to the same program
+    expect(new Set(surfaces.map(({ material }) => material.onBeforeCompile)).size).toBe(1);
   });
 });

@@ -362,17 +362,16 @@ instead of "fixing" it.
 - **Entity look** (`entities/EntityLook.js`, DESIGN.md "Entity look"):
   gates are a per-gate unlit ShaderMaterial (`createGateMaterial`: state in
   uniforms uOpacity/uProgress/uLockout/uOpen, `bindAreaLight` on first
-  update; `Gate.lockoutGlow` reads the red); an open PLAIN gate still
-  draws its shell as a depth-less rippling frame, a door does not (its
-  panels ripple). **The ripple shows ONLY on the face the player looks
-  into (`looksInto` + its GLSL twin — change both) and ONLY in the main
-  view** (`passContext.MAIN_VIEW`, 1 just while `renderMainView` draws):
-  never on a gate seen through a door or the cleanser gate. Door panels
-  use `createDoorwayMaterial` (a ShaderMaterial
-  writing stored texels as they are; `material.map` is an accessor onto its
-  uMap uniform, so PortalView's buffer swap is unchanged; the ripple stays
-  in a `DOORWAY_RIPPLE_BAND` at the edges, NEVER over the view inside;
-  `tintDoorway` = the cleanser gate's gold). Ramps share ONE geometry
+  update; `Gate.lockoutGlow` reads the red). **An open gate's shell is its
+  rippling frame, drawn ONLY by the main view** (`showOpenFrame` →
+  `passContext.showInMainViewOnly`: `renderMainView` shows those materials
+  for its own render, every other pass skips them) **and ONLY on the face
+  the player looks into** — the NEAR face, where walking in crosses
+  (`looksInto` + its GLSL twin — change both); a thin band at its edges,
+  never over the way through, no depth. Door view panels are plain
+  (PortalView's MeshBasicMaterial + `showStoredTexels`). The deployed
+  cleanser gate gets a gold frame of its own (`createOpenFrame`, freed by
+  `releaseOpenFrame` in `CleanserGatePad.dispose`). Ramps share ONE geometry
   (wedge + posts) and ONE material, lit per ramp via `onBeforeRender` →
   `bindRampLight` (uniformsNeedUpdate, like creatures). Cleansers stay
   MeshStandardMaterial with the shared `CLEANSER_RING_MAP` emissive map

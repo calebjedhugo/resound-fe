@@ -8,7 +8,7 @@ import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/con
 import { midiOf } from 'core/messiaenColour';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from 'entities/Entity';
-import { bindAreaLight, createGateMaterial } from 'entities/EntityLook';
+import { bindAreaLight, createGateMaterial, showOpenFrame } from 'entities/EntityLook';
 
 // Every gate is the same box: it fills its 3x3 cell when closed. ONE
 // geometry serves every gate in every area, flagged `userData.shared` so
@@ -349,8 +349,9 @@ class Gate extends Entity {
    * not the mesh's subtree. (An opacity-0 draw painted nothing yet cost a
    * draw call in every pass that saw it, and still wrote depth: a
    * translucent creature in an open gate's cell could vanish behind it.)
-   * The one exception is an open PLAIN gate's rippling frame (a door's
-   * panels ripple instead: entities/EntityLook): drawn, writing no depth.
+   * The one exception is an open gate's rippling frame (entities/EntityLook:
+   * the face the player looks into, where walking in crosses): drawn in the
+   * main view only, writing no depth — every door pass skips it.
    * Opacity is a uniform; of these only `transparent` reaches the shader
    * program (three's OPAQUE define), so the program is re-derived only
    * when that flips — not every fade frame.
@@ -365,10 +366,9 @@ class Gate extends Entity {
     const u = m.uniforms;
     u.uOpacity.value = opacity;
     u.uProgress.value = this.isOpen ? 0 : this._fade;
-    u.uOpen.value = this.isOpen ? 1 : 0;
-    const frame = this.isOpen && !this.link;
-    m.depthWrite = !this.isOpen;
-    m.visible = frame || !transparent || opacity > 0;
+    // Open: its rippling frame, in the main view only (it owns visibility)
+    showOpenFrame(m, this.isOpen);
+    if (!this.isOpen) m.visible = !transparent || opacity > 0;
   }
 
   /** The wrong note's red on the shell now, 0..1 (decaying over the lockout). */
@@ -476,6 +476,7 @@ class Gate extends Entity {
     if (this.notationDisplay) {
       this.notationDisplay.dispose();
     }
+    if (this.mesh) showOpenFrame(this.mesh.material, false); // no frame left drawing
     // Unregister from listening manager
     ListeningManager.unregisterListener(this);
     super.dispose();

@@ -249,7 +249,7 @@ describe('Gate shell drawing', () => {
 
   const link = { puzzleId: 'elsewhere', gateId: 'beyond' };
 
-  it('an open door draws no shell, only its notation (its panels show the way through)', () => {
+  it('an open door draws no slab, only its notation (its panels show the way through)', () => {
     const gate = new Gate({ x: 30, y: 0, z: 30 }, { song, link });
     expect(shellDrawn(gate)).toBe(true);
 
@@ -261,13 +261,14 @@ describe('Gate shell drawing', () => {
     expect(shellDrawn(gate)).toBe(true);
   });
 
-  it('an open plain gate keeps only its rippling frame: no slab, and nothing hidden behind it', () => {
+  it('an open gate keeps only its rippling frame: no slab, and nothing hidden behind it', () => {
     const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
 
     gate.open();
 
     const { material } = gate.mesh;
-    expect(shellDrawn(gate)).toBe(true); // the frame
+    // The frame draws in the main view alone (EntityLook.test), never here
+    expect(shellDrawn(gate)).toBe(false);
     expect(material.opacity).toBe(0); // no slab
     expect(material.transparent).toBe(true);
     // A creature in the open cell never vanishes behind it

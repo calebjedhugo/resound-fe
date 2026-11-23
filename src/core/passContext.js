@@ -15,8 +15,7 @@
  *    the pass clips nothing: renderMainView);
  *  - in the CANVAS's colour space: render targets that draw world scenes come
  *    from createSceneTarget, and a material that displays one uses
- *    showStoredTexels (or, a custom shader, writes its texels out as they
- *    are: entities/EntityLook's doorway panels).
+ *    showStoredTexels.
  */
 import * as THREE from 'three';
 
@@ -32,16 +31,28 @@ export const NO_CLIP_PLANES = Object.freeze(
   Array.from({ length: CLIP_PLANE_COUNT }, () => NO_CLIP)
 );
 
+// Materials only the MAIN view draws (showInMainViewOnly): hidden in every
+// other pass — doors, the cleanser gate, the prewarm — so those passes skip
+// them outright (no draw, no cost)
+const mainViewOnly = new Set();
+
 /**
- * A shared uniform object, 1 only while the MAIN view draws (renderMainView)
- * and 0 in every other pass (doors, the cleanser gate, the prewarm). Looks
- * that belong to the player's own eye alone read it — an open door's ripple
- * shows only on the opening the player looks into, never on a gate seen
- * through a door (entities/EntityLook). three uploads a material's uniforms
- * on its first draw in every render call, so the value each pass draws
- * with is the value it had then; flipping it changes no program.
+ * Draw `material` in the main view alone (or, `only` false, everywhere
+ * again — the caller then owns its visibility). An open gate's rippling
+ * frame belongs to the player's own eye: never on a gate seen through a
+ * door (entities/EntityLook). Whoever registers a material unregisters it
+ * before freeing it.
+ * @param {THREE.Material} material
+ * @param {boolean} [only]
  */
-export const MAIN_VIEW = { value: 0 };
+export function showInMainViewOnly(material, only = true) {
+  if (only) {
+    mainViewOnly.add(material);
+    material.visible = false; // eslint-disable-line no-param-reassign
+  } else {
+    mainViewOnly.delete(material);
+  }
+}
 
 /**
  * Draw the main view to the canvas under the shared context: it clips
@@ -51,9 +62,9 @@ export const MAIN_VIEW = { value: 0 };
 export function renderMainView(renderer, scene, camera) {
   const previousPlanes = renderer.clippingPlanes;
   renderer.clippingPlanes = NO_CLIP_PLANES;
-  MAIN_VIEW.value = 1;
+  for (const material of mainViewOnly) material.visible = true;
   renderer.render(scene, camera);
-  MAIN_VIEW.value = 0;
+  for (const material of mainViewOnly) material.visible = false;
   renderer.clippingPlanes = previousPlanes;
 }
 

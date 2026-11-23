@@ -14,10 +14,12 @@
  *   halo. A correct performance fades the slab (Gate) while its edges
  *   CHARGE from the floor up with the song's progress, a hot front riding
  *   the charge; a wrong note floods it red for the lockout. An open gate
- *   has no slab: a plain one keeps only its frame, rippling; a door's
- *   panels show the room beyond with the ripple round their edges
- *   (doorway material) and NOTHING over the view inside that band — and
- *   only on the opening the player looks into, in the main view (looksInto).
+ *   has no slab: only the face the player looks into — the NEAR face, the
+ *   one they cross by walking in (PortalManager commits on entering the
+ *   cell) — keeps a rippling frame, a thin band at its edges with nothing
+ *   over the way through, and only in the main view (looksInto,
+ *   showOpenFrame). A door's view panels stay plain. The deployed cleanser
+ *   gate has a gold frame of its own (createOpenFrame).
  * - RAMP: a wedge of the storeys' slate; chevrons crawl slowly UP its slope
  *   (the way up, at a glance) between pale side lines (its drops, like a
  *   storey's cliff edge); pale posts mark its top edge from up on the
@@ -32,7 +34,7 @@
  */
 import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
-import { MAIN_VIEW } from 'core/passContext';
+import { showInMainViewOnly } from 'core/passContext';
 import {
   WORLD_UNIFORMS,
   PALETTE_GLSL,
@@ -50,6 +52,18 @@ const LIGHT_KEYS = ['uLightPos', 'uLightCol', 'uLightCount'];
  */
 export function bindAreaLight(material, light) {
   for (const key of LIGHT_KEYS) material.uniforms[key] = light.uniforms[key]; // eslint-disable-line no-param-reassign
+}
+
+// The frame's light (sRGB hex): pale for a gate or door (EnvironmentLook's
+// portalGlow), the active cleanser's gold for the deployed cleanser gate
+const DOOR_GLOW = 0xb9c6e2;
+export const CLEANSER_GOLD = 0xf0b85a;
+
+/** A Color holding a hex's DISPLAY values (shaders here write them out as they are). */
+function displayColour(hex) {
+  const colour = new THREE.Color();
+  colour.setHex(hex, THREE.LinearSRGBColorSpace);
+  return colour;
 }
 
 // ---- The opening the player looks into --------------------------------------
@@ -115,8 +129,8 @@ const GATE_FRAGMENT = /* glsl */ `
   uniform float uOpacity; // the slab (1 sealed, fading with the song, 0 open)
   uniform float uProgress; // how far a correct performance has come, 0..1
   uniform float uLockout; // the wrong note's red, decaying over the lockout
-  uniform float uOpen; // 1: open — only the rippling frame draws
-  uniform float uMainView; // 1 in the main view only (core/passContext MAIN_VIEW)
+  uniform float uOpen; // 1: open — only the rippling frame draws (main view only)
+  uniform vec3 uGlow; // the open frame's light
   uniform float uEnvTime;
   uniform float uFlash;
   uniform vec3 uStormCol;
@@ -154,13 +168,14 @@ const GATE_FRAGMENT = /* glsl */ `
     vec3 col;
     float alpha;
     if (uOpen > 0.5) {
-      // Open: no slab — only the face the player looks into, in the main
-      // view, keeps a frame and light rippling in from it over a band at
-      // its edges (nothing past it: the way through is clear)
-      float looked = uMainView * (looksInto(cameraPosition, vCentre, n) ? 1.0 : 0.0);
-      float band = 1.0 - smoothstep(0.0, 0.3, edge);
+      // Open: no slab — only the face the player looks into (the near one:
+      // where walking in crosses) keeps a frame and light rippling in from
+      // it over a thin band at its edges (nothing past it: the way through
+      // is clear). Drawn in the main view only (showOpenFrame)
+      float looked = looksInto(cameraPosition, vCentre, n) ? 1.0 : 0.0;
+      float band = 1.0 - smoothstep(0.0, 0.22, edge);
       float ripple = 0.5 + 0.5 * sin(edge * 30.0 - uEnvTime * 3.0 + sin(h * 9.0 + uEnvTime * 1.3) * 1.2);
-      col = PORTAL_GLOW * (0.7 + 0.5 * ripple) * shimmer;
+      col = uGlow * (0.7 + 0.5 * ripple) * shimmer;
       alpha = looked * max(line * 0.9, band * band * (0.15 + 0.45 * ripple));
     } else {
       // Dark glass, darker at the foot, with faint veils deep inside that
@@ -207,7 +222,7 @@ const GATE_FRAGMENT = /* glsl */ `
  * @param {import('entities/EnvironmentLook').AreaLight} [light]
  * @returns {THREE.ShaderMaterial}
  */
-export function createGateMaterial(light = NO_LIGHT) {
+export function createGateMaterial(light = NO_LIGHT, glow = DOOR_GLOW) {
   return new THREE.ShaderMaterial({
     uniforms: {
       ...WORLD_UNIFORMS,
@@ -216,7 +231,7 @@ export function createGateMaterial(light = NO_LIGHT) {
       uProgress: { value: 0 },
       uLockout: { value: 0 },
       uOpen: { value: 0 },
-      uMainView: MAIN_VIEW,
+      uGlow: { value: displayColour(glow) },
     },
     vertexShader: GATE_VERTEX,
     fragmentShader: GATE_FRAGMENT,
@@ -225,112 +240,45 @@ export function createGateMaterial(light = NO_LIGHT) {
   });
 }
 
-// ---- Doorway panels (an open door's see-through faces) ---------------------
+// ---- An open gate's frame --------------------------------------------------
 
-const DOORWAY_VERTEX = /* glsl */ `
-  uniform float uMainView;
-  varying vec2 vUv;
-  varying float vRipple;
-  #include <common>
-  #include <clipping_planes_pars_vertex>
-  ${LOOKS_INTO_GLSL}
-  void main() {
-    vUv = uv;
-    // A panel faces outward (+z) from just inside the OPPOSITE face of its
-    // gate (PortalView): it is the opening the player looks into when that
-    // outward face is — and only in the main view
-    vec3 outward = normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0));
-    vec3 centre = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz + outward * ${(
-      WORLD_SCALE / 2
-    ).toFixed(2)};
-    vRipple = uMainView * (looksInto(cameraPosition, centre, outward) ? 1.0 : 0.0);
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mvPosition;
-    #include <clipping_planes_vertex>
-  }
-`;
+// Every open frame on its own (the cleanser gate's) is a gate box
+const FRAME_GEOMETRY = new THREE.BoxGeometry(WORLD_SCALE, WORLD_SCALE, WORLD_SCALE);
+FRAME_GEOMETRY.userData.shared = true;
 
-// The band round a panel's edges the ripple lives in, in world units (a
-// panel is WORLD_SCALE across): inside it, the view beyond is untouched
-export const DOORWAY_RIPPLE_BAND = 0.3;
-
-const DOORWAY_FRAGMENT = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform vec3 uGlow;
-  uniform float uEnvTime;
-  varying vec2 vUv;
-  varying float vRipple;
-  #include <common>
-  #include <clipping_planes_pars_fragment>
-
-  void main() {
-    #include <clipping_planes_fragment>
-    // The stored texels, shown as they are: the target already holds the
-    // canvas's colour space (core/passContext showStoredTexels)
-    vec3 col = texture2D(uMap, vUv).rgb;
-    vec2 e2 = min(vUv, 1.0 - vUv);
-    float edge = min(e2.x, e2.y) * ${WORLD_SCALE.toFixed(1)};
-    if (vRipple > 0.5 && edge < ${DOORWAY_RIPPLE_BAND.toFixed(2)}) {
-      // Light rippling in from the frame: travelling rings, wavering along it
-      float band = 1.0 - edge / ${DOORWAY_RIPPLE_BAND.toFixed(2)};
-      float along = vUv.x + vUv.y;
-      float ripple = 0.5 + 0.5 * sin(edge * 30.0 - uEnvTime * 3.0 + sin(along * 9.0 + uEnvTime * 1.3) * 1.2);
-      col += uGlow * band * band * (0.12 + 0.5 * ripple);
-    }
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
-
-// The ripple's light (sRGB hex): pale for a door (EnvironmentLook's
-// portalGlow), the active cleanser's gold for the deployed cleanser gate
-const DOOR_GLOW = 0xb9c6e2;
-export const CLEANSER_GOLD = 0xf0b85a;
-
-/** A Color holding a hex's DISPLAY values (shaders here write them out as they are). */
-function displayColour(hex) {
-  const colour = new THREE.Color();
-  colour.setHex(hex, THREE.LinearSRGBColorSpace);
-  return colour;
+/**
+ * Show `material` (a gate shell's) as an open gate's rippling frame — or, a
+ * closed gate's slab, everywhere again. The frame is drawn in the main view
+ * only (core/passContext showInMainViewOnly), never writing depth.
+ * @param {THREE.ShaderMaterial} material
+ * @param {boolean} open
+ */
+export function showOpenFrame(material, open) {
+  material.uniforms.uOpen.value = open ? 1 : 0; // eslint-disable-line no-param-reassign
+  material.depthWrite = !open; // eslint-disable-line no-param-reassign
+  showInMainViewOnly(material, open);
 }
 
 /**
- * An open door's panel material: shows `map` (a scene target's texture,
- * swapped each pass through `material.map` — the same property a basic
- * material has, so PortalView and everything reading it are unchanged)
- * with a light ripple round its edges and nothing over the view inside.
- * @param {THREE.Texture} map
- * @param {number} [glow] - the ripple's colour (sRGB hex): pale for a door,
- *   gold for the deployed cleanser gate (tintDoorway)
- * @returns {THREE.ShaderMaterial}
+ * A rippling open frame standing alone — the deployed cleanser gate's (it
+ * has no slab): a gate box whose material shows only the face the player
+ * looks into, in the main view. Its material is its own: free it with
+ * releaseOpenFrame.
+ * @param {number} [glow] - sRGB hex
+ * @returns {THREE.Mesh}
  */
-export function createDoorwayMaterial(map, glow = DOOR_GLOW) {
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      uMap: { value: map },
-      uGlow: { value: displayColour(glow) },
-      uEnvTime: WORLD_UNIFORMS.uEnvTime,
-      uMainView: MAIN_VIEW,
-    },
-    vertexShader: DOORWAY_VERTEX,
-    fragmentShader: DOORWAY_FRAGMENT,
-    clipping: true,
-  });
-  // three reads `material.map` for the program's map flag; keep it the
-  // uniform's texture (always set: one program)
-  Object.defineProperty(material, 'map', {
-    get() {
-      return material.uniforms.uMap.value;
-    },
-    set(texture) {
-      material.uniforms.uMap.value = texture;
-    },
-  });
-  return material;
+export function createOpenFrame(glow = CLEANSER_GOLD) {
+  const material = createGateMaterial(NO_LIGHT, glow);
+  material.transparent = true;
+  material.uniforms.uOpacity.value = 0;
+  showOpenFrame(material, true);
+  return new THREE.Mesh(FRAME_GEOMETRY, material);
 }
 
-/** The deployed cleanser gate's panels ripple gold: the gate leads to the gold tile. */
-export function tintDoorway(material, hex = CLEANSER_GOLD) {
-  material.uniforms.uGlow.value.setHex(hex, THREE.LinearSRGBColorSpace);
+/** A frame (createOpenFrame) is going: stop drawing it, free its material. */
+export function releaseOpenFrame(frame) {
+  showInMainViewOnly(frame.material, false);
+  frame.material.dispose();
 }
 
 // ---- Ramp -----------------------------------------------------------------
@@ -568,7 +516,6 @@ export function standInMaterials() {
   return {
     gateSealed: createGateMaterial(),
     gateFading: fading,
-    doorway: createDoorwayMaterial(new THREE.Texture()),
     ramp: RAMP_MATERIAL,
     cleanser: new THREE.MeshStandardMaterial({
       emissiveMap: CLEANSER_RING_MAP,

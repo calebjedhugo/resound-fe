@@ -270,8 +270,8 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     // panels land exactly where a door's do (local y 0).
     expect(pad.mesh.position.y).toBeCloseTo(WORLD_SCALE / 2);
     expect(surfaces[0].position.y).toBeCloseTo(0);
-    // No disc: the anchor holds nothing but the panels
-    expect(pad.mesh.children).toHaveLength(4);
+    // No disc: the anchor holds the panels and its gold frame, nothing else
+    expect(pad.mesh.children.filter((child) => child !== pad.frame)).toEqual(surfaces);
   });
 
   it('renders the destination through the face the eye is on (panels self-cull)', async () => {
