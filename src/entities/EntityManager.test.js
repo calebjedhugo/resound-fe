@@ -249,23 +249,22 @@ describe('Freeing GPU resources when entities go away', () => {
     return found;
   };
 
-  it('frees raised floors and ramp marker posts when the world moves on', () => {
+  it('frees raised floors when the world moves on, never the ramp look every ramp shares', () => {
     ctx.loadPuzzle('elevation-ramp');
     const floor = ctx.getEntityManager().getByType('floor')[0];
     const ramp = ctx.getEntityManager().getByType('ramp')[0];
     const floorResources = resourcesOf(floor);
     const rampResources = resourcesOf(ramp);
     // The whole floor (ground, the raised slab, its cliff edges) is one
-    // geometry + its material; the ramp's wedge plus its
-    // (shared-between-posts) post geometry + material
+    // geometry + its material; a ramp is one mesh (its wedge and marker
+    // posts in one geometry) drawn with the material every ramp shares
     expect(floorResources).toHaveLength(2);
-    expect(rampResources).toHaveLength(4);
+    expect(rampResources).toHaveLength(2);
 
     ctx.loadPuzzle('recording-basic'); // tears the old world down
 
-    [...floorResources, ...rampResources].forEach(({ dispose }) => {
-      expect(dispose).toHaveBeenCalledTimes(1);
-    });
+    floorResources.forEach(({ dispose }) => expect(dispose).toHaveBeenCalledTimes(1));
+    rampResources.forEach(({ dispose }) => expect(dispose).not.toHaveBeenCalled());
   });
 
   it('never frees the wall box every wall shares', () => {

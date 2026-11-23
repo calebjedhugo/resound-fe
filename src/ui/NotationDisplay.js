@@ -139,10 +139,12 @@ function renderWidth({ song, timeSignature }) {
 
 // The pale halo under a staff's ink (engrave): its colour, its blur as a
 // share of the texture's width, and how many times it is laid down (each
-// one thickens it)
+// one thickens it). Wide and dense enough that the dark ink sits on a
+// band of light: on a gate's dark glass the staff reads as lit from behind
+// (entities/EntityLook), far off as well as close
 const STAFF_HALO_COLOUR = 'rgba(226, 231, 242, 0.9)';
-const STAFF_HALO_BLUR = 0.008;
-const STAFF_HALO_PASSES = 2;
+const STAFF_HALO_BLUR = 0.014;
+const STAFF_HALO_PASSES = 4;
 
 /**
  * Engrave a staff: render the song to SVG, then (asynchronously, once the
@@ -202,12 +204,12 @@ function engrave(engraving, input, width) {
         canvas.height = canvasHeight;
         const ctx = canvas.getContext('2d');
 
-        // Transparent background (entity color shows through)
+        // Transparent background (the entity shows through)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // Draw SVG scaled to fit canvas, over a soft pale halo of itself:
-        // the ink reads on a closed gate's colour AND over an open door's
-        // view of the dark world beyond (entities/EnvironmentLook)
+        // the ink reads on a closed gate's dark glass AND over an open
+        // door's view of the dark world beyond (entities/EntityLook)
         ctx.shadowColor = STAFF_HALO_COLOUR;
         ctx.shadowBlur = canvas.width * STAFF_HALO_BLUR;
         for (let i = 0; i < STAFF_HALO_PASSES; i += 1) {

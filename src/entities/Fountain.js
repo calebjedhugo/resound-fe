@@ -59,13 +59,15 @@ class Fountain extends Entity {
    * @param {{x:number, y:number, z:number}} position - base world position
    */
   static buildBasinMesh(position) {
-    // Landmark-sized fountain
+    // Landmark-sized fountain: dark stone, near-neutral like the world
+    // around it (DESIGN.md "Entity look": fountains get only what keeps
+    // them in the theme — they are likely to be cut)
     const geometry = new THREE.CylinderGeometry(1.5, 1.5, 2.5, 16);
     const material = new THREE.MeshStandardMaterial({
-      color: 0x0088ff,
+      color: 0x272c36,
       roughness: 0.3,
       metalness: 0.4,
-      emissive: 0x001144,
+      emissive: 0x0d111a,
       emissiveIntensity: 0.4,
     });
     const mesh = new THREE.Mesh(geometry, material);
@@ -180,8 +182,8 @@ class Fountain extends Entity {
     }
 
     // Update visual appearance
-    this.mesh.material.color.setHex(0x00ffff); // Cyan when activated
-    this.mesh.material.emissive.setHex(0x004444);
+    this.mesh.material.color.setHex(0xc9d2e4); // pale, lit from within, when activated
+    this.mesh.material.emissive.setHex(0x55607a);
     this.mesh.material.emissiveIntensity = 1.0; // Bright glow
     this.mesh.material.needsUpdate = true; // Force material update
 

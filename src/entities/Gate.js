@@ -8,11 +8,12 @@ import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/con
 import { midiOf } from 'core/messiaenColour';
 import NotationDisplay from 'ui/NotationDisplay';
 import Entity from 'entities/Entity';
+import { bindAreaLight, createGateMaterial } from 'entities/EntityLook';
 
 // Every gate is the same box: it fills its 3x3 cell when closed. ONE
 // geometry serves every gate in every area, flagged `userData.shared` so
 // Entity.dispose leaves it alone; each gate keeps its OWN material (its
-// fade, red flash and open look are its own).
+// fade, charge, red and open frame are its own: entities/EntityLook).
 const GATE_GEOMETRY = new THREE.BoxGeometry(3, 3, 3);
 GATE_GEOMETRY.userData.shared = true;
 
@@ -88,8 +89,9 @@ class Gate extends Entity {
     this._wasPlayerInside = false;
     this._lockoutUntilMs = 0;
     // How many times this gate has opened (the storm strikes on each:
-    // entities/EnvironmentLook)
+    // entities/EnvironmentLook), and the area whose creatures light it
     this.openings = 0;
+    this._litBy = null;
 
     // Listening state
     this.capturedNotes = [];
@@ -104,18 +106,12 @@ class Gate extends Entity {
   }
 
   /**
-   * Mesh-only closed-gate look (no entity, no listeners).
+   * Mesh-only closed-gate look (no entity, no listeners): a slab of dark
+   * glass with pale edges (entities/EntityLook).
    * @param {{x:number, y:number, z:number}} position - base world position
    */
   static buildClosedMesh(position) {
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xffaa00,
-      roughness: 0.4,
-      metalness: 0.6,
-      emissive: 0x331100,
-      emissiveIntensity: 0.3,
-    });
-    const mesh = new THREE.Mesh(GATE_GEOMETRY, material);
+    const mesh = new THREE.Mesh(GATE_GEOMETRY, createGateMaterial());
     mesh.position.set(position.x, position.y + 1.5, position.z);
     return mesh;
   }
@@ -192,6 +188,11 @@ class Gate extends Entity {
    * snaps it back to solid with the red flash.
    */
   update(deltaTime) {
+    // Lit by its own area's singing creatures (known once it is placed)
+    if (this.area && this._litBy !== this.area && this.mesh) {
+      this._litBy = this.area;
+      bindAreaLight(this.mesh.material, this.area.light);
+    }
     this._updateMismatchFlash();
 
     // Sliding window: forget notes older than the retention period. (A hard
@@ -329,7 +330,7 @@ class Gate extends Entity {
         songMs > 0 ? Math.min(1, (Date.now() - this._inProgressSinceMs) / songMs) : 1;
       if (progress !== this._fade) {
         this._fade = progress;
-        this._paintShell(true, 1 - this._fade);
+        this._paintShell(true, 1 - this._fade); // the edges charge with it
       }
       return;
     }
@@ -341,15 +342,18 @@ class Gate extends Entity {
   }
 
   /**
-   * Set the shell's transparency. A shell faded all the way out is not
-   * drawn at all — an open gate has NO shell (DESIGN.md) — while its
-   * children (notation, door panels) still are: three skips a hidden
-   * material but not the mesh's subtree. (An opacity-0 draw painted
-   * nothing yet cost a draw call in every pass that saw it, and still
-   * wrote depth: a translucent creature in an open gate's cell could
-   * vanish behind it.) Opacity is a uniform; of these only `transparent`
-   * reaches the shader program (three's OPAQUE define), so the program is
-   * re-derived only when that flips — not every fade frame.
+   * Set the shell's transparency (and the charge its edges show: the fade
+   * IS the song's progress). A shell faded all the way out is not drawn at
+   * all — an open gate has NO slab (DESIGN.md) — while its children
+   * (notation, door panels) still are: three skips a hidden material but
+   * not the mesh's subtree. (An opacity-0 draw painted nothing yet cost a
+   * draw call in every pass that saw it, and still wrote depth: a
+   * translucent creature in an open gate's cell could vanish behind it.)
+   * The one exception is an open PLAIN gate's rippling frame (a door's
+   * panels ripple instead: entities/EntityLook): drawn, writing no depth.
+   * Opacity is a uniform; of these only `transparent` reaches the shader
+   * program (three's OPAQUE define), so the program is re-derived only
+   * when that flips — not every fade frame.
    */
   _paintShell(transparent, opacity) {
     const m = this.mesh.material;
@@ -358,7 +362,18 @@ class Gate extends Entity {
       m.needsUpdate = true;
     }
     m.opacity = opacity;
-    m.visible = !transparent || opacity > 0;
+    const u = m.uniforms;
+    u.uOpacity.value = opacity;
+    u.uProgress.value = this.isOpen ? 0 : this._fade;
+    u.uOpen.value = this.isOpen ? 1 : 0;
+    const frame = this.isOpen && !this.link;
+    m.depthWrite = !this.isOpen;
+    m.visible = frame || !transparent || opacity > 0;
+  }
+
+  /** The wrong note's red on the shell now, 0..1 (decaying over the lockout). */
+  get lockoutGlow() {
+    return this.mesh ? this.mesh.material.uniforms.uLockout.value : 0;
   }
 
   /**
@@ -389,8 +404,7 @@ class Gate extends Entity {
   _flashMismatch() {
     if (!this.mesh || !this.mesh.material) return;
     this._mismatchFlashUntil = Date.now() + Gate.MISMATCH_LOCKOUT_MS;
-    this.mesh.material.emissive.setHex(0xaa1111);
-    this.mesh.material.emissiveIntensity = 1.0;
+    this.mesh.material.uniforms.uLockout.value = 1;
   }
 
   _updateMismatchFlash() {
@@ -399,15 +413,12 @@ class Gate extends Entity {
     if (remaining > 0) {
       // Decay the red glow in step with the lockout running out.
       if (this.mesh && this.mesh.material) {
-        this.mesh.material.emissiveIntensity = 0.3 + 0.7 * (remaining / Gate.MISMATCH_LOCKOUT_MS);
+        this.mesh.material.uniforms.uLockout.value = remaining / Gate.MISMATCH_LOCKOUT_MS;
       }
       return;
     }
     this._mismatchFlashUntil = null;
-    // Restore the emissive that matches the CURRENT open/closed state — never
-    // a snapshot, which could capture the wrong state if the gate flipped
-    // open/closed while the flash was up (that once left a closed gate green).
-    if (this.mesh && this.mesh.material) this._applyStateEmissive();
+    if (this.mesh && this.mesh.material) this.mesh.material.uniforms.uLockout.value = 0;
   }
 
   /**
@@ -445,30 +456,20 @@ class Gate extends Entity {
     this._applyLook();
   }
 
-  /** Paint the gate for its current open/closed state (color + transparency). */
+  /** Paint the gate for its current open/closed state. */
   _applyLook() {
     if (this.isOpen) {
-      // An open gate has NO shell at all — no green tint (ruled 2026-07-11):
-      // transparency is the game's vocabulary for "open", for linked doors
-      // and plain gates alike. The notation stays; the red mismatch flash
-      // still lands on the CLOSED look.
+      // An open gate has NO slab — no tint (ruled 2026-07-11): transparency
+      // is the game's vocabulary for "open", for linked doors and plain
+      // gates alike (a plain one keeps its rippling frame, a door's panels
+      // ripple at their edges). The notation stays; the red mismatch
+      // flash only ever shows on the CLOSED look.
       this._paintShell(true, 0);
     } else {
-      this.mesh.material.color.setHex(0xffaa00);
       this._paintShell(false, 1);
     }
-    this._applyStateEmissive();
-  }
-
-  _applyStateEmissive() {
-    const m = this.mesh.material;
-    if (this.isOpen) {
-      m.emissive.setHex(0x003300);
-      m.emissiveIntensity = 0.5;
-    } else {
-      m.emissive.setHex(0x331100);
-      m.emissiveIntensity = 0.3;
-    }
+    // A fresh look carries no red: a wrong note flashes it AFTER (update)
+    this.mesh.material.uniforms.uLockout.value = 0;
   }
 
   dispose() {

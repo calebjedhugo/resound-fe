@@ -17,7 +17,7 @@ class Entity {
 
   /**
    * Free the GPU resources of this entity's WHOLE mesh tree — a Group root
-   * (Floor) or child meshes (Ramp's marker posts) used to leak on every
+   * (Floor) or child meshes (a gate's staff planes) used to leak on every
    * area unload. Resources shared beyond this entity (a module-level
    * geometry/material used by every instance) set `userData.shared = true`
    * and are skipped. Textures stay with their owners (NotationDisplay,

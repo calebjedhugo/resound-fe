@@ -814,7 +814,7 @@ describe('The deployed gate draws only what can show, and never shows a blank pa
     expect(mirror.material.emissiveIntensity).toBe(tile.mesh.material.emissiveIntensity);
     expect(mirror.material.color.getHex()).toBe(tile.mesh.material.color.getHex());
     expect(mirror.material.emissive.getHex()).toBe(tile.mesh.material.emissive.getHex());
-    expect(mirror.material.color.getHex()).toBe(0xffd97a); // the active (gold) tile
+    expect(mirror.material.emissive.getHex()).toBe(CleansingTile.ACTIVE_EMISSIVE); // the gold ring
 
     const freed = jest.spyOn(mirror.material, 'dispose');
     DeployManager.toggle(); // pick the gate back up

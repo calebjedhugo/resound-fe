@@ -4,6 +4,7 @@ import CameraController from 'core/CameraController';
 import PortalManager from 'core/PortalManager';
 import CleansingTile from 'entities/CleansingTile';
 import CleanserGatePad from 'entities/CleanserGatePad';
+import { tintDoorway } from 'entities/EntityLook';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { DOORWAY_OFFSET, FACING_VECTORS } from 'core/portalMath';
 
@@ -279,6 +280,8 @@ class DeployManager {
       // cardinal face, each mapped so walking in from that side continues
       // seamlessly at the cleanser.
       this._views = PortalManager.createCleanserGateViews(this._pad.entity, target);
+      // Its panels ripple gold: it leads to the gold (active) cleanser
+      for (const view of this._views) tintDoorway(view.surface.material);
       this._viewKey = this._views.length > 0 ? key : null;
       this._viewTarget = this._views.length > 0 ? target : null;
       this._buildTileMirror(destArea, target);

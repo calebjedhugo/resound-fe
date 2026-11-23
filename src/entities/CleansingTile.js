@@ -3,6 +3,7 @@ import gameState from 'core/GameState';
 import Tape from 'core/Tape';
 import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
 import Entity from 'entities/Entity';
+import { CLEANSER_GOLD, CLEANSER_RING_MAP, createCleanserGeometry } from 'entities/EntityLook';
 
 /**
  * CleansingTile — a walkable floor tile that empties the player's tape when
@@ -25,18 +26,20 @@ class CleansingTile extends Entity {
 
   // Emissive glow floor/ceiling for the resting pulse, and the bright spike a
   // fresh clear flashes to.
-  static PULSE_MIN = 0.35;
-  static PULSE_MAX = 0.9;
-  static FLASH_INTENSITY = 2.2;
+  static PULSE_MIN = 0.6;
+  static PULSE_MAX = 1.2;
+  static FLASH_INTENSITY = 2.6;
   static FLASH_DECAY_PER_S = 3.5;
 
-  // Resting (cyan) look, and the gold look of the ACTIVE cleanser — the last
-  // tile the player stepped on, where a deployed cleanser gate leads
-  // (core/DeployManager). One tile is active at a time, world-wide.
-  static BASE_COLOR = 0x66ddff;
-  static BASE_EMISSIVE = 0x2299cc;
-  static ACTIVE_COLOR = 0xffd97a;
-  static ACTIVE_EMISSIVE = 0xbb7711;
+  // Resting look — dark glass, a pale ring — and the ACTIVE cleanser's, its
+  // ring burning gold: the last tile the player stepped on, where a
+  // deployed cleanser gate leads (core/DeployManager; its panels ripple the
+  // same gold). One tile is active at a time, world-wide. Gold is the one
+  // accent the world's entities keep (entities/EntityLook).
+  static BASE_COLOR = 0x252a34;
+  static BASE_EMISSIVE = 0xb4c2de;
+  static ACTIVE_COLOR = 0x3a3121;
+  static ACTIVE_EMISSIVE = CLEANSER_GOLD;
 
   constructor(position, data = {}) {
     super('cleanser', position, data);
@@ -48,20 +51,21 @@ class CleansingTile extends Entity {
   }
 
   /**
-   * Mesh-only tile look (no entity). A thin disc lying flush on the floor,
-   * glowing cyan-white.
+   * Mesh-only tile look (no entity). A thin disc lying flush on the floor:
+   * dark glass, its light a breathing ring (an emissive map, shared).
    * @param {{x:number, y:number, z:number}} position - base world position
    */
   static buildTileMesh(position) {
-    const geometry = new THREE.CylinderGeometry(1.25, 1.25, 0.12, 32);
+    const geometry = createCleanserGeometry();
     const material = new THREE.MeshStandardMaterial({
       color: CleansingTile.BASE_COLOR,
       roughness: 0.25,
       metalness: 0.2,
       emissive: CleansingTile.BASE_EMISSIVE,
+      emissiveMap: CLEANSER_RING_MAP,
       emissiveIntensity: CleansingTile.PULSE_MIN,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
     });
     const mesh = new THREE.Mesh(geometry, material);
     // Sit just above the floor plane so it never z-fights with the floor.

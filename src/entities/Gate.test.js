@@ -8,17 +8,14 @@ import { drawnObjects } from '../__tests__/helpers/drawList';
 // state machine, especially the material/flash bookkeeping.
 describe('Gate latch state (open on completion, close on walk-through)', () => {
   const song = [{ pitch: 'C4', length: '1/4' }];
-  const CLOSED_EMISSIVE = 0x331100;
-  const OPEN_EMISSIVE = 0x003300;
-  const FLASH_EMISSIVE = 0xaa1111;
 
-  it('opens green, LATCHES with no timer, and closes when the player walks through', () => {
+  it('opens (its slab gone), LATCHES with no timer, and closes when the player walks through', () => {
     const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
     expect(gate.isOpen).toBe(false);
 
     gate.open();
     expect(gate.isOpen).toBe(true);
-    expect(gate.mesh.material.emissive.getHex()).toBe(OPEN_EMISSIVE);
+    expect(gate.mesh.material.opacity).toBe(0);
 
     // No timer: updates with nobody around leave it open
     gameState.player.position = { x: 0, y: 1.8, z: 0 };
@@ -34,7 +31,7 @@ describe('Gate latch state (open on completion, close on walk-through)', () => {
     gameState.player.position = { x: 30, y: 1.8, z: 36 };
     gate.update(0.016);
     expect(gate.isOpen).toBe(false);
-    expect(gate.mesh.material.emissive.getHex()).toBe(CLOSED_EMISSIVE);
+    expect(gate.mesh.material.opacity).toBe(1); // sealed again
   });
 
   it('a performance holding the door keeps it open behind the player', () => {
@@ -79,28 +76,25 @@ describe('Gate latch state (open on completion, close on walk-through)', () => {
     expect(new Gate({ x: 30, y: 0, z: 30 }, { song }).ending).toBe(false);
   });
 
-  it('a mismatch flash restores the emissive of the CURRENT open/closed state', () => {
-    // Regression: the flash used to snapshot whatever emissive was current and
-    // restore it later — so a flash raised while OPEN could repaint a green
-    // (passable-looking) glow onto a gate that had since CLOSED. Restore must
-    // track the live state instead.
+  it('a mismatch flash never outlives its window, whatever the gate did meanwhile', () => {
+    // Regression: the flash used to snapshot the look it interrupted and
+    // restore it later — so a flash raised while OPEN could repaint an open
+    // look onto a gate that had since CLOSED. The red must simply end.
     const gate = new Gate({ x: 0, y: 0, z: 0 }, { song });
 
-    // Flash while OPEN -> restores green.
     gate.open();
     gate._flashMismatch();
-    expect(gate.mesh.material.emissive.getHex()).toBe(FLASH_EMISSIVE);
+    expect(gate.lockoutGlow).toBe(1);
     gate._mismatchFlashUntil = Date.now() - 1;
     gate._updateMismatchFlash();
-    expect(gate.mesh.material.emissive.getHex()).toBe(OPEN_EMISSIVE);
+    expect(gate.lockoutGlow).toBe(0);
 
-    // Flash raised while open but resolved after CLOSE -> restores orange.
+    // Raised while open, the gate closed before it ran out: sealed, not red
     gate._flashMismatch();
     gate.close();
     expect(gate.isOpen).toBe(false);
-    gate._mismatchFlashUntil = Date.now() - 1;
-    gate._updateMismatchFlash();
-    expect(gate.mesh.material.emissive.getHex()).toBe(CLOSED_EMISSIVE);
+    expect(gate.lockoutGlow).toBe(0);
+    expect(gate.mesh.material.opacity).toBe(1);
   });
 
   it('closing drops captured notes (a fresh performance is needed to re-cross)', () => {
@@ -253,8 +247,10 @@ describe('Gate shell drawing', () => {
     gameState.player.elevation = 0;
   });
 
-  it('an open gate draws no shell, only its notation', () => {
-    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+  const link = { puzzleId: 'elsewhere', gateId: 'beyond' };
+
+  it('an open door draws no shell, only its notation (its panels show the way through)', () => {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song, link });
     expect(shellDrawn(gate)).toBe(true);
 
     gate.open();
@@ -265,9 +261,26 @@ describe('Gate shell drawing', () => {
     expect(shellDrawn(gate)).toBe(true);
   });
 
-  it('an alwaysOpen face never draws its shell', () => {
-    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song, alwaysOpen: true });
-    expect(shellDrawn(gate)).toBe(false);
+  it('an open plain gate keeps only its rippling frame: no slab, and nothing hidden behind it', () => {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+
+    gate.open();
+
+    const { material } = gate.mesh;
+    expect(shellDrawn(gate)).toBe(true); // the frame
+    expect(material.opacity).toBe(0); // no slab
+    expect(material.transparent).toBe(true);
+    // A creature in the open cell never vanishes behind it
+    expect(material.depthWrite).toBe(false);
+    gate.close();
+    expect(material.depthWrite).toBe(true);
+  });
+
+  it('an alwaysOpen face never draws its slab', () => {
+    const door = new Gate({ x: 30, y: 0, z: 30 }, { song, link, alwaysOpen: true });
+    expect(shellDrawn(door)).toBe(false);
+    const doorway = new Gate({ x: 30, y: 0, z: 30 }, { song, alwaysOpen: true });
+    expect(doorway.mesh.material.opacity).toBe(0); // only its frame
   });
 
   it('a fading shell draws until the song has faded it all the way out', () => {
@@ -339,7 +352,7 @@ describe('Gate wrong-note lockout (ruled 2026-07-16)', () => {
     const gate = mismatchedGate();
     expect(gate.capturedNotes).toHaveLength(0);
     expect(gate._lockoutUntilMs).toBeGreaterThan(Date.now());
-    expect(gate.mesh.material.emissive.getHex()).toBe(0xaa1111);
+    expect(gate.lockoutGlow).toBe(1); // red
   });
 
   it('the gate is DEAF during the lockout — even the correct note is not captured', () => {
@@ -363,10 +376,10 @@ describe('Gate wrong-note lockout (ruled 2026-07-16)', () => {
 
   it('the red flash decays across the lockout window', () => {
     const gate = mismatchedGate();
-    expect(gate.mesh.material.emissiveIntensity).toBeCloseTo(1.0, 1);
+    expect(gate.lockoutGlow).toBeCloseTo(1.0, 1);
     gate._mismatchFlashUntil = Date.now() + 200; // window nearly over
     gate._updateMismatchFlash();
-    expect(gate.mesh.material.emissiveIntensity).toBeLessThan(0.5);
+    expect(gate.lockoutGlow).toBeLessThan(0.5);
   });
 
   it('close() clears the lockout (a fresh crossing starts clean)', () => {

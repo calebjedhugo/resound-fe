@@ -23,9 +23,10 @@ import * as THREE from 'three';
 // eslint-disable-next-line import/extensions
 import { frameCorners } from 'three/examples/jsm/utils/CameraUtils.js';
 import { WORLD_SCALE } from 'core/constants';
-import { createSceneTarget, showStoredTexels } from 'core/passContext';
+import { createSceneTarget } from 'core/passContext';
 import { scenePieces, updateSceneMatrices } from 'core/sceneMatrices';
 import memoizeOnEntityList from 'core/entityListMemo';
+import { createDoorwayMaterial } from 'entities/EntityLook';
 import {
   FACING_VECTORS,
   DOORWAY_OFFSET,
@@ -412,10 +413,9 @@ class PortalView {
     // (QA, 2026-07-16). A doorway wall is never translucent; near-plane
     // coherence is the render camera's job (MIN_RENDER_EYE_DISTANCE).
     // The buffer already holds canvas-space colour: shown as stored, never
-    // encoded a second time (core/passContext).
-    const material = showStoredTexels(
-      new THREE.MeshBasicMaterial({ map: this._targets[1].texture })
-    );
+    // encoded a second time (core/passContext), the open door's ripple
+    // round its edges only (entities/EntityLook)
+    const material = createDoorwayMaterial(this._targets[1].texture);
     this.surface = new THREE.Mesh(geometry, material);
     // Local to the gate mesh, which sits at the box CENTER: just inside the
     // OPPOSITE panel, facing back at the viewer

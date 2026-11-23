@@ -35,7 +35,8 @@ import * as THREE from 'three';
 import CreatureLook from 'entities/CreatureLook';
 import ClapVisual from 'ui/ClapVisual';
 import { createSky, standInMaterials } from 'entities/EnvironmentLook';
-import { NO_CLIP_PLANES, createSceneTarget, showStoredTexels } from 'core/passContext';
+import { standInMaterials as entityStandIns } from 'entities/EntityLook';
+import { NO_CLIP_PLANES, createSceneTarget } from 'core/passContext';
 
 const SPAN = 1e4;
 
@@ -67,26 +68,23 @@ function setup(mainScene) {
   look.noteOn();
   look.update(0, true, null);
   standIns.add(look.object);
-  // A doorway surface exactly as PortalView builds one (opaque, showing a
-  // scene target's stored texels; its map is a second target, never the one
+  // The entities (entities/EntityLook): a gate sealed, and fading or open;
+  // a ramp; a cleansing tile (the deploy phantom and tile mirrors are its
+  // clones); and an open door's panel as PortalView builds one (showing a
+  // scene target's stored texels; its map a second target, never the one
   // drawn into)
-  const surfaceMap = createSceneTarget(1, 1);
-  standIns.add(
-    new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
-      showStoredTexels(new THREE.MeshBasicMaterial({ map: surfaceMap.texture }))
-    )
-  );
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  const entities = entityStandIns();
+  entities.doorway.map = createSceneTarget(1, 1).texture;
+  standIns.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), entities.doorway));
+  for (const name of ['gateSealed', 'gateFading', 'ramp', 'cleanser']) {
+    standIns.add(new THREE.Mesh(box, entities[name]));
+  }
   // The world's other looks, by the material flags their programs are keyed
   // by (nothing else about these materials matters here)
-  const box = new THREE.BoxGeometry(1, 1, 1);
   const looks = [
-    // Closed gates, fountains, ramp posts
+    // Fountains (dark stone; pale once activated)
     new THREE.MeshStandardMaterial(),
-    // A gate's shell as it fades, a cleansing tile, the deploy phantom
-    new THREE.MeshStandardMaterial({ transparent: true }),
-    // A ramp's wedge, readable from every side (Ramp)
-    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }),
     // A notation plane until its staff texture arrives (NotationDisplay)
     new THREE.MeshBasicMaterial({ transparent: true }),
     // ...and once it has (a map is a program of its own). A world's staves

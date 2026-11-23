@@ -298,6 +298,15 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
   });
 
+  it('an open plain gate: only its rippling frame', () => {
+    const gate = new Gate({ x: 0, y: 0, z: 0 }, staffSong('E3'));
+    gate.open();
+
+    expect(gate.mesh.material.visible).toBe(true); // the frame draws
+    expect(coldPrograms(gate.mesh)).toEqual([]);
+    gate.dispose();
+  });
+
   it('a gate glowing red, locked out by a wrong note', async () => {
     const [{ song }] = ctx.loadPuzzle('listening-gate-multi-note').entities;
     ctx.setInventorySlot(0, [{ ...song[0], pitch: 'D4' }]);
@@ -306,7 +315,7 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     await ctx.advanceBeats(0.5);
 
     const [gate] = ctx.getGates();
-    expect(gate.mesh.material.emissive.getHex()).toBe(0xaa1111); // the lockout's glow
+    expect(gate.lockoutGlow).toBeGreaterThan(0); // the lockout's red
     expect(coldPrograms(gate.mesh)).toEqual([]);
   });
 

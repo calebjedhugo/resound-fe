@@ -15,7 +15,8 @@
  *    the pass clips nothing: renderMainView);
  *  - in the CANVAS's colour space: render targets that draw world scenes come
  *    from createSceneTarget, and a material that displays one uses
- *    showStoredTexels.
+ *    showStoredTexels (or, a custom shader, writes its texels out as they
+ *    are: entities/EntityLook's doorway panels).
  */
 import * as THREE from 'three';
 

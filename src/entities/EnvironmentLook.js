@@ -65,6 +65,19 @@ const PALETTE = {
   slabSide: 0x1f232b,
   slabUnder: 0x121418,
   cliffEdge: 0xb4bccf,
+  // The entities (entities/EntityLook): dark glass gates with pale edge
+  // light, ramps of the storeys' slate, pale cleanser rings — the gold of
+  // the ACTIVE cleanser (and the gate that leads there) the one accent,
+  // red the wrong note's
+  gateGlass: 0x10131a,
+  gateFoot: 0x07080c,
+  gateEdge: 0xc6d0e6,
+  gateCharge: 0xeef3ff,
+  lockout: 0xc8242a,
+  portalGlow: 0xb9c6e2,
+  rampSlope: 0x3c414c,
+  rampChevron: 0x8d97ad,
+  rampPost: 0xd2d9e8,
 };
 
 // Up to this many creatures light an area's surfaces at once (the
