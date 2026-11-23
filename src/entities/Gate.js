@@ -453,6 +453,36 @@ class Gate extends Entity {
     this._applyLook();
   }
 
+  /**
+   * What it has become, for core/WorldMemory (its area is being pruned):
+   * open or not, a close waiting on a performer, how often it has opened,
+   * and when a song last completed it (what holds a performed door open).
+   * What it was hearing is not kept: a performance doesn't outlive its
+   * listener's area.
+   * @returns {{isOpen: boolean, closePending: boolean, openings: number, lastCompletionMs: number}}
+   */
+  saveState() {
+    return {
+      isOpen: this.isOpen,
+      closePending: Boolean(this._closePending),
+      openings: this.openings,
+      lastCompletionMs: this._lastCompletionMs,
+    };
+  }
+
+  /**
+   * Built again from saveState: as it was left. No opening is counted (the
+   * storm strikes only for a new one).
+   * @param {object} state
+   */
+  restoreState(state) {
+    this.isOpen = this.alwaysOpen || Boolean(state.isOpen);
+    this._closePending = this.isOpen && Boolean(state.closePending);
+    this.openings = state.openings || 0;
+    this._lastCompletionMs = state.lastCompletionMs ?? -Infinity;
+    this._applyLook();
+  }
+
   /** Paint the gate for its current open/closed state. */
   _applyLook() {
     if (this.isOpen) {

@@ -655,6 +655,72 @@ describe('Cross-area travel (the waystone gate can go anywhere)', () => {
   });
 });
 
+describe('A deployed gate is never pruned away (the world forgets nothing)', () => {
+  const installFetchMock = (puzzles) => {
+    global.fetch = jest.fn((url) => {
+      const match = url.match(/^\/puzzles\/([a-zA-Z0-9_-]+)\.json$/);
+      const data = match && puzzles[match[1]];
+      return Promise.resolve(
+        data
+          ? { ok: true, json: () => Promise.resolve(JSON.parse(JSON.stringify(data))) }
+          : { ok: false, statusText: 'Not Found' }
+      );
+    });
+  };
+  afterEach(() => {
+    delete global.fetch;
+  });
+
+  /** A gate deployed here in deploy-basic, leading to a waystone in portal-b. */
+  const deployTowardPortalB = () => {
+    gameState.activeWaystone = { puzzleId: 'portal-b', position: { x: 6, y: 0, z: 6 } };
+    standAt(30, 39);
+    DeployManager.toggle(); // aim...
+    DeployManager.toggle(); // ...and deploy
+    DeployManager.update();
+    expect(DeployManager.state).toBe('deployed');
+  };
+
+  it('its area stays live while it stands, however far the player goes', async () => {
+    installFetchMock({ 'portal-a': portalA, 'portal-b': portalB });
+    deployTowardPortalB();
+    await jest.runAllTimersAsync();
+    const [pad] = padsInActiveArea();
+
+    // Away to portal-a: deploy-basic is linked to nothing there
+    await PortalManager.teleportToWaystone({
+      puzzleId: 'portal-a',
+      position: { x: 6, y: 0, z: 6 },
+    });
+    await jest.runAllTimersAsync();
+    DeployManager.update();
+
+    const home = PortalManager.getArea('deploy-basic');
+    expect(home).toBeTruthy();
+    expect(home.entityManager.get(pad.id)).toBe(pad);
+    expect(DeployManager.state).toBe('deployed');
+  });
+
+  it('picked back up, its area may prune again', async () => {
+    installFetchMock({ 'portal-a': portalA, 'portal-b': portalB });
+    deployTowardPortalB();
+    await jest.runAllTimersAsync();
+    await PortalManager.teleportToWaystone({
+      puzzleId: 'portal-a',
+      position: { x: 6, y: 0, z: 6 },
+    });
+    await jest.runAllTimersAsync();
+
+    DeployManager._removePad();
+    await PortalManager.teleportToWaystone({
+      puzzleId: 'portal-b',
+      position: { x: 6, y: 0, z: 6 },
+    });
+
+    expect(PortalManager.getArea('deploy-basic')).toBeFalsy();
+  });
+});
+
 describe('The deployed gate draws only what can show, and never shows a blank panel', () => {
   // portal-a: its door (world 15, 0, 6) leads into portal-b. The gate goes
   // two tiles south of a player standing north of the door; the waystone it

@@ -22,8 +22,9 @@ import { DOORWAY_OFFSET, FACING_VECTORS } from 'core/portalMath';
  *
  * Walking onto the deployed pad teleports the player to the ACTIVE
  * waystone (the gold tile — the last one stepped on) and consumes the pad.
- * One pad exists at a time, world-wide; it lives in the area it was placed
- * and dies with it if that area is pruned. Aiming requires an active
+ * One pad exists at a time, world-wide; it lives in the area it was placed,
+ * which stays live while it stands (PortalManager.retainArea — the world
+ * forgets nothing, 2026-11-23: a pruned area would take the gate with it). Aiming requires an active
  * waystone: the gate is "a remote opening of the drain you touched" — no
  * touched drain, no gate.
  *
@@ -62,6 +63,7 @@ class DeployManager {
     this._viewKey = null; // what the current panels were built against
     this._viewTarget = null; // the active waystone the panels point at
     this._retainedId = null; // destination area pinned live for the views
+    this._padAreaId = null; // the pad's own area, pinned live while it stands
     // Visual clone of the destination waystone tile under the gate — the
     // panel aperture can only paint past the window plane, so the tile in
     // the arrival cell would clip to a crescent; the mirror IS the "seen
@@ -245,6 +247,10 @@ class DeployManager {
       PortalManager.releaseArea(this._retainedId);
       this._retainedId = null;
     }
+    if (this._padAreaId) {
+      PortalManager.releaseArea(this._padAreaId);
+      this._padAreaId = null;
+    }
     this._pad = null; // pad entities die with their areas
     this._state = 'idle';
   }
@@ -427,6 +433,10 @@ class DeployManager {
     const pad = new WaystoneGatePad({ x: this._spot.x, y: this._spot.y, z: this._spot.z });
     area.entityManager.add(pad);
     this._pad = { area, id: pad.id, entity: pad };
+    // Its area stays live while it stands: walking two doors away never
+    // prunes the gate away
+    this._padAreaId = area.id;
+    PortalManager.retainArea(area.id);
     this._hidePhantom();
     this._state = 'deployed';
     // The hint stays: the remaining lesson is "g again to cancel" — it

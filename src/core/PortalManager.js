@@ -40,7 +40,7 @@ import PuzzleLoader from 'core/PuzzleLoader';
 import PortalView from 'core/PortalView';
 import ListeningManager from 'core/ListeningManager';
 import AudioPrewarm from 'core/AudioPrewarm';
-import CreatureRegistry from 'core/CreatureRegistry';
+import WorldMemory from 'core/WorldMemory';
 import gameState from 'core/GameState';
 import {
   WORLD_SCALE,
@@ -148,10 +148,11 @@ class PortalManager {
     // Visual-only clones of a waystone sitting under a door's PARTNER face
     // (see _rebuildTileMirrors): { mesh, group } pairs, rebuilt with doors
     this._tileMirrors = [];
-    // Areas pinned live beyond the link-adjacency rule — the deployable
-    // waystone gate retains its destination so the pad's see-through view
-    // has a live scene to render (core/DeployManager).
-    this._retained = new Set();
+    // Areas pinned live beyond the link-adjacency rule, each with how many
+    // hold it — the deployed waystone gate retains its destination so the
+    // pad's see-through view has a live scene to render, and its own area so
+    // it is never pruned away (core/DeployManager). The two may be one.
+    this._retained = new Map();
     // gate -> Map<facing, PortalView> (all four faces of an open door) or
     // null once the link proves dangling (the gate stays an ordinary gate).
     // A view lives as long as BOTH its areas stay loaded: a crossing hides
@@ -242,8 +243,8 @@ class PortalManager {
 
   /** Tear the whole world down (leaving for the menu). */
   reset() {
-    // A new world: no creature moved by the pole yet
-    CreatureRegistry.reset();
+    // A new world: nothing has happened in it yet
+    WorldMemory.reset();
     this._generation += 1;
     this._disposeViews();
     this._newViews = [];
@@ -1538,19 +1539,20 @@ class PortalManager {
       ? this._activeArea.entityManager.getByType('gate').filter((g) => g.link && g.link.puzzleId)
       : [];
 
-    // Prune areas that are neither active nor adjacent to it (their state
-    // resets on the next visit — streaming beyond depth 1 is a later stage).
-    // Retained areas (the deployable gate's destination) are kept live too.
+    // Prune areas that are neither active nor adjacent to it: what happened
+    // in each is remembered (core/WorldMemory) and handed back when it is
+    // built again. Retained areas (the waystone gate's own and its
+    // destination) are kept live too.
     // Views hanging on (or looking into) a pruned area go first: the area's
     // teardown frees the gate meshes their panels hang on.
-    const wanted = new Set(this._retained);
+    const wanted = new Set(this._retained.keys());
     if (this._activeArea) wanted.add(this._activeArea.id);
     for (const gate of this._linkedGates) wanted.add(gate.link.puzzleId);
     for (const [id, area] of [...this._areas]) {
       if (!wanted.has(id)) {
         this._disposeViews(area);
-        // Creatures released here live on: where each stands now
-        CreatureRegistry.snapshot(area);
+        // Everything that happened here lives on (core/WorldMemory)
+        WorldMemory.snapshot(area);
         area.dispose();
         this._areas.delete(id);
       }
@@ -1560,7 +1562,7 @@ class PortalManager {
     for (const gate of this._linkedGates) {
       this._loadNeighbor(gate.link.puzzleId);
     }
-    for (const id of this._retained) {
+    for (const id of this._retained.keys()) {
       this._loadNeighbor(id);
     }
     this._rebuildDoors();
@@ -1674,13 +1676,18 @@ class PortalManager {
    */
   retainArea(puzzleId) {
     if (!puzzleId) return;
-    this._retained.add(puzzleId);
+    this._retained.set(puzzleId, (this._retained.get(puzzleId) || 0) + 1);
     this._loadNeighbor(puzzleId);
   }
 
-  /** Un-pin a retained area; it prunes on the next adjacency rescan. */
+  /**
+   * Un-pin a retained area (one retainArea's worth); once nothing holds it,
+   * it prunes on the next adjacency rescan.
+   */
   releaseArea(puzzleId) {
-    this._retained.delete(puzzleId);
+    const holds = (this._retained.get(puzzleId) || 0) - 1;
+    if (holds > 0) this._retained.set(puzzleId, holds);
+    else this._retained.delete(puzzleId);
   }
 
   /**

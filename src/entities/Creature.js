@@ -393,7 +393,7 @@ class Creature extends Entity {
 
   /**
    * Everything needed to build this creature again, identically, somewhere
-   * else (a slot of the tape holds one; core/CreatureRegistry keeps one per
+   * else (a slot of the tape holds one; core/WorldMemory keeps one per
    * released creature): its song and timing, range, body, speed, its VOICE
    * (the timbre its instrument rolled), and the PHASE of its schedule (its
    * next sing beat modulo its interval), so a released creature sings on
@@ -411,6 +411,36 @@ class Creature extends Entity {
       voice: voiceOf(this.instrument),
       phase: ((this.nextSingBeat % interval) + interval) % interval,
     };
+  }
+
+  /**
+   * What it has become, for core/WorldMemory (its area is being pruned):
+   * its spec (toSpec: song, voice, the phase it sings on...), where it
+   * stands, its layer and its drift. A creature is BUILT from this
+   * (`new Creature(state.position, state.spec)`, then restoreState).
+   * @returns {{spec: object, position: object, elevation: number, velocity: object}}
+   */
+  saveState() {
+    return {
+      spec: this.toSpec(),
+      position: { ...this.position },
+      elevation: this.elevation,
+      velocity: { ...this.velocity },
+    };
+  }
+
+  /**
+   * Built again from saveState: back on its layer (a ramp's in-between
+   * layer included) and drifting as it was. Its first movement pass
+   * re-floors it.
+   * @param {{elevation: number, velocity: object}} state
+   */
+  restoreState(state) {
+    if (typeof state.elevation === 'number') this.elevation = state.elevation;
+    if (state.velocity) {
+      this.velocity.x = state.velocity.x || 0;
+      this.velocity.z = state.velocity.z || 0;
+    }
   }
 
   /**

@@ -9,7 +9,7 @@ import Waystone from 'entities/Waystone';
 import { WORLD_SCALE, ELEVATION_HEIGHT, entityTypeOf } from 'core/constants';
 import Area from 'core/Area';
 import AudioPrewarm from 'core/AudioPrewarm';
-import CreatureRegistry from 'core/CreatureRegistry';
+import WorldMemory from 'core/WorldMemory';
 import ElevationGrid from 'core/ElevationGrid';
 import runInIdleSlices from 'core/idleSlices';
 import NotationDisplay from 'ui/NotationDisplay';
@@ -177,13 +177,18 @@ class PuzzleLoader {
         z: entityData.position.z * WORLD_SCALE,
       };
 
+      // What it had become when this area was last pruned (core/WorldMemory)
+      const saved = WorldMemory.stateOf(puzzleData.id, index);
+
       try {
         switch (entityData.type) {
           case 'creature':
-            // One the pole has taken stays taken (core/CreatureRegistry)
-            if (!CreatureRegistry.isAbsorbed(puzzleData.id, index)) {
-              entity = new Creature(scaledPosition, entityData.data || {});
-              CreatureRegistry.tagOrigin(entity, puzzleData.id, index);
+            // One the pole has taken stays taken; one remembered is built
+            // where it stood, singing on its own phase, in its own voice
+            if (!WorldMemory.isAbsorbed(puzzleData.id, index)) {
+              entity = saved
+                ? new Creature({ ...saved.position }, { ...entityData.data, ...saved.spec })
+                : new Creature(scaledPosition, entityData.data || {});
             }
             break;
           case 'gate':
@@ -231,15 +236,18 @@ class PuzzleLoader {
       }
 
       if (entity) {
+        WorldMemory.tagOrigin(entity, puzzleData.id, index);
+        if (saved && typeof entity.restoreState === 'function') entity.restoreState(saved);
         entityManager.add(entity);
       }
     });
 
     // ...and every creature the pole let out here lives here again, where it
     // stood when the area was last pruned
-    for (const { key, spec, position } of CreatureRegistry.releasedIn(puzzleData.id)) {
-      const creature = new Creature({ ...position }, spec);
-      CreatureRegistry.tagReleased(creature, puzzleData.id, key);
+    for (const { key, state } of WorldMemory.releasedIn(puzzleData.id)) {
+      const creature = new Creature({ ...state.position }, state.spec);
+      creature.restoreState(state);
+      WorldMemory.tagReleased(creature, puzzleData.id, key);
       entityManager.add(creature);
     }
 

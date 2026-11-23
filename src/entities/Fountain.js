@@ -167,12 +167,8 @@ class Fountain extends Entity {
     }
   }
 
-  /**
-   * Activate the fountain (correct song was played)
-   */
-  async activate() {
-    if (this.isActivated) return;
-
+  /** Latched: activated for good, its staff gone, pale and lit from within. */
+  _latch() {
     this.isActivated = true;
     this.isComplete = true;
 
@@ -186,6 +182,28 @@ class Fountain extends Entity {
     this.mesh.material.emissive.setHex(0x55607a);
     this.mesh.material.emissiveIntensity = 1.0; // Bright glow
     this.mesh.material.needsUpdate = true; // Force material update
+  }
+
+  /** What it has become, for core/WorldMemory: activated or not. */
+  saveState() {
+    return { isActivated: this.isActivated };
+  }
+
+  /**
+   * Built again from saveState: an activated fountain stays activated —
+   * latched and lit, its song not played again (it was heard once).
+   */
+  restoreState(state) {
+    if (state.isActivated && !this.isActivated) this._latch();
+  }
+
+  /**
+   * Activate the fountain (correct song was played)
+   */
+  async activate() {
+    if (this.isActivated) return;
+
+    this._latch();
 
     // Hush the creatures IN OUR AREA so the fountain plays alone (a neighbor
     // fountain latching behind a doorway must not silence the player's

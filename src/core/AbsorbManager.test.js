@@ -5,7 +5,7 @@
  * flash. A creature taken is silent from the moment the tip connects, a
  * creature released comes alive only once the pole is back — sounding as it
  * did, on its old beat — and neither duplicates nor vanishes when its area
- * is pruned and rebuilt from its puzzle (core/CreatureRegistry).
+ * is pruned and rebuilt from its puzzle (core/WorldMemory).
  */
 import gameState from 'core/GameState';
 import AbsorbManager, { POLE_TIMES } from 'core/AbsorbManager';

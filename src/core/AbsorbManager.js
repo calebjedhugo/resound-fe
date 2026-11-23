@@ -26,13 +26,13 @@
  * body leaves its area once drawn in; a released creature is in its area
  * (dormant: Creature data.dormant) from the moment the pole sets out, and
  * wakes when the pole is back. Every creature moved is remembered per
- * puzzle (core/CreatureRegistry), so a pruned area rebuilds without
+ * puzzle (core/WorldMemory), so a pruned area rebuilds without
  * duplicating or losing one.
  */
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import CollisionDetector from 'core/CollisionDetector';
-import CreatureRegistry from 'core/CreatureRegistry';
+import WorldMemory from 'core/WorldMemory';
 import HintMemory from 'core/HintMemory';
 import Tape from 'core/Tape';
 import { lineOfSight } from 'core/poleReach';
@@ -160,7 +160,7 @@ class AbsorbManager {
       { ...held.spec, dormant: true }
     );
     area.entityManager.add(creature);
-    CreatureRegistry.release(creature, area.id, held.spec);
+    WorldMemory.release(creature, area.id);
     inventory[activeSlot] = null;
     for (let i = 0; i < 3; i += 1) this._colour[i] = held.colour[i];
     this._contactOn(creature, this._tip);
@@ -276,7 +276,7 @@ class AbsorbManager {
       css: cssOf(this._colour),
     };
     nextSlotId += 1;
-    CreatureRegistry.absorb(creature);
+    WorldMemory.absorb(creature);
     HintMemory.retire('record'); // the absorb lesson (puzzle id "record")
     action.connected = true;
     return true;
