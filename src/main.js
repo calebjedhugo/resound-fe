@@ -40,6 +40,7 @@ import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import CleansingTile from 'entities/CleansingTile';
 import CleanserGatePad from 'entities/CleanserGatePad';
+import { tickEnvironment } from 'entities/EnvironmentLook';
 
 // Three.js scene
 const scene = new THREE.Scene();
@@ -212,6 +213,7 @@ function update(deltaTime) {
     // Crossing an open linked gate hands the world to the neighbor puzzle
     PortalManager.update();
     DeployManager.update();
+    tickEnvironment(deltaTime); // the sky's drift and lightning
     clapVisual.update();
     recordingUI.update();
     keyHints.update(deltaTime);

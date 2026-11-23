@@ -288,7 +288,8 @@ describe('NotationDisplay on Gates and Fountains', () => {
   describe('shared engravings (one texture per distinct staff)', () => {
     // jsdom can't load an SVG as an image or draw on a canvas, so those two
     // browser APIs are stood in for: an image "loads" on the next timer and
-    // a canvas records what was drawn on it. Each test uses its own songs —
+    // `drawn` lists each canvas a staff was drawn on (the staff is laid down
+    // more than once on its canvas: its halo, then its ink). Each test uses its own songs —
     // engravings are shared module-wide, and earlier tests' gates live on.
     let renderSpy;
     let drawn;
@@ -316,7 +317,9 @@ describe('NotationDisplay on Gates and Fountains', () => {
       jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function context() {
         return {
           clearRect() {},
-          drawImage: () => drawn.push(this),
+          drawImage: () => {
+            if (!drawn.includes(this)) drawn.push(this);
+          },
         };
       });
     });

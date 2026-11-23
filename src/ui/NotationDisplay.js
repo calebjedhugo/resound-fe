@@ -137,6 +137,13 @@ function renderWidth({ song, timeSignature }) {
   return measures <= 2 ? 400 : 500 * Math.ceil(measures / 2);
 }
 
+// The pale halo under a staff's ink (engrave): its colour, its blur as a
+// share of the texture's width, and how many times it is laid down (each
+// one thickens it)
+const STAFF_HALO_COLOUR = 'rgba(226, 231, 242, 0.9)';
+const STAFF_HALO_BLUR = 0.008;
+const STAFF_HALO_PASSES = 2;
+
 /**
  * Engrave a staff: render the song to SVG, then (asynchronously, once the
  * SVG has loaded as an image) rasterize it onto a canvas texture and hand
@@ -198,7 +205,16 @@ function engrave(engraving, input, width) {
         // Transparent background (entity color shows through)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw SVG scaled to fit canvas
+        // Draw SVG scaled to fit canvas, over a soft pale halo of itself:
+        // the ink reads on a closed gate's colour AND over an open door's
+        // view of the dark world beyond (entities/EnvironmentLook)
+        ctx.shadowColor = STAFF_HALO_COLOUR;
+        ctx.shadowBlur = canvas.width * STAFF_HALO_BLUR;
+        for (let i = 0; i < STAFF_HALO_PASSES; i += 1) {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         URL.revokeObjectURL(url);

@@ -264,8 +264,8 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
   });
 
   it.each([
-    ['floors, single and batched walls, gates and their notation', 'portal-two-pairs'],
-    ['a raised floor, a ramp and a creature (halo included)', 'elevation-basic'],
+    ['the sky, the floor, the wall batch, gates and their notation', 'portal-two-pairs'],
+    ['a raised floor with cliff edges, a ramp and a creature (halo included)', 'elevation-basic'],
     ['a fountain', 'listening-fountain-basic'],
     ['a cleansing tile', 'deploy-basic'],
   ])('a level with %s', (_, puzzleId) => {

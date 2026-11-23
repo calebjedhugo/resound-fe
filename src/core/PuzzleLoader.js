@@ -10,7 +10,6 @@ import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Area from 'core/Area';
 import AudioPrewarm from 'core/AudioPrewarm';
 import ElevationGrid from 'core/ElevationGrid';
-import { inPortalHideBand } from 'core/portalMath';
 import runInIdleSlices from 'core/idleSlices';
 import NotationDisplay from 'ui/NotationDisplay';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
@@ -118,32 +117,34 @@ class PuzzleLoader {
     elevationGrid.applyFloors(puzzleData.floors || []);
     area.elevationGrid = elevationGrid;
 
-    // Create floor with elevation data
-    const floor = new Floor(puzzleData.gridSize, puzzleData.floors || []);
+    // The whole floor (ground, raised storeys, their cliff edges) is one
+    // mesh, lit by the area's creatures. A cliff edge is any storey edge
+    // you can't walk on past: not where storeys meet, nor a ramp's ends,
+    // nor a wall's foot
+    const ramps = puzzleData.entities
+      .filter((e) => e.type === 'ramp')
+      .map((e) => ({ ...e.position, direction: e.direction || 'north' }));
+    const walls = puzzleData.entities.filter((e) => e.type === 'wall').map((e) => e.position);
+    const floor = new Floor(puzzleData.gridSize, puzzleData.floors || [], {
+      light: area.light,
+      elevationGrid,
+      ramps,
+      walls,
+    });
     entityManager.add(floor);
 
     // Static-wall batching: an area's walls are identical immovable boxes,
     // but each one as its own THREE.Mesh made long sightlines submit
     // hundreds of draw calls (387 walls ≈ 11.7ms/frame in poc-return,
-    // multiplied by every open portal pass — profiled 2026-07-16). Walls a
-    // PortalView hide-set could ever need to toggle per pass (near a linked
-    // gate — see inPortalHideBand) keep individual meshes; every other wall
-    // becomes an instance of ONE InstancedMesh, added to the group below.
-    const doorPositions = puzzleData.entities
-      .filter((e) => e.type === 'gate' && e.link && e.link.puzzleId)
-      .map((e) => ({ x: e.position.x * WORLD_SCALE, z: e.position.z * WORLD_SCALE }));
-    const batchedWallPositions = [];
-    // This area's own wall materials (see Wall.js: a material drawn in two
-    // scenes re-derives its shader program at every pass switch)
-    const wallMaterials = Wall.createMaterials();
-    area.ownedMaterials.push(wallMaterials.single, wallMaterials.batch);
+    // multiplied by every open portal pass — profiled 2026-07-16). So EVERY
+    // wall is an instance of ONE InstancedMesh, added to the group below; a
+    // door pass hides its eye-side walls per instance (Area.hideWalls).
+    // Walls near doors used to stay meshes of their own for that: 74 of The
+    // Star's 106, ~110 draws a frame with every door open (2026-11-22).
+    const wallPositions = [];
     const addWall = (position) => {
-      if (doorPositions.some((g) => inPortalHideBand(position, g))) {
-        entityManager.add(new Wall(position, {}, wallMaterials.single));
-      } else {
-        entityManager.add(new Wall(position, { batched: true }));
-        batchedWallPositions.push(position);
-      }
+      entityManager.add(new Wall(position, { batched: true }));
+      wallPositions.push(position);
     };
 
     for (const position of this.perimeterWallPositions(puzzleData.gridSize)) {
@@ -215,14 +216,14 @@ class PuzzleLoader {
       }
     });
 
-    if (batchedWallPositions.length > 0) {
-      const batch = new THREE.InstancedMesh(
-        Wall.GEOMETRY,
-        wallMaterials.batch, // never the single walls' material: see Wall.js
-        batchedWallPositions.length
-      );
+    if (wallPositions.length > 0) {
+      // This area's own wall material: lit by its creatures, hidden per
+      // pass by its doors (and freed with it: Area.dispose)
+      const material = Wall.createBatchMaterial(area.light);
+      area.ownedMaterials.push(material);
+      const batch = new THREE.InstancedMesh(Wall.GEOMETRY, material, wallPositions.length);
       const matrix = new THREE.Matrix4();
-      batchedWallPositions.forEach((p, i) => {
+      wallPositions.forEach((p, i) => {
         batch.setMatrixAt(i, matrix.makeTranslation(p.x, p.y + Wall.MESH_Y_OFFSET, p.z));
       });
       // three frustum-culls an InstancedMesh by object.boundingSphere; the

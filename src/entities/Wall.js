@@ -1,37 +1,32 @@
 import * as THREE from 'three';
 import Entity from 'entities/Entity';
+import { createWallMaterial } from 'entities/EnvironmentLook';
 
-// Every wall is the same gray box. ONE geometry serves every wall in every
-// area; the MATERIALS come per AREA (Wall.createMaterials — PuzzleLoader
-// makes one set per area and Area.dispose frees it). three keys a material's
-// shader program by the scene's lights state, and every scene (the main
-// view, each neighbor's Area.scene) has its own: one wall material drawn in
-// two scenes re-derived its program at every pass switch between them
-// (measured 2026-10-16). Within an area the instanced batch gets its own
-// material too, for the same reason (programs are keyed by "drawn
-// instanced"). Shared resources outlive any one wall: flagged
-// `userData.shared` so Entity.dispose leaves them alone.
-const WALL_LOOK = { color: 0x808080, roughness: 0.9, metalness: 0.1 };
+// Every wall is the same box. ONE geometry serves every wall in every area,
+// flagged `userData.shared` so Entity.dispose leaves it alone. In the game
+// every wall of an area draws as an instance of ONE InstancedMesh
+// (PuzzleLoader.buildArea), with that area's own wall material
+// (Wall.createBatchMaterial: lit by the area's creatures, and told by each
+// door pass which walls to leave out — Area.hideWalls). The look is
+// entities/EnvironmentLook's.
 const WALL_GEOMETRY = new THREE.BoxGeometry(3, 2.5, 3);
 WALL_GEOMETRY.userData.shared = true;
 
 /**
- * A fresh pair of identical wall materials for one area: `single` for the
- * individual (hideable) walls, `batch` for its InstancedMesh. Flagged
- * shared; whoever creates them disposes them (Area.dispose).
- * @returns {{single: THREE.Material, batch: THREE.Material}}
+ * The material one area's wall batch draws with, lit by that area's
+ * creatures. Whoever creates it disposes it (Area.dispose).
+ * @param {import('entities/EnvironmentLook').AreaLight} light
+ * @returns {THREE.Material}
  */
-function createMaterials() {
-  const make = () => {
-    const material = new THREE.MeshStandardMaterial(WALL_LOOK);
-    material.userData.shared = true;
-    return material;
-  };
-  return { single: make(), batch: make() };
+function createBatchMaterial(light) {
+  const material = createWallMaterial(light);
+  material.userData.shared = true;
+  return material;
 }
 
-// For a wall built outside any area (tests, tools): one module-wide set
-const DEFAULT_MATERIALS = createMaterials();
+// For a wall built outside any area with its own mesh (tests, tools)
+const DEFAULT_MATERIAL = createWallMaterial();
+DEFAULT_MATERIAL.userData.shared = true;
 
 // Wall fills entire grid cell (3x3 world units) - 2.5 units tall (taller than
 // 1.8 player); the mesh sits half its height above the entity's floor y.
@@ -42,26 +37,23 @@ class Wall extends Entity {
    * @param {{x,y,z}} position
    * @param {object} [data]
    * @param {boolean} [data.batched] - true when this wall renders as an
-   *   instance of the area's static wall batch (PuzzleLoader.buildArea)
-   *   instead of its own mesh. Batched walls have `mesh: null`, so portal
-   *   render passes can never hide them individually — the loader keeps
-   *   every wall a PortalView hide-set could touch individual.
-   * @param {THREE.Material} [material] - its area's `single` wall material
-   *   (Wall.createMaterials)
+   *   instance of its area's wall batch (PuzzleLoader.buildArea) instead of
+   *   its own mesh: `mesh` stays null (collision, elevation and the editor
+   *   use the entity's data, never its mesh)
    */
-  constructor(position, data = {}, material = DEFAULT_MATERIALS.single) {
+  constructor(position, data = {}) {
     super('wall', position, data);
-    if (!data.batched) this.createMesh(material);
+    if (!data.batched) this.createMesh();
   }
 
-  createMesh(material) {
-    this.mesh = new THREE.Mesh(WALL_GEOMETRY, material);
+  createMesh() {
+    this.mesh = new THREE.Mesh(WALL_GEOMETRY, DEFAULT_MATERIAL);
     this.mesh.position.set(this.position.x, this.position.y + WALL_MESH_Y_OFFSET, this.position.z);
   }
 }
 
 Wall.GEOMETRY = WALL_GEOMETRY;
-Wall.createMaterials = createMaterials;
+Wall.createBatchMaterial = createBatchMaterial;
 Wall.MESH_Y_OFFSET = WALL_MESH_Y_OFFSET;
 
 export default Wall;

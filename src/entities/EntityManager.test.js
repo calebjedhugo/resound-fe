@@ -255,9 +255,10 @@ describe('Freeing GPU resources when entities go away', () => {
     const ramp = ctx.getEntityManager().getByType('ramp')[0];
     const floorResources = resourcesOf(floor);
     const rampResources = resourcesOf(ramp);
-    // Ground plane + one raised slab, each with geometry + material; the
-    // ramp's wedge plus its (shared-between-posts) post geometry + material
-    expect(floorResources).toHaveLength(4);
+    // The whole floor (ground, the raised slab, its cliff edges) is one
+    // geometry + its material; the ramp's wedge plus its
+    // (shared-between-posts) post geometry + material
+    expect(floorResources).toHaveLength(2);
     expect(rampResources).toHaveLength(4);
 
     ctx.loadPuzzle('recording-basic'); // tears the old world down

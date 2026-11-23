@@ -663,7 +663,7 @@ class PortalManager {
       // The approach panel's eye-side walls ride along with its clip plane:
       // the shared plane's overreach can graze their faces in EVERY panel's
       // pass, not just the approach panel's own.
-      options.extraWallsBehind = approachView ? approachView.wallsToHide(camera) : null;
+      options.extraWallHide = approachView ? approachView.wallHide(camera) : null;
       options.footprint = footprint;
       if (view.render(renderer, camera, options)) {
         this._wrote(view, camera, camera.position);

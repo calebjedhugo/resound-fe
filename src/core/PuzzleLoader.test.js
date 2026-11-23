@@ -3,7 +3,10 @@
  * Tests puzzle loading, validation, and parsing
  */
 
+import * as THREE from 'three';
 import PuzzleLoader from 'core/PuzzleLoader';
+import CollisionDetector from 'core/CollisionDetector';
+import Wall from 'entities/Wall';
 import gameState from 'core/GameState';
 import { WORLD_SCALE } from 'core/constants';
 
@@ -205,9 +208,19 @@ describe('PuzzleLoader', () => {
 
   describe('static wall batching', () => {
     // Walls are identical immovable boxes: rendering each as its own mesh
-    // made long sightlines cost one draw call per wall. Walls merge into ONE
-    // InstancedMesh per area — except walls near a linked door, which portal
-    // render passes must be able to hide individually (PortalView hide-sets).
+    // made long sightlines cost one draw call per wall. EVERY wall of an
+    // area is an instance of ONE InstancedMesh; a door pass leaves out its
+    // eye-side walls through it (Area.hideWalls), so walls beside a door
+    // batch too.
+
+    /** Where the batch draws each instance: "x,y,z" of its box centre. */
+    const instanceCentres = (batch) =>
+      Array.from({ length: batch.count }, (_, i) => {
+        const e = batch.getMatrixAt(i, new THREE.Matrix4()).elements;
+        return `${e[12]},${e[13]},${e[14]}`;
+      });
+    const wallCentre = (wall) =>
+      `${wall.position.x},${wall.position.y + Wall.MESH_Y_OFFSET},${wall.position.z}`;
 
     it('batches every wall into one instanced mesh when the puzzle has no linked gates', () => {
       ctx.loadPuzzle('parse-wall-basic');
@@ -224,67 +237,74 @@ describe('PuzzleLoader', () => {
       expect(area.group.children).toContain(area.staticWalls); // still rendered
     });
 
-    it('keeps walls near a linked door individual so portal passes can hide them', () => {
+    it('batches the walls beside a linked door too: one draw for every wall', () => {
       ctx.loadPuzzle('portal-walls-b'); // south-door at grid (5,7)
 
       const walls = ctx.getEntityManager().getByType('wall');
-      const wallAt = (gridX, gridZ) =>
-        walls.find(
-          (w) => w.position.x === gridX * WORLD_SCALE && w.position.z === gridZ * WORLD_SCALE
-        );
-
-      // The door's jambs, the strip wall behind it, and anything sharing its
-      // row/column stay individually hideable (PortalView hide-sets)
-      expect(wallAt(5, 6).mesh).not.toBeNull(); // one cell behind the door
-      expect(wallAt(4, 7).mesh).not.toBeNull(); // jamb beside it
-      expect(wallAt(5, 9).mesh).not.toBeNull(); // the door's own column
-      expect(wallAt(5, -1).mesh).not.toBeNull(); // perimeter, door's column
-
-      // A perimeter wall far from the door merges into the batch
-      const farCorner = wallAt(-1, 1);
-      expect(farCorner).toBeDefined();
-      expect(farCorner.mesh).toBeNull();
-
-      const area = gameState.activeArea;
-      const batchedCount = walls.filter((w) => !w.mesh).length;
-      expect(batchedCount).toBeGreaterThan(0);
-      expect(area.staticWalls.count).toBe(batchedCount);
+      expect(walls.length).toBeGreaterThan(0);
+      for (const wall of walls) expect(wall.mesh).toBeNull();
+      expect(gameState.activeArea.staticWalls.count).toBe(walls.length);
     });
 
-    it('each area draws its walls with its OWN materials (batch apart from single walls), identical in look', () => {
-      // three keys a material's shader program by the scene's lights state
-      // and by "drawn instanced": one wall material drawn in two scenes (the
-      // main view and a neighbour's Area.scene), or both as the batch and as
-      // a jamb wall, re-derived its program at every switch between them
+    it('draws exactly the walls collision blocks: one box on every wall, none elsewhere', () => {
       ctx.loadPuzzle('portal-walls-b');
-      const first = gameState.activeArea;
-      const firstSingle = first.entities.find((e) => e.type === 'wall' && e.mesh).mesh.material;
-      const firstBatch = first.staticWalls.material;
-      ctx.loadPuzzle('portal-walls-b');
-      const second = gameState.activeArea;
-      const secondSingle = second.entities.find((e) => e.type === 'wall' && e.mesh).mesh.material;
+      const area = gameState.activeArea;
+      const walls = ctx.getEntityManager().getByType('wall');
 
-      expect(firstBatch).not.toBe(firstSingle);
-      expect(secondSingle).not.toBe(firstSingle);
-      expect(second.staticWalls.material).not.toBe(firstBatch);
-      for (const material of [firstBatch, secondSingle, second.staticWalls.material]) {
-        expect(material.color.getHex()).toBe(firstSingle.color.getHex());
-        expect(material.roughness).toBe(firstSingle.roughness);
-        expect(material.metalness).toBe(firstSingle.metalness);
-        expect(material.userData.shared).toBe(true); // no single wall frees it
+      expect(instanceCentres(area.staticWalls).sort()).toEqual(walls.map(wallCentre).sort());
+      // ...and each of those walls still blocks a mover standing on it
+      for (const wall of walls) {
+        expect(CollisionDetector.checkCollision(wall.position, 0.3, null, area)).toBe(true);
       }
     });
 
-    it("frees the area's wall materials with the area", () => {
+    it('a door pass leaves out its eye-side walls, and only for that pass', () => {
       ctx.loadPuzzle('portal-walls-b');
       const area = gameState.activeArea;
-      const single = area.entities.find((e) => e.type === 'wall' && e.mesh).mesh.material;
-      const batch = area.staticWalls.material;
-      const disposed = [jest.spyOn(single, 'dispose'), jest.spyOn(batch, 'dispose')];
+      const wallAt = (gridX, gridZ) =>
+        area.entities.find(
+          (w) =>
+            w.type === 'wall' &&
+            w.position.x === gridX * WORLD_SCALE &&
+            w.position.z === gridZ * WORLD_SCALE
+        );
+      // A pass looking out through south-door from the room (window half a
+      // cell south of the gate, outward +z), the eye dead on its axis
+      const pass = { x: 5 * WORLD_SCALE, z: 7.5 * WORLD_SCALE, outX: 0, outZ: 1, latEye: 0 };
+
+      area.hideWalls(pass);
+      expect(area.isWallHidden(wallAt(5, 6))).toBe(true); // the strip behind the door
+      expect(area.isWallHidden(wallAt(4, 7))).toBe(false); // a jamb, framing the doorway
+      expect(area.isWallHidden(wallAt(5, 9))).toBe(false); // the room the door shows
+
+      area.hideWalls(null, null);
+      expect(area.isWallHidden(wallAt(5, 6))).toBe(false);
+    });
+
+    it('each area draws its walls with its OWN material', () => {
+      // A material drawn in two scenes (the main view and a neighbour's
+      // Area.scene) re-derives its program at every switch between them;
+      // and each area's walls are lit by its own creatures and hidden by
+      // its own doors
+      ctx.loadPuzzle('portal-walls-b');
+      const first = gameState.activeArea.staticWalls.material;
+      ctx.loadPuzzle('portal-walls-b');
+      const second = gameState.activeArea.staticWalls.material;
+
+      expect(second).not.toBe(first);
+      expect(second.vertexShader).toBe(first.vertexShader); // one look, one program
+      expect(second.fragmentShader).toBe(first.fragmentShader);
+      expect(second.userData.shared).toBe(true); // no single wall frees it
+    });
+
+    it("frees the area's wall material with the area", () => {
+      ctx.loadPuzzle('portal-walls-b');
+      const area = gameState.activeArea;
+      const dispose = jest.spyOn(area.staticWalls.material, 'dispose');
 
       area.dispose();
 
-      for (const dispose of disposed) expect(dispose).toHaveBeenCalledTimes(1);
+      expect(dispose).toHaveBeenCalledTimes(1);
     });
 
     it('disposes the wall batch with the area', () => {

@@ -11,6 +11,10 @@ const NormalBlending = 1;
 const AdditiveBlending = 2;
 // Colour-space names (three's values): the pass context tags scene targets
 const SRGBColorSpace = 'srgb';
+// Texture constants (three's values) the environment's noise texture uses
+const RepeatWrapping = 1000;
+const LinearFilter = 1006;
+const RedFormat = 1028;
 
 /** An object's local transform, as one comparable string. */
 const transformOf = (object) => {
@@ -167,12 +171,19 @@ class Quaternion {
   }
 }
 
+// Only translations are tracked (like three, in elements 12-14): enough to
+// read back where an instanced batch draws its instances
 class Matrix4 {
+  constructor() {
+    this.elements = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  }
+
   set() {
     return this;
   }
 
-  copy() {
+  copy(m) {
+    if (m && m.elements) this.elements = [...m.elements];
     return this;
   }
 
@@ -180,7 +191,8 @@ class Matrix4 {
     return this;
   }
 
-  makeTranslation() {
+  makeTranslation(x, y, z) {
+    this.elements = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1];
     return this;
   }
 }
@@ -437,9 +449,17 @@ class InstancedMesh extends Mesh {
     this.count = count;
     this.instanceMatrix = { needsUpdate: false };
     this.boundingSphere = null;
+    this._matrices = [];
   }
 
-  setMatrixAt() {}
+  // Like three: each instance's matrix, by index
+  setMatrixAt(index, matrix) {
+    this._matrices[index] = new Matrix4().copy(matrix);
+  }
+
+  getMatrixAt(index, matrix) {
+    return matrix.copy(this._matrices[index] || new Matrix4());
+  }
 
   computeBoundingSphere() {}
 
@@ -575,6 +595,21 @@ class Texture {
 
 class CanvasTexture extends Texture {}
 
+// A texture from an array (the environment's cloud noise)
+class DataTexture extends Texture {
+  constructor(data, width, height) {
+    super({ data, width, height });
+  }
+}
+
+// A bounding sphere (the sky declares one that reaches everywhere)
+class Sphere {
+  constructor(center = new Vector3(), radius = -1) {
+    this.center = center;
+    this.radius = radius;
+  }
+}
+
 class Vector2 {
   constructor(x = 0, y = 0) {
     this.x = x;
@@ -643,6 +678,11 @@ module.exports = {
   SRGBColorSpace,
   Texture,
   CanvasTexture,
+  DataTexture,
+  Sphere,
+  RepeatWrapping,
+  LinearFilter,
+  RedFormat,
   FrontSide,
   BackSide,
   DoubleSide,

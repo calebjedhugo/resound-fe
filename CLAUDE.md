@@ -329,14 +329,25 @@ instead of "fixing" it.
   performer's completions keep a door open behind you; `alwaysOpen: true`
   marks a permanently-open face (one-way doors). See DESIGN.md; don't "fix"
   a door that ignores a correct first note or one that "won't close".
-- **Walls render BATCHED**: each area's walls draw as ONE `InstancedMesh`
-  (`PuzzleLoader.buildArea`; one mesh per wall was the dominant frame cost —
-  profiled 2026-07-16, fixed 2026-07-17). Only walls near a linked gate stay
-  individual meshes (`portalMath.inPortalHideBand`: the gate's row/column
-  plus one cell off it — exactly what PortalView hide-sets must toggle per
-  portal pass). **A batched wall entity has `mesh: null`** — never assume a
-  wall has a mesh (collision/elevation/editor use entity data and don't
-  care); `Area.staticWalls` holds the batch.
+- **Walls render BATCHED**: ALL of an area's walls draw as ONE
+  `InstancedMesh` (`PuzzleLoader.buildArea`; one mesh per wall was the
+  dominant frame cost — profiled 2026-07-16; walls near doors stayed
+  meshes until 2026-11-22). **Every wall entity has `mesh: null`**
+  (collision/elevation/editor use entity data). A door pass hides its
+  eye-side walls PER INSTANCE in the walls' vertex shader:
+  `PortalView.wallHide(camera)` → `Area.hideWalls(spec, approachSpec)` →
+  `portalMath.wallHiddenBy` (JS) / `WALL_HIDE_GLSL` (its twin — change
+  both); `Area.isWallHidden(wall)` answers for tests. `Area.staticWalls`
+  holds the batch. The floor is ONE merged mesh per area too (`Floor`:
+  ground + slabs + cliff-edge lines)
+- **Environment look** (`entities/EnvironmentLook.js`, DESIGN.md
+  "Environment look", DRAFT): sky (one shared mesh per `Area.group`, drawn
+  last among opaques at infinity, a function of view DIRECTION only, its
+  azimuth 4-fold so quarter-turn doors agree), wall + floor shaders lit by
+  `Area.light` (creatures' glow, refreshed in `Area.update`), lightning
+  ticked by main.js `update` (`tickEnvironment`). All unlit ShaderMaterials
+  in DISPLAY values (no output encode), all honour clip planes; a new one
+  needs a `standInMaterials` entry (ShaderPrewarm)
 - **ONE pass context for every scene draw** (`core/passContext.js`; ruled
   2026-10-16). three keys a material's shader program by clip-plane COUNT,
   output colour space, instancing and the scene's lights; a material drawn
@@ -348,9 +359,8 @@ instead of "fixing" it.
   (three's internal `isXRRenderTarget` flag + sRGB + RGBA8: it renders in
   the CANVAS colour space, so doors blend/quantize like the main view) and a
   material showing one uses `showStoredTexels` (no second encode);
-  ShaderPrewarm warms that single context; walls get per-AREA materials
-  (`Wall.createMaterials`, freed by `Area.dispose`), batch apart from single
-  walls. **three is pinned to 0.153.x for this** (`^0.153.0`): re-verify
+  ShaderPrewarm warms that single context; walls get a per-AREA material
+  (`Wall.createBatchMaterial`, freed by `Area.dispose`). **three is pinned to 0.153.x for this** (`^0.153.0`): re-verify
   passContext before any upgrade. Check: `__resoundDebug.countProgramDerivations()`
   ≈ 0/frame
 - **World matrices update ONCE a frame per scene** (`core/sceneMatrices`): the
@@ -489,4 +499,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-11-22 — menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-22 — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
