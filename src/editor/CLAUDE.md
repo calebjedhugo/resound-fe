@@ -60,8 +60,9 @@ edits show up in the game on a manual reload.
   `UndoManager.canUndo/canRedo`; undo/redo is centralized in `EditorApp._undo/_redo`,
   which refits meshes in place: `EntityPlacer.rebuildFromModel` keeps a mesh
   whose entity kept its id + type and builds/frees only the rest),
-  a live save-status line driven by the autosave flow, a "Test in game" deep
-  link (`/?puzzle=<id>`, handled in `src/main.js`), and a keyboard-shortcut popover.
+  a live save-status line driven by the autosave flow, the look button, Play
+  (below), and a keyboard + controller shortcut popover (the controller rows
+  come from `EDITOR_MAPPING`).
 - **Puzzle id is derived, not typed** — `MetadataPanel` has no ID field. The id
   is `slugify(name)` while the puzzle is new (`EditorApp._puzzleCommitted === false`)
   and locks after the first repo write, so renaming an existing puzzle never
@@ -118,6 +119,97 @@ edits show up in the game on a manual reload.
   which can be stale (e.g. the file was reverted via git). Falls back to the
   localStorage snapshot only for a not-yet-saved puzzle (no id / not in the
   manifest).
+
+## The viewport's look (2026-11-23)
+
+- **Game look (default)** — `viewport/GameLookLayer.js` draws the level with
+  the GAME'S OWN builders: `createSky`, `Floor`, `Wall.buildBatch` +
+  `Wall.perimeterPositions` (shared with `PuzzleLoader`), `Ramp`,
+  `Gate.buildClosedMesh` + `NotationDisplay` (the staff), the waystone and
+  fountain mesh builders, and a `CreatureLook` per creature (the soap bubble;
+  animated). Never fork a shader or write a shared material here; a look
+  change belongs in the game modules. Game cells centre at `x * WORLD_SCALE`,
+  the editor's at `+ WORLD_SCALE / 2`: everything is built in game
+  coordinates under one root offset by half a cell. Nothing simulates (no
+  instrument, listener or gameState).
+- The **schematic meshes** (`EntityPlacer`, coloured primitives) stay in the
+  scene as invisible pick targets (`setLook`: material hidden; three still
+  raycasts them). Editor cues are drawn OVER the dark look (`outlineBox`, no
+  depth test): the selection outline, a violet frame on linked gates' tops,
+  the cursor's frame. Range spheres (`RangeIndicator`): outer = audible range,
+  inner (pale) = the pole's ABSORB reach, each ringed at the creature.
+- **V** / the toolbar's ◐ toggles game ↔ schematic, remembered in
+  localStorage (`io/lookPreference.js`, key `resound-editor-look`). The game
+  look is synced only while shown (`_syncGameLook`). While it shows, every
+  frame asks for the next (the sky, the wobble); the schematic look keeps the
+  on-demand rendering.
+- **Songs light their creature** — `GameLookLayer.noteOn(id, pitch, seconds)`
+  lights it note by note with Creature.updateLook's rule (messiaenColour over
+  its sounding notes: a lone note is pearl, as in game) and its light falls on
+  the floor/walls (`AreaLight`). Fed by the song editor's Play
+  (`SongEditorModal` `onNote` / `onStop`; the modal docks at the bottom and
+  the camera frames the entity in the band above it) and by **A** — quick
+  audition of the song under the cursor (`audio/SongAudition.js`, a Synth;
+  also the entity menu's Play Song). Editor audio is audible by design.
+
+## Play (2026-11-23)
+
+- **Play** (toolbar ▶, **Cmd/Ctrl+Enter**, the controller's Options menu)
+  = `EditorApp.play()`: refuses (toast) an unnamed puzzle or one with no
+  player spawn; writes the last edit (`_settleAutoSave`); opens
+  `/?puzzle=<id>&from=editor` (`core/playLink`). The game skips the menu,
+  keeps the start gate, starts at the spawn. One named tab
+  (`PLAY_WINDOW_NAME`): a second Play reloads it. With no user activation (a
+  controller press) or a blocked popup it plays in THIS tab, stashing the
+  undo history in sessionStorage (`resound-editor-history`, restored only if
+  the reloaded level is unchanged).
+- **Back to Editor** — the game's pause menu entry (only `from=editor`):
+  a tab the editor opened posts `resound:back-to-editor` to its opener and
+  closes; otherwise it loads `/editor.html?puzzle=<id>`, which the editor
+  opens from disk (then strips the query). It returns to the level Play
+  launched, not the area the player walked to.
+
+## Controller (2026-11-23; `input/EditorGamepad.js`)
+
+Reuses the game's pad reading (`core/Gamepad` `findPad`/`readStick`/
+`DEAD_ZONE`), `core/InputDevice` (device in hand) and the glyphs
+(`core/inputGlyphs` `buttonGlyph`, `ui/glyphCanvas`; new `pill`/`dpad`
+kinds). Buttons mostly press the editor's OWN keys (synthetic keydowns on
+document, `fromGamepad`), so pad and keyboard can't drift; polled per frame
+only while a pad is connected. **`EDITOR_MAPPING` is the one table** the code,
+the legend (`ui/PadLegend.js`, top-right while the pad is in hand) and the ?
+help read — change it there. Context (`EditorApp.padContext()`): song editor
+> menu > world map > sidebar panel > viewport.
+
+| Input | Viewport | + L2 held | + R2 held |
+|---|---|---|---|
+| D-pad | cursor (repeats) | ↑/↓ storey (empty starts a floor); ←/→ undo/redo | move the entity |
+| Left stick | glide cursor (accelerates) | pan camera | glide the entity |
+| Right stick | orbit camera | zoom (↑ nearer) | — |
+| Cross | place chosen type / select / its menu; commits a floor draft | — | — |
+| Square | delete under cursor | start a floor here (F) | — |
+| Triangle | song editor | play/stop the song (A) | — |
+| Circle | back (Esc) | | |
+| L1 / R1 | palette prev / next | | carry entity down / up a storey |
+| L2 + R2 + d-pad ↑/↓ | carry entity a storey | | |
+| R3 / L3 | centre camera on cursor / reset camera | | |
+| Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, floor, Undo, Redo, look | | |
+| Share | game ↔ schematic look | | |
+| Touchpad | sidebar focus (`PadFocus`) | | |
+
+- **Sidebar / world map** (`input/PadFocus.js`): d-pad ↑/↓ moves a visible
+  focus (`.pad-focus`), ←/→ steps a dropdown (shown only; ✕ commits, leaving
+  reverts) or a number field (committed each step), ✕ clicks / toggles /
+  gives a text field the keyboard, ○ (or the touchpad) back to the level.
+  World-map nodes carry `data-pad-focus`.
+- **Song editor** (`SongEditorModal.padAction`, each the staff's own key):
+  ←/→ edit cursor, ↑/↓ selected note's pitch, ✕ insert a note of the chosen
+  duration, □ delete, L1/R1 longer/shorter duration, △ play/stop, L2 dot,
+  R2 rest, Options sharp→flat→natural, Share other staff, ○ close.
+- **Menus** (ContextMenu): d-pad ↑/↓, ✕ choose, ○ close.
+- Caveats: a pad press is no user activation, so Play from the pad plays in
+  the editor's tab, and audio stays locked until a real key/click; window
+  prompts/confirms (link by id, deletes) need the keyboard/mouse.
 
 ## Portal links (cross-puzzle gate links)
 

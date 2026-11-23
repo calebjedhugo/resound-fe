@@ -788,6 +788,15 @@ Rulings (designer, 2026-11-22):
   double-sided + glow with **marker posts** at the top edge so they read from
   every angle, including when hunting for the way down.
 
+- **The editor draws the game's look** (2026-11-23; the designer asked for
+  "the updated look for the creatures" in the editor): the level as the game
+  draws it, by the game's own modules, with editor cues (cursor, selection,
+  links, ranges) drawn over it; V switches to the coloured schematic. A song
+  heard in the editor lights its creature as in game. Play opens the level in
+  the game at its spawn; the pause menu leads back. The editor plays from a
+  controller too ("make it easy to use with the PlayStation controller"):
+  `src/editor/CLAUDE.md` has the mapping.
+
 ## Gate links / portals (ruled 2026-07-06)
 
 Cross-puzzle gate links are the open-world backbone (see ROADMAP). Designer
