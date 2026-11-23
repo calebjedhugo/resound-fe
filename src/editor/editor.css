@@ -136,3 +136,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .pad-legend[data-mapping="song"] .pad-legend-glyphs { min-width: 0; }
 .shortcut-title { margin: 8px 0 2px; color: #cfd8ea; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
 .shortcut-title:first-child { margin-top: 0; }
+/* Play (editor/play/PlayPreview): the canvas covers the window under the
+   sliding chrome; the game's iframe fades in over everything */
+#editor-viewport canvas.play-canvas { position: fixed; left: 0; top: 0; z-index: 1; }
+#editor-root.previewing #editor-sidebar { position: relative; z-index: 2; }
+#editor-root.previewing .viewport-toast { z-index: 3; }
+.play-shield { position: fixed; inset: 0; z-index: 9998; cursor: progress; }
+.play-frame { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; border: 0; margin: 0; padding: 0; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 150ms linear; background: transparent; }
+.play-frame.shown { opacity: 1; }
+.play-frame.playing { pointer-events: auto; }
+.play-loading { position: fixed; left: 50%; bottom: 48px; width: 26px; height: 26px; margin-left: -13px; z-index: 9997; border: 2px solid rgba(255, 217, 122, 0.8); border-radius: 50%; pointer-events: none; animation: play-loading-pulse 1.6s ease-in-out infinite; }
+.play-loading[hidden] { display: none; }
+@keyframes play-loading-pulse { 0%, 100% { transform: scale(0.85); opacity: 0.35; } 50% { transform: scale(1.1); opacity: 0.85; } }

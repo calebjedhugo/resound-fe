@@ -12,6 +12,12 @@
  *
  * A controller button or Esc wakes it only into a world with sound
  * (_wakeIntoSound).
+ *
+ * In the editor's Play (core/playLink) the gate is VEILED while the world
+ * loads: up (the world held still, input swallowed) but unseen, so the
+ * game's first frame is the world at the spawn, as the editor's camera
+ * landed on it. The editor's GO reveals it: gone at once if audio can run,
+ * else the gate a level start always shows.
  */
 import { audioContextManager } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
@@ -24,6 +30,7 @@ class StartGate {
     // showLoading): input is swallowed but nothing wakes it yet
     this.wakeable = false;
     this.dismissHandler = null;
+    this.veiled = false;
   }
 
   /**
@@ -72,6 +79,10 @@ class StartGate {
       document.head.appendChild(style);
     }
 
+    if (this.veiled) {
+      this.element.style.transition = 'none';
+      this.element.style.opacity = '0';
+    }
     document.body.appendChild(this.element);
     this.visible = true;
     AudioPrewarm.hold(true);
@@ -79,7 +90,9 @@ class StartGate {
     // Capture-phase so the waking keypress never reaches the game
     this.dismissHandler = (event) => {
       event.stopPropagation();
-      if (!this.wakeable || (event.type !== 'keydown' && event.type !== 'click')) return;
+      // Veiled, nothing but the editor's GO lifts it (reveal)
+      if (!this.wakeable || this.veiled) return;
+      if (event.type !== 'keydown' && event.type !== 'click') return;
       if (event.fromGamepad || event.code === 'Escape') this._wakeIntoSound();
       else this.hide();
     };
@@ -121,6 +134,46 @@ class StartGate {
       `;
       this.element.appendChild(note);
     }
+  }
+
+  /**
+   * Keep the gate up but unseen (the editor's Play, while the world loads
+   * and the editor fades over to it): this gate and any shown before reveal.
+   */
+  veil() {
+    this.veiled = true;
+    if (this.element) {
+      this.element.style.transition = 'none';
+      this.element.style.opacity = '0';
+    }
+  }
+
+  /**
+   * The veil lifts (the editor's GO): a world that can play with sound wakes
+   * at once, with no gate seen; otherwise the gate fades in, as at any
+   * level start, and wakes as it always does (a resume that starts the
+   * audio after all wakes it too).
+   */
+  reveal() {
+    this.veiled = false;
+    if (!this.visible || !this.wakeable) {
+      if (this.element) this.element.style.opacity = '1';
+      return;
+    }
+    const context = audioContextManager.getContext();
+    if (context.state === 'running') {
+      this.hide();
+      return;
+    }
+    const scrim = this.element;
+    scrim.style.transition = 'opacity 0.6s';
+    scrim.style.opacity = '1';
+    context.resume().then(
+      () => {
+        if (this.element === scrim && this.wakeable && context.state === 'running') this.hide();
+      },
+      () => {} // refused: a key or a click to come
+    );
   }
 
   hide() {

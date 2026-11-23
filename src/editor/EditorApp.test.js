@@ -24,7 +24,9 @@ const mockMesh = {
 const mockIntersectObjects = jest.fn().mockReturnValue([]);
 
 jest.mock('three', () => {
-  const mockScene = { add: jest.fn() };
+  const mockScene = { add: jest.fn(), children: [] };
+  // The test helper's vectors (moduleNameMapper maps 'three' to it)
+  const { Vector3, Quaternion } = jest.requireActual('three');
   return {
     Scene: jest.fn(() => mockScene),
     WebGLRenderer: jest.fn(() => ({
@@ -33,16 +35,24 @@ jest.mock('three', () => {
       setClearColor: jest.fn(),
       render: jest.fn(),
       dispose: jest.fn(),
-      get domElement() {
-        return global.document.createElement('canvas');
-      },
+      domElement: global.document.createElement('canvas'),
     })),
-    PerspectiveCamera: jest.fn(() => ({
-      position: { set: jest.fn() },
+    PerspectiveCamera: jest.fn((fov, aspect, near, far) => ({
+      position: new Vector3(),
+      quaternion: new Quaternion(),
+      fov,
+      near,
+      far,
       lookAt: jest.fn(),
       aspect: 1,
       updateProjectionMatrix: jest.fn(),
       updateMatrixWorld: jest.fn(),
+      setViewOffset(fullWidth, fullHeight, offsetX, offsetY, width, height) {
+        this.view = { enabled: true, fullWidth, fullHeight, offsetX, offsetY, width, height };
+      },
+      clearViewOffset() {
+        if (this.view) this.view.enabled = false;
+      },
       // Identity orientation: camera right = +X, forward (into screen) = -Z, so
       // Right→+x, Left→-x, Up→-z, Down→+z (see _cursorDeltaForArrow).
       matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] },
@@ -68,7 +78,7 @@ jest.mock('three', () => {
 
 jest.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
   OrbitControls: jest.fn(() => ({
-    target: { set: jest.fn() },
+    target: new (jest.requireActual('three').Vector3)(),
     enableDamping: false,
     dampingFactor: 0,
     enabled: true,
@@ -123,6 +133,8 @@ jest.mock('editor/viewport/GameLookLayer', () =>
     noteOn: jest.fn(),
     silence: jest.fn(),
     lookOf: jest.fn(() => null),
+    setCuesVisible: jest.fn(),
+    root: {},
     dispose: jest.fn(),
   }))
 );
@@ -1703,41 +1715,98 @@ describe('EditorApp writes each edit to its own puzzle', () => {
     jest.restoreAllMocks();
   });
 
-  describe('Play: the level in the game', () => {
-    let opened;
+  describe('Play: the level in the game, in this tab', () => {
+    const { origin } = window.location;
+    let frames; // animation-frame callbacks waiting to run
+    let clock; // the frames' timestamps (ms)
+    let gamePosts; // what the editor told the game
+
+    /** Let `ms` of animation frames run, 16 ms apart. */
+    function runFrames(ms) {
+      const end = clock + ms;
+      while (clock < end) {
+        clock += 16;
+        const now = clock;
+        frames.splice(0).forEach((callback) => callback(now));
+      }
+    }
+
+    const game = () => app.preview.frameElement;
+    /** The game in the iframe says something to the editor. */
+    const fromGame = (data, source = game().contentWindow) =>
+      window.dispatchEvent(new MessageEvent('message', { data, origin, source }));
+    const told = (type) => gamePosts.filter((m) => m.type === type);
+    const toast = () => document.querySelector('.viewport-toast').textContent;
+    const cameraAt = () => ({
+      position: app.camera.position.clone(),
+      quaternion: { ...app.camera.quaternion },
+      fov: app.camera.fov,
+    });
+    // The game's eye at the editor's spawn (2, 0, 3), in game coordinates
+    const SPAWN_POSE = { position: [6, 1.8, 9], quaternion: [0, 0, 0, 1], fov: 75 };
+
+    /** Open level `a` with its spawn at (2, 0, 3), the camera somewhere of its own, and Play. */
+    async function startPlay(setUp = async () => {}) {
+      await openEditorOn('a');
+      // The viewport beside a 280 px sidebar (jsdom lays nothing out)
+      document.getElementById('editor-viewport').getBoundingClientRect = () => ({
+        left: 280,
+        top: 0,
+        width: window.innerWidth - 280,
+        height: window.innerHeight,
+      });
+      await setUp();
+      app.undoManager.setPlayerSpawn(2, 0, 3);
+      app.camera.position.set(52.5, 40, 52.5);
+      app.camera.quaternion.set(-0.34, 0.36, 0.14, 0.86);
+      app.controls.target.set(22.5, 0, 22.5);
+      const home = cameraAt();
+      const started = await app.play();
+      gamePosts = [];
+      jest.spyOn(game().contentWindow, 'postMessage').mockImplementation((m) => gamePosts.push(m));
+      return { started, home };
+    }
+
+    /** The game loads, says it is waiting, the glide lands, and the game is ready. */
+    async function untilPlaying() {
+      fromGame({ type: 'resound:preview-waiting' });
+      runFrames(1100);
+      fromGame({ type: 'resound:preview-ready', pose: SPAWN_POSE });
+      runFrames(32);
+      jest.advanceTimersByTime(200); // the cross-fade
+    }
+
+    /** Back to Editor, and the fade and the glide home run out. */
+    function backToEditor(report) {
+      fromGame({ type: 'resound:back-to-editor', puzzleId: 'a', ...report });
+      runFrames(32);
+      jest.advanceTimersByTime(200);
+      runFrames(1200);
+    }
+
     beforeEach(() => {
-      opened = [];
-      jest.spyOn(window, 'open').mockImplementation((url, name) => {
-        opened.push({ url, name, log: [...log] });
-        return {};
+      frames = [];
+      clock = 0;
+      window.requestAnimationFrame.mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
       });
     });
+
     afterEach(() => {
-      sessionStorage.clear();
       window.history.replaceState(null, '', '/');
     });
 
-    const toast = () => document.querySelector('.viewport-toast').textContent;
+    it('saves the last edit, then loads the game on the level, unseen, in a frame over the editor', async () => {
+      const { started } = await startPlay();
 
-    it("saves the last edit, then opens the game on the level at its spawn, in the editor's one game tab", async () => {
-      await openEditorOn('a');
-      app.undoManager.setPlayerSpawn(2, 0, 3);
-
-      expect(await app.play()).toBe(true);
-
-      expect(opened).toEqual([
-        { url: '/?puzzle=a&from=editor', name: 'resound-play', log: ['write a'] },
-      ]);
+      expect(started).toBe(true);
       expect(disk.a.playerStart).toEqual({ x: 2, y: 0, z: 3 });
-    });
-
-    it('a second Play reloads that same tab instead of opening another', async () => {
-      await openEditorOn('a');
-      app.undoManager.setPlayerSpawn(2, 0, 3);
-      await app.play();
-      await app.play();
-
-      expect(opened.map((o) => o.name)).toEqual(['resound-play', 'resound-play']);
+      expect(log).toEqual(['write a']);
+      expect(game().getAttribute('src')).toBe('/?puzzle=a&from=editor');
+      expect(game().allow).toContain('autoplay');
+      expect(game().classList.contains('shown')).toBe(false);
+      expect(app.preview.state).toBe('entering');
     });
 
     it('Cmd/Ctrl+Enter plays too', async () => {
@@ -1746,7 +1815,7 @@ describe('EditorApp writes each edit to its own puzzle', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true }));
       await jest.advanceTimersByTimeAsync(600);
 
-      expect(opened.map((o) => o.url)).toEqual(['/?puzzle=a&from=editor']);
+      expect(game().getAttribute('src')).toBe('/?puzzle=a&from=editor');
     });
 
     it("won't play a puzzle with no name yet, and says why", async () => {
@@ -1755,7 +1824,7 @@ describe('EditorApp writes each edit to its own puzzle', () => {
       app.undoManager.setPlayerSpawn(2, 0, 3);
 
       expect(await app.play()).toBe(false);
-      expect(opened).toEqual([]);
+      expect(document.querySelector('iframe')).toBeNull();
       expect(toast()).toMatch(/Name the puzzle/);
     });
 
@@ -1764,44 +1833,283 @@ describe('EditorApp writes each edit to its own puzzle', () => {
       app.undoManager.clearPlayerSpawn();
 
       expect(await app.play()).toBe(false);
-      expect(opened).toEqual([]);
+      expect(document.querySelector('iframe')).toBeNull();
       expect(toast()).toMatch(/player spawn/);
     });
 
-    it('with no gesture to open a tab (a controller), plays in this tab and keeps the undo history for the way back', async () => {
-      jest.spyOn(console, 'error').mockImplementation(() => {}); // jsdom can't navigate
-      await openEditorOn('a');
-      app.undoManager.setPlayerSpawn(2, 0, 3);
-      await app.play({ sameTab: true });
-      expect(opened).toEqual([]);
-      app.dispose();
+    it("the camera glides down to the player's eye at the spawn, with the game's heading and lens", async () => {
+      const { home } = await startPlay();
 
-      // The game's Back to Editor: the editor again, on the level
-      document.body.innerHTML = '';
-      setupEditorDOM();
-      window.history.replaceState(null, '', '/editor.html?puzzle=a');
-      app = new EditorApp();
-      app.init();
-      await jest.advanceTimersByTimeAsync(0);
+      runFrames(500);
+      const halfway = cameraAt();
+      expect(halfway.position.y).toBeLessThan(home.position.y);
+      expect(halfway.position.y).toBeGreaterThan(1.8);
+      expect(document.getElementById('editor-sidebar').style.transform).toMatch(/translateX\(-/);
 
-      expect(app.undoManager.getMetadata().id).toBe('a');
-      expect(app.undoManager.canUndo()).toBe(true);
-      app._undo();
-      expect(app.undoManager.getPlayerSpawn()).toEqual({ x: 0, y: 0, z: 0 });
+      runFrames(600);
+      // The editor's cells sit half a cell over the game's: (2, 3) is at 7.5, 10.5
+      expect(cameraAt()).toEqual({
+        position: expect.objectContaining({ x: 7.5, y: 1.8, z: 10.5 }),
+        quaternion: { x: 0, y: 0, z: 0, w: 1 },
+        fov: 75,
+      });
+      expect(app.camera.near).toBe(0.1);
+      expect(app.camera.far).toBe(500);
+      // With the sidebar gone, the view is the whole window, as the game's
+      expect(app.camera.aspect).toBeCloseTo(window.innerWidth / window.innerHeight);
+      expect(app.preview.landed).toBe(true);
     });
 
-    it("a game tab's Back to Editor brings the editor its level", async () => {
-      await openEditorOn('a');
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          origin: window.location.origin,
-          data: { type: 'resound:back-to-editor', puzzleId: 'b' },
-        })
-      );
-      await jest.advanceTimersByTimeAsync(0);
+    it('a frame that comes late (the game loading on the same thread) pauses the glide, never jumps it', async () => {
+      await startPlay();
+      runFrames(208);
+      const before = app.camera.position.y;
+      clock += 300; // one frame 300 ms late
+      frames.splice(0).forEach((callback) => callback(clock));
+      const step = before - app.camera.position.y;
+      runFrames(16);
+      const nextStep = before - step - app.camera.position.y;
 
-      expect(app.undoManager.getMetadata().id).toBe('b');
-      expect(toast()).toMatch(/Back from the game/);
+      expect(step).toBeLessThan(nextStep * 2.5); // two frames' worth at most, not twenty
+      runFrames(500);
+      expect(app.preview.landed).toBe(false); // the glide still has its full second
+      runFrames(400);
+      expect(app.preview.landed).toBe(true);
+    });
+
+    it('the game builds its world only once the camera has landed (holding still)', async () => {
+      await startPlay();
+      fromGame({ type: 'resound:preview-waiting' });
+      runFrames(500);
+      expect(told('resound:preview-landed')).toEqual([]);
+
+      runFrames(600);
+      expect(told('resound:preview-landed')).toHaveLength(1);
+      expect(told('resound:preview-landed')[0].sky).toEqual({
+        env: expect.any(Number),
+        deck: expect.any(Number),
+      });
+    });
+
+    it('a game ready before the camera lands waits for it, then fades in and takes over', async () => {
+      await startPlay();
+      fromGame({ type: 'resound:preview-waiting' });
+      runFrames(400);
+      fromGame({ type: 'resound:preview-ready', pose: SPAWN_POSE });
+      runFrames(200);
+      expect(game().classList.contains('shown')).toBe(false); // still gliding
+
+      runFrames(500);
+      expect(game().classList.contains('shown')).toBe(true); // the cross-fade
+      expect(app.preview.state).toBe('entering');
+
+      jest.advanceTimersByTime(150);
+      expect(app.preview.state).toBe('playing');
+      expect(told('resound:preview-go')).toHaveLength(1);
+      expect(game().classList.contains('playing')).toBe(true); // it takes the pointer
+    });
+
+    it('a game slower than the glide: the camera holds at the eye with a loading ring until it is ready', async () => {
+      await startPlay();
+      fromGame({ type: 'resound:preview-waiting' });
+      runFrames(1500);
+
+      expect(app.preview.landed).toBe(true);
+      expect(document.querySelector('.play-loading').hidden).toBe(false);
+      expect(game().classList.contains('shown')).toBe(false);
+
+      fromGame({ type: 'resound:preview-ready', pose: SPAWN_POSE });
+      runFrames(32);
+      expect(document.querySelector('.play-loading').hidden).toBe(true);
+      expect(game().classList.contains('shown')).toBe(true);
+      jest.advanceTimersByTime(150);
+      expect(app.preview.state).toBe('playing');
+    });
+
+    it("a game whose first frame isn't quite where the camera landed: it settles onto the game's eye first", async () => {
+      await startPlay();
+      fromGame({ type: 'resound:preview-waiting' });
+      runFrames(1100);
+      fromGame({
+        type: 'resound:preview-ready',
+        pose: { position: [6, 2.4, 9], quaternion: [0, 0, 0, 1], fov: 75 },
+      });
+      runFrames(32);
+      expect(game().classList.contains('shown')).toBe(false);
+
+      runFrames(400);
+      expect(app.camera.position.y).toBe(2.4);
+      expect(game().classList.contains('shown')).toBe(true);
+    });
+
+    it("the editor's keys and controller stand aside while the game plays", async () => {
+      const pad = {
+        id: 'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)',
+        connected: true,
+        mapping: 'standard',
+        axes: [0, 0, 0, 0],
+        buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })),
+      };
+      Object.defineProperty(navigator, 'getGamepads', { value: () => [pad], configurable: true });
+      try {
+        await startPlay();
+        await untilPlaying();
+        const entities = app.undoManager.getEntities().length;
+        app.undoManager.addEntity('wall', 7, 0, 7); // under the cursor: Delete would take it
+        app.entityPlacer.placeEntity.mockClear();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        pad.buttons[15].pressed = true; // d-pad right: the cursor would step
+        runFrames(100);
+
+        expect(app.entityPlacer.placeEntity).not.toHaveBeenCalled();
+        expect(app.undoManager.getEntities()).toHaveLength(entities + 1);
+        expect(app.editorScene.moveCursor).not.toHaveBeenCalled();
+        expect(app.preview.state).toBe('playing');
+      } finally {
+        delete navigator.getGamepads;
+      }
+    });
+
+    it('while playing the editor draws nothing (the game is the view)', async () => {
+      await startPlay();
+      await untilPlaying();
+      app.renderer.render.mockClear();
+
+      app._requestFrame();
+      runFrames(100);
+
+      expect(app.renderer.render).not.toHaveBeenCalled();
+    });
+
+    it("Back to Editor in the level: the editor fades in at the player's view, the game goes, and the camera glides home exactly", async () => {
+      const { home } = await startPlay();
+      await untilPlaying();
+      const frame = game();
+
+      fromGame({
+        type: 'resound:back-to-editor',
+        puzzleId: 'a',
+        areaId: 'a',
+        pose: { position: [12, 1.8, 18], quaternion: [0, 0.25, 0, 0.9682458365518543], fov: 75 },
+      });
+      runFrames(16);
+      // The player's view, in the editor's coordinates, under the fading game
+      expect(app.camera.position).toEqual(expect.objectContaining({ x: 13.5, y: 1.8, z: 19.5 }));
+      expect(app.camera.quaternion.y).toBe(0.25);
+      expect(frame.classList.contains('shown')).toBe(false);
+      expect(frame.isConnected).toBe(true);
+
+      jest.advanceTimersByTime(150);
+      expect(frame.isConnected).toBe(false); // torn down: a fresh game every Play
+      expect(document.querySelector('iframe')).toBeNull();
+
+      runFrames(1200);
+      expect(app.preview.state).toBe('idle');
+      expect(cameraAt()).toEqual(home);
+      expect(app.camera.view.enabled).toBe(false);
+      expect(app.controls.target).toEqual(expect.objectContaining({ x: 22.5, y: 0, z: 22.5 }));
+      expect(document.getElementById('editor-sidebar').style.transform).toBe('');
+      expect(document.querySelector('.play-shield')).toBeNull();
+    });
+
+    it('Back from another level the player walked into: the glide home starts from the spawn', async () => {
+      await startPlay();
+      await untilPlaying();
+
+      fromGame({
+        type: 'resound:back-to-editor',
+        puzzleId: 'a',
+        areaId: 'b',
+        pose: { position: [30, 4.8, 3], quaternion: [0, 0.7, 0, 0.71], fov: 75 },
+      });
+      runFrames(16);
+
+      expect(app.camera.position).toEqual(expect.objectContaining({ x: 7.5, y: 1.8, z: 10.5 }));
+      const { x, y, z, w } = app.camera.quaternion;
+      [x, y, z, w - 1].forEach((component) => expect(component).toBeCloseTo(0));
+    });
+
+    it('back home, the editor is as it was: selection, look, keys and controller', async () => {
+      let id;
+      const pad = {
+        id: 'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)',
+        connected: true,
+        mapping: 'standard',
+        axes: [0, 0, 0, 0],
+        buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })),
+      };
+      Object.defineProperty(navigator, 'getGamepads', { value: () => [pad], configurable: true });
+      try {
+        await startPlay(async () => {
+          id = app.undoManager.addEntity('creature', 5, 0, 5, { song: [] });
+          app.selectionManager.select(id);
+          app.setLook('schematic');
+          await jest.advanceTimersByTimeAsync(600);
+        });
+        expect(app.look).toBe('game'); // the game's look for the way in
+        await untilPlaying();
+
+        pad.buttons[15].pressed = true; // held through the return (d-pad right)
+        backToEditor({ areaId: 'a', pose: SPAWN_POSE });
+
+        expect(app.preview.state).toBe('idle');
+        expect(app.selectionManager.selectedId).toBe(id);
+        expect(app.look).toBe('schematic');
+        runFrames(100);
+        expect(app.editorScene.moveCursor).not.toHaveBeenCalled(); // held: no press
+        pad.buttons[15].pressed = false;
+        runFrames(32);
+        pad.buttons[15].pressed = true;
+        runFrames(32);
+        expect(app.editorScene.moveCursor).toHaveBeenCalledWith(1, 0); // pressed again: a press
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }));
+        expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('wall', 7, 7, 0);
+      } finally {
+        delete navigator.getGamepads;
+      }
+    });
+
+    it('Esc while gliding in calls it off: no game, the camera goes home', async () => {
+      const { home } = await startPlay();
+      runFrames(300);
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(document.querySelector('iframe')).toBeNull();
+      runFrames(1200);
+
+      expect(app.preview.state).toBe('idle');
+      expect(cameraAt()).toEqual(home);
+    });
+
+    it("a level the game can't play: it says why and the camera goes home", async () => {
+      const { home } = await startPlay();
+      fromGame({ type: 'resound:preview-failed', message: '"a" isn\'t in the manifest' });
+      runFrames(1200);
+
+      expect(toast()).toMatch(/isn't in the manifest/);
+      expect(app.preview.state).toBe('idle');
+      expect(cameraAt()).toEqual(home);
+    });
+
+    it('hears only its own game: a message from any other window changes nothing', async () => {
+      await startPlay();
+      runFrames(1100);
+
+      fromGame({ type: 'resound:preview-ready', pose: SPAWN_POSE }, window);
+      runFrames(100);
+
+      expect(app.preview.gameReady).toBe(false);
+      expect(game().classList.contains('shown')).toBe(false);
+    });
+
+    it('a second Play while one is under way does nothing', async () => {
+      await startPlay();
+      expect(await app.play()).toBe(false);
+      expect(document.querySelectorAll('iframe')).toHaveLength(1);
     });
   });
 

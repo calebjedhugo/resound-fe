@@ -447,6 +447,19 @@ class NotationDisplay {
     scheduleUpload();
   }
 
+  /**
+   * How many staves are still being engraved (their texture not there yet):
+   * the editor's Play waits for none before it hands over, so the game's
+   * first frame shows every staff the editor's last frame did.
+   */
+  static engravingsPending() {
+    let pending = 0;
+    engravings.forEach((engraving) => {
+      if (!engraving.texture && engraving.users > 0) pending += 1;
+    });
+    return pending;
+  }
+
   /** The renderer input for this display's staff (see renderInput). */
   _renderInput() {
     return renderInput(this);

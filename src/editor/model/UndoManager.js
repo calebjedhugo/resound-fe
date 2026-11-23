@@ -99,30 +99,6 @@ export default class UndoManager {
     this._emitChange();
   }
 
-  /**
-   * The undo/redo history as plain data (the most recent `limit` steps of
-   * each), for carrying it across a page load: the editor's Play from a
-   * controller replaces the editor with the game in the same tab.
-   * @param {number} [limit]
-   */
-  exportHistory(limit = 100) {
-    return {
-      undo: this._undoStack.slice(-limit),
-      redo: this._redoStack.slice(-limit),
-    };
-  }
-
-  /**
-   * Take back a history exportHistory gave, for the model as it was then
-   * (the caller checks it is the same puzzle, unchanged since). Fires no
-   * change: nothing in the model moves.
-   * @param {{undo: object[], redo: object[]}} history
-   */
-  importHistory({ undo = [], redo = [] } = {}) {
-    this._undoStack = undo.slice(-MAX_UNDO_STEPS);
-    this._redoStack = redo.slice(-MAX_UNDO_STEPS);
-  }
-
   _saveState() {
     return {
       metadata: { ...this._model._metadata },

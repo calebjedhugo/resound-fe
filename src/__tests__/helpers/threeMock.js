@@ -158,6 +158,14 @@ class Quaternion {
     this.w = 1;
   }
 
+  set(x, y, z, w) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    this.w = w;
+    return this;
+  }
+
   setFromAxisAngle() {
     return this;
   }
@@ -548,6 +556,15 @@ class PerspectiveCamera extends Mesh {
   }
 
   updateProjectionMatrix() {}
+
+  // Like three: the sub-window of a larger view this camera draws
+  setViewOffset(fullWidth, fullHeight, offsetX, offsetY, width, height) {
+    this.view = { enabled: true, fullWidth, fullHeight, offsetX, offsetY, width, height };
+  }
+
+  clearViewOffset() {
+    if (this.view) this.view.enabled = false;
+  }
 }
 
 class OrthographicCamera extends Mesh {

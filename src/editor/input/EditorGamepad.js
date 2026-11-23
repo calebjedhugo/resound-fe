@@ -188,7 +188,11 @@ export default class EditorGamepad {
     this._look = { x: 0, y: 0 };
   }
 
-  /** Listen for pads; poll every frame while one is connected. */
+  /**
+   * Listen for pads; poll every frame while one is connected. A button
+   * already held is no press (back from Play, the one that chose Back to
+   * Editor may still be down): it acts only once let go and pressed again.
+   */
   start() {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
     this._onConnect = () => {
@@ -198,7 +202,23 @@ export default class EditorGamepad {
     this._onDisconnect = () => this._rescan();
     window.addEventListener('gamepadconnected', this._onConnect);
     window.addEventListener('gamepaddisconnected', this._onDisconnect);
+    this._release();
+    this._latchHeld();
     this._rescan();
+  }
+
+  /** What is held now counts as already down (and a held d-pad never repeats). */
+  _latchHeld() {
+    const pad = findPad();
+    if (!pad) return;
+    this._pad = pad;
+    pad.buttons.forEach((button, i) => {
+      if (this._pressedAt(i)) {
+        this._down[i] = true;
+        this._repeatAt[i] = Infinity;
+      }
+    });
+    this._pad = null;
   }
 
   stop() {

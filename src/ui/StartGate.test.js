@@ -106,4 +106,53 @@ describe('StartGate', () => {
       expect(gate.visible).toBe(false);
     });
   });
+
+  describe("veiled (the editor's Play)", () => {
+    const context = audioContextManager.getContext();
+    let resume = null;
+
+    afterEach(() => {
+      context.state = 'running';
+      if (resume) resume.mockRestore();
+      resume = null;
+    });
+
+    it('is up while the world loads — input swallowed, the world held — but unseen', () => {
+      gate.showLoading();
+      gate.veil();
+      gate.show(); // built, still veiled
+
+      press('KeyW');
+
+      expect(gate.visible).toBe(true);
+      expect(gameKeys).toEqual([]);
+      expect(scrim().style.opacity).toBe('0');
+    });
+
+    it('lifted with sound able to run, the world wakes with no gate seen', () => {
+      gate.showLoading();
+      gate.veil();
+      gate.show();
+
+      gate.reveal();
+
+      expect(gate.visible).toBe(false);
+    });
+
+    it('lifted with the audio locked (a controller Play), the gate shows, as at any level start', async () => {
+      context.state = 'suspended';
+      resume = jest.spyOn(context, 'resume').mockReturnValue(new Promise(() => {}));
+      gate.showLoading();
+      gate.veil();
+      gate.show();
+
+      gate.reveal();
+      await Promise.resolve();
+
+      expect(gate.visible).toBe(true);
+      expect(scrim().style.opacity).toBe('1');
+      press('KeyW');
+      expect(gate.visible).toBe(false);
+    });
+  });
 });

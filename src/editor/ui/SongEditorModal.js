@@ -274,6 +274,11 @@ export default class SongEditorModal {
     return this._player;
   }
 
+  /** Stop the song if it is playing (the editor's Play takes the stage). */
+  stopPlayback() {
+    if (this._notationEditor && this._notationEditor.isPlaying) this._notationEditor.stop();
+  }
+
   close() {
     if (!this._isOpen) return;
 

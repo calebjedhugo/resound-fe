@@ -1,10 +1,11 @@
 /** @jest-environment jsdom */
 /**
- * The way between the editor and the game: the editor's Play opens the game
- * straight into its level (`?puzzle=<id>&from=editor`), and the game's pause
- * menu, launched that way, offers Back to Editor — which hands the level
- * back to the editor tab that opened it and closes, or else loads the editor
- * on the level in the same tab. Played with the keyboard and with a
+ * The way between the editor and the game: the editor's Play loads the game
+ * straight into its level (`?puzzle=<id>&from=editor`) in an iframe over
+ * itself, and the game, finding the editor around it, talks to it by
+ * message; its pause menu, launched that way, offers Back to Editor — which
+ * hands the editor the player's view, or (a game opened by itself) loads the
+ * editor on the level in its tab. Played with the keyboard and with a
  * controller, like the rest of the menu.
  */
 import {
@@ -12,8 +13,11 @@ import {
   playRequest,
   editorUrl,
   editorRequest,
+  editorFrame,
+  isFromEditor,
   backToEditor,
-  BACK_TO_EDITOR_MESSAGE,
+  BACK_TO_EDITOR,
+  PREVIEW_GO,
 } from 'core/playLink';
 import PauseMenu from 'ui/PauseMenu';
 import Gamepad from 'core/Gamepad';
@@ -42,65 +46,77 @@ describe('The play link', () => {
   });
 });
 
+describe('The editor around the game', () => {
+  const { origin } = window.location;
+
+  /** A game window inside `parent` (or a tab of its own: no parent given). */
+  function gameWindow(parent = null) {
+    const win = { location: { origin, assign: jest.fn() } };
+    win.parent = parent || win;
+    return win;
+  }
+  const editorPage = (pageOrigin = origin) => ({
+    location: { origin: pageOrigin },
+    postMessage: jest.fn(),
+  });
+
+  it('is the page of this site the game plays inside', () => {
+    const editor = editorPage();
+    expect(editorFrame(gameWindow(editor))).toBe(editor);
+  });
+
+  it('is none for a game in a tab of its own, or framed by another site', () => {
+    expect(editorFrame(gameWindow())).toBeNull();
+    expect(editorFrame(gameWindow(editorPage('https://example.com')))).toBeNull();
+    const unreadable = {
+      get location() {
+        throw new Error('cross-origin');
+      },
+    };
+    expect(editorFrame(gameWindow(unreadable))).toBeNull();
+  });
+
+  it('a message counts as the editor speaking only from that page, of this site', () => {
+    const editor = editorPage();
+    const win = gameWindow(editor);
+    const go = { type: PREVIEW_GO };
+
+    expect(isFromEditor({ source: editor, origin, data: go }, PREVIEW_GO, win)).toBe(true);
+    expect(isFromEditor({ source: {}, origin, data: go }, PREVIEW_GO, win)).toBe(false);
+    expect(
+      isFromEditor({ source: editor, origin: 'https://example.com', data: go }, PREVIEW_GO, win)
+    ).toBe(false);
+    expect(isFromEditor({ source: editor, origin, data: go }, PREVIEW_GO, gameWindow())).toBe(
+      false
+    );
+  });
+});
+
 describe('Back to Editor', () => {
   const { origin } = window.location;
 
-  /** A game window: what it was opened by, whether it may close itself. */
-  function gameWindow({ opener = null, closable = false } = {}) {
-    const win = {
-      opener,
-      closed: false,
-      location: { origin, assign: jest.fn() },
-      close: jest.fn(() => {
-        if (closable) win.closed = true;
-      }),
+  it("inside the editor's Play, hands the editor where the player stands, and stays put", () => {
+    const editor = { location: { origin }, postMessage: jest.fn() };
+    const win = { parent: editor, location: { origin, assign: jest.fn() } };
+    const report = {
+      areaId: 'poc-duet',
+      pose: { position: [3, 1.8, 6], quaternion: [0, 0, 0, 1], fov: 75 },
     };
-    return win;
-  }
 
-  const editorTab = () => ({
-    closed: false,
-    location: { origin },
-    postMessage: jest.fn(),
-    focus: jest.fn(),
-  });
-
-  it('a game tab the editor opened hands it the level and closes', () => {
-    const editor = editorTab();
-    const win = gameWindow({ opener: editor, closable: true });
-
-    expect(backToEditor('poc-duet', win)).toBe('closed');
+    expect(backToEditor('poc-duet', report, win)).toBe('handed');
     expect(editor.postMessage).toHaveBeenCalledWith(
-      { type: BACK_TO_EDITOR_MESSAGE, puzzleId: 'poc-duet' },
+      { type: BACK_TO_EDITOR, puzzleId: 'poc-duet', ...report },
       origin
     );
     expect(win.location.assign).not.toHaveBeenCalled();
   });
 
-  it('a game in the editor’s own tab (Play from a controller) loads the editor on the level', () => {
-    const win = gameWindow();
+  it('a game opened by itself loads the editor on the level', () => {
+    const win = { location: { origin, assign: jest.fn() } };
+    win.parent = win;
 
-    expect(backToEditor('poc-duet', win)).toBe('navigated');
+    expect(backToEditor('poc-duet', {}, win)).toBe('navigated');
     expect(win.location.assign).toHaveBeenCalledWith('/editor.html?puzzle=poc-duet');
-  });
-
-  it('a tab that may not close itself loads the editor instead', () => {
-    const win = gameWindow({ opener: editorTab(), closable: false });
-
-    expect(backToEditor('poc-duet', win)).toBe('navigated');
-    expect(win.location.assign).toHaveBeenCalledWith('/editor.html?puzzle=poc-duet');
-  });
-
-  it('never hands the level to a window of another site', () => {
-    const stranger = {
-      closed: false,
-      location: { origin: 'https://example.com' },
-      postMessage: jest.fn(),
-    };
-    const win = gameWindow({ opener: stranger, closable: true });
-
-    expect(backToEditor('poc-duet', win)).toBe('navigated');
-    expect(stranger.postMessage).not.toHaveBeenCalled();
   });
 });
 

@@ -161,4 +161,24 @@ describe('Editor cues over the dark look', () => {
     layer.setSelected(null, undo);
     expect(layer.selectedId).toBeNull();
   });
+
+  it("Play hides the editor's marks (selection, linked-gate frame, spawn ghost), leaving the level as the game draws it", () => {
+    const gate = undo.addEntity('gate', 2, 0, 2, {
+      song: [],
+      link: { puzzleId: 'b', gateId: 'gate-1' },
+    });
+    undo.setPlayerSpawn(1, 0, 1);
+    layer.sync(undo);
+    layer.setSelected(gate, undo);
+    const before = drawn().filter((n) => n.visible !== false).length;
+
+    layer.setCuesVisible(false);
+    const hidden = drawn().filter((n) => n.visible === false);
+    // the outline, the link frame and the spawn ghost: three marks, each one group
+    expect(hidden).toHaveLength(3);
+    expect(wallBatches()[0].visible).not.toBe(false);
+
+    layer.setCuesVisible(true);
+    expect(drawn().filter((n) => n.visible !== false)).toHaveLength(before);
+  });
 });

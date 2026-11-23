@@ -311,6 +311,47 @@ describe('A pad that leaves lets go of everything it held', () => {
   });
 });
 
+describe("The pad in the editor's Play: only the page with the keyboard reads it", () => {
+  afterEach(() => Gamepad.setActive(true));
+
+  it('before the game has the keyboard, its presses go nowhere in the game', () => {
+    const pad = connectPad();
+    Gamepad.setActive(false);
+
+    press(pad, CROSS);
+    release(pad, CROSS);
+    pad.axes = [0, -1, 0, 0];
+    frame();
+
+    expect(heard).toEqual([]);
+    expect(gameState.input.stick.walk).toEqual({ x: 0, y: 0 });
+  });
+
+  it('handed over with a button still held (the one that chose Play), that button is no press, nor its release', () => {
+    const pad = connectPad();
+    Gamepad.setActive(false);
+    pad.buttons[CROSS].pressed = true;
+
+    Gamepad.setActive(true);
+    frame();
+    release(pad, CROSS);
+
+    expect(heard).toEqual([]);
+
+    press(pad, CROSS); // pressed again: a press like any
+    expect(heard).toEqual(['keydown Space']);
+  });
+
+  it('taken back (Back to Editor) mid-hold, what it held lets go', () => {
+    const pad = connectPad();
+    press(pad, SQUARE);
+
+    Gamepad.setActive(false);
+
+    expect(heard).toEqual(['keydown KeyR', 'keyup KeyR']);
+  });
+});
+
 describe('The sticks', () => {
   it('read exactly zero inside the dead zone', () => {
     const pad = connectPad();

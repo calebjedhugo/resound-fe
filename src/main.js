@@ -39,8 +39,25 @@ import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import Waystone from 'entities/Waystone';
 import WaystoneGatePad from 'entities/WaystoneGatePad';
-import { calmStorm, tickEnvironment } from 'entities/EnvironmentLook';
-import { playRequest, backToEditor } from 'core/playLink';
+import {
+  calmStorm,
+  tickEnvironment,
+  environmentClock,
+  setEnvironmentClock,
+} from 'entities/EnvironmentLook';
+import { audioContextManager } from 'resound-sound';
+import {
+  playRequest,
+  backToEditor,
+  editorFrame,
+  tellEditor,
+  isFromEditor,
+  PREVIEW_WAITING,
+  PREVIEW_LANDED,
+  PREVIEW_READY,
+  PREVIEW_FAILED,
+  PREVIEW_GO,
+} from 'core/playLink';
 
 // Three.js scene
 const scene = new THREE.Scene();
@@ -52,6 +69,15 @@ scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(50, 100, 50);
 scene.add(directionalLight);
+
+// What the page was asked to play (a deep link: ?puzzle=<id>), and whether
+// it plays inside the editor's Play (core/playLink): an iframe over the
+// editor, which glides its camera down to the spawn while this loads, then
+// fades over to this game's first frame
+const launch = playRequest(window.location.search);
+const inEditor = launch.fromEditor && editorFrame() !== null;
+// Back to Editor was chosen: the world holds still until the editor lets go
+let handedBack = false;
 
 // UI
 let mainMenu = null;
@@ -191,6 +217,8 @@ async function nextPuzzle() {
 
 // Game loop callbacks
 function update(deltaTime) {
+  // Handed back to the editor: the last frame stays as the player left it
+  if (handedBack) return;
   // The controller first: its buttons go out as their keys, and its sticks
   // feed this frame's motion and look (render) while the world is awake, or
   // step through the menu that's open
@@ -263,8 +291,84 @@ function render() {
 
 const gameLoop = new GameLoop(update, render);
 
+/** Where the player's eye is and how it looks, in game coordinates. */
+function currentPose() {
+  return {
+    position: camera.position.toArray(),
+    quaternion: camera.quaternion.toArray(),
+    fov: camera.fov,
+  };
+}
+
+/** Resolves on the next animation frame (after that frame's render). */
+function nextFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
+// The editor's Play waits at most this long for the staves to engrave before
+// the game is shown anyway (one that never loads must not hold it forever)
+const STAFF_WAIT_MS = 3000;
+
+/**
+ * In the editor's Play: once every staff has its texture and frames of the
+ * world at the spawn have been drawn and painted, tell the editor, which
+ * fades over to this frame and says GO.
+ */
+async function announceReady() {
+  const deadline = performance.now() + STAFF_WAIT_MS;
+  while (NotationDisplay.engravingsPending() > 0 && performance.now() < deadline) {
+    // eslint-disable-next-line no-await-in-loop
+    await nextFrame();
+  }
+  await nextFrame();
+  await nextFrame();
+  await afterNextPaint();
+  tellEditor({ type: PREVIEW_READY, puzzleId: launch.puzzleId, pose: currentPose() });
+}
+
+/**
+ * The editor's GO: the game is on screen. It takes the keyboard and the
+ * controller, and the veiled start gate lifts (core/playLink).
+ */
+function goFromEditor() {
+  window.focus();
+  Gamepad.setActive(true);
+  startGate.reveal();
+}
+
+/**
+ * Back to Editor (the pause menu's entry, Cmd/Ctrl+Enter). Inside the
+ * editor's Play: the world holds still with no menu over it, the sound fades
+ * out, the pad goes back to the editor, and the editor is told where the
+ * player stands (it fades in at that view, then glides home). In a tab of
+ * its own: the editor loads here, on the level.
+ */
+async function leaveForEditor() {
+  if (!inEditor) {
+    backToEditor(launch.puzzleId);
+    return;
+  }
+  if (handedBack) return;
+  handedBack = true;
+  Gamepad.setActive(false);
+  // The library's master gain only: the player's sound setting stays
+  audioContextManager.setMuted(true);
+  if (pauseMenu) pauseMenu.hide();
+  keyHints.hideAll();
+  const report = {
+    areaId: gameState.currentPuzzle ? gameState.currentPuzzle.id : null,
+    pose: currentPose(),
+    sky: environmentClock(), // the editor fades in under the same clouds
+  };
+  await afterNextPaint(); // the menu gone from the frame the editor fades from
+  backToEditor(launch.puzzleId, report);
+}
+
 // Keyboard handler for pause and metronome
 function handleKeyDown(event) {
+  if (handedBack) return;
   if (event.code === 'Escape') {
     if (gameState.mode === 'PLAYING') {
       pauseGame();
@@ -293,11 +397,43 @@ async function initializeGame() {
   // Up before the first fetch, so the boot paints the scrim, not a blank page
   startGate.showLoading();
 
+  // Inside the editor's Play the gate stays unseen (the editor shows its own
+  // view until this game's first frame is ready) and the pad stays the
+  // editor's until GO. Cmd/Ctrl+Enter goes back, start gate or not.
+  // The world is built only once the editor's camera has landed at the eye
+  // (PREVIEW_LANDED): the frame shares the editor's main thread, and the
+  // build and first frame would stutter the glide.
+  let editorLanded = Promise.resolve();
+  if (inEditor) {
+    startGate.veil();
+    Gamepad.setActive(false);
+    editorLanded = new Promise((resolve) => {
+      window.addEventListener('message', (event) => {
+        if (isFromEditor(event, PREVIEW_LANDED)) {
+          // The editor's sky, so the first frame shows its clouds
+          if (event.data.sky) setEnvironmentClock(event.data.sky);
+          resolve();
+        } else if (isFromEditor(event, PREVIEW_GO)) goFromEditor();
+      });
+    });
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        if (event.code === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          leaveForEditor();
+        }
+      },
+      true
+    );
+    tellEditor({ type: PREVIEW_WAITING, puzzleId: launch.puzzleId });
+  }
+
   // A deep link — the editor's Play (?puzzle=<id>&from=editor,
   // core/playLink) or a plain ?puzzle=<id> — fetches its puzzle alongside
   // the manifest instead of after it. It is entered only if the manifest
   // lists it; startPuzzle reports a failed load.
-  const { puzzleId: requestedPuzzle, fromEditor } = playRequest(window.location.search);
+  const { puzzleId: requestedPuzzle, fromEditor } = launch;
   const requestedLoad = requestedPuzzle ? PuzzleLoader.load(requestedPuzzle) : null;
   if (requestedLoad) requestedLoad.catch(() => {});
 
@@ -308,7 +444,7 @@ async function initializeGame() {
   mainMenu = new MainMenu(puzzles, startPuzzle, ProgressManager);
   // Launched from the editor: its pause menu leads back there, on the level
   // the editor played
-  const onBackToEditor = fromEditor ? () => backToEditor(requestedPuzzle) : null;
+  const onBackToEditor = fromEditor ? leaveForEditor : null;
   pauseMenu = new PauseMenu(resumeGame, exitToMenu, nextPuzzle, onBackToEditor);
 
   // Register states
@@ -319,8 +455,21 @@ async function initializeGame() {
   // Deep link (the editor's Play): ?puzzle=<id> jumps straight in, at the
   // puzzle's player spawn, the start gate up (audio needs a gesture).
   // Checked (and awaited) first so the menu never flashes while a puzzle loads.
-  if (requestedPuzzle && puzzles.some((p) => p.id === requestedPuzzle)) {
+  const listed = Boolean(requestedPuzzle) && puzzles.some((p) => p.id === requestedPuzzle);
+  if (listed) {
+    await editorLanded;
     await startPuzzle(requestedPuzzle, requestedLoad);
+  }
+  if (inEditor && gameState.mode !== 'PLAYING') {
+    // The editor's level, or nothing: it says why and takes its view back
+    tellEditor({
+      type: PREVIEW_FAILED,
+      puzzleId: requestedPuzzle,
+      message: listed
+        ? `Couldn't load "${requestedPuzzle}"`
+        : `"${requestedPuzzle}" isn't in the manifest`,
+    });
+    return;
   }
   if (gameState.mode !== 'PLAYING' && puzzles.length > 0) {
     // No menu at boot: wake up in the world. The first manifest entry is the
@@ -341,6 +490,8 @@ async function initializeGame() {
 
   // Start game loop
   gameLoop.start();
+
+  if (inEditor) announceReady();
 }
 
 // Dev-only introspection handle (used by tests/tooling; not part of the game)
@@ -484,6 +635,8 @@ if (import.meta.env.DEV) {
     DeployManager,
     PuzzleLoader,
     ShaderPrewarm,
+    // resound-sound's context and master output (a check that a page is muted)
+    audioContextManager,
   };
 }
 

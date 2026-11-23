@@ -39,8 +39,8 @@ import {
 import { importPuzzle } from 'editor/io/importPuzzle';
 import { loadLook, saveLook } from 'editor/io/lookPreference';
 import SongAudition from 'editor/audio/SongAudition';
-import { serializePuzzle } from 'editor/model/serialization';
-import { playUrl, editorRequest, PLAY_WINDOW_NAME, BACK_TO_EDITOR_MESSAGE } from 'core/playLink';
+import { editorRequest } from 'core/playLink';
+import PlayPreview from 'editor/play/PlayPreview';
 import { availableElevations } from 'editor/util/elevations';
 import { ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
 import InputDevice from 'core/InputDevice';
@@ -61,8 +61,6 @@ const PLACE_KEYS = {
   r: 'ramp',
   l: 'waystone',
 };
-// Where a same-tab Play leaves the undo history for the editor's return
-const HISTORY_KEY = 'resound-editor-history';
 // A click whose pointer moved more than this many pixels since mousedown is a
 // drag (camera rotate/pan), not a selection.
 const CLICK_DRAG_PX = 4;
@@ -281,9 +279,18 @@ export default class EditorApp {
     // this._setupDrag();
     this._setupKeyboard();
     this._setupRenderInvalidation();
-    this._onMessage = (event) => this._onBackFromGame(event);
-    window.addEventListener('message', this._onMessage);
     this._setupGamepad();
+    // Play: the level in the game, in this tab (editor/play/PlayPreview)
+    this.preview = new PlayPreview({
+      camera: this.camera,
+      renderer: this.renderer,
+      controls: this.controls,
+      requestFrame: () => this._requestFrame(),
+      suspend: () => this._standAside(),
+      resume: () => this._comeBack(),
+      toast: (message) => this._showToast(message),
+      fitView: () => this._onResize(),
+    });
     this._requestFrame(); // initial render
     window.addEventListener('resize', () => this._onResize());
   }
@@ -560,10 +567,7 @@ export default class EditorApp {
   async _restoreSession() {
     // Opened on a level (the game's Back to Editor): that level, from disk
     const requested = editorRequest(window.location.search);
-    if (requested && (await this._openRequestedPuzzle(requested))) {
-      this._restoreHistory();
-      return;
-    }
+    if (requested && (await this._openRequestedPuzzle(requested))) return;
     const restored = loadSession();
     if (!restored) return;
 
@@ -581,7 +585,6 @@ export default class EditorApp {
           this._applyRestoredModel(importPuzzle(json).model);
           await this.puzzlePicker.refresh(id);
           this.toolbar.setStatus('saved');
-          this._restoreHistory();
           return;
         }
       } catch (err) {
@@ -1068,23 +1071,22 @@ export default class EditorApp {
   // --- Play: the level in the game -----------------------------------------
 
   /**
-   * Save the level and open the game on it, at its player spawn (the menu
-   * skipped, the start gate kept: core/playLink). In the one game tab the
-   * editor reuses (a second Play reloads it, no pile of tabs) — or, with no
-   * user gesture to open a tab (a controller press) or a blocked popup, in
-   * this tab, the undo history kept for the way back (the game's pause menu:
-   * "Back to Editor").
-   * @param {{sameTab?: boolean}} [options]
-   * @returns {Promise<boolean>} whether the game was opened
+   * Save the level and play it here (editor/play/PlayPreview): the camera
+   * glides down to the player's eye at the spawn, the game takes over from
+   * that frame, and its pause menu's Back to Editor (Cmd/Ctrl+Enter) glides
+   * back to this view with everything as it was.
+   * @returns {Promise<boolean>} whether the game was started
    */
-  async play({ sameTab = false } = {}) {
+  async play() {
+    if (this.preview && this.preview.active) return false;
     const { id } = this.undoManager.getMetadata();
     if (!id) {
       this._showToast('Name the puzzle to play it — its name gives it the file the game loads');
       this.metadataPanel.expand();
       return false;
     }
-    if (!this.undoManager.getPlayerSpawn()) {
+    const spawn = this.undoManager.getPlayerSpawn();
+    if (!spawn) {
       this._showToast('Place the player spawn first (P) — the game starts you there');
       return false;
     }
@@ -1096,64 +1098,59 @@ export default class EditorApp {
       this._showToast("Couldn't save the puzzle, so the game can't load it — see the save status");
       return false;
     }
-    const url = playUrl(id);
-    const activated = !navigator.userActivation || navigator.userActivation.isActive;
-    if (!sameTab && activated) {
-      const tab = window.open(url, PLAY_WINDOW_NAME);
-      if (tab) {
-        this._showToast('Playing in the game tab — pause there for Back to Editor', 'success');
-        return true;
-      }
-    }
-    this._leaveForGame(url);
-    return true;
-  }
-
-  /** The game replaces the editor in this tab: keep the undo history for the return. */
-  _leaveForGame(url) {
-    try {
-      sessionStorage.setItem(
-        HISTORY_KEY,
-        JSON.stringify({
-          model: JSON.stringify(serializePuzzle(this.undoManager)),
-          history: this.undoManager.exportHistory(),
-        })
-      );
-    } catch {
-      // Too big or blocked: the level is saved; only undo history is lost
-    }
-    saveSession(this.undoManager);
-    window.location.assign(url);
+    return this.preview.start({ puzzleId: id, playerStart: { ...spawn } });
   }
 
   /**
-   * Back from a same-tab Play: the undo history comes back if the level is
-   * the one left (same file, unchanged).
+   * Play begins: the editor stands aside. Its keys and controller go quiet
+   * (the game has them), a song being heard stops, the camera answers no
+   * mouse, and only the level as the game draws it stays in the view — the
+   * game look even from the schematic one, none of the editor's marks.
+   * What it was is kept for _comeBack.
    */
-  _restoreHistory() {
-    let stored = null;
-    try {
-      stored = JSON.parse(sessionStorage.getItem(HISTORY_KEY) || 'null');
-      sessionStorage.removeItem(HISTORY_KEY);
-    } catch {
-      return;
+  _standAside() {
+    this._aside = {
+      look: this._look,
+      focus: document.activeElement,
+      controlsEnabled: this.controls.enabled,
+      hidden: [],
+    };
+    this.gamepad.stop();
+    this.audition.stop();
+    this.songEditorModal.stopPlayback();
+    this.controls.enabled = false;
+    if (this._look !== 'game') {
+      this._look = 'game';
+      this._applyLook();
     }
-    if (!stored || !stored.history) return;
-    if (stored.model !== JSON.stringify(serializePuzzle(this.undoManager))) return;
-    this.undoManager.importHistory(stored.history);
-    this.toolbar.refresh();
+    this.gameLook.setCuesVisible(false);
+    for (const child of this.scene.children || []) {
+      if (child !== this.gameLook.root && !child.isLight && child.visible !== false) {
+        child.visible = false;
+        this._aside.hidden.push(child);
+      }
+    }
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   }
 
-  /** A game tab this editor opened went "Back to Editor": show its level. */
-  _onBackFromGame(event) {
-    if (event.origin !== window.location.origin) return;
-    const { data } = event;
-    if (!data || data.type !== BACK_TO_EDITOR_MESSAGE) return;
-    const { id } = this.undoManager.getMetadata();
-    if (data.puzzleId && data.puzzleId !== id && this.puzzlePicker.hasLevel(data.puzzleId)) {
-      this.puzzlePicker.open(data.puzzleId);
+  /** Back from Play: everything as it was before it (selection, panels, look, focus). */
+  _comeBack() {
+    const aside = this._aside;
+    this._aside = null;
+    if (!aside) return;
+    aside.hidden.forEach((child) => {
+      child.visible = true; // eslint-disable-line no-param-reassign
+    });
+    this.gameLook.setCuesVisible(true);
+    if (aside.look !== this._look) {
+      this._look = aside.look;
+      this._applyLook();
     }
-    this._showToast('Back from the game', 'success');
+    this.controls.enabled = aside.controlsEnabled;
+    this.gamepad.start();
+    if (aside.focus && aside.focus.focus && document.contains(aside.focus)) aside.focus.focus();
+    this.onPadChange();
+    this._requestFrame();
   }
 
   // --- Git controls (dev-only; see ui/GitPanel.js + io/gitControls.js) ---
@@ -1802,6 +1799,11 @@ export default class EditorApp {
 
   _setupKeyboard() {
     this._onKeyDown = (e) => {
+      // Play under way: the game has the keys (Esc while gliding in calls it off)
+      if (this.preview && this.preview.active) {
+        if (e.key === 'Escape') this.preview.cancel();
+        return;
+      }
       // Modals take precedence — they own the keyboard while open (each closes
       // itself on Escape). An open context menu owns arrows/Enter/Escape too.
       if (this.songEditorModal && this.songEditorModal.isOpen) return;
@@ -1936,6 +1938,16 @@ export default class EditorApp {
     this._dirty = false;
     const dt = this._lastFrameAt == null ? 0 : (now - this._lastFrameAt) / 1000;
     this._lastFrameAt = now;
+    // Play: the preview places the camera (no orbit, no cursor, no HUD), and
+    // while the game is on screen the editor draws nothing
+    if (this.preview && this.preview.active) {
+      const { draw, more, still } = this.preview.frame(now);
+      if (!draw) return;
+      if (more || this.gameLook.animates) this._requestFrame();
+      if (!still) this.gameLook.update(dt);
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     this.controls.update(); // may emit 'change' (damping) → schedules the next frame
     // The game look moves on its own (the sky, the creatures' wobble, a
     // previewed song): while it shows, every frame asks for the next
@@ -1976,6 +1988,11 @@ export default class EditorApp {
   }
 
   _onResize() {
+    if (this.preview && this.preview.active) {
+      this.preview.onResize();
+      this._requestFrame();
+      return;
+    }
     const container = document.getElementById('editor-viewport');
     const w = container.clientWidth;
     const h = container.clientHeight;
@@ -1987,8 +2004,8 @@ export default class EditorApp {
 
   dispose() {
     if (this._frameId) cancelAnimationFrame(this._frameId);
+    if (this.preview) this.preview.dispose();
     document.removeEventListener('keydown', this._onKeyDown);
-    window.removeEventListener('message', this._onMessage);
     if (this.gamepad) this.gamepad.stop();
     if (this._stopDeviceWatch) this._stopDeviceWatch();
     if (this.padLegend) this.padLegend.dispose();

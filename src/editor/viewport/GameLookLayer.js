@@ -38,6 +38,7 @@ import Fountain from 'entities/Fountain';
 import Waystone from 'entities/Waystone';
 import NotationDisplay from 'ui/NotationDisplay';
 import { createOutlineBox, createOutlineMaterial } from 'editor/viewport/outlineBox';
+import { GAME_OFFSET } from 'editor/viewport/gridUtils';
 
 // The editor's cues over the dark look
 const SELECTION_COLOR = 0x7fe8ff;
@@ -81,7 +82,7 @@ export default class GameLookLayer {
   constructor(scene) {
     this._scene = scene;
     this.root = new THREE.Group();
-    this.root.position.set(WORLD_SCALE / 2, 0, WORLD_SCALE / 2);
+    this.root.position.set(GAME_OFFSET, 0, GAME_OFFSET);
     this._scene.add(this.root);
 
     // The creature light the floor, walls, gates and ramps add up, as one
@@ -233,6 +234,20 @@ export default class GameLookLayer {
     );
     this.root.add(object);
     this._selection = { id, object };
+  }
+
+  /**
+   * Show or hide the editor's own marks in the look — the selection
+   * outline, the linked gates' frames, the spawn's ghost — leaving the level
+   * as the game draws it (Play glides into the game's view without them).
+   * @param {boolean} visible
+   */
+  setCuesVisible(visible) {
+    if (this._selection) this._selection.object.visible = visible;
+    if (this._spawn) this._spawn.visible = visible;
+    for (const entry of this._entities.values()) {
+      if (entry.badge) entry.badge.visible = visible;
+    }
   }
 
   /** What the selection outline is on (tests, the controller hints). */

@@ -342,6 +342,25 @@ export function tickEnvironment(deltaTime, area = null) {
   WORLD_UNIFORMS.uFlash.value = level;
 }
 
+/**
+ * The sky's clock: how far its clouds have drifted (`deck`) and the time
+ * the gates' and ramps' shimmer runs on (`env`), in seconds.
+ * @returns {{env: number, deck: number}}
+ */
+export function environmentClock() {
+  return { env: WORLD_UNIFORMS.uEnvTime.value, deck: WORLD_UNIFORMS.uDeckTime.value };
+}
+
+/**
+ * Set the sky's clock (the editor's Play hands the editor's sky to the game,
+ * so its first frame shows the clouds where the editor's last one did).
+ * @param {{env: number, deck: number}} clock
+ */
+export function setEnvironmentClock({ env, deck }) {
+  if (Number.isFinite(env)) WORLD_UNIFORMS.uEnvTime.value = env;
+  if (Number.isFinite(deck)) WORLD_UNIFORMS.uDeckTime.value = deck;
+}
+
 /** The lightning's brightness now, 0..1 (0 between strikes). */
 export function lightningLevel() {
   return WORLD_UNIFORMS.uFlash.value;

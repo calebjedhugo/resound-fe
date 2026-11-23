@@ -126,6 +126,15 @@ class Gamepad {
   // Whether each stick (left, right) was past its dead zone last poll
   static _sticksOut = [false, false];
 
+  // Whether this page reads the pad at all. Off while the game plays in the
+  // editor's Play but doesn't have the keyboard yet (core/playLink): the
+  // editor's own mapping has the pad then, and only one may act on it
+  static _active = true;
+
+  // Buttons already held when the pad was handed to this page: no press,
+  // and so no release either
+  static _latched = [];
+
   /** Listen for pads coming and going (the game page only, once). */
   static initialize() {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
@@ -146,7 +155,7 @@ class Gamepad {
    * @param {boolean} [menu] - a menu is open (and nothing in front of it)
    */
   static poll(awake, menu = false) {
-    if (!this._connected) return;
+    if (!this._connected || !this._active) return;
     const pad = findPad();
     if (!pad) {
       this._rescan();
@@ -157,7 +166,11 @@ class Gamepad {
     const count = Math.max(buttons.length, this._down.length);
     for (let i = 0; i < count; i += 1) {
       const pressed = i < buttons.length && buttons[i].pressed;
-      if (pressed !== !!this._down[i]) {
+      if (!pressed && this._latched[i]) {
+        // Held since before the pad was handed over: it lets go unheard
+        this._latched[i] = false;
+        this._down[i] = false;
+      } else if (pressed !== !!this._down[i]) {
         this._down[i] = pressed;
         // Before the key goes out, so whoever hears it sees the pad
         if (pressed) InputDevice.usePad(pad);
@@ -220,19 +233,49 @@ class Gamepad {
     }
   }
 
+  /**
+   * Hand the pad to this page or take it away (the editor's Play: the game
+   * gets it with the keyboard and gives it back on Back to Editor). Handed
+   * over, a button already down is no press (the one that chose Play is
+   * often still held); taken away, everything held lets go.
+   * @param {boolean} active
+   */
+  static setActive(active) {
+    if (active === this._active) return;
+    this._active = active;
+    if (!active) {
+      this._letGo();
+      return;
+    }
+    const pad = typeof navigator !== 'undefined' && navigator.getGamepads ? findPad() : null;
+    this._latched = [];
+    this._down = [];
+    if (!pad) return;
+    pad.buttons.forEach((button, i) => {
+      if (button.pressed) {
+        this._down[i] = true;
+        this._latched[i] = true;
+      }
+    });
+  }
+
+  /** Every key the pad holds goes up, its sticks rest. */
+  static _letGo() {
+    for (let i = 0; i < this._down.length; i += 1) {
+      if (this._down[i] && !this._latched[i]) sendKey('keyup', BUTTON_KEYS[i] || UNBOUND_KEY);
+      this._down[i] = false;
+    }
+    this._latched = [];
+    this._step(0);
+    this._rest();
+    this._sticksOut = [false, false];
+  }
+
   /** After a pad leaves: if none is left, let go of everything it held. */
   static _rescan() {
     this._connected = findPad() !== null;
     if (this._connected) return;
-    for (let i = 0; i < this._down.length; i += 1) {
-      if (this._down[i]) {
-        this._down[i] = false;
-        sendKey('keyup', BUTTON_KEYS[i] || UNBOUND_KEY);
-      }
-    }
-    this._step(0);
-    this._rest();
-    this._sticksOut = [false, false];
+    this._letGo();
     // No pad left to play with: back to the keyboard's glyphs
     InputDevice.useKeyboard();
   }

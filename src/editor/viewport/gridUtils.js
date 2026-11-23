@@ -20,3 +20,12 @@ export function gridToWorld(gridX, gridZ) {
     z: gridZ * WORLD_SCALE + WORLD_SCALE / 2,
   };
 }
+
+// The game centres a cell at x * WORLD_SCALE; the editor at half a cell
+// more (gridToWorld). Game coordinates are these much less on x and z.
+export const GAME_OFFSET = WORLD_SCALE / 2;
+
+/** A game-coordinate point in the editor's coordinates (y is the same). */
+export function gameToEditor({ x, y, z }) {
+  return { x: x + GAME_OFFSET, y, z: z + GAME_OFFSET };
+}
