@@ -349,6 +349,60 @@ forces, recording, matching and audio are untouched.
   is up (`core/ShaderPrewarm`), so the first note and the first open door
   no longer stall on shader compiles (perf pass 2026-10-12).
 
+## Environment look (DRAFT 2026-11-22 — pending designer review)
+
+The designer delegated it ("something that complements the creatures");
+this is a first draft to react to (`entities/EnvironmentLook.js`). Visual
+only — collision, elevation, puzzles and audio are untouched.
+
+**Concept: the storm the ball lightning was born in, at night.** The
+creatures are the light; the world is the dark around them.
+
+- **Sky**: a slow-turning storm deck (drifting in toward a clear eye
+  overhead) over a cold, luminous horizon band; below the horizon (seen
+  from high storeys) a dark abyss. Now and then soft sheet lightning
+  flickers inside the clouds (1-3 quick pulses every ~9-22 s, cool and
+  low-chroma — atmosphere, never an event).
+- **Walls**: dark layered stone, darker at the foot, a lighter cap and a
+  thin pale RIM along every top edge — walls silhouette against the
+  horizon glow, so walls vs openings read at a glance.
+- **Floor**: polished dark slate with a faint cell grid (fades with
+  distance) that catches the horizon glow at grazing angles. Raised
+  storeys are a shade lighter; every CLIFF edge (a storey edge nothing
+  walkable continues past — not where storeys meet, not a ramp's ends,
+  not a wall's foot) carries a pale line.
+- **Creature light**: a singing creature lights the floor and walls
+  around it in its own glow colour, flaring with each onset (shader-side,
+  up to 8 per area, the brightest; no three.js lights, no shadows).
+- **Staff halo**: a staff's ink sits on a soft pale halo of itself, so it
+  reads over an open door's dark view as well as on a gate's colour.
+
+Rules (keep any later work coherent):
+
+- **Creatures own colour.** Environment surfaces stay near-neutral,
+  low-chroma (cool greys), DARK; the scene reads by value, never hue. No
+  environment hue that could pass for a Messiaen chord colour (no warm
+  accents, no saturated blue/green/turquoise), and nothing as bright as a
+  lit creature except thin rim/edge lines and the brief lightning.
+- **Gameplay accents are not environment**: gates, fountains, ramps,
+  cleansers keep their own colours (unchanged by this draft).
+- **The sky is a function of view direction only** — its height, and its
+  azimuth taken FOUR times round. Every door and the cleanser gate turn the
+  view by quarter turns, so this is what keeps a door's sky continuous with
+  the sky beside it. Never give the sky a feature that is not 90-degree
+  symmetric.
+- **Cost**: the world redraws through every door pass, so: one draw for
+  the sky, one per area for all its walls (instanced), one for its whole
+  floor; unlit shaders written in display values (no per-pixel output
+  encode); precomputed textures over per-pixel noise; every program has a
+  ShaderPrewarm stand-in.
+
+Open questions for the designer: overall darkness (the draft errs dark so
+creature colour dominates); whether sheet lightning stays (or follows the
+world's tempo); whether the nine POC levels should drift along the tempo
+gradient (e.g. calmer sky early, a stormier deck toward The Star); the
+staff halo (it touches the notation's look).
+
 ## World / editor (settled)
 
 - **Ground floor (elevation 0) is implicit everywhere.** Floor regions exist
