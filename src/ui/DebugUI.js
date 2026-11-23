@@ -58,33 +58,16 @@ class DebugUI {
       gameState.player.elevation
     }<br/><br/>`;
 
-    // Creatures (distance + whether recordable from here)
+    // Creatures (distance + whether the pole reaches them from here)
     const creatures = gameState.entities.filter((e) => e.type === 'creature');
     if (creatures.length > 0) {
       html += '<strong>Creatures:</strong><br/>';
       creatures.forEach((c) => {
         const d = getDistance(gameState.player.position, c.position);
-        const flag = c.isRecordable ? '[IN RECORDING RANGE]' : '';
-        html += `${this.formatSong(c.song)} (${Math.round(d)}m, range ${c.audibleRange}, rec ≤ ${
-          c.recordingRange
+        const flag = c.isAbsorbable ? '[IN ABSORB RANGE]' : '';
+        html += `${this.formatSong(c.song)} (${Math.round(d)}m, range ${c.audibleRange}, absorb ≤ ${
+          c.absorbRange
         }) ${flag}<br/>`;
-      });
-      html += '<br/>';
-    }
-
-    // Show harmony detections (recent only — stale lines read as "still sounding")
-    const recentHarmonies = (gameState.harmonyLog || []).filter(
-      (h) => Date.now() - h.timestamp < 4000
-    );
-    if (recentHarmonies.length > 0) {
-      html += '<strong>Player-Creature Harmonies:</strong><br/>';
-      recentHarmonies.forEach((h) => {
-        let harmonyColor = '#ffff00'; // perfect (yellow)
-        if (h.harmony === 'consonant') harmonyColor = '#00ff00'; // green
-        if (h.harmony === 'dissonant') harmonyColor = '#ff0000'; // red
-        html += `<span style="color: ${harmonyColor}">🎵 ${h.creature}: ${h.creaturePitch} + ${
-          h.playerPitch
-        } = ${h.harmony.toUpperCase()} (${h.interval})</span><br/>`;
       });
       html += '<br/>';
     }
@@ -95,8 +78,8 @@ class DebugUI {
       const isActive = index === gameState.player.activeSlot;
       const prefix = isActive ? '&gt; ' : '  ';
 
-      if (slot && slot.data) {
-        const songPreview = this.formatSong(slot.data).substring(0, 40);
+      if (slot && slot.spec) {
+        const songPreview = this.formatSong(slot.spec.song).substring(0, 40);
         html += `${prefix}Slot ${index + 1}: ${songPreview}...<br/>`;
       } else {
         html += `${prefix}Slot ${index + 1}: [empty]<br/>`;

@@ -1,12 +1,6 @@
 /**
  * AudioPrewarm — build ahead the audio that a first note would otherwise
  * build mid-frame (resound-sound builds it lazily):
- *  - the player's Piano. The first time the tape plays a pitch, the Piano
- *    renders that strike live AND builds its offline render (12 ms at 1x
- *    CPU, 32-45 ms at 4x, audited 2026-10-17); every later strike is one
- *    buffer source. The tape only ever holds what creatures sang, so the
- *    pitches it can play are the creatures': each area's are pre-rendered
- *    as the area is built (world entry, and every neighbor as it loads).
  *  - each creature's voice. A Random builds a pitch's wavetable on its first
  *    note of it (~1-1.5 ms at 44.1-48 kHz; above 88.2 kHz it builds none);
  *    `warm()` builds them ahead, one job per (creature, pitch).
@@ -16,33 +10,26 @@
  *    mean/max at 1x, 10.7/16.6 at 4x, measured 2026-10-17). A creature asks
  *    for its next song as one ends (`prepareSong`, Random.prepare): one job
  *    per creature, with a deadline before that song starts.
+ * (The player's tape Piano was pre-rendered here too until the tape stopped
+ * playing, 2026-11-23: the pole holds creatures now, which sing themselves.)
  *
  * While the StartGate holds the world still (`hold`), jobs run back to back,
  * one per task: no frame shows anything worth protecting, and input is still
  * answered between jobs. Otherwise they run in idle callbacks (where there
  * are none, Safari, in timer slices of TIMER_SLICE_MS), each only when the
  * idle period has room for what that kind of job last cost, so no frame pays
- * for one (a Piano render may wait for the next gate: on a slow machine, and
- * in Safari; the session's first always does). The one exception is a
- * song's notes come their deadline: built whatever the room (a frame that
- * has no idle time, e.g. at 4x CPU with doors open, still gets them before
- * the song starts), one job per task, so synchronised songs spread over
- * tasks between frames. Only work that builds
+ * for one. The one exception is a song's notes come their deadline: built
+ * whatever the room (a frame that has no idle time, e.g. at 4x CPU with
+ * doors open, still gets them before the song starts), one job per task, so
+ * synchronised songs spread over tasks between frames. Only work that builds
  * something is run and priced: a pitch the audio already has (a note in play
- * got there first) is dropped, and a Piano render waits while the Piano's
- * own render pool is full rather than queue there, to be built whenever a
- * slot frees. Nothing waits on this: a note not built ahead still plays,
- * built as it starts, as before.
+ * got there first) is dropped. Nothing waits on this: a note not built ahead
+ * still plays, built as it starts, as before.
  */
-import PlaybackManager from 'core/PlaybackManager';
 
 // Main-thread ms a job of each kind cost last time; these first guesses are
-// the audited 1x costs, rounded up (notes: one creature's next song). A
-// Piano render gets no guess: the session's first also builds the offline
-// phase bank every later render shares (47 ms at 4x CPU against 2-9 ms for
-// the rest, measured 2026-10-18), so until one has run, no idle period has
-// room for it and it waits for the StartGate
-const cost = { voice: 2, piano: Infinity, notes: 1 };
+// the audited 1x costs, rounded up (notes: one creature's next song)
+const cost = { voice: 2, notes: 1 };
 
 // A song's notes are built at least this long before it starts, idle time or
 // not: a few frames' margin over the frame its onset lands in
@@ -57,14 +44,8 @@ const MAX_IDLE_MS = 50;
 const TIMER_FALLBACK_MS = 50;
 const TIMER_SLICE_MS = 8;
 
-// How often a Piano render waiting on the Piano's full render pool looks again
-const POOL_RETRY_MS = 50;
-
 const noteJobs = new Map(); // instrument -> { pitches, dueAt }: a creature's next song
 const voiceJobs = []; // { instrument, pitch }: one creature voice each
-const pianoPitches = []; // pitches waiting for a render
-const pianoQueued = new Set(); // every pitch ever queued (the cache keeps them)
-let pianoBusy = false; // our render under way (one at a time), or a full pool
 let held = false;
 let scheduled = false;
 let scheduledBy = Infinity; // the latest the scheduled run starts (performance.now ms)
@@ -91,8 +72,7 @@ function nextNoteJob() {
 function hasWork(room) {
   return (
     noteJobs.size > 0 || // built by its deadline whatever the room
-    (voiceJobs.length > 0 && cost.voice <= room) ||
-    (!pianoBusy && pianoPitches.length > 0 && cost.piano <= room)
+    (voiceJobs.length > 0 && cost.voice <= room)
   );
 }
 
@@ -155,43 +135,12 @@ function buildVoice() {
   if (!instrument.isWarm([pitch])) timed('voice', () => instrument.warm([pitch]));
 }
 
-/** The next render the Piano doesn't have, if it can start one now. */
-function renderPianoPitch() {
-  const piano = PlaybackManager.getPlayerInstrument();
-  // A strike in play rendered (or queued) it first: nothing to build
-  while (pianoPitches.length > 0 && piano.isWarm([pianoPitches[0]])) pianoPitches.shift();
-  if (pianoPitches.length === 0) return;
-
-  pianoBusy = true;
-  const done = () => {
-    pianoBusy = false;
-    schedule();
-  };
-  if (!piano.canRenderNow()) {
-    // Strikes in play fill its pool: warm() would only queue the render,
-    // to be built when a slot frees, in no idle period
-    setTimeout(done, POOL_RETRY_MS);
-    return;
-  }
-  // Its graph is built now; the render itself runs off the main thread
-  const pitch = pianoPitches.shift();
-  timed('piano', () => piano.warm([pitch]))
-    .catch(() => {}) // unwarmed, it still plays: rendered live on its first strike
-    .then(done);
-}
-
 /** Behind the StartGate: the next job, whatever it costs (voices before songs). */
 function runOne() {
   scheduled = false;
   cancelRun = null;
-  // An unpriced render (the session's first) can only ever run here: no idle
-  // period has room for it. Start it before the voices and songs, which fit
-  // idle time, so a gate woken early still gets it.
-  const unpricedRender = cost.piano === Infinity && !pianoBusy && pianoPitches.length > 0;
-  if (unpricedRender) renderPianoPitch();
-  else if (voiceJobs.length > 0) buildVoice();
+  if (voiceJobs.length > 0) buildVoice();
   else if (noteJobs.size > 0) buildNotes(nextNoteJob().instrument);
-  else if (!pianoBusy && pianoPitches.length > 0) renderPianoPitch();
   schedule();
 }
 
@@ -209,7 +158,6 @@ function runIdle(deadline) {
   const roomFor = (kind) => deadline.timeRemaining() > 0 && deadline.timeRemaining() >= cost[kind];
   while (voiceJobs.length > 0 && roomFor('voice')) buildVoice();
   while (noteJobs.size > 0 && roomFor('notes')) buildNotes(nextNoteJob().instrument);
-  if (!pianoBusy && pianoPitches.length > 0 && roomFor('piano')) renderPianoPitch();
   schedule();
 }
 
@@ -237,8 +185,7 @@ function songPitches(song) {
 
 const AudioPrewarm = {
   /**
-   * Queue a newly built area's sounds: each creature's voice for its song,
-   * and every pitch its creatures sing for the player's Piano.
+   * Queue a newly built area's sounds: each creature's voice for its song.
    * @param {Area} area
    */
   warmArea(area) {
@@ -250,10 +197,6 @@ const AudioPrewarm = {
           // Instruments that can build their voices ahead (Random), a pitch
           // a job so that a job fits an idle period
           if (typeof instrument.warm === 'function') voiceJobs.push({ instrument, pitch });
-          if (!pianoQueued.has(pitch)) {
-            pianoQueued.add(pitch);
-            pianoPitches.push(pitch);
-          }
         }
       }
     }
@@ -282,10 +225,8 @@ const AudioPrewarm = {
 
   /**
    * The world was torn down (PortalManager.reset): its creatures' queued
-   * voices and songs go, as their instruments did. The piano outlives every
-   * world, so its queued pitches stay, and so does any run already scheduled
-   * for the queue (it serves the next world's jobs, or finds nothing and
-   * stops).
+   * voices and songs go, as their instruments did. A run already scheduled
+   * stays (it serves the next world's jobs, or finds nothing and stops).
    */
   reset() {
     noteJobs.clear();

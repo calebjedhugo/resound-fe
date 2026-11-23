@@ -17,13 +17,13 @@ import StartGate from 'ui/StartGate';
 import KeyHints from 'ui/KeyHints';
 import CameraModeBadge from 'ui/CameraModeBadge';
 import PauseMenu from 'ui/PauseMenu';
-import RecordingUI from 'ui/RecordingUI';
+import InventoryUI from 'ui/InventoryUI';
 import EndingOverlay from 'ui/EndingOverlay';
 import DebugUI from 'ui/DebugUI';
 import ClapVisual from 'ui/ClapVisual';
 import NotationDisplay from 'ui/NotationDisplay';
 import ClapManager from 'core/ClapManager';
-import PlaybackManager from 'core/PlaybackManager';
+import AbsorbManager from 'core/AbsorbManager';
 import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
 import DeployManager from 'core/DeployManager';
@@ -57,7 +57,7 @@ scene.add(directionalLight);
 // UI
 let mainMenu = null;
 let pauseMenu = null;
-const recordingUI = new RecordingUI();
+const inventoryUI = new InventoryUI();
 const debugUI = new DebugUI();
 const clapVisual = new ClapVisual(scene);
 const startGate = new StartGate();
@@ -77,6 +77,9 @@ ClapManager.setVisualCallback((position, range) => {
 // destination puzzle's `teaches` list; hints already performed this
 // session stay retired (each lesson happens once).
 PortalManager.initialize(scene, (puzzle, arrivalGate) => {
+  // A pole action under way completes at once: its creature belongs to the
+  // area the player just left
+  AbsorbManager.finishNow();
   HintMemory.arm(puzzle && puzzle.teaches);
   keyHints.hideAll();
   if (arrivalGate && arrivalGate.ending) endingOverlay.show();
@@ -84,6 +87,9 @@ PortalManager.initialize(scene, (puzzle, arrivalGate) => {
 
 // The deployable cleanser gate's aiming phantom renders in the main scene
 DeployManager.initialize(scene);
+
+// The pole draws in a scene of its own, lit like this one (main view only)
+AbsorbManager.initialize(scene);
 
 // Staff textures go to the GPU in idle time, not in the frame of the first
 // pass that shows them (a door into a neighbour built after the start gate)
@@ -122,6 +128,7 @@ async function startPuzzle(puzzleId, pendingLoad = null) {
     // may have saved some since the last world loaded them)
     PuzzleLoader.clearCache();
     const [puzzleData] = await Promise.all([pendingLoad || PuzzleLoader.load(puzzleId), painted]);
+    AbsorbManager.reset(); // fresh world: the pole in hand
     PortalManager.enterWorld(puzzleData);
     DeployManager.reset(); // fresh world: no phantom, no deployed gate
     calmStorm(); // ...and a calm sky: nothing of the last world's storm
@@ -163,7 +170,7 @@ function exitToMenu() {
   gameState.reset();
   clapVisual.clear();
   ClapManager.reset();
-  PlaybackManager.reset();
+  AbsorbManager.reset();
   startGate.hide();
   endingOverlay.hide();
   keyHints.hideAll();
@@ -214,11 +221,13 @@ function update(deltaTime) {
     PortalManager.updateAreas(deltaTime);
     // Crossing an open linked gate hands the world to the neighbor puzzle
     PortalManager.update();
+    // The pole's action, after the creatures it holds have updated
+    AbsorbManager.update(deltaTime);
     DeployManager.update();
     // The sky: its drift, its lightning, and its answer to a gate being solved
     tickEnvironment(deltaTime, PortalManager.getActiveArea());
     clapVisual.update();
-    recordingUI.update();
+    inventoryUI.update();
     keyHints.update(deltaTime);
     debugUI.update();
   }
@@ -258,6 +267,8 @@ function render() {
     DeployManager.renderPortal(webglRenderer, playerCamera);
     PortalManager.renderPortals(webglRenderer, playerCamera);
   });
+  // The pole, over the main view only (never a door pass)
+  AbsorbManager.render(renderer, camera);
 }
 
 const gameLoop = new GameLoop(update, render);
@@ -342,7 +353,7 @@ if (import.meta.env.DEV) {
   window.__resoundDebug = {
     gameState,
     scene,
-    PlaybackManager,
+    AbsorbManager,
     ListeningManager,
     PortalManager,
     camera,
@@ -356,6 +367,12 @@ if (import.meta.env.DEV) {
     setTapImpulse(enabled = true) {
       gameState.input.tapImpulseEnabled = !!enabled;
       return gameState.input.tapImpulseEnabled;
+    },
+    // Run the pole's absorb/release animations `factor` times slower (1 =
+    // normal), so frames mid-animation can be screenshotted.
+    // Usage: window.__resoundDebug.setPoleSlowmo(10)
+    setPoleSlowmo(factor = 1) {
+      return AbsorbManager.setSlowmo(factor);
     },
     // Shader-program re-derivations per frame, by material type: three
     // re-runs getParameters + the program cache key (which calls
@@ -426,7 +443,8 @@ if (import.meta.env.DEV) {
           [PortalManager, 'update', 'update.crossing'],
           [DeployManager, 'update', 'update.deploy'],
           [clapVisual, 'update', 'update.clapVisual'],
-          [recordingUI, 'update', 'update.recordingUI'],
+          [AbsorbManager, 'update', 'update.pole'],
+          [inventoryUI, 'update', 'update.inventoryUI'],
           [keyHints, 'update', 'update.keyHints'],
           [debugUI, 'update', 'update.debugUI'],
           [cameraModeBadge, 'update', 'update.cameraBadge'],

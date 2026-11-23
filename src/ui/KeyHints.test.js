@@ -4,8 +4,8 @@
  * polls them): keycaps on the keyboard; on a controller its own buttons, by
  * family — the face button for R / Space / C / G (PlayStation's shapes, an
  * Xbox's or a Switch's letter, a generic pad's lit diamond position) and
- * the two sticks for the move cluster — and the tape strip's grow hint its
- * right shoulder. A hint on screen swaps its glyph in place. Each glyph is
+ * the two sticks for the move cluster. A hint on screen swaps its glyph in
+ * place. Each glyph is
  * drawn once per family: no frame draws or uploads one.
  */
 import * as THREE from 'three';
@@ -14,7 +14,6 @@ import Gamepad from 'core/Gamepad';
 import HintMemory from 'core/HintMemory';
 import InputDevice from 'core/InputDevice';
 import KeyHints from 'ui/KeyHints';
-import RecordingUI from 'ui/RecordingUI';
 
 const CROSS = 0;
 
@@ -82,7 +81,7 @@ const moveCluster = () =>
   [...document.querySelectorAll('#hint-move [data-glyph]')].map((el) => el.dataset.glyph);
 const deployGlyph = () => document.querySelector('#hint-deploy').firstElementChild.dataset.glyph;
 
-/** Stand beside a creature: the record and clap hints float over it. */
+/** Stand beside a creature: the absorb and clap hints float over it. */
 async function standBesideACreature() {
   ctx.loadPuzzle('clap-basic');
   await ctx.tick(32);
@@ -91,7 +90,7 @@ async function standBesideACreature() {
 
 describe('Each hint shows the glyph of the device in hand', () => {
   it.each([
-    // family, record (R), playback (Space), clap (C), deploy (G), move cluster
+    // family, absorb (R), release (Space), clap (C), deploy (G), move cluster
     ['keyboard', 'R', 'Space', 'C', 'G', ['W', 'A', 'S', 'D']],
     ['playstation', 'Square', 'Cross', 'Circle', 'Triangle', ['the left stick', 'the right stick']],
     ['xbox', 'X', 'A', 'B', 'Y', ['the left stick', 'the right stick']],
@@ -104,47 +103,30 @@ describe('Each hint shows the glyph of the device in hand', () => {
       'the top button',
       ['the left stick', 'the right stick'],
     ],
-  ])('on %s: %s, %s, %s, %s', (family, record, playback, clap, deploy, move) => {
+  ])('on %s: %s, %s, %s, %s', (family, absorb, release, clap, deploy, move) => {
     if (family !== 'keyboard') pickUpPad(family);
 
-    expect(shown(hints.recordSprite)).toBe(record);
-    expect(shown(hints.playbackSprite)).toBe(playback);
+    expect(shown(hints.absorbSprite)).toBe(absorb);
+    expect(shown(hints.releaseSprite)).toBe(release);
     expect(shown(hints.clapSprite)).toBe(clap);
     expect(deployGlyph()).toBe(deploy);
     expect(moveCluster()).toEqual(move);
   });
 
   it('the spacebar is wide; a face button is round, as tall as it is wide', () => {
-    const space = hints.playbackSprite.scale.x / hints.playbackSprite.scale.y;
+    const space = hints.releaseSprite.scale.x / hints.releaseSprite.scale.y;
     pickUpPad('playstation');
-    const cross = hints.playbackSprite.scale.x / hints.playbackSprite.scale.y;
+    const cross = hints.releaseSprite.scale.x / hints.releaseSprite.scale.y;
 
     expect(space).toBeGreaterThan(2);
     expect(cross).toBe(1);
-  });
-
-  it('the grow-the-tape hint is ► on the keyboard and the right shoulder on a pad', () => {
-    const tape = new RecordingUI();
-    const glyph = () => {
-      const el = tape.growArrow.firstChild;
-      return el.dataset ? el.dataset.glyph : el.textContent; // ► is text
-    };
-    expect(glyph()).toBe('►');
-
-    pickUpPad('playstation');
-    expect(glyph()).toBe('R1');
-    pickUpPad('xbox');
-    expect(glyph()).toBe('RB');
-    pressKey();
-    expect(glyph()).toBe('►');
-    tape.container.remove();
   });
 });
 
 describe('A hint on screen swaps its glyph in place', () => {
   it('the floating hints keep their place and stay up', async () => {
     await standBesideACreature();
-    expect(hints.recordSprite.visible).toBe(true);
+    expect(hints.absorbSprite.visible).toBe(true);
     expect(hints.clapSprite.visible).toBe(true);
     const where = hints.clapSprite.position.clone();
 
@@ -203,7 +185,7 @@ describe('No frame draws or uploads a glyph', () => {
 
     pickUpPad('playstation');
     const drawn = canvases.length;
-    const cross = hints.playbackSprite.material.map;
+    const cross = hints.releaseSprite.material.map;
     pressKey();
     pickUpPad('playstation');
     pressKey();
@@ -212,7 +194,7 @@ describe('No frame draws or uploads a glyph', () => {
     // Three sprites, two sticks and the deploy button
     expect(drawn).toBe(6);
     expect(canvases).toHaveLength(drawn);
-    expect(hints.playbackSprite.material.map).toBe(cross);
+    expect(hints.releaseSprite.material.map).toBe(cross);
   });
 
   it('a stick held over frame after frame swaps nothing', () => {

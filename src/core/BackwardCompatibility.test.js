@@ -69,7 +69,7 @@ describe('Backward compatibility', () => {
       const originalX = creature.position.x;
 
       // Play a consonant note (E4 = major 3rd above C4)
-      ctx.startPlayerPlayback([{ pitch: 'E4', length: '1/1' }], 480);
+      ctx.startSinging([{ pitch: 'E4', length: '1/1' }], 480);
       // Wait for instrument to start
       await new Promise((resolve) => {
         setTimeout(resolve, 20);
@@ -91,46 +91,37 @@ describe('Backward compatibility', () => {
       // Creature should have moved toward the player (lower X)
       expect(creature.position.x).toBeLessThan(originalX);
     } finally {
-      ctx.stopPlayerPlayback();
+      ctx.stopSinging();
       jest.useFakeTimers();
     }
   }, 10000);
 
-  it('recording works identically in flat puzzles', async () => {
+  it('absorbing works identically in flat puzzles', async () => {
     ctx.loadPuzzle('recording-basic');
     await ctx.tick(16);
 
-    // Start recording
-    ctx.holdKey('r');
+    // The pole absorbs the creature in reach
+    ctx.pressKey('r');
+    await ctx.finishPole();
 
-    // Advance 4 beats (creature sings at interval=4)
-    await ctx.advanceBeats(4);
-
-    // Stop recording
-    ctx.releaseKey('r');
-
-    // Song should be captured in inventory slot 0
-    const recorded = ctx.getInventorySlot(0);
-    expect(recorded).not.toBeNull();
-    expect(recorded).toHaveLength(1);
-    expect(recorded[0].pitch).toBe('C4');
+    // It is held in inventory slot 0
+    const held = ctx.getInventorySlot(0);
+    expect(held).not.toBeNull();
+    expect(held.song).toHaveLength(1);
+    expect(held.song[0].pitch).toBe('C4');
   });
 
   it('gate activation works identically in flat puzzles', async () => {
     ctx.loadPuzzle('listening-gate-basic');
     await ctx.tick(16);
 
-    // Set up inventory with the correct song
-    ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-    ctx.setActiveSlot(0);
-
     // Verify gate starts closed
     const gates = ctx.getGates();
     expect(gates).toHaveLength(1);
     expect(ctx.isGateOpen(gates[0])).toBe(false);
 
-    // Play the song
-    ctx.pressKey('space');
+    // A singer at the player's position sings the song
+    ctx.startSinging([{ pitch: 'C4', length: '1/4' }]);
 
     // Gates open AS the song is performed; check within the open window
     await ctx.advanceBeats(2);

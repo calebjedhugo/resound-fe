@@ -10,14 +10,11 @@
 
 describe('Creature reaction to harmonic intervals', () => {
   /**
-   * Helper to set up player playback of a specific pitch
-   * Uses the test context API instead of direct PlaybackManager manipulation
+   * A test singer at the player's position sings a whole note of `pitch`
+   * (the player's tape did until 2026-11-23)
    */
-  const setupPlayerSong = (pitch) => {
-    // Create a song with the specified pitch at 480 BPM (whole note = 500ms)
-    const song = [{ pitch, length: '1/1' }];
-    ctx.setInventorySlot(0, song);
-    ctx.setActiveSlot(0);
+  const singAtPlayer = (pitch) => {
+    ctx.startSinging([{ pitch, length: '1/1' }]);
   };
 
   describe('creature does not react when notes do not overlap in time', () => {
@@ -35,8 +32,7 @@ describe('Creature reaction to harmonic intervals', () => {
 
       // Now play a dissonant note (minor 2nd: D4 vs D#4)
       // Creature should NOT react since it's not currently singing
-      setupPlayerSong('D#4');
-      ctx.holdKey('space');
+      singAtPlayer('D#4');
       await ctx.advanceBeats(4);
 
       // Creature should not have moved
@@ -53,8 +49,7 @@ describe('Creature reaction to harmonic intervals', () => {
       const originalX = creature.position.x;
 
       // Creature sings C4, player plays E4 = major 3rd = consonant = attraction
-      setupPlayerSong('E4');
-      ctx.holdKey('space');
+      singAtPlayer('E4');
       await ctx.advanceBeats(4);
 
       expect(creature.position.x).toBeLessThan(originalX);
@@ -68,8 +63,7 @@ describe('Creature reaction to harmonic intervals', () => {
       const originalX = creature.position.x;
 
       // Creature sings C4, player plays C#4 = minor 2nd = dissonant = repulsion
-      setupPlayerSong('C#4');
-      ctx.holdKey('space');
+      singAtPlayer('C#4');
       await ctx.advanceBeats(4);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
@@ -83,8 +77,7 @@ describe('Creature reaction to harmonic intervals', () => {
       const originalX = creature.position.x;
 
       // Creature sings C4, player plays G4 = perfect 5th = no movement
-      setupPlayerSong('G4');
-      ctx.holdKey('space');
+      singAtPlayer('G4');
       await ctx.advanceBeats(4);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
@@ -98,8 +91,7 @@ describe('Creature reaction to harmonic intervals', () => {
       const originalX = creature.position.x;
 
       // Creature sings C4, player plays C4 = unison = no movement
-      setupPlayerSong('C4');
-      ctx.holdKey('space');
+      singAtPlayer('C4');
       await ctx.advanceBeats(4);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
@@ -113,8 +105,7 @@ describe('Creature reaction to harmonic intervals', () => {
       const originalX = creature.position.x;
 
       // Creature sings C4, player plays C5 = octave = no movement
-      setupPlayerSong('C5');
-      ctx.holdKey('space');
+      singAtPlayer('C5');
       await ctx.advanceBeats(4);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);

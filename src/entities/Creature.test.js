@@ -50,10 +50,10 @@ describe('Creature movement from consonance/dissonance', () => {
     }
   };
 
-  // Helper to start player instrument playback (works with real timers)
+  // Helper to start the test singer (works with real timers)
   // Uses high BPM (480) and whole note for faster test execution
-  const startPlayerPlayback = async (testCtx, pitch) => {
-    testCtx.startPlayerPlayback([{ pitch, length: '1/1' }], 480);
+  const startSinging = async (testCtx, pitch) => {
+    testCtx.startSinging([{ pitch, length: '1/1' }], 480);
     // Wait for instrument to start
     // eslint-disable-next-line no-promise-executor-return
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -63,18 +63,18 @@ describe('Creature movement from consonance/dissonance', () => {
     // Switch to real timers for movement tests
     jest.useRealTimers();
     // Reset playback state using test context API
-    ctx.resetPlaybackState();
+    ctx.stopSinging();
   });
 
   afterEach(() => {
     // Stop any playback and reset state using test context API
-    ctx.stopPlayerPlayback();
+    ctx.stopSinging();
     // Restore fake timers for other tests
     jest.useFakeTimers();
   });
 
   describe('attraction from consonant intervals', () => {
-    it('moves toward player when player plays consonant interval (major 3rd)', async () => {
+    it('moves toward player when a singer at the player sings consonant interval (major 3rd)', async () => {
       ctx.loadPuzzle('creature-consonance');
 
       const creatures = ctx.getCreatures();
@@ -82,7 +82,7 @@ describe('Creature movement from consonance/dissonance', () => {
       const originalX = creature.position.x;
 
       // Start playback immediately and run long enough to cover multiple singing cycles
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeLessThan(originalX);
@@ -98,7 +98,7 @@ describe('Creature movement from consonance/dissonance', () => {
       creature.position.x = 17;
       creature.position.z = 15;
 
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 800);
 
       const player = ctx.getPlayerPosition();
@@ -107,27 +107,27 @@ describe('Creature movement from consonance/dissonance', () => {
       expect(dist).toBeGreaterThanOrEqual(1.25);
     }, 10000);
 
-    it('moves toward player when player plays consonant interval (minor 3rd)', async () => {
+    it('moves toward player when a singer at the player sings consonant interval (minor 3rd)', async () => {
       ctx.loadPuzzle('creature-consonance');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'Eb4');
+      await startSinging(ctx, 'Eb4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeLessThan(originalX);
     }, 10000);
 
-    it('moves toward player when player plays consonant interval (major 6th)', async () => {
+    it('moves toward player when a singer at the player sings consonant interval (major 6th)', async () => {
       ctx.loadPuzzle('creature-consonance');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'A4');
+      await startSinging(ctx, 'A4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeLessThan(originalX);
@@ -135,40 +135,40 @@ describe('Creature movement from consonance/dissonance', () => {
   });
 
   describe('repulsion from dissonant intervals', () => {
-    it('moves away from player when player plays dissonant interval (minor 2nd)', async () => {
+    it('moves away from player when a singer at the player sings dissonant interval (minor 2nd)', async () => {
       ctx.loadPuzzle('creature-dissonance');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'C#4');
+      await startSinging(ctx, 'C#4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
     }, 10000);
 
-    it('moves away from player when player plays dissonant interval (tritone)', async () => {
+    it('moves away from player when a singer at the player sings dissonant interval (tritone)', async () => {
       ctx.loadPuzzle('creature-dissonance');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'F#4');
+      await startSinging(ctx, 'F#4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
     }, 10000);
 
-    it('moves away from player when player plays dissonant interval (major 7th)', async () => {
+    it('moves away from player when a singer at the player sings dissonant interval (major 7th)', async () => {
       ctx.loadPuzzle('creature-dissonance');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'B4');
+      await startSinging(ctx, 'B4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
@@ -176,53 +176,53 @@ describe('Creature movement from consonance/dissonance', () => {
   });
 
   describe('no movement from perfect intervals', () => {
-    it('does not move when player plays unison (same pitch)', async () => {
+    it('does not move when a singer at the player sings unison (same pitch)', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'C4');
+      await startSinging(ctx, 'C4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
     }, 10000);
 
-    it('does not move when player plays octave', async () => {
+    it('does not move when a singer at the player sings octave', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'C5');
+      await startSinging(ctx, 'C5');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
     }, 10000);
 
-    it('does not move when player plays perfect 5th', async () => {
+    it('does not move when a singer at the player sings perfect 5th', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'G4');
+      await startSinging(ctx, 'G4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
     }, 10000);
 
-    it('does not move when player plays perfect 4th', async () => {
+    it('does not move when a singer at the player sings perfect 4th', async () => {
       ctx.loadPuzzle('creature-perfect-interval');
 
       const creatures = ctx.getCreatures();
       const creature = creatures[0];
       const originalX = creature.position.x;
 
-      await startPlayerPlayback(ctx, 'F4');
+      await startSinging(ctx, 'F4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeCloseTo(originalX, 1);
@@ -243,7 +243,7 @@ describe('Creature movement from consonance/dissonance', () => {
       const originalX = creature.position.x;
 
       // Now creature is resting (not singing until beat 8)
-      await startPlayerPlayback(ctx, 'C#4');
+      await startSinging(ctx, 'C#4');
       await realTimeUpdate(ctx, 400);
 
       // Should not move since creature isn't singing
@@ -258,7 +258,7 @@ describe('Creature movement from consonance/dissonance', () => {
       const originalX = creature.position.x;
 
       // C#4 against C4 = minor 2nd = dissonant = repulsion
-      await startPlayerPlayback(ctx, 'C#4');
+      await startSinging(ctx, 'C#4');
       await realTimeUpdate(ctx, 800);
 
       expect(creature.position.x).toBeGreaterThan(originalX);
@@ -268,11 +268,11 @@ describe('Creature movement from consonance/dissonance', () => {
       ctx.loadPuzzle('creature-consonance');
       const creature = ctx.getCreatures()[0];
       const originalX = creature.position.x;
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 800);
       expect(creature.position.x).toBeLessThan(originalX); // it was pulled
 
-      ctx.stopPlayerPlayback();
+      ctx.stopSinging();
       creature.calculateForces();
 
       expect(creature.forces).toEqual([]);
@@ -295,7 +295,7 @@ describe('Creature wall sliding', () => {
     const retriggerEvery = Math.round(400 / stepMs);
     for (let i = 0; i < steps; i += 1) {
       if (i % retriggerEvery === 0) {
-        testCtx.startPlayerPlayback([{ pitch, length: '1/1' }], 480);
+        testCtx.startSinging([{ pitch, length: '1/1' }], 480);
       }
       const dt = stepMs / 1000;
       const clock = testCtx.getMusicalClock();
@@ -308,11 +308,11 @@ describe('Creature wall sliding', () => {
 
   beforeEach(() => {
     jest.useRealTimers();
-    ctx.resetPlaybackState();
+    ctx.stopSinging();
   });
 
   afterEach(() => {
-    ctx.stopPlayerPlayback();
+    ctx.stopSinging();
     jest.useFakeTimers();
   });
 
@@ -380,12 +380,12 @@ describe('Creature-to-creature harmony', () => {
   beforeEach(() => {
     jest.useRealTimers();
     // Reset playback state using test context API
-    ctx.resetPlaybackState();
+    ctx.stopSinging();
   });
 
   afterEach(() => {
     // Stop any playback and reset state using test context API
-    ctx.stopPlayerPlayback();
+    ctx.stopSinging();
     jest.useFakeTimers();
   });
 
@@ -460,78 +460,42 @@ describe('Creature singing at correct intervals', () => {
   });
 });
 
-describe('Creature audible range', () => {
-  it('creature is not recordable when player is outside audible range', async () => {
-    // Creature at grid (5,0,0) -> world (15,0,0), audibleRange=10
-    // Player at (0,0,0) -> distance = 15, which is > audibleRange
+describe("Creature audible range and the pole's reach", () => {
+  // Creature at grid (5,0,0) -> world (15,0,0), audibleRange=10: the pole
+  // reaches it within audibleRange * 0.5 = 5
+  it("is out of the pole's reach when the player is outside its audible range", async () => {
     ctx.loadPuzzle('creature-audible-range');
-    await ctx.tick(16);
+    await ctx.tick(16); // player at distance 15 > range 10
 
-    // Initially player is out of audible range (distance 15 > range 10)
-    // Verify through recording behavior - attempt to record and verify nothing captured
-    ctx.holdKey('r');
-    await ctx.advanceBeats(5); // Wait for creature to sing (interval=4)
-    ctx.releaseKey('r');
+    ctx.pressKey('r');
+    await ctx.finishPole();
 
-    // Should not have recorded anything because player is out of range
-    const recorded = ctx.getInventorySlot(0);
-    expect(recorded).toBeNull();
+    expect(ctx.getInventorySlot(0)).toBeNull();
+    expect(ctx.getCreatures()).toHaveLength(1);
   });
 
-  it('player can record creature when within recording range', async () => {
+  it('is absorbed when the player is within its absorb range', async () => {
     ctx.loadPuzzle('creature-audible-range');
-
-    // Move player closer to creature (creature at world x=15)
-    // Recording range = audibleRange * 0.5 = 5
-    // Move player to distance 4 (within recording range)
-    ctx.setPlayerPosition({ x: 11, y: 0, z: 0 });
+    ctx.setPlayerPosition({ x: 11, y: 0, z: 0 }); // distance 4 < 5
     await ctx.tick(16);
 
-    // Verify recordability through actual recording behavior
-    ctx.holdKey('r');
-    await ctx.advanceBeats(5); // Wait for creature to sing (interval=4)
-    ctx.releaseKey('r');
+    ctx.pressKey('r');
+    await ctx.finishPole();
 
-    // Should have recorded the creature's song
-    const recorded = ctx.getInventorySlot(0);
-    expect(recorded).not.toBeNull();
-    expect(recorded[0].pitch).toBe('C4');
+    expect(ctx.getInventorySlot(0).song[0].pitch).toBe('C4');
+    expect(ctx.getCreatures()).toHaveLength(0);
   });
 
-  it('can record creature song when within recording range', async () => {
+  it('is out of reach outside its absorb range though inside its audible range', async () => {
     ctx.loadPuzzle('creature-audible-range');
-
-    // Move player within recording range
-    ctx.setPlayerPosition({ x: 11, y: 0, z: 0 });
+    ctx.setPlayerPosition({ x: 8, y: 0, z: 0 }); // distance 7: audible, not reachable
     await ctx.tick(16);
 
-    // Start recording and wait for creature to sing
-    ctx.holdKey('r');
-    await ctx.advanceBeats(5); // Wait for creature to sing (interval=4)
-    ctx.releaseKey('r');
+    ctx.pressKey('r');
+    await ctx.finishPole();
 
-    // Should have recorded the creature's song
-    const recorded = ctx.getInventorySlot(0);
-    expect(recorded).not.toBeNull();
-    expect(recorded[0].pitch).toBe('C4');
-  });
-
-  it('cannot record creature when outside recording range but inside audible range', async () => {
-    ctx.loadPuzzle('creature-audible-range');
-
-    // Recording range = 5, audible range = 10
-    // Move player to distance 7 (inside audible, outside recording)
-    ctx.setPlayerPosition({ x: 8, y: 0, z: 0 });
-    await ctx.tick(16);
-
-    // Try to record - should not capture anything
-    ctx.holdKey('r');
-    await ctx.advanceBeats(5);
-    ctx.releaseKey('r');
-
-    // Should not have recorded anything
-    const recorded = ctx.getInventorySlot(0);
-    expect(recorded).toBeNull();
+    expect(ctx.getInventorySlot(0)).toBeNull();
+    expect(ctx.getCreatures()).toHaveLength(1);
   });
 });
 
@@ -604,19 +568,19 @@ describe('Creature elevation behavior', () => {
       }
     };
 
-    const startPlayerPlayback = async (testCtx, pitch) => {
-      testCtx.startPlayerPlayback([{ pitch, length: '1/1' }], 480);
+    const startSinging = async (testCtx, pitch) => {
+      testCtx.startSinging([{ pitch, length: '1/1' }], 480);
       // eslint-disable-next-line no-promise-executor-return
       await new Promise((resolve) => setTimeout(resolve, 20));
     };
 
     beforeEach(() => {
       jest.useRealTimers();
-      ctx.resetPlaybackState();
+      ctx.stopSinging();
     });
 
     afterEach(() => {
-      ctx.stopPlayerPlayback();
+      ctx.stopSinging();
       jest.useFakeTimers();
     });
 
@@ -629,7 +593,7 @@ describe('Creature elevation behavior', () => {
 
       // Play E4 - consonant with C4 (major 3rd) = attraction toward player (north)
       // Player is at grid (7,5) on elevation 1, north of the ramp
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 6000);
 
       // Creature should have moved north along the ramp, increasing elevation
@@ -643,7 +607,7 @@ describe('Creature elevation behavior', () => {
       ctx.loadPuzzle('creature-elevation-ramp');
       const creature = ctx.getCreatures()[0];
 
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 400);
 
       expect(creature.mesh.position.x).toBe(creature.position.x);
@@ -661,7 +625,7 @@ describe('Creature elevation behavior', () => {
       expect(creature.position.y).toBe(0);
 
       // A single entity update should cause Y to update from getFloorY (ramp interpolation)
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 50);
 
       // Y should now reflect the ramp position (between 0 and ELEVATION_HEIGHT)
@@ -676,7 +640,7 @@ describe('Creature elevation behavior', () => {
       // Elevated floor starts at grid z=8 (elevation 1), no ramp at x=5
 
       // Play E4 - consonant = attraction toward player (north)
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 800);
 
       // Creature should NOT have crossed onto elevation 1
@@ -688,11 +652,11 @@ describe('Creature elevation behavior', () => {
       const creature = ctx.getCreatures()[0];
 
       // Push creature toward boundary
-      await startPlayerPlayback(ctx, 'E4');
+      await startSinging(ctx, 'E4');
       await realTimeUpdate(ctx, 600);
 
       // Stop playback so no new forces are applied
-      ctx.stopPlayerPlayback();
+      ctx.stopSinging();
 
       // Run a few more frames - with no forces and velocity zeroed on block, speed decays
       await realTimeUpdate(ctx, 100);
@@ -754,8 +718,8 @@ describe('Creature elevation behavior', () => {
       const dist = getDistance(creature.position, ctx.getPlayerPosition());
       expect(dist).toBeGreaterThan(creature.audibleRange);
 
-      // Creature should not be recordable (too far in 3D)
-      expect(creature.isRecordable).toBe(false);
+      // Out of the pole's reach too (too far in 3D)
+      expect(creature.isAbsorbable).toBe(false);
     });
   });
 });
@@ -1036,11 +1000,11 @@ describe('Creature look (ball lightning)', () => {
 
   beforeEach(() => {
     jest.useRealTimers();
-    ctx.resetPlaybackState();
+    ctx.stopSinging();
   });
 
   afterEach(() => {
-    ctx.stopPlayerPlayback();
+    ctx.stopSinging();
     jest.useFakeTimers();
   });
 
@@ -1106,7 +1070,7 @@ describe('Creature look (ball lightning)', () => {
     // resonance (D major's green) and the dissonance flickers
     ctx.loadPuzzle('creature-consonance');
     const creature = ctx.getCreatures()[0];
-    ctx.startPlayerPlayback([{ pitch: 'D4', length: '1/1' }], 480);
+    ctx.startSinging([{ pitch: 'D4', length: '1/1' }], 480);
 
     await realTimeUpdate(ctx, 48);
 
@@ -1121,7 +1085,7 @@ describe('Creature look (ball lightning)', () => {
     ctx.loadPuzzle('creature-consonance');
     const creature = ctx.getCreatures()[0];
     ctx.setPlayerPosition({ x: creature.position.x + 40, y: 0, z: creature.position.z });
-    ctx.startPlayerPlayback([{ pitch: 'D4', length: '1/1' }], 480);
+    ctx.startSinging([{ pitch: 'D4', length: '1/1' }], 480);
 
     await realTimeUpdate(ctx, 48);
 
@@ -1353,5 +1317,99 @@ describe('A creature leaving the world', () => {
     expect(sung.length).toBeGreaterThanOrEqual(9); // three songs or more
     expect(new Set(sung)).toEqual(new Set(['C4', 'E4']));
     expect(waves).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * Drawn into the pole (core/AbsorbManager): the body's vertex shader pulls
+ * every point into the tip, nearest first — suckPoint is its JS twin
+ * (CreatureLook's SUCK_GLSL). A teardrop stretched to the tip, never a
+ * sphere shrinking where it stands. The halo and the light it throws go
+ * with it.
+ */
+/* eslint-disable import/first -- section header (babel-jest hoists imports) */
+import CreatureLook, { suckPoint } from 'entities/CreatureLook';
+/* eslint-enable import/first */
+
+describe('A creature drawn into the pole', () => {
+  const TIP = { x: 0, y: 0, z: 1.05 }; // just off the near surface (+z faces the eye)
+
+  // Points over the unit sphere
+  const sphere = [];
+  for (let i = 0; i <= 12; i += 1) {
+    for (let j = 0; j < 16; j += 1) {
+      const theta = (Math.PI * i) / 12;
+      const phi = (2 * Math.PI * j) / 16;
+      sphere.push({
+        x: Math.sin(theta) * Math.cos(phi),
+        y: Math.sin(theta) * Math.sin(phi),
+        z: Math.cos(theta),
+      });
+    }
+  }
+  const drawn = (s) => sphere.map((p) => suckPoint(p, TIP, s, {}));
+  const along = (points) => points.map((p) => p.z);
+  const girth = (p) => Math.hypot(p.x, p.y);
+
+  it('is the creature untouched before the pole draws, and all in the tip at the end', () => {
+    drawn(0).forEach((p, i) => expect(p).toEqual(sphere[i]));
+    drawn(1).forEach((p) => {
+      expect(p.x).toBeCloseTo(TIP.x);
+      expect(p.y).toBeCloseTo(TIP.y);
+      expect(p.z).toBeCloseTo(TIP.z);
+    });
+  });
+
+  it('draws the side nearest the tip first and the far side last', () => {
+    const near = { x: 0, y: 0.6, z: 0.8 };
+    const far = { x: 0, y: 0.6, z: -0.8 };
+    const gap = (p) => Math.hypot(p.x - TIP.x, p.y - TIP.y, p.z - TIP.z);
+
+    const nearAt = suckPoint(near, TIP, 0.35, {});
+    const farAt = suckPoint(far, TIP, 0.35, {});
+
+    expect(gap(nearAt) / gap(near)).toBeLessThan(0.35); // most of the way in
+    expect(gap(farAt) / gap(far)).toBeGreaterThan(0.75); // barely started
+  });
+
+  it('pulls into a teardrop pointing at the tip, its far side still round: never a shrink', () => {
+    const points = drawn(0.4);
+    const zs = along(points);
+    const nearTip = points.filter((p) => p.z > 0.8);
+    const middle = points.filter((p) => Math.abs(p.z) < 0.2);
+
+    expect(Math.max(...zs)).toBeGreaterThan(1); // it reaches the tip
+    // ...narrowing into a funnel there, while the far half keeps its girth
+    // (a shrink, about any point, narrows all of it alike)
+    expect(Math.max(...nearTip.map(girth))).toBeLessThan(Math.max(...middle.map(girth)) * 0.6);
+    expect(Math.max(...points.map(girth))).toBeGreaterThan(0.8);
+  });
+
+  it('travels toward the tip as a whole, not only its near cap', () => {
+    const centroid = (points) => points.reduce((sum, p) => sum + p.z, 0) / points.length;
+
+    expect(centroid(drawn(0.25))).toBeGreaterThan(0.05);
+    expect(centroid(drawn(0.6))).toBeGreaterThan(centroid(drawn(0.25)) + 0.2);
+    expect(centroid(drawn(0.9))).toBeGreaterThan(centroid(drawn(0.6)));
+  });
+
+  it('takes its halo and the light it throws with it', () => {
+    const look = new CreatureLook(1);
+    look.noteOn();
+    look.update(0.016, true, null);
+    const strength = () => look.lightInto(new Float32Array(4), new Float32Array(3), 0);
+    const lit = strength();
+
+    look.setSuck(0.5, { x: 0, y: 1.3, z: 1.1 });
+    expect(strength()).toBeCloseTo(lit * 0.5);
+    expect(look.body.frustumCulled).toBe(false); // it reaches out of its sphere
+
+    look.setSuck(1, { x: 0, y: 1.3, z: 1.1 });
+    expect(strength()).toBe(0);
+    expect(look.halo.visible).toBe(false);
+
+    look.setSuck(0);
+    expect(strength()).toBeCloseTo(lit);
+    expect(look.body.frustumCulled).toBe(true);
   });
 });

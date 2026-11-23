@@ -1,61 +1,46 @@
 import CleansingTile from 'entities/CleansingTile';
 import gameState from 'core/GameState';
 
-// The CleansingTile (ruled 2026-07-12) replaces the hold-to-delete verb:
-// walking onto it empties the tape. The clear is edge-triggered on entry so a
-// player standing on it doesn't lose fresh takes, and a tile in a neighbor
-// area (simulating behind a doorway) never fires on the active player.
+// The CleansingTile: walking onto it makes it the ACTIVE cleanser (the
+// cleanser gate's destination). It used to empty the tape (2026-07-12);
+// since the tape holds creatures (2026-11-23) it leaves the inventory alone
+// (interim ruling). Edge-triggered on entry; a tile in a neighbor area
+// (simulating behind a doorway) never fires on the active player.
 const ON_TILE = { x: 30, y: 1.8, z: 30 };
 const OFF_TILE = { x: 0, y: 1.8, z: 0 };
 
-const take = (pitch) => ({ id: `take_${pitch}`, data: [{ pitch, length: '1/1' }] });
+const held = (pitch) => ({ id: `held_${pitch}`, spec: { song: [{ pitch, length: '1/1' }] } });
 
 beforeEach(() => {
   gameState.reset();
 });
 
 describe('CleansingTile', () => {
-  it('empties the tape when the player first steps onto it', () => {
+  it('leaves the creatures the player holds alone when stepped on', () => {
     const tile = new CleansingTile({ x: 30, y: 0, z: 30 });
-    gameState.player.inventory = [take('C4'), take('E4')];
+    const tape = [held('C4'), held('E4')];
+    gameState.player.inventory = [...tape];
     gameState.player.activeSlot = 1;
     gameState.player.position = { ...OFF_TILE };
     gameState.player.elevation = 0;
-
-    tile.update(0.016); // not on it yet
-    expect(gameState.player.inventory).toHaveLength(2);
+    tile.update(0.016);
 
     gameState.player.position = { ...ON_TILE };
-    tile.update(0.016); // stepped on — clears
-    expect(gameState.player.inventory).toEqual([null]);
-    expect(gameState.player.activeSlot).toBe(0);
-  });
-
-  it('does not re-clear takes recorded while still standing on the tile (edge-triggered)', () => {
-    const tile = new CleansingTile({ x: 30, y: 0, z: 30 });
-    gameState.player.position = { ...ON_TILE };
-    gameState.player.elevation = 0;
-
-    tile.update(0.016); // enter — clears the (empty) tape
-    // Player records without leaving the tile
-    gameState.player.inventory = [take('C4')];
-    tile.update(0.016);
-    tile.update(0.016);
-    expect(gameState.player.inventory).toHaveLength(1); // not wiped again
-
-    // Leaving and re-entering DOES clear again
+    tile.update(0.016); // stepped on
     gameState.player.position = { ...OFF_TILE };
     tile.update(0.016);
     gameState.player.position = { ...ON_TILE };
-    tile.update(0.016);
-    expect(gameState.player.inventory).toEqual([null]);
+    tile.update(0.016); // and again
+
+    expect(gameState.player.inventory).toEqual(tape);
+    expect(gameState.player.activeSlot).toBe(1);
   });
 
   it('ignores the active player when the tile lives in a neighbor area', () => {
     const tile = new CleansingTile({ x: 30, y: 0, z: 30 });
     tile.area = { id: 'neighbor' };
     gameState.activeArea = { id: 'here' };
-    gameState.player.inventory = [take('C4')];
+    gameState.player.inventory = [held('C4')];
     gameState.player.position = { ...ON_TILE };
     gameState.player.elevation = 0;
 
@@ -118,7 +103,7 @@ describe('CleansingTile', () => {
     expect(rebuilt.mesh.material.color.getHex()).toBe(CleansingTile.ACTIVE_COLOR);
   });
 
-  it('spikes the glow on a fresh clear, then settles back toward the resting pulse', () => {
+  it('spikes the glow on a fresh step, then settles back toward the resting pulse', () => {
     const tile = new CleansingTile({ x: 30, y: 0, z: 30 });
     gameState.player.position = { ...ON_TILE };
     gameState.player.elevation = 0;

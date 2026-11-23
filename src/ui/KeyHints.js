@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import gameState from 'core/GameState';
 import HintMemory from 'core/HintMemory';
-import RecordingManager from 'core/RecordingManager';
+import AbsorbManager from 'core/AbsorbManager';
 import DeployManager from 'core/DeployManager';
 import InputDevice, { KEYBOARD } from 'core/InputDevice';
 import { glyphFor } from 'core/inputGlyphs';
 import { makeGlyphCanvas, makeGlyphElement } from 'ui/glyphCanvas';
 import { getDistance } from 'core/utils';
-import { CLAP_RANGE } from 'core/constants';
+import { CLAP_RANGE, CREATURE_HOVER_HEIGHT } from 'core/constants';
 
 /**
  * KeyHints - wordless contextual key hints.
@@ -18,14 +18,15 @@ import { CLAP_RANGE } from 'core/constants';
  * hint for the rest of the playthrough — each lesson happens once:
  *
  *   move     - W A S D cluster, bottom-center HUD; retires on first movement
- *   record   - "R" sprite floating over a creature in recording range;
- *              retires when a recording with notes lands in a slot
- *   playback - spacebar sprite over a gate/fountain in playback reach;
- *              retires on the first playback keypress
- *   slots    - (rendered by RecordingUI, not here) a ghost tape slot that
- *              blooms at the next position with a pulsing ► when recording
- *              over the filled LAST slot is imminent; retires on first cursor
- *              move. See RecordingUI.updateGrowHint.
+ *   record   - the ABSORB hint (the lesson keeps its puzzle id): "R"
+ *              floating over the creature R would absorb (core/AbsorbManager);
+ *              retires on the first absorb
+ *   playback - the RELEASE hint (likewise): the spacebar floating over the
+ *              spot Space would release the cursor slot's creature onto,
+ *              while it holds one and the spot is good; retires on the
+ *              first release
+ *   (slots   - the tape's grow hint, gone 2026-11-23: an absorb never
+ *              overwrites a slot, so there is nothing to warn of)
  *   clap     - "C" sprite over the nearest creature within clap range,
  *              shown steadily whenever a clap could land (not gated on the
  *              fleeting moment two creatures sing at once — that was flaky);
@@ -144,10 +145,6 @@ class KeyHints {
     `;
     document.body.appendChild(this.deployEl);
 
-    // The "grow the tape" (slots) hint lives in the tape strip itself now —
-    // RecordingUI blooms a ghost slot with a pulsing ► (a pad: its right
-    // shoulder) at the next position.
-
     const style = document.createElement('style');
     style.textContent = `
       @keyframes hint-breathe {
@@ -158,16 +155,16 @@ class KeyHints {
     document.head.appendChild(style);
 
     // In-world sprites, by the action each one hints
-    this.recordSprite = makeHintSprite();
-    this.playbackSprite = makeHintSprite();
+    this.absorbSprite = makeHintSprite();
+    this.releaseSprite = makeHintSprite();
     this.clapSprite = makeHintSprite();
     this._sprites = [
-      ['record', this.recordSprite],
-      ['play', this.playbackSprite],
+      ['absorb', this.absorbSprite],
+      ['release', this.releaseSprite],
       ['clap', this.clapSprite],
     ];
-    this.scene.add(this.recordSprite);
-    this.scene.add(this.playbackSprite);
+    this.scene.add(this.absorbSprite);
+    this.scene.add(this.releaseSprite);
     this.scene.add(this.clapSprite);
 
     // Every glyph drawn so far, by family: each hint's sprite texture (and
@@ -181,14 +178,13 @@ class KeyHints {
     this._stillTime = 0;
     this._startPosition = null;
 
-    // Playback is a discrete keypress with no polled state, so observe the
+    // Clapping is a discrete keypress with no polled state, so observe the
     // key directly. Non-capture: the start gate's capture-phase dismissal
     // stops propagation, so the waking keypress can't retire the hint.
+    // (Absorb and release retire their own hints: core/AbsorbManager.)
     this._keyHandler = (event) => {
       if (gameState.mode !== 'PLAYING') return;
-      if (event.code === 'Space') {
-        if (gameState.player.inventory.some(Boolean)) HintMemory.retire('playback');
-      } else if (event.code === 'KeyC' && this.clapSprite.visible) {
+      if (event.code === 'KeyC' && this.clapSprite.visible) {
         // Clapping at the hinted moment (a clashing chorus in clap range)
         // is the lesson performed.
         HintMemory.retire('clap');
@@ -258,8 +254,8 @@ class KeyHints {
   update(deltaTime) {
     this._bobPhase += deltaTime * 2.5;
     this._updateMove(deltaTime);
-    this._updateRecord();
-    this._updatePlayback();
+    this._updateAbsorb();
+    this._updateRelease();
     this._updateClap();
     this._updateDeploy();
   }
@@ -300,49 +296,30 @@ class KeyHints {
     }
   }
 
-  _updateRecord() {
-    // Retires on the first recording that actually captured notes, however it
-    // was made — the slot pop confirms the deed.
-    if (!HintMemory.isRetired('record')) {
-      const landed = gameState.player.inventory.some((slot) => slot && slot.data.length > 0);
-      if (landed) HintMemory.retire('record');
-    }
-    if (HintMemory.isRetired('record')) {
-      this.recordSprite.visible = false;
+  _updateAbsorb() {
+    // While the pole works, the pole carries the message
+    const target =
+      HintMemory.isRetired('record') || AbsorbManager.busy ? null : AbsorbManager.target();
+    if (!target) {
+      this.absorbSprite.visible = false;
       return;
     }
-    const { creaturesInRange } = gameState.recording;
-    // While recording, the red pulse carries the message; hide the keycap.
-    if (creaturesInRange.length === 0 || RecordingManager.isRecording()) {
-      this.recordSprite.visible = false;
-      return;
-    }
-    this._floatOver(this.recordSprite, creaturesInRange[0].position);
+    this._floatOver(this.absorbSprite, target.position);
   }
 
-  _updatePlayback() {
-    if (HintMemory.isRetired('playback')) {
-      this.playbackSprite.visible = false;
+  _updateRelease() {
+    const held = gameState.player.inventory[gameState.player.activeSlot];
+    if (HintMemory.isRetired('playback') || !held || AbsorbManager.busy) {
+      this.releaseSprite.visible = false;
       return;
     }
-    // The whole tape plays on Space; its performance carries as far as the
-    // loudest take it contains
-    const takes = gameState.player.inventory.filter(Boolean);
-    if (takes.length === 0) {
-      this.playbackSprite.visible = false;
+    // Over the spot it would come out onto, when there is one
+    const spot = AbsorbManager.releaseSpot(held.spec.size);
+    if (!spot.valid) {
+      this.releaseSprite.visible = false;
       return;
     }
-    const reach = Math.max(...takes.map((t) => t.sourceRange || 0));
-    const target = gameState.entities.find(
-      (e) =>
-        ((e.type === 'gate' && !e.isOpen) || (e.type === 'fountain' && !e.isActivated)) &&
-        getDistance(gameState.player.position, e.position) <= reach
-    );
-    if (!target) {
-      this.playbackSprite.visible = false;
-      return;
-    }
-    this._floatOver(this.playbackSprite, target.position);
+    this._floatOver(this.releaseSprite, spot, held.spec.size * 2 + CREATURE_HOVER_HEIGHT);
   }
 
   _updateClap() {
@@ -370,10 +347,10 @@ class KeyHints {
     this._floatOver(this.clapSprite, inClapRange[0].c.position);
   }
 
-  _floatOver(sprite, position) {
+  _floatOver(sprite, position, height = SPRITE_HEIGHT) {
     sprite.position.set(
       position.x,
-      position.y + SPRITE_HEIGHT + Math.sin(this._bobPhase) * BOB_AMPLITUDE,
+      position.y + height + Math.sin(this._bobPhase) * BOB_AMPLITUDE,
       position.z
     );
     sprite.material.opacity = 0.75 + 0.25 * Math.sin(this._bobPhase * 1.3);
@@ -384,8 +361,8 @@ class KeyHints {
   hideAll() {
     this.moveEl.style.opacity = '0';
     this.deployEl.style.opacity = '0';
-    this.recordSprite.visible = false;
-    this.playbackSprite.visible = false;
+    this.absorbSprite.visible = false;
+    this.releaseSprite.visible = false;
     this.clapSprite.visible = false;
     this._stillTime = 0;
     this._startPosition = null;
@@ -399,8 +376,8 @@ class KeyHints {
     );
     this.moveEl.remove();
     this.deployEl.remove();
-    this.scene.remove(this.recordSprite);
-    this.scene.remove(this.playbackSprite);
+    this.scene.remove(this.absorbSprite);
+    this.scene.remove(this.releaseSprite);
     this.scene.remove(this.clapSprite);
   }
 }

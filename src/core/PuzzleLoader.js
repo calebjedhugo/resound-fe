@@ -9,6 +9,7 @@ import CleansingTile from 'entities/CleansingTile';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import Area from 'core/Area';
 import AudioPrewarm from 'core/AudioPrewarm';
+import CreatureRegistry from 'core/CreatureRegistry';
 import ElevationGrid from 'core/ElevationGrid';
 import runInIdleSlices from 'core/idleSlices';
 import NotationDisplay from 'ui/NotationDisplay';
@@ -152,7 +153,7 @@ class PuzzleLoader {
     }
 
     // Create entities
-    puzzleData.entities.forEach((entityData) => {
+    puzzleData.entities.forEach((entityData, index) => {
       let entity = null;
 
       // Scale the position from grid coordinates to world coordinates
@@ -165,7 +166,11 @@ class PuzzleLoader {
       try {
         switch (entityData.type) {
           case 'creature':
-            entity = new Creature(scaledPosition, entityData.data || {});
+            // One the pole has taken stays taken (core/CreatureRegistry)
+            if (!CreatureRegistry.isAbsorbed(puzzleData.id, index)) {
+              entity = new Creature(scaledPosition, entityData.data || {});
+              CreatureRegistry.tagOrigin(entity, puzzleData.id, index);
+            }
             break;
           case 'gate':
             entity = new Gate(scaledPosition, {
@@ -216,6 +221,14 @@ class PuzzleLoader {
       }
     });
 
+    // ...and every creature the pole let out here lives here again, where it
+    // stood when the area was last pruned
+    for (const { key, spec, position } of CreatureRegistry.releasedIn(puzzleData.id)) {
+      const creature = new Creature({ ...position }, spec);
+      CreatureRegistry.tagReleased(creature, puzzleData.id, key);
+      entityManager.add(creature);
+    }
+
     if (wallPositions.length > 0) {
       // This area's own wall material: lit by its creatures, hidden per
       // pass by its doors (and freed with it: Area.dispose)
@@ -232,7 +245,7 @@ class PuzzleLoader {
       area.setStaticWalls(batch);
     }
 
-    // Its creatures' voices and the tape's piano notes, built in idle time
+    // Its creatures' voices, built in idle time
     AudioPrewarm.warmArea(area);
 
     return area;

@@ -231,7 +231,7 @@ describe('The storm answers a gate being solved', () => {
 
   /**
    * Run the world (and its sky) for `ms`, frame by frame as the game loop
-   * does — the tape's notes landing in their own frames (ctx.tick flushes
+   * does — the singer's notes landing in their own frames (ctx.tick flushes
    * every pending timer at its end, which would play a whole song at once)
    */
   async function frames(ms) {
@@ -245,13 +245,15 @@ describe('The storm answers a gate being solved', () => {
     }
   }
 
-  /** A gate beside the player wanting `song`, and the tape holding it. */
+  // What the test singer at the player's position sings (gateWanting)
+  let wanted = null;
+
+  /** A gate beside the player wanting `song` (the test singer will sing it). */
   function gateWanting(song, distance = WORLD_SCALE) {
-    ctx.loadPuzzle('listening-gate-multi-note'); // no creatures: the gate hears the tape alone
+    ctx.loadPuzzle('listening-gate-multi-note'); // no creatures: the gate hears the singer alone
     const player = ctx.getPlayerPosition();
     const gate = ctx.addGate({ position: { x: player.x, y: 0, z: player.z + distance }, song });
-    ctx.setInventorySlot(0, song);
-    ctx.setActiveSlot(0);
+    wanted = song;
     return gate;
   }
 
@@ -271,7 +273,7 @@ describe('The storm answers a gate being solved', () => {
 
   it('builds with the performance, in the light of the chord the gate hears', async () => {
     const gate = gateWanting([E_MAJOR, A_MAJOR]);
-    ctx.pressKey('space');
+    ctx.startSinging(wanted);
     await frames(1200); // into E major
 
     const early = stormResponse();
@@ -289,7 +291,7 @@ describe('The storm answers a gate being solved', () => {
 
   it('strikes lightning when the gate opens, and the strike dies away', async () => {
     const gate = gateWanting([E_MAJOR]);
-    ctx.pressKey('space');
+    ctx.startSinging(wanted);
     let peak = 0;
     for (let i = 0; i < 300 && !gate.isOpen; i += 1) {
       await frames(16); // eslint-disable-line no-await-in-loop
@@ -307,12 +309,11 @@ describe('The storm answers a gate being solved', () => {
 
   it('goes back to the neutral storm when the music stops', async () => {
     gateWanting([E_MAJOR, A_MAJOR]);
-    ctx.setInventorySlot(0, [E_MAJOR]); // the tape holds only half the song
-    ctx.pressKey('space');
+    ctx.startSinging([E_MAJOR]); // only half the song
     await frames(1200);
     expect(brightness(stormResponse().colour)).toBeGreaterThan(0);
 
-    await frames(12000); // the tape ran out: silence, the gate gave up, the storm settled
+    await frames(12000); // the singer stopped: silence, the gate gave up, the storm settled
 
     const { level, colour, strike } = stormResponse();
     expect(level).toBe(0);
@@ -322,15 +323,15 @@ describe('The storm answers a gate being solved', () => {
 
   it('a gate far from the player stirs it less than one beside them', async () => {
     gateWanting([E_MAJOR], WORLD_SCALE);
-    ctx.pressKey('space');
+    ctx.startSinging(wanted);
     await frames(1500);
     const near = stormResponse().level;
 
     calmStorm();
-    // Far, but still within the tape's reach
+    // Far, but still within the singer's reach
     const far = gateWanting([E_MAJOR], 12 * WORLD_SCALE);
     far.audibleRange = 60;
-    ctx.pressKey('space');
+    ctx.startSinging(wanted);
     await frames(1500);
 
     expect(stormResponse().level).toBeLessThan(near * 0.8);

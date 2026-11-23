@@ -1,20 +1,19 @@
 /**
- * Tape tests — the dynamic slot strip (ruled 2026-07-11; delete verb retired
- * 2026-07-12 in favor of the CleansingTile).
+ * Tape tests — the dynamic slot strip (ruled 2026-07-11; slots hold absorbed
+ * creatures since 2026-11-23).
  *
- * Behaviors under test: the tape boots with one slot and grows only via
- * ArrowRight on a FILLED last slot (progressive disclosure, capped); and
- * clear() empties it back to a single blank slot.
+ * Behaviors under test: the tape boots with one slot and grows via
+ * ArrowRight on a FILLED last slot (progressive disclosure, capped). Where
+ * an absorb lands (slotForAbsorb) is covered through the pole itself, in
+ * AbsorbManager.test.
  */
 import gameState from 'core/GameState';
 import Tape from 'core/Tape';
 import { TAPE_SLOT_CAP } from 'core/constants';
 
 const take = (pitch) => ({
-  id: `take_${pitch}_${Math.random()}`,
-  data: [{ pitch, length: '1/1' }],
-  tempo: 100,
-  sourceRange: 8,
+  id: `held_${pitch}_${Math.random()}`,
+  spec: { song: [{ pitch, length: '1/1' }] },
 });
 
 beforeEach(() => {
@@ -62,23 +61,5 @@ describe('cursor movement and growth', () => {
       Tape.right();
     }
     expect(gameState.player.inventory).toHaveLength(TAPE_SLOT_CAP);
-  });
-});
-
-describe('clear (CleansingTile)', () => {
-  it('empties a multi-take tape back to one blank slot with the cursor at the start', () => {
-    gameState.player.inventory = [take('C4'), take('E4'), take('G4')];
-    gameState.player.activeSlot = 2;
-
-    Tape.clear();
-
-    expect(gameState.player.inventory).toEqual([null]);
-    expect(gameState.player.activeSlot).toBe(0);
-  });
-
-  it('is a harmless no-op on an already-empty tape', () => {
-    Tape.clear();
-    expect(gameState.player.inventory).toEqual([null]);
-    expect(gameState.player.activeSlot).toBe(0);
   });
 });

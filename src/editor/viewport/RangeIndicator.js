@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RECORDING_RANGE_PERCENTAGE } from 'core/constants';
+import { ABSORB_RANGE_PERCENTAGE } from 'core/constants';
 
 /**
  * RangeIndicator
@@ -7,7 +7,7 @@ import { RECORDING_RANGE_PERCENTAGE } from 'core/constants';
  * Two nested translucent spheres around the selected creature that make its
  * reach legible in the editor:
  *   - audible range   (outer, fainter) = creature's audibleRange
- *   - recordable range (inner, denser) = audibleRange × RECORDING_RANGE_PERCENTAGE
+ *   - absorb range     (inner, denser) = audibleRange × ABSORB_RANGE_PERCENTAGE
  *
  * Audibility uses true 3D distance in-game (see core/utils.getDistance), so a
  * SPHERE is the accurate boundary — a flat disc would lie on elevated puzzles.
@@ -50,7 +50,7 @@ export default class RangeIndicator {
     this._group = new THREE.Group();
     this._group.position.set(center.x, center.y, center.z);
     this._group.add(this._sphere(range, AUDIBLE_COLOR, AUDIBLE_OPACITY));
-    this._group.add(this._sphere(range * RECORDING_RANGE_PERCENTAGE, RECORD_COLOR, RECORD_OPACITY));
+    this._group.add(this._sphere(range * ABSORB_RANGE_PERCENTAGE, RECORD_COLOR, RECORD_OPACITY));
     this._scene.add(this._group);
     this._range = range;
   }

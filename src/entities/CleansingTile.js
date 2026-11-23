@@ -1,20 +1,18 @@
 import * as THREE from 'three';
 import gameState from 'core/GameState';
-import Tape from 'core/Tape';
 import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
 import Entity from 'entities/Entity';
 import { CLEANSER_GOLD, CLEANSER_RING_MAP, createCleanserGeometry } from 'entities/EntityLook';
 
 /**
- * CleansingTile — a walkable floor tile that empties the player's tape when
- * they step onto it (ruled 2026-07-12, replacing the hold-to-delete verb).
+ * CleansingTile — a walkable floor tile that becomes the ACTIVE cleanser (the
+ * deployable cleanser gate's destination, core/DeployManager) when the
+ * player steps onto it, flashing as they do (edge-triggered on entry).
  *
- * Clearing the tape used to be a scary per-slot delete: a playtester who knew
- * nothing about the game refused to use it for fear of stranding himself. The
- * tile turns "reset my recordings" into a place in the world — a gently
- * pulsing pad you walk over on purpose, so it always reads as safe. The clear
- * is edge-triggered on entry (standing on it doesn't repeatedly wipe; leaving
- * and re-entering does).
+ * It used to empty the tape too (ruled 2026-07-12, replacing the
+ * hold-to-delete verb). Since the tape holds CREATURES (2026-11-23), a wipe
+ * would delete them, so it no longer touches the inventory — an INTERIM
+ * ruling for the designer to revisit (DESIGN.md).
  *
  * Like a gate, the player's coordinates only mean anything in THEIR active
  * area, so a tile in a neighbor area simulating behind a doorway never fires.
@@ -78,8 +76,8 @@ class CleansingTile extends Entity {
   }
 
   /**
-   * Per-frame: breathe the glow, decay any clear-flash, and clear the tape
-   * when the player first steps onto the tile.
+   * Per-frame: breathe the glow, decay any flash, and become the active
+   * cleanser when the player first steps onto the tile.
    */
   update(deltaTime) {
     const dt = deltaTime || 0.016;
@@ -87,8 +85,7 @@ class CleansingTile extends Entity {
 
     const inside = this._playerInside();
     if (inside && !this._wasPlayerInside) {
-      Tape.clear();
-      this._flash = 1; // spike the glow so the wipe reads as caused by the tile
+      this._flash = 1; // spike the glow: the step is what claimed the tile
       // Stepping on a cleanser makes it the ACTIVE one — the destination of
       // a deployed cleanser gate. Stored positionally so it survives the
       // entity being pruned and rebuilt with its area.

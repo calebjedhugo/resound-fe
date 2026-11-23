@@ -6,7 +6,7 @@
  * while held), wrapping around at the ends; Enter or Space chooses the
  * focused entry (a controller's Cross); C backs out (its Circle), which
  * resumes from pause. The keys a menu takes act on the menu alone: nothing
- * in the world (the tape, a clap, the tape cursor) answers behind it.
+ * in the world (the pole, a clap, the tape cursor) answers behind it.
  */
 import gameState from 'core/GameState';
 import Gamepad from 'core/Gamepad';
@@ -255,10 +255,10 @@ describe('Choosing and backing out', () => {
 });
 
 describe('Nothing in the world answers a menu', () => {
-  it('Cross performs no tape, and Circle claps no clap', async () => {
+  it('Cross releases no creature, and Circle claps no clap', async () => {
     ctx.loadPuzzle('playback-basic');
     await ctx.tick(16);
-    ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
+    ctx.setInventorySlot(0, { song: [{ pitch: 'C4', length: '1/4' }] });
     ctx.clearEmittedNotes();
     const claps = jest.fn();
     ClapManager.setVisualCallback(claps);
@@ -269,12 +269,13 @@ describe('Nothing in the world answers a menu', () => {
     await ctx.advanceBeats(2);
     ClapManager.setVisualCallback(null);
 
-    expect(ctx.getEmittedNotes()).toEqual([]);
+    expect(ctx.getCreatures()).toEqual([]);
+    expect(ctx.getInventorySlot(0)).not.toBeNull();
     expect(claps).not.toHaveBeenCalled();
   });
 
   it('the tape cursor stays where it was (L1/R1, the d-pad left/right)', () => {
-    ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
+    ctx.setInventorySlot(0, { song: [{ pitch: 'C4', length: '1/4' }] });
 
     [R1, DPAD_RIGHT, L1, DPAD_LEFT].forEach((button) => tap(pad, button));
 

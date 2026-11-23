@@ -157,8 +157,8 @@ describe('PortalManager crossing', () => {
     PortalManager._onCrossed = null;
   });
 
-  it('recordings persist across the seam', async () => {
-    const take = { notes: [{ pitch: 'C4', length: '1/4' }], sourceRange: 15 };
+  it('the creatures held persist across the seam', async () => {
+    const take = { id: 'held', spec: { song: [{ pitch: 'C4', length: '1/4' }] } };
     gameState.player.inventory[0] = take;
     gate.open();
 
@@ -1092,10 +1092,10 @@ describe('PortalManager live neighbor (stage 3)', () => {
     expect(PortalManager.effectiveDistanceToPlayer(neighbor, creature.position)).toBeCloseTo(walk);
   });
 
-  it('a neighbor creature is audible but NOT recordable (recording is per-area)', async () => {
+  it("a neighbor creature is audible but NOT in the pole's reach (absorbing is per-area)", async () => {
     // Player just inside the gate cell, shy of the commit zone (entry would
     // teleport them): total doorway distance ~4.4 with the door open — well
-    // inside recording range if the creature were local
+    // inside absorb range if the creature were local
     gate.open();
     ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 2 * WORLD_SCALE + 1.4 });
 
@@ -1104,7 +1104,7 @@ describe('PortalManager live neighbor (stage 3)', () => {
     const total =
       getDistance(gameState.player.position, gate.position) +
       getDistance(creature.position, partnerGate.position);
-    expect(total).toBeLessThan(creature.recordingRange);
+    expect(total).toBeLessThan(creature.absorbRange);
     expect(ctx.getCreaturesInRange()).not.toContain(creature);
   });
 
@@ -1131,7 +1131,7 @@ describe('PortalManager live neighbor (stage 3)', () => {
     await ctx.advanceBeats(4);
     ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 3 * WORLD_SCALE });
 
-    ctx.startPlayerPlayback({ data: [{ pitch: 'C4', length: '1/4' }] });
+    ctx.startSinging({ data: [{ pitch: 'C4', length: '1/4' }] });
     await ctx.advanceBeats(4);
 
     expect(gate.isOpen).toBe(true);
@@ -1721,7 +1721,7 @@ describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () 
     const [gate] = ctx.getGates();
     ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 3 * WORLD_SCALE });
 
-    ctx.startPlayerPlayback({ data: [{ pitch: 'C4', length: '1/4' }] });
+    ctx.startSinging({ data: [{ pitch: 'C4', length: '1/4' }] });
     await ctx.advanceBeats(6);
 
     expect(gate.isOpen).toBe(false);
@@ -1741,7 +1741,7 @@ describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () 
     const [gate] = ctx.getGates();
     ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 3 * WORLD_SCALE });
 
-    ctx.startPlayerPlayback({ data: [{ pitch: 'C4', length: '1/4' }] });
+    ctx.startSinging({ data: [{ pitch: 'C4', length: '1/4' }] });
     await ctx.advanceBeats(6);
 
     expect(gate.isOpen).toBe(true);
@@ -1921,7 +1921,7 @@ describe('PortalManager same-area doorway sound (teleport doors are shortcuts)',
     expect(Math.max(...volumes)).toBeGreaterThan(0);
   });
 
-  it('...but is NOT recordable through the door (recording takes real proximity)', async () => {
+  it("...but is NOT in the pole's reach through the door (absorbing takes real proximity)", async () => {
     const creature = ctx.addCreature({
       position: { x: 5 * WORLD_SCALE, z: 1 * WORLD_SCALE },
       audibleRange: 15,
@@ -1931,7 +1931,7 @@ describe('PortalManager same-area doorway sound (teleport doors are shortcuts)',
 
     await ctx.tick(32);
 
-    expect(creature.isRecordable).toBe(false);
+    expect(creature.isAbsorbable).toBe(false);
     expect(ctx.getCreaturesInRange()).not.toContain(creature);
   });
 });

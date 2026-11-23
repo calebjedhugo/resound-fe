@@ -3,17 +3,15 @@ import AudioPrewarm from 'core/AudioPrewarm';
 import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
 import HarmonyAnalyzer from 'core/HarmonyAnalyzer';
-import PlaybackManager from 'core/PlaybackManager';
 import SongMatcher from 'core/SongMatcher';
 import resolveSlide from 'core/SlideResolver';
 import memoizeOnEntityList from 'core/entityListMemo';
 import { messiaenColourCached, midiOf, registerLuminosity } from 'core/messiaenColour';
 import { getDistance, getDistanceVolume } from 'core/utils';
 import {
-  RECORDING_RANGE_PERCENTAGE,
+  ABSORB_RANGE_PERCENTAGE,
   DEFAULT_CREATURE_MAX_SPEED,
   DEFAULT_CREATURE_SIZE,
-  PLAYER_SIZE,
   CREATURE_DECELERATION,
   CREATURE_REST_VELOCITY,
   CREATURE_PHYSICS_PASSES,
@@ -39,6 +37,37 @@ const soundCapable = memoizeOnEntityList((entities) =>
   entities.filter((entity) => entity.instrument)
 );
 
+/**
+ * A creature's VOICE: the timbre resound-sound's Random rolled for it once
+ * (waveform, filter, envelope, harmonics — Math.random, not seeded by the
+ * instrument id), copied so a creature rebuilt from a spec sounds the same.
+ * @param {Random} instrument
+ * @returns {?object}
+ */
+function voiceOf(instrument) {
+  if (!instrument || instrument.waveform === undefined) return null;
+  return {
+    waveform: instrument.waveform,
+    filterCutoff: instrument.filterCutoff,
+    envelope: { ...instrument.envelope },
+    harmonics: (instrument.harmonics || []).map((harmonic) => ({ ...harmonic })),
+  };
+}
+
+/** Give `instrument` a voice voiceOf took (before it has built any note). */
+function applyVoice(instrument, voice) {
+  if (!voice) return;
+  instrument.waveform = voice.waveform;
+  instrument.filterCutoff = voice.filterCutoff;
+  instrument.envelope = { ...voice.envelope };
+  instrument.harmonics = voice.harmonics.map((harmonic) => ({ ...harmonic }));
+}
+
+/** The first beat at or after `beat` congruent to `phase` modulo `interval`. */
+function nextBeatInPhase(beat, phase, interval) {
+  return phase + interval * Math.ceil((beat - phase) / interval - 1e-9);
+}
+
 class Creature extends Entity {
   constructor(position, data = {}) {
     super('creature', position, data);
@@ -52,7 +81,7 @@ class Creature extends Entity {
     this.song = data.song;
     this.interval = data.interval || 8; // Quarter notes between songs
     this.audibleRange = data.audibleRange || 15; // World units
-    this.recordingRange = this.audibleRange * RECORDING_RANGE_PERCENTAGE;
+    this.absorbRange = this.audibleRange * ABSORB_RANGE_PERCENTAGE;
 
     // Physical properties
     this.size = data.size || DEFAULT_CREATURE_SIZE; // Radius in world units
@@ -90,12 +119,18 @@ class Creature extends Entity {
     // every physics pass)
     this._forceVisitor = this._addForceFromSource.bind(this);
 
-    // Create unique instrument for this creature
+    // Create unique instrument for this creature: a random timbre, or the
+    // one it had before the pole took it (data.voice — toSpec)
     this.instrument = new Random(this.id);
+    applyVoice(this.instrument, data.voice);
     this.instrument.sourcePosition = this.position; // Set source position for listening
 
     // Set up note callback to emit to ListeningManager (for gates/fountains/creatures)
     this.instrument.noteCallback = (noteEvent) => {
+      // Once the pole has it (or before it is out), nothing more of its
+      // song reaches anyone
+      if (this.held) return;
+
       // Track current note for harmony analysis
       this.currentNote = noteEvent;
 
@@ -116,9 +151,20 @@ class Creature extends Entity {
     // Initialize to next beat boundary to prevent drift
     const currentBeat = gameState.musicalClock?.getCurrentBeat() || 0;
     this.nextSingBeat = Math.ceil(currentBeat); // Next integer beat
+    // A creature released from the pole keeps its old schedule's phase
+    // (data.phase: its next sing beat modulo its interval; see wake)
+    this._phase = typeof data.phase === 'number' ? data.phase : null;
+    if (this._phase !== null) {
+      this.nextSingBeat = nextBeatInPhase(currentBeat, this._phase, this.interval);
+    }
 
-    // Recording state
-    this.isRecordable = false; // Is player in recording range?
+    // Can the pole reach it from the player? (active area, absorbRange)
+    this.isAbsorbable = false;
+
+    // HELD by the pole (core/AbsorbManager): being drawn in, or not yet out
+    // (data.dormant: a released creature pouring out of the tip). A held
+    // creature sings nothing, feels no force and stays where it is.
+    this.held = !!data.dormant;
 
     // Fountains playing their song in our area (Fountain.activate): silent
     // while any is
@@ -152,6 +198,15 @@ class Creature extends Entity {
     // Skip if no musical clock initialized
     if (!gameState.musicalClock) return;
 
+    if (this.held) {
+      // On the pole: it only looks (the pole deforms it), out of reach of a
+      // second absorb, singing nothing and going nowhere
+      this.isAbsorbable = false;
+      this.updateAbsorbState();
+      this.updateLook(deltaTime);
+      return;
+    }
+
     const currentBeat = gameState.musicalClock.getCurrentBeat();
 
     // Check if it's time to sing (deterministic based on musical time)
@@ -178,18 +233,18 @@ class Creature extends Entity {
       const volume = getDistanceVolume(distance, this.audibleRange);
       this.instrument.updateVolume(this.hushCount > 0 ? 0 : volume);
 
-      // Check if in recording range. Recording takes real proximity, never a
+      // Within the pole's reach? Absorbing takes real proximity, never a
       // doorway: a creature audible through a door (neighbor area OR an
-      // in-level teleport) must be approached on its own side to record.
-      this.isRecordable = inActiveArea && direct <= this.recordingRange;
+      // in-level teleport) must be approached on its own side.
+      this.isAbsorbable = inActiveArea && direct <= this.absorbRange;
     } else {
       // Too far - silence
       this.instrument.updateVolume(0);
-      this.isRecordable = false;
+      this.isAbsorbable = false;
     }
 
-    // Update creatures in range for recording UI
-    this.updateRecordingState();
+    // Keep the absorbable list (key hint, R, the range badge) current
+    this.updateAbsorbState();
 
     // Visual "now singing" cue (audio has no visual equivalent otherwise)
     this.updateLook(deltaTime);
@@ -337,64 +392,71 @@ class Creature extends Entity {
     if (this.look) this.look.flash();
   }
 
-  /**
-   * Update recording state in game state
-   */
-  updateRecordingState() {
-    const { creaturesInRange } = gameState.recording;
-
-    if (this.isRecordable) {
-      // Add to recording range if not already there
-      if (!creaturesInRange.includes(this)) {
-        creaturesInRange.push(this);
-      }
-    } else {
-      // Remove from recording range
-      const index = creaturesInRange.indexOf(this);
-      if (index !== -1) {
-        creaturesInRange.splice(index, 1);
-      }
+  /** Keep gameState.absorb.inRange in step with isAbsorbable. */
+  updateAbsorbState() {
+    const { inRange } = gameState.absorb;
+    const index = inRange.indexOf(this);
+    if (this.isAbsorbable) {
+      if (index === -1) inRange.push(this);
+    } else if (index !== -1) {
+      inRange.splice(index, 1);
     }
   }
 
   /**
-   * Callback when a note is played nearby (from ListeningManager)
-   * Used only for logging/debug - force calculation happens in calculateForces()
-   * @param {Object} noteEvent - { pitch, length, timestamp, source, sourcePosition }
+   * Everything needed to build this creature again, identically, somewhere
+   * else (a slot of the tape holds one; core/CreatureRegistry keeps one per
+   * released creature): its song and timing, range, body, speed, its VOICE
+   * (the timbre its instrument rolled), and the PHASE of its schedule (its
+   * next sing beat modulo its interval), so a released creature sings on
+   * its old beat.
+   * @returns {object} data for `new Creature(position, spec)`
    */
-  onNoteCaptured(noteEvent) {
-    // Ignore own notes
-    if (noteEvent.source === this.id) return;
+  toSpec() {
+    const { interval } = this;
+    return {
+      song: this.song,
+      interval,
+      audibleRange: this.audibleRange,
+      size: this.size,
+      maxSpeed: this.maxSpeed,
+      voice: voiceOf(this.instrument),
+      phase: ((this.nextSingBeat % interval) + interval) % interval,
+    };
+  }
 
-    // Only log if we're currently singing and can react
-    if (!this.currentNote || !this.instrument.playbackState.isPlaying) return;
+  /**
+   * The pole has it (core/AbsorbManager): it stops singing NOW — the note
+   * sounding fades, nothing more of its song is heard by any gate — and
+   * stops moving. Its area removes it once the pole has drawn it in.
+   */
+  hold() {
+    if (this.held) return;
+    this.held = true;
+    if (this.instrument) this.instrument.dispose();
+    this.currentNote = null;
+    this.soundingNotes.length = 0;
+    this.velocity.x = 0;
+    this.velocity.z = 0;
+    this.forces.length = 0;
+    this.isAbsorbable = false;
+    this.updateAbsorbState();
+  }
 
-    // Check if source is within audible range (doorway-crossing notes carry
-    // their source->partner-gate leg as extraDistance)
-    const distance =
-      (noteEvent.extraDistance || 0) + getDistance(this.position, noteEvent.sourcePosition);
-    if (distance > this.audibleRange) return;
-
-    // Calculate harmony for logging
-    const interval = HarmonyAnalyzer.calculateInterval(this.currentNote.pitch, noteEvent.pitch);
-    const harmony = HarmonyAnalyzer.classifyInterval(interval);
-
-    // Log player-creature harmonies to gameState for DebugUI
-    if (noteEvent.source === 'player') {
-      const harmonyEvent = {
-        creature: this.id,
-        creaturePitch: this.currentNote.pitch,
-        playerPitch: noteEvent.pitch,
-        harmony,
-        interval,
-        timestamp: Date.now(),
-      };
-      gameState.harmonyLog.push(harmonyEvent);
-      // Keep only last 5 harmonies
-      if (gameState.harmonyLog.length > 5) {
-        gameState.harmonyLog.shift();
-      }
+  /**
+   * Out of the pole (a released creature, built dormant): it comes alive —
+   * physics, and singing on its old schedule's phase from here on.
+   */
+  wake() {
+    if (!this.held) return;
+    this.held = false;
+    const clock = gameState.musicalClock;
+    if (clock && this._phase !== null) {
+      this.nextSingBeat = nextBeatInPhase(clock.getCurrentBeat(), this._phase, this.interval);
+    } else if (clock) {
+      this.nextSingBeat = Math.ceil(clock.getCurrentBeat());
     }
+    this.prepareNextSong();
   }
 
   /**
@@ -492,15 +554,6 @@ class Creature extends Entity {
       ) {
         visit(entity.currentNote, entity.position, entity.size || DEFAULT_CREATURE_SIZE);
       }
-    }
-
-    // Also check player's playback — direct only when the player is in OUR
-    // area; otherwise the player is heard through a doorway (below)
-    const playerInstrument = PlaybackManager.getPlayerInstrument();
-    const playerHere = !this.area || this.area === gameState.activeArea;
-
-    if (playerHere && playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
-      visit(playerInstrument.currentNote, gameState.player.position, PLAYER_SIZE);
     }
 
     // Sources sounding in ADJACENT areas pull/push through the doorway: the
@@ -665,11 +718,9 @@ class Creature extends Entity {
       this.instrument.dispose();
     }
 
-    // Remove from recording range
-    const index = gameState.recording.creaturesInRange.indexOf(this);
-    if (index !== -1) {
-      gameState.recording.creaturesInRange.splice(index, 1);
-    }
+    // Out of the pole's reach for good
+    const index = gameState.absorb.inRange.indexOf(this);
+    if (index !== -1) gameState.absorb.inRange.splice(index, 1);
 
     // Unregister from listening manager
     ListeningManager.unregisterListener(this);

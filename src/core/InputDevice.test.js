@@ -273,21 +273,21 @@ describe("A pad's family, from its id", () => {
 
 describe("Each action's glyph", () => {
   it.each([
-    // family, play (Space), clap (C), record (R), deploy (G), tape cursor right
+    // family, release (Space), clap (C), absorb (R), deploy (G), tape cursor right
     [KEYBOARD, 'Space', 'C', 'R', 'G', 'Right arrow'],
     ['playstation', 'Cross', 'Circle', 'Square', 'Triangle', 'R1'],
     ['xbox', 'A', 'B', 'X', 'Y', 'RB'],
     ['switch', 'B', 'A', 'Y', 'X', 'R'],
     ['generic', 'the bottom button', 'the right button', 'the left button', 'the top button', 'RB'],
-  ])('on %s: %s, %s, %s, %s, %s', (family, play, clap, record, deploy, tapeRight) => {
+  ])('on %s: %s, %s, %s, %s, %s', (family, release, clap, absorb, deploy, tapeRight) => {
     expect(
-      ['play', 'clap', 'record', 'deploy', 'tapeRight'].map((a) => nameFor(a, family))
-    ).toEqual([play, clap, record, deploy, tapeRight]);
+      ['release', 'clap', 'absorb', 'deploy', 'tapeRight'].map((a) => nameFor(a, family))
+    ).toEqual([release, clap, absorb, deploy, tapeRight]);
   });
 
   it("a pad's face buttons are its standard layout's positions", () => {
     expect(
-      ['play', 'clap', 'record', 'deploy'].map((a) => glyphFor(a, 'generic').position)
+      ['release', 'clap', 'absorb', 'deploy'].map((a) => glyphFor(a, 'generic').position)
     ).toEqual(['bottom', 'right', 'left', 'top']);
   });
 
@@ -301,6 +301,6 @@ describe("Each action's glyph", () => {
   });
 
   it('a glyph is the same object every time it is asked for (nothing allocated per frame)', () => {
-    expect(glyphFor('record', 'switch')).toBe(glyphFor('record', 'switch'));
+    expect(glyphFor('absorb', 'switch')).toBe(glyphFor('absorb', 'switch'));
   });
 });

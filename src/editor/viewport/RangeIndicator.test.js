@@ -6,7 +6,7 @@
  * range must build exactly the spheres a fresh show would.
  */
 import RangeIndicator from 'editor/viewport/RangeIndicator';
-import { RECORDING_RANGE_PERCENTAGE } from 'core/constants';
+import { ABSORB_RANGE_PERCENTAGE } from 'core/constants';
 
 // The shared three mock, plus what three's real classes have and the mock
 // lacks: Object3D.traverse, and a sphere's construction parameters.
@@ -48,7 +48,7 @@ describe('RangeIndicator', () => {
     indicator.show(creature(12), { x: 1, y: 2, z: 3 });
 
     expect(scene.children).toHaveLength(1);
-    expect(radii()).toEqual([12, 12 * RECORDING_RANGE_PERCENTAGE]);
+    expect(radii()).toEqual([12, 12 * ABSORB_RANGE_PERCENTAGE]);
     expect(shown().position).toMatchObject({ x: 1, y: 2, z: 3 });
   });
 
@@ -75,7 +75,7 @@ describe('RangeIndicator', () => {
 
     expect(scene.children).toHaveLength(1);
     expect(shown()).not.toBe(oldGroup);
-    expect(radii()).toEqual([20, 20 * RECORDING_RANGE_PERCENTAGE]);
+    expect(radii()).toEqual([20, 20 * ABSORB_RANGE_PERCENTAGE]);
     expect(freed).toHaveBeenCalled();
   });
 

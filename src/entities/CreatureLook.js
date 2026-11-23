@@ -81,15 +81,50 @@ const NOISE_GLSL = /* glsl */ `
   }
 `;
 
+// The pole drawing a creature in (core/AbsorbManager), in the body's object
+// space (the unit sphere): every point travels into the pole's tip `tip`,
+// the side nearest it first and the far side last — `lead` orders them —
+// along a narrowing, twisting funnel, so the body is pulled out into a
+// teardrop whose point is the tip, never shrunk where it stands. s = 0 is
+// the creature, s = 1 every point at the tip; a release runs it backwards
+// (the far side pours out first, the near side leaves the tip last).
+// suckPoint below is its JS twin — change both.
+const SUCK_GLSL = /* glsl */ `
+  float suckLocal(vec3 p, vec3 axis, float s) {
+    float lead = 0.5 + 0.5 * dot(normalize(p), axis);
+    float k = clamp(s * 2.0 - (1.0 - lead), 0.0, 1.0);
+    return k * k * (3.0 - 2.0 * k);
+  }
+  vec3 suckInto(vec3 p, vec3 tip, float s) {
+    vec3 axis = normalize(tip);
+    float e = suckLocal(p, axis, s);
+    float tipAlong = length(tip);
+    float along = dot(p, axis);
+    vec3 lateral = p - axis * along;
+    // The bulk leans toward the tip before its own turn comes
+    float travel = min(1.0, e + s * (1.0 - e) * 0.2);
+    float newAlong = mix(along, tipAlong, travel);
+    // A funnel: the girth closes faster than the point travels, twisting
+    float squeeze = (1.0 - e) * (1.0 - e);
+    float ang = e * 2.4;
+    vec3 swirl = lateral * cos(ang) + cross(axis, lateral) * sin(ang);
+    return axis * newAlong + swirl * squeeze;
+  }
+`;
+
 const BODY_VERTEX = /* glsl */ `
   uniform float uTime;
   uniform float uExcite;
   uniform float uSeed;
+  uniform float uSuck;
+  uniform vec3 uTip;
   varying vec3 vObj;
   varying vec3 vNormalV;
   varying vec3 vViewV;
+  varying float vDraw;
   #include <common>
   #include <clipping_planes_pars_vertex>
+  ${SUCK_GLSL}
 
   void main() {
     vec3 p = position;
@@ -98,9 +133,26 @@ const BODY_VERTEX = /* glsl */ `
             + sin(p.y * 3.4 - uTime * 0.85 + uSeed * 1.7)
             + sin(p.z * 2.8 + uTime * 0.95 + uSeed * 2.3);
     p += normal * w * (0.012 + 0.016 * uExcite);
+    // The look (noise, film) rides the undeformed surface
     vObj = position;
+    vec3 n = normal;
+    vDraw = 0.0;
+    if (uSuck > 0.0) {
+      // Drawn into the pole's tip; the normal of the deformed surface by
+      // finite differences along two tangents
+      vec3 q = suckInto(p, uTip, uSuck);
+      vec3 t1 = normalize(cross(normal, abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+      vec3 t2 = cross(normal, t1);
+      vec3 da = suckInto(p + t1 * 0.02, uTip, uSuck) - q;
+      vec3 db = suckInto(p + t2 * 0.02, uTip, uSuck) - q;
+      vec3 dn = cross(da, db);
+      float len = length(dn);
+      if (len > 1e-10) n = dot(dn, normal) < 0.0 ? -dn / len : dn / len;
+      vDraw = suckLocal(p, normalize(uTip), uSuck);
+      p = q;
+    }
     vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
-    vNormalV = normalize(normalMatrix * normal);
+    vNormalV = normalize(normalMatrix * n);
     vViewV = -mvPosition.xyz;
     gl_Position = projectionMatrix * mvPosition;
     #include <clipping_planes_vertex>
@@ -128,9 +180,11 @@ const BODY_FRAGMENT = /* glsl */ `
   uniform vec3 uRefl1;
   uniform vec3 uRefl2;
   uniform vec3 uReflW;
+  uniform float uSuck;
   varying vec3 vObj;
   varying vec3 vNormalV;
   varying vec3 vViewV;
+  varying float vDraw;
   #include <common>
   #include <clipping_planes_pars_fragment>
   ${NOISE_GLSL}
@@ -266,6 +320,13 @@ const BODY_FRAGMENT = /* glsl */ `
       col = mix(bubbleCol, litCol, uExcite);
       a = mix(bubbleA, litA, uExcite);
     }
+    // On the pole: the body glows in its own light as it is drawn in, the
+    // stretch nearest the tip brightest (energy pouring into the pole)
+    if (uSuck > 0.0) {
+      float energy = min(1.0, uSuck * 5.0) * (0.35 + 0.65 * vDraw);
+      col = mix(col, uGlow * (0.6 + 0.6 * vDraw) + vec3(0.15 * vDraw), energy * 0.8);
+      a = mix(a, 0.45 + 0.5 * vDraw, energy);
+    }
     col = mix(col, vec3(1.0), uFlash); // clap flash
     a = mix(a, 1.0, uFlash);
     gl_FragColor = vec4(col, a);
@@ -372,6 +433,8 @@ const BODY_MATERIAL = new THREE.ShaderMaterial({
     uFlare: { value: 0 },
     uFlash: { value: 0 },
     uSeed: { value: 0 },
+    uSuck: { value: 0 },
+    uTip: { value: new THREE.Vector3(0, 0, 1) },
     ...colourUniforms(),
   },
   vertexShader: BODY_VERTEX,
@@ -438,9 +501,12 @@ function bindBody(look) {
   to.uExcite.value = from.uExcite.value;
   to.uFlash.value = from.uFlash.value;
   to.uSeed.value = from.uSeed.value;
-  // The rest is read only by the lit branch (uExcite > 0): a silent bubble
-  // leaves the last lit creature's values in place, so three uploads none
-  if (from.uExcite.value > 0) {
+  to.uSuck.value = from.uSuck.value;
+  if (from.uSuck.value > 0) to.uTip.value.copy(from.uTip.value);
+  // The rest is read only by the lit branch (uExcite > 0) and the pole's
+  // glow (uSuck > 0): a silent bubble leaves the last lit creature's values
+  // in place, so three uploads none
+  if (from.uExcite.value > 0 || from.uSuck.value > 0) {
     to.uFlare.value = from.uFlare.value;
     copyColours(to, from);
   }
@@ -459,6 +525,47 @@ function bindHalo(look) {
 }
 
 const NOOP = () => {};
+
+const smooth01 = (k) => k * k * (3 - 2 * k);
+
+/**
+ * The body vertex shader's suckInto, in JS (its twin — change both): where
+ * the unit-sphere point `p` is drawn to with the pole's tip at `tip` (both
+ * object space), `s` of the way in. Written into `out` ({x, y, z}).
+ * @returns {{x:number, y:number, z:number}} out
+ */
+export function suckPoint(p, tip, s, out = { x: 0, y: 0, z: 0 }) {
+  if (s <= 0) {
+    out.x = p.x;
+    out.y = p.y;
+    out.z = p.z;
+    return out;
+  }
+  const tipLen = Math.hypot(tip.x, tip.y, tip.z);
+  const ax = tip.x / tipLen;
+  const ay = tip.y / tipLen;
+  const az = tip.z / tipLen;
+  const pLen = Math.hypot(p.x, p.y, p.z) || 1;
+  const lead = 0.5 + 0.5 * ((p.x * ax + p.y * ay + p.z * az) / pLen);
+  const e = smooth01(Math.min(1, Math.max(0, s * 2 - (1 - lead))));
+  const along = p.x * ax + p.y * ay + p.z * az;
+  const lx = p.x - ax * along;
+  const ly = p.y - ay * along;
+  const lz = p.z - az * along;
+  const travel = Math.min(1, e + s * (1 - e) * 0.2);
+  const newAlong = along + (tipLen - along) * travel;
+  const squeeze = (1 - e) * (1 - e);
+  const c = Math.cos(e * 2.4);
+  const sn = Math.sin(e * 2.4);
+  // cross(axis, lateral)
+  const cx = ay * lz - az * ly;
+  const cy = az * lx - ax * lz;
+  const cz = ax * ly - ay * lx;
+  out.x = ax * newAlong + (lx * c + cx * sn) * squeeze;
+  out.y = ay * newAlong + (ly * c + cy * sn) * squeeze;
+  out.z = az * newAlong + (lz * c + cz * sn) * squeeze;
+  return out;
+}
 
 // The dissonance fringe's bursts: smooth 1D value noise over time, the same
 // for every pixel of a draw — so worked out here, once per creature per
@@ -659,8 +766,15 @@ class CreatureLook {
       uIntensity: { value: 0 },
       uFloorY: { value: 0 },
       uPull: { value: size },
+      uSuck: { value: 0 },
+      uTip: { value: new THREE.Vector3(0, 0, 1) },
       ...colourUniforms(),
     };
+
+    // The pole (core/AbsorbManager): how far into its tip the body is drawn
+    // (0..1) and where the tip is, in the world
+    this._suck = 0;
+    this._tipWorld = new THREE.Vector3();
 
     this.body = new THREE.Mesh(BODY_GEOMETRY, BODY_MATERIAL);
     this.body.scale.set(size, size, size);
@@ -730,7 +844,8 @@ class CreatureLook {
    * @returns {number} the strength written in (0: silent, casts nothing)
    */
   lightInto(position, colour, index) {
-    const strength = Math.max(this.glow * Math.min(1.4, this._lum), this._flash);
+    // Drawn into the pole, its light goes with it
+    const strength = Math.max(this.glow * Math.min(1.4, this._lum), this._flash) * (1 - this._suck);
     if (strength <= 0) return 0;
     const { x, y, z } = this.object.position;
     position[index * 4] = x;
@@ -741,6 +856,57 @@ class CreatureLook {
       colour[index * 3 + i] = (this._glow[i] + (1 - this._glow[i]) * white) * strength;
     }
     return strength;
+  }
+
+  /**
+   * The pole is drawing the body into its tip (or pouring it back out):
+   * `amount` 0 (the creature) .. 1 (all of it in the tip), the tip at
+   * `tipWorld`. The body deforms toward the tip in its vertex shader
+   * (SUCK_GLSL); the halo and the light it throws fade as it goes. Call
+   * after the frame's update (the tip is placed against where the body
+   * floats now). Allocation-free.
+   * @param {number} amount
+   * @param {{x:number, y:number, z:number}} [tipWorld]
+   */
+  setSuck(amount, tipWorld = null) {
+    this._suck = Math.min(1, Math.max(0, amount));
+    if (tipWorld) this._tipWorld.set(tipWorld.x, tipWorld.y, tipWorld.z);
+    this._writeSuck();
+  }
+
+  /** How far into the pole's tip the body is drawn (0..1). */
+  get suck() {
+    return this._suck;
+  }
+
+  /**
+   * Where the body's centre floats in the world (its rendered centre: the
+   * hover and the bob included), written into `out`.
+   */
+  centreInto(out) {
+    const { x, y, z } = this.object.position;
+    return out.set(x, y + this.float.position.y, z);
+  }
+
+  _writeSuck() {
+    const u = this._uniforms;
+    const s = this._suck;
+    u.uSuck.value = s;
+    if (s > 0) {
+      // The tip in the body's object space (the unit sphere, scaled by size)
+      const { x, y, z } = this.object.position;
+      const cy = y + this.float.position.y;
+      u.uTip.value.set(
+        (this._tipWorld.x - x) / this.size,
+        (this._tipWorld.y - cy) / this.size,
+        (this._tipWorld.z - z) / this.size
+      );
+    }
+    // The deformed body reaches out of the sphere three culls it by
+    this.body.frustumCulled = s <= 0;
+    const glow = this.glow * (1 - s);
+    u.uIntensity.value = glow;
+    this.halo.visible = glow > 0.002;
   }
 
   /** The harmony colour the look is showing/moving toward (core/messiaenColour's answer). */
@@ -914,6 +1080,13 @@ class CreatureLook {
     const haloRadius = this.size * (HALO_RADIUS + HALO_FLARE_GROWTH * this._flare);
     this.halo.scale.set(haloRadius, haloRadius, haloRadius);
     this.halo.visible = glow > 0.002;
+    if (this._suck > 0) this._writeSuck();
+  }
+
+  /** The colour of the light it glows with now (linear rgb), written into `out[0..2]`. */
+  glowColourInto(out) {
+    copy3(out, this._glow);
+    return out;
   }
 
   /**

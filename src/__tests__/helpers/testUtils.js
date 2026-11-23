@@ -6,22 +6,23 @@
 import gameState from 'core/GameState';
 import Area from 'core/Area';
 import ListeningManager from 'core/ListeningManager';
-import RecordingManager from 'core/RecordingManager';
-import PlaybackManager from 'core/PlaybackManager';
+import { Random } from 'resound-sound';
+import AbsorbManager from 'core/AbsorbManager';
 import ClapManager from 'core/ClapManager';
+import Tape from 'core/Tape';
 import PortalManager from 'core/PortalManager';
 import PuzzleLoader from 'core/PuzzleLoader';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import resolveSlide from 'core/SlideResolver';
-import { PLAYER_COLLISION_RADIUS } from 'core/constants';
+import { PLAYER_COLLISION_RADIUS, PLAYER_SIZE } from 'core/constants';
 import Creature from 'entities/Creature';
+import Entity from 'entities/Entity';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import { MockScene } from './mocks';
 
 // Import test puzzle fixtures
 import recordingBasic from '../fixtures/puzzles/recording-basic.json';
-import recordingMultiNote from '../fixtures/puzzles/recording-multi-note.json';
 import recordingOutOfRange from '../fixtures/puzzles/recording-out-of-range.json';
 import recordingTwoCreatures from '../fixtures/puzzles/recording-two-creatures.json';
 import recordingChord from '../fixtures/puzzles/recording-chord.json';
@@ -32,7 +33,6 @@ import clapCustomDisplacement from '../fixtures/puzzles/clap-custom-displacement
 import clapPerCreatureDisplacement from '../fixtures/puzzles/clap-per-creature-displacement.json';
 import clapTwoCreatures from '../fixtures/puzzles/clap-two-creatures.json';
 import playbackBasic from '../fixtures/puzzles/playback-basic.json';
-import playbackMultiNote from '../fixtures/puzzles/playback-multi-note.json';
 import listeningGateBasic from '../fixtures/puzzles/listening-gate-basic.json';
 import listeningFountainBasic from '../fixtures/puzzles/listening-fountain-basic.json';
 import listeningGateOutOfRange from '../fixtures/puzzles/listening-gate-out-of-range.json';
@@ -67,10 +67,65 @@ import portalWallsB from '../fixtures/puzzles/portal-walls-b.json';
 import deployBasic from '../fixtures/puzzles/deploy-basic.json';
 import portalTwoPairs from '../fixtures/puzzles/portal-two-pairs.json';
 
+/**
+ * A TEST SINGER: a sound source standing where the player stands, singing a
+ * song once (ctx.startSinging). The player sang the tape until 2026-11-23;
+ * tests of what a heard song does — gates and fountains judging it, the
+ * harmony forces and colour it gives creatures, the storm's answer — still
+ * need a source they control, so it takes the tape's place: it sounds from
+ * the player's position in the player's area, carrying `range`, and every
+ * listener hears it as it heard any source (ListeningManager, the area's
+ * entities for the forces, doorways). Test-only: nothing in the game sings
+ * for the player.
+ */
+class TestSinger extends Entity {
+  constructor(range) {
+    super('singer', null);
+    this.size = PLAYER_SIZE;
+    this.range = range;
+    this.currentNote = null;
+    this.instrument = new Random('singer');
+    this.instrument.noteCallback = (noteEvent) => {
+      this.currentNote = noteEvent;
+      noteEvent.sourceRange = this.range;
+      noteEvent.sourceArea = this.area || gameState.activeArea;
+      ListeningManager.emitNote(noteEvent);
+    };
+  }
+
+  // Always where the player is (the player's position object is replaced
+  // by moves and teleports)
+  get position() {
+    return gameState.player.position;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  set position(_) {
+    // Entity's constructor assigns one; the player's is the singer's
+  }
+
+  update() {
+    this.instrument.sourcePosition = gameState.player.position;
+  }
+
+  sing(song, tempo) {
+    this.instrument.sourcePosition = gameState.player.position;
+    this.instrument.play({ data: song, tempo, basis: 4 });
+  }
+
+  stop() {
+    this.currentNote = null;
+    this.instrument.stop();
+  }
+
+  dispose() {
+    this.instrument.dispose();
+  }
+}
+
 // Puzzle fixture registry
 const TEST_PUZZLES = {
   'recording-basic': recordingBasic,
-  'recording-multi-note': recordingMultiNote,
   'recording-out-of-range': recordingOutOfRange,
   'recording-two-creatures': recordingTwoCreatures,
   'recording-chord': recordingChord,
@@ -81,7 +136,6 @@ const TEST_PUZZLES = {
   'clap-per-creature-displacement': clapPerCreatureDisplacement,
   'clap-two-creatures': clapTwoCreatures,
   'playback-basic': playbackBasic,
-  'playback-multi-note': playbackMultiNote,
   'listening-gate-basic': listeningGateBasic,
   'listening-fountain-basic': listeningFountainBasic,
   'listening-gate-out-of-range': listeningGateOutOfRange,
@@ -131,6 +185,7 @@ function createTestContext(options = {}) {
   gameState.reset();
   ListeningManager.clear();
   ClapManager.reset();
+  AbsorbManager.reset();
 
   // The world's render scene (the active area's content group lives here)
   const mockScene = new MockScene();
@@ -156,6 +211,9 @@ function createTestContext(options = {}) {
 
   // Input simulation state
   const heldKeys = new Set();
+
+  // The test singer, while one sings (startSinging)
+  let singer = null;
 
   // The player's area's entity manager (sandbox until a puzzle loads)
   const activeEntityManager = () =>
@@ -234,6 +292,9 @@ function createTestContext(options = {}) {
         // walking into/out of an open linked gate's cell is detected per frame
         PortalManager.update();
 
+        // The pole's action, after the areas, as the game loop runs it
+        AbsorbManager.update(dt);
+
         // Advance Jest fake timers to trigger instrument callbacks. Must be
         // the async variant: instruments schedule successive notes through
         // await/microtask chains, and the sync variant defers all of that to
@@ -301,11 +362,6 @@ function createTestContext(options = {}) {
       const k = key.toLowerCase();
       heldKeys.delete(k);
       this.updateInputState();
-
-      // Handle key-up actions
-      if (k === 'r' && RecordingManager.isRecording()) {
-        RecordingManager.stopRecording();
-      }
     },
 
     /**
@@ -329,33 +385,39 @@ function createTestContext(options = {}) {
     },
 
     /**
-     * Handle key-down actions (recording, playback, etc.)
+     * Handle key-down actions (the pole, claps, the tape cursor) as
+     * createEventListeners does in play
      */
     handleKeyAction(key, isDown) {
       if (!isDown) return;
 
       switch (key) {
         case 'r':
-          if (!RecordingManager.isRecording()) {
-            RecordingManager.startRecording();
-          }
+          AbsorbManager.absorb();
           break;
         case 'space':
-          PlaybackManager.playTape();
+          AbsorbManager.release();
           break;
         case 'c':
           ClapManager.requestClap();
           break;
         case 'arrowleft':
-          gameState.player.activeSlot =
-            (gameState.player.activeSlot - 1 + gameState.player.maxInventorySize) %
-            gameState.player.maxInventorySize;
+          Tape.left();
           break;
         case 'arrowright':
-          gameState.player.activeSlot =
-            (gameState.player.activeSlot + 1) % gameState.player.maxInventorySize;
+          Tape.right();
           break;
         default:
+      }
+    },
+
+    /**
+     * Run the pole's action under way to its end (absorb or release)
+     */
+    async finishPole() {
+      for (let i = 0; i < 200 && AbsorbManager.busy; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await this.tick(16);
       }
     },
 
@@ -473,31 +535,30 @@ function createTestContext(options = {}) {
     // --- Inventory ---
 
     /**
-     * Get recorded song from inventory slot
+     * The creature spec a slot holds (Creature.toSpec), or null
      */
     getInventorySlot(slot) {
       const item = gameState.player.inventory[slot];
-      return item ? item.data : null;
+      return item ? item.spec : null;
     },
 
     /**
-     * Set inventory slot directly (for test setup). The tape is a dynamic
-     * array — grow it (with empty slots) to reach the requested index.
+     * Put a creature spec straight into a slot (test setup; null empties
+     * it). The tape is a dynamic array — grow it (with empty slots) to reach
+     * the requested index.
      */
-    setInventorySlot(slot, song) {
+    setInventorySlot(slot, spec) {
       while (gameState.player.inventory.length <= slot) {
         gameState.player.inventory.push(null);
       }
-      if (song) {
-        gameState.player.inventory[slot] = {
-          id: `test_${Date.now()}`,
-          data: song,
-          recordedAt: Date.now(),
-          tempo: gameState.musicalClock?.tempo || 120,
-        };
-      } else {
-        gameState.player.inventory[slot] = null;
-      }
+      gameState.player.inventory[slot] = spec
+        ? {
+            id: `test_${slot}_${Math.random()}`,
+            spec,
+            colour: [1, 1, 1],
+            css: 'rgb(255, 255, 255)',
+          }
+        : null;
     },
 
     /**
@@ -574,20 +635,6 @@ function createTestContext(options = {}) {
     },
 
     /**
-     * Start recording (for backwards compatibility)
-     */
-    startRecording() {
-      RecordingManager.startRecording();
-    },
-
-    /**
-     * Stop recording (for backwards compatibility)
-     */
-    stopRecording() {
-      RecordingManager.stopRecording();
-    },
-
-    /**
      * Get all creatures
      */
     getCreatures() {
@@ -625,58 +672,42 @@ function createTestContext(options = {}) {
       return fountain?.isActivated || false;
     },
 
-    // --- Playback ---
+    // --- A test singer (the tape's stand-in: see TestSinger) ---
 
     /**
-     * Start player playback for a song (for test setup)
-     * @param {Object} song - Song object with data array
-     * @param {number} tempoBpm - Tempo in BPM (default: puzzle tempo)
+     * A source at the player's position sings `song` once
+     * @param {Array} song - notes/chords
+     * @param {number} [tempoBpm] - default: the world clock's tempo
+     * @param {number} [range] - how far it carries (default 15)
      */
-    startPlayerPlayback(song, tempoBpm) {
-      const playerInstrument = PlaybackManager.getPlayerInstrument();
-      playerInstrument.sourcePosition = this.getPlayerPosition();
-      playerInstrument.play({
-        data: song.data || song,
-        tempo: tempoBpm || gameState.musicalClock?.tempo || 120,
-        basis: 4,
-      });
-      PlaybackManager.isPlaying = true;
+    startSinging(song, tempoBpm, range = 15) {
+      this.stopSinging();
+      const area = gameState.activeArea;
+      singer = new TestSinger(range);
+      area.entityManager.add(singer);
+      singer.sing(song.data || song, tempoBpm || gameState.musicalClock?.tempo || 120);
+      return singer;
     },
 
     /**
-     * Stop player playback and reset state
+     * The test singer stops and leaves (nothing if none sings)
      */
-    stopPlayerPlayback() {
-      PlaybackManager.isPlaying = false;
-      const playerInstrument = PlaybackManager.getPlayerInstrument();
-      playerInstrument.currentNote = null;
-      playerInstrument.stop?.();
+    stopSinging() {
+      if (!singer) return;
+      singer.stop();
+      if (singer.area && singer.area.entityManager.get(singer.id)) {
+        singer.area.entityManager.remove(singer.id);
+      }
+      singer = null;
     },
 
-    /**
-     * Reset playback state (for test cleanup)
-     */
-    resetPlaybackState() {
-      PlaybackManager.isPlaying = false;
-      const playerInstrument = PlaybackManager.getPlayerInstrument();
-      playerInstrument.currentNote = null;
-      playerInstrument.stop?.();
-    },
-
-    // --- Recording ---
+    // --- The pole ---
 
     /**
-     * Check if recording is active
-     */
-    isRecording() {
-      return RecordingManager.isRecording();
-    },
-
-    /**
-     * Get creatures currently in recording range
+     * Creatures the pole can reach now
      */
     getCreaturesInRange() {
-      return [...gameState.recording.creaturesInRange];
+      return [...gameState.absorb.inRange];
     },
 
     // --- Notes ---
@@ -727,10 +758,10 @@ function createTestContext(options = {}) {
       return {
         beat: gameState.musicalClock?.getCurrentBeat() || 0,
         playerPosition: { ...gameState.player.position },
-        inventory: gameState.player.inventory.map((item) => (item ? item.data : null)),
+        inventory: gameState.player.inventory.map((item) => (item ? item.spec.song : null)),
         activeSlot: gameState.player.activeSlot,
-        isRecording: RecordingManager.isRecording(),
-        creaturesInRange: gameState.recording.creaturesInRange.length,
+        pole: AbsorbManager.kind,
+        creaturesInRange: gameState.absorb.inRange.length,
         heldKeys: Array.from(heldKeys),
         creatures: activeEntityManager()
           .getByType('creature')
@@ -749,6 +780,8 @@ function createTestContext(options = {}) {
      */
     cleanup() {
       ListeningManager.emitNote = originalEmit;
+      this.stopSinging();
+      AbsorbManager.reset();
       // Dispose the sandbox area (if still active) plus every world area
       const sandbox = gameState.activeArea;
       PortalManager.reset();

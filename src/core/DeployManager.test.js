@@ -5,7 +5,7 @@
  * deployed (a real walk-on pad) -> idle (picked back up). Walking onto the
  * pad teleports the player to the ACTIVE cleanser (the last one stepped
  * on), consumes the pad, and the arrival fires the cleanser as usual
- * (tape wipe). One way, one use; world state does not reset.
+ * (it no longer wipes the tape: 2026-11-23). One way, one use; world state does not reset.
  */
 import * as THREE from 'three';
 import gameState from 'core/GameState';
@@ -18,7 +18,7 @@ import portalA from '../__tests__/fixtures/puzzles/portal-a.json';
 import portalB from '../__tests__/fixtures/puzzles/portal-b.json';
 import deployBasic from '../__tests__/fixtures/puzzles/deploy-basic.json';
 
-const take = (pitch) => ({ id: `take_${pitch}`, data: [{ pitch, length: '1/1' }] });
+const take = (pitch) => ({ id: `held_${pitch}`, spec: { song: [{ pitch, length: '1/1' }] } });
 
 // deploy-basic geometry (world units): spawn (21, 39), cleanser (21, 33),
 // wall cell (21, 15). Facing "north" (-z) is yaw 0.
@@ -31,7 +31,7 @@ function standAt(x, z, yaw = 0) {
   gameState.camera.viewCenter = [yaw, 0];
 }
 
-/** Walk onto the cleanser and let it fire (claims ACTIVE + wipes). */
+/** Walk onto the cleanser and let it fire (claims ACTIVE). */
 async function activateCleanser() {
   standAt(CLEANSER.x, CLEANSER.z);
   await ctx.tick(20);
@@ -389,23 +389,25 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
 });
 
 describe('Walking through the deployed cleanser gate', () => {
-  it('teleports to the active cleanser, wipes the tape, and consumes the pad', async () => {
+  it('teleports to the active cleanser, keeps the creatures held, and consumes the pad', async () => {
     await activateCleanser();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
     const [pad] = padsInActiveArea();
 
-    // Record something en route, then step onto the pad
-    gameState.player.inventory = [take('C4')];
+    // Holding a creature, step onto the pad
+    const held = take('C4');
+    gameState.player.inventory = [held];
     standAt(pad.position.x, pad.position.z);
     await ctx.tick(20);
     DeployManager.update();
 
-    // Arrived ON the active cleanser; the landing fired it (wipe)
+    // Arrived ON the active cleanser; the landing fires it, which no longer
+    // empties the tape (it holds creatures: interim ruling 2026-11-23)
     expect(gameState.player.position.x).toBeCloseTo(CLEANSER.x);
     expect(gameState.player.position.z).toBeCloseTo(CLEANSER.z);
-    expect(gameState.player.inventory).toEqual([null]);
+    expect(gameState.player.inventory).toEqual([held]);
     // One use: the gate closed behind the player
     expect(padsInActiveArea()).toHaveLength(0);
     expect(DeployManager.state).toBe('idle');

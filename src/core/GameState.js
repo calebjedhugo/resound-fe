@@ -9,7 +9,7 @@ class GameState {
 
     // The area the player stands in. Linked puzzles are one world of many
     // live areas (core/Area); `currentPuzzle`/`entities`/`elevationGrid`
-    // below delegate here, so player-scoped systems (UI, input, playback,
+    // below delegate here, so player-scoped systems (UI, input, the pole,
     // claps) always mean "the player's area" without knowing about areas.
     this.activeArea = null;
 
@@ -30,10 +30,11 @@ class GameState {
       position: { x: 0, y: 1.8, z: 0 },
       rotation: { x: 0, y: 0 },
       elevation: 0,
-      // The TAPE: a growable strip of takes (see core/Tape.js). Boots with
-      // ONE slot; ArrowRight past a filled last slot appends the next.
+      // The TAPE: a growable strip of slots, each holding one absorbed
+      // creature (core/Tape.js, core/AbsorbManager) or null. Boots with ONE
+      // slot; ArrowRight past a filled last slot appends the next.
       inventory: [null],
-      activeSlot: 0, // The cursor: R records into this slot in place
+      activeSlot: 0, // The cursor: R absorbs into it, Space releases from it
     };
 
     this.input = {
@@ -94,22 +95,15 @@ class GameState {
       viewCenter: [0, 0], // Accumulated camera rotation
     };
 
-    // Recording state
-    this.recording = {
-      isRecording: false,
-      creaturesInRange: [],
-      startTime: null,
-      capturedNotes: [],
-    };
+    // Creatures the pole can absorb right now (active area, within each
+    // one's absorb range; Creature.update keeps it current)
+    this.absorb = { inRange: [] };
 
     // The ACTIVE cleanser — the last cleansing tile the player stepped on
     // ({ puzzleId, position } or null). It glows gold instead of cyan, and
     // it is where a deployed cleanser gate leads (core/DeployManager).
     // Positional, not an entity reference: it survives area prune/rebuild.
     this.activeCleanser = null;
-
-    // Harmony detection log (for debug UI)
-    this.harmonyLog = [];
   }
 
   // --- Active-area delegation -------------------------------------------
@@ -139,12 +133,7 @@ class GameState {
     this.player.elevation = 0;
     this.player.inventory = [null];
     this.player.activeSlot = 0;
-    this.recording = {
-      isRecording: false,
-      creaturesInRange: [],
-      startTime: null,
-      capturedNotes: [],
-    };
+    this.absorb = { inRange: [] };
     this.activeCleanser = null;
   }
 

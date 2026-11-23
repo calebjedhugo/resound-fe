@@ -3,9 +3,9 @@
  *
  * These tests validate that Gates and Fountains correctly recognize songs by:
  * 1. Loading test puzzles with gates/fountains that have required songs
- * 2. Setting up inventory with songs to play back
- * 3. Pressing space to trigger playback
- * 4. Verifying gates open / fountains activate when correct song is played nearby
+ * 2. Having a test singer at the player's position sing a song (the
+ *    player's tape did until 2026-11-23; any source is heard alike)
+ * 3. Verifying gates open / fountains activate when the correct song sounds nearby
  *
  * Note: Tests are async because tick() uses jest.runAllTimersAsync()
  * to properly handle async instrument playback.
@@ -20,16 +20,15 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Set up inventory with the correct song
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       // Verify gate is initially closed
       const gates = ctx.getGates();
       expect(gates).toHaveLength(1);
       expect(ctx.isGateOpen(gates[0])).toBe(false);
 
-      // Play the song (space key triggers playback)
-      ctx.pressKey('space');
+      // A singer at the player's position sings it
+      ctx.startSinging(song);
 
       // Gates open AS the song is performed; check within the open window
       // (the song sounds, then a short step-through grace).
@@ -44,18 +43,17 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Set up inventory with the correct 3-note song
-      ctx.setInventorySlot(0, [
+      const song = [
         { pitch: 'C4', length: '1/4' },
         { pitch: 'E4', length: '1/4' },
         { pitch: 'G4', length: '1/4' },
-      ]);
-      ctx.setActiveSlot(0);
+      ];
 
       const gates = ctx.getGates();
       expect(ctx.isGateOpen(gates[0])).toBe(false);
 
       // Play the song
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       // Multi-note gates commit only on the COMPLETED song: a correct
       // prefix must NOT crack the door open mid-performance...
       await ctx.advanceBeats(2);
@@ -73,14 +71,13 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Set up inventory with a different song
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const gates = ctx.getGates();
       expect(ctx.isGateOpen(gates[0])).toBe(false);
 
       // Play the wrong song
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       // Assert: gate should still be closed
@@ -94,14 +91,13 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Set up inventory with correct song
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const gates = ctx.getGates();
       expect(ctx.isGateOpen(gates[0])).toBe(false);
 
       // Play the song from out of range
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       // Assert: gate should still be closed (player too far)
@@ -113,8 +109,7 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Set up inventory with correct song
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const gates = ctx.getGates();
 
@@ -123,7 +118,7 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Play the song from close range
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(2);
 
       // Assert: gate should now be open (within the play-to-pass window)
@@ -134,13 +129,12 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const gates = ctx.getGates();
 
       // Open the gate with a correct performance
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(2);
 
       expect(ctx.isGateOpen(gates[0])).toBe(true);
@@ -164,12 +158,11 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(2);
       expect(ctx.isGateOpen(gates[0])).toBe(true);
 
@@ -187,7 +180,7 @@ describe('Gates and Fountains recognizing songs', () => {
       // leading-silence margin reaches into the trimmed region is
       // unjudgeable by design. Then completion + trailing silence opens it.)
       await ctx.advanceBeats(2);
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(4);
       expect(ctx.isGateOpen(gates[0])).toBe(true);
     });
@@ -198,15 +191,14 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-fountain-basic');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const fountains = ctx.getFountains();
       expect(fountains).toHaveLength(1);
       expect(ctx.isFountainActive(fountains[0])).toBe(false);
 
       // Play the song
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       // Assert: fountain should be activated
@@ -217,17 +209,16 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-fountain-multi-note');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [
+      const song = [
         { pitch: 'C4', length: '1/4' },
         { pitch: 'E4', length: '1/4' },
         { pitch: 'G4', length: '1/4' },
-      ]);
-      ctx.setActiveSlot(0);
+      ];
 
       const fountains = ctx.getFountains();
       expect(ctx.isFountainActive(fountains[0])).toBe(false);
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       // 3 notes x 1/4 = 3 beats, plus extra for playback and one more tick to process
       await ctx.advanceBeats(8);
       await ctx.tick(16);
@@ -240,12 +231,11 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Fountain requires C4, but we play E4
-      ctx.setInventorySlot(0, [{ pitch: 'E4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'E4', length: '1/4' }];
 
       const fountains = ctx.getFountains();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       // Fountain should NOT be activated
@@ -257,12 +247,11 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Fountain requires C4 1/4, but we play C4 1/8
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/8' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/8' }];
 
       const fountains = ctx.getFountains();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       // Fountain should NOT be activated (length mismatch)
@@ -273,12 +262,11 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-fountain-basic');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const fountains = ctx.getFountains();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       expect(ctx.isFountainActive(fountains[0])).toBe(true);
@@ -297,8 +285,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-gate-out-of-range');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const gates = ctx.getGates();
 
@@ -306,7 +293,7 @@ describe('Gates and Fountains recognizing songs', () => {
       // Distance = sqrt(24^2 + 24^2) = ~34, audibleRange = 5
       // So notes should NOT reach gate
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
@@ -316,8 +303,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-gate-out-of-range');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       const gates = ctx.getGates();
       // Gate at grid (8,0,8) -> world (24,0,24), audibleRange=5
@@ -325,7 +311,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.setPlayerPosition({ x: 24, y: 0, z: 19 }); // 5 units in z direction
       await ctx.tick(16);
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(2);
 
       // Should be within range (boundary inclusive)
@@ -338,12 +324,11 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/4' }];
 
       ctx.clearEmittedNotes();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       // Check that notes were emitted
@@ -356,16 +341,15 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.loadPuzzle('listening-gate-multi-note');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [
+      const song = [
         { pitch: 'C4', length: '1/4' },
         { pitch: 'E4', length: '1/4' },
         { pitch: 'G4', length: '1/4' },
-      ]);
-      ctx.setActiveSlot(0);
+      ];
 
       ctx.clearEmittedNotes();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       // All 3 notes should have been emitted
@@ -383,12 +367,11 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Gate requires C4, we play C#4
-      ctx.setInventorySlot(0, [{ pitch: 'C#4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C#4', length: '1/4' }];
 
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
@@ -399,12 +382,11 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Gate requires C4 1/4, we play C4 1/2
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/2' }]);
-      ctx.setActiveSlot(0);
+      const song = [{ pitch: 'C4', length: '1/2' }];
 
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
@@ -415,15 +397,14 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Gate requires 3 notes (C4, E4, G4), we only play 2
-      ctx.setInventorySlot(0, [
+      const song = [
         { pitch: 'C4', length: '1/4' },
         { pitch: 'E4', length: '1/4' },
-      ]);
-      ctx.setActiveSlot(0);
+      ];
 
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(5);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
@@ -434,73 +415,69 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.tick(16);
 
       // Gate requires C4, E4, G4 - we play in reverse order
-      ctx.setInventorySlot(0, [
+      const song = [
         { pitch: 'G4', length: '1/4' },
         { pitch: 'E4', length: '1/4' },
         { pitch: 'C4', length: '1/4' },
-      ]);
-      ctx.setActiveSlot(0);
+      ];
 
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
   });
 
-  describe('tape playback (all slots, concatenated)', () => {
+  describe('a longer phrase around the song', () => {
     it('a foreign note BEFORE the song voids the attempt (wrong-note lockout, ruled 2026-07-16)', async () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
-      // A foreign note in slot 0, the door's song in slot 2: the E4
-      // mismatches the moment it lands and the lockout deafens the door
-      // through the C4 that follows — the target must START clean now
-      // (supersedes the 2026-07-11 "anywhere in the tape" ruling).
-      ctx.setInventorySlot(0, [{ pitch: 'E4', length: '1/4' }]);
-      ctx.setInventorySlot(2, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setActiveSlot(2);
-
+      // A foreign E4 first, then the door's C4: the E4 mismatches the
+      // moment it lands and the lockout deafens the door through the C4
+      // that follows — the target must START clean
+      const song = [
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'C4', length: '1/4' },
+      ];
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(3);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
 
-    it('opens on the song at the START of the tape — trailing surplus is still fine', async () => {
+    it('opens on the song at the START of a phrase — trailing surplus is still fine', async () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
-      // The door's song leads the tape; the E4 after it lands past the
-      // window (completion fires the instant the target's span elapses).
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-      ctx.setInventorySlot(2, [{ pitch: 'E4', length: '1/4' }]);
-      ctx.setActiveSlot(0);
-
+      // The door's song leads; the E4 after it lands past the window
+      // (completion fires the instant the target's span elapses)
+      const song = [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+      ];
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(3);
 
       expect(ctx.isGateOpen(gates[0])).toBe(true);
     });
 
-    it('does not open when the tape merely contains the right pitches at the wrong spacing', async () => {
-      // Gate wants [C4 1/4]. The tape holds a half-note C4 — the pitch
-      // occurs but the duration is wrong, so no window ever aligns.
+    it('does not open when the right pitch comes at the wrong length', async () => {
+      // Gate wants [C4 1/4]: a half-note C4 has the pitch but the wrong
+      // duration, so no window ever aligns
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
-      ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/2' }]);
-      ctx.setActiveSlot(0);
-
+      const song = [{ pitch: 'C4', length: '1/2' }];
       const gates = ctx.getGates();
 
-      ctx.pressKey('space');
+      ctx.startSinging(song);
       await ctx.advanceBeats(4);
 
       expect(ctx.isGateOpen(gates[0])).toBe(false);

@@ -4,7 +4,7 @@
  * controller's Share button turn the game's sound off and on, in play and
  * while paused, with a brief toast for the key. Off fades resound-sound's
  * master output to silence; the audio context keeps running, so the game
- * (its clock, the creatures' songs, recording) carries on exactly as with
+ * (its clock, the creatures' songs, the pole) carries on exactly as with
  * sound on. Remembered across visits. A key pressed while the start gate is
  * up only wakes the gate, as any key does: it never toggles the sound.
  */
@@ -300,17 +300,18 @@ describe('with the sound off, the game runs on', () => {
     suspend.mockRestore();
   });
 
-  it('a creature still sings, the clock counts, and recording captures its song', async () => {
+  it('a creature still sings, the clock counts, and the pole absorbs it', async () => {
     key('KeyP');
     ctx.loadPuzzle('recording-basic'); // creature 3 away, sings every 4 beats
-    await ctx.tick(16);
-
-    ctx.holdKey('r');
+    ctx.clearEmittedNotes();
     await ctx.advanceBeats(4);
-    ctx.releaseKey('r');
+    expect(ctx.getEmittedNotes().map((note) => note.pitch)).toContain('C4');
+
+    ctx.pressKey('r');
+    await ctx.finishPole();
 
     expect(ctx.getCurrentBeat()).toBeGreaterThanOrEqual(4);
-    expect(ctx.getInventorySlot(0)).toEqual([expect.objectContaining({ pitch: 'C4' })]);
+    expect(ctx.getInventorySlot(0).song).toEqual([expect.objectContaining({ pitch: 'C4' })]);
     expect(master()).toBe(0);
   });
 });

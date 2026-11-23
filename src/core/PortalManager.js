@@ -16,7 +16,7 @@
  *   IN the new space, and every exit (including backing out the way they
  *   came) is plain walking against the destination's real geometry. No
  *   rebuild, so the neighbor keeps exactly the state seen through the
- *   doorway; recordings persist (one world), and the world CLOCK persists
+ *   doorway; the tape (its held creatures) persists (one world), and the world CLOCK persists
  *   too (one clock).
  * - See-through rendering (stage 2): each open linked gate draws the LIVE
  *   neighbor scene through its doorway face (core/PortalView).
@@ -40,14 +40,13 @@ import PuzzleLoader from 'core/PuzzleLoader';
 import PortalView from 'core/PortalView';
 import ListeningManager from 'core/ListeningManager';
 import AudioPrewarm from 'core/AudioPrewarm';
-import PlaybackManager from 'core/PlaybackManager';
+import CreatureRegistry from 'core/CreatureRegistry';
 import gameState from 'core/GameState';
 import {
   WORLD_SCALE,
   ELEVATION_HEIGHT,
   CLOSED_DOOR_LEAK_DISTANCE,
   DEFAULT_CREATURE_SIZE,
-  PLAYER_SIZE,
   DOORWAY_COMMIT_DEPTH,
   PLAYER_COLLISION_RADIUS,
 } from 'core/constants';
@@ -243,8 +242,8 @@ class PortalManager {
 
   /** Tear the whole world down (leaving for the menu). */
   reset() {
-    // A tape still playing must not play on into the next world
-    PlaybackManager.reset();
+    // A new world: no creature moved by the pole yet
+    CreatureRegistry.reset();
     this._generation += 1;
     this._disposeViews();
     this._newViews = [];
@@ -1378,22 +1377,6 @@ class PortalManager {
         source.extraDistance = getDistance(entity.position, remoteGate.position) + leak;
         sources.push(source);
       }
-
-      // The player counts as a source in whichever area they stand in
-      if (remoteArea === this._activeArea) {
-        const playerInstrument = PlaybackManager.getPlayerInstrument();
-        if (playerInstrument.playbackState.isPlaying && playerInstrument.currentNote) {
-          if (pool.length === sources.length) {
-            pool.push({ note: null, doorPosition: null, size: 0, extraDistance: 0 });
-          }
-          const source = pool[sources.length];
-          source.note = playerInstrument.currentNote;
-          source.doorPosition = localGate.position;
-          source.size = PLAYER_SIZE;
-          source.extraDistance = getDistance(gameState.player.position, remoteGate.position) + leak;
-          sources.push(source);
-        }
-      }
     }
     return sources;
   }
@@ -1566,6 +1549,8 @@ class PortalManager {
     for (const [id, area] of [...this._areas]) {
       if (!wanted.has(id)) {
         this._disposeViews(area);
+        // Creatures released here live on: where each stands now
+        CreatureRegistry.snapshot(area);
         area.dispose();
         this._areas.delete(id);
       }
@@ -1957,7 +1942,7 @@ class PortalManager {
    * see core/DeployManager): place the player ON the tile at
    * `target.position` in `target.puzzleId`, loading and swapping to that
    * area if it isn't the active one. Landing on the tile fires it as usual
-   * (tape wipe + it stays the active cleanser). The ONE world clock keeps
+   * (it stays the active cleanser). The ONE world clock keeps
    * running — this is a crossing without a door, not a rebuild.
    * @param {{puzzleId: string, position: {x,y,z}}} target
    * @returns {Promise<boolean>} false if the target area can't be loaded

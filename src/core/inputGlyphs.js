@@ -4,8 +4,8 @@
  * draw the glyphs (ui/glyphCanvas); texts that name a key use the names.
  *
  * A controller's buttons are keys (core/Gamepad): the face button at the
- * bottom of the diamond is Space (perform the tape), the right one C (clap),
- * the left one R (record), the top one G (the cleanser gate), R1/RB moves
+ * bottom of the diamond is Space (release a creature), the right one C
+ * (clap), the left one R (absorb), the top one G (the cleanser gate), R1/RB moves
  * the tape cursor right, Share/View is P (sound). The Gamepad API's standard
  * layout numbers the face buttons by POSITION, so each family's glyph is the
  * label printed at that position: a Switch's bottom button is "B", its right
@@ -17,16 +17,16 @@
 import { KEYBOARD } from 'core/InputDevice';
 
 // Which face button each action is, by its position in the diamond
-const FACE_POSITIONS = { play: 'bottom', clap: 'right', record: 'left', deploy: 'top' };
+const FACE_POSITIONS = { release: 'bottom', clap: 'right', absorb: 'left', deploy: 'top' };
 
 const key = (label, name = label) => ({ kind: 'key', label, name });
 
 const KEYBOARD_GLYPHS = {
   move: { kind: 'keys', labels: ['W', 'A', 'S', 'D'], name: 'W/A/S/D' },
   look: { kind: 'keys', labels: ['I', 'J', 'K', 'L'], name: 'I/J/K/L' },
-  play: { kind: 'space', name: 'Space' },
+  release: { kind: 'space', name: 'Space' },
   clap: key('C'),
-  record: key('R'),
+  absorb: key('R'),
   deploy: key('G'),
   tapeRight: key('►', 'Right arrow'),
   sound: key('P'),
@@ -83,7 +83,7 @@ const DUALSENSE = /dualsense|product:\s*0(ce6|df2)|-0?(ce6|df2)-/i;
 
 /**
  * An action's glyph on a family.
- * @param {string} action - move, look, play, clap, record, deploy, tapeRight
+ * @param {string} action - move, look, release, clap, absorb, deploy, tapeRight
  * @param {string} family - core/InputDevice's KEYBOARD or a pad family
  */
 export const glyphFor = (action, family) => (GLYPHS[family] || GLYPHS.generic)[action];

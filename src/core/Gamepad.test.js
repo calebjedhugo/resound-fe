@@ -3,7 +3,8 @@
  * The game controller (core/Gamepad), polled once a frame. Its buttons are
  * the keys they stand for: each press goes out once as its key's keydown and
  * each release as its keyup, so the game's own key listeners act on them
- * (the tape, recording, claps, the cleanser gate, the ending card; the
+ * (the pole's absorb and release, the tape cursor, claps, the cleanser
+ * gate, the ending card; the
  * menus: see ui/Menu.test.js). Its
  * sticks are analog (walking and looking: see motion.test.js) and rest
  * outside play. A pad that leaves lets go of everything it held. The start
@@ -14,7 +15,6 @@
 import { audioContextManager } from 'resound-sound';
 import gameState from 'core/GameState';
 import Gamepad from 'core/Gamepad';
-import RecordingManager from 'core/RecordingManager';
 import ClapManager from 'core/ClapManager';
 import DeployManager from 'core/DeployManager';
 import createEventListeners from 'createEventListeners';
@@ -142,18 +142,18 @@ describe("A controller's buttons are the keys they stand for", () => {
     expect(heard).toEqual(['keydown Unidentified', 'keyup Unidentified']);
   });
 
-  it('Cross performs the tape', async () => {
-    ctx.loadPuzzle('playback-basic');
+  it("Cross releases the cursor slot's creature", async () => {
+    ctx.loadPuzzle('playback-basic'); // an empty room, the player in its middle
     await ctx.tick(16);
-    ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
-    ctx.clearEmittedNotes();
+    ctx.setInventorySlot(0, { song: [{ pitch: 'C4', length: '1/4' }], interval: 4 });
     const pad = connectPad();
 
     press(pad, CROSS);
     release(pad, CROSS);
-    await ctx.advanceBeats(1);
+    await ctx.finishPole();
 
-    expect(ctx.getEmittedNotes().map((note) => note.pitch)).toContain('C4');
+    expect(ctx.getCreatures().map((creature) => creature.song[0].pitch)).toEqual(['C4']);
+    expect(ctx.getInventorySlot(0)).toBeNull();
   });
 
   it('Circle claps', async () => {
@@ -187,7 +187,7 @@ describe("A controller's buttons are the keys they stand for", () => {
   });
 
   it('L1 and R1 move the tape cursor (R1 on a filled last slot adds one)', () => {
-    ctx.setInventorySlot(0, [{ pitch: 'C4', length: '1/4' }]);
+    ctx.setInventorySlot(0, { song: [{ pitch: 'C4', length: '1/4' }] });
     const pad = connectPad();
 
     press(pad, R1);
@@ -200,37 +200,17 @@ describe("A controller's buttons are the keys they stand for", () => {
     expect(gameState.player.activeSlot).toBe(0);
   });
 
-  describe('Square records like R', () => {
-    beforeEach(async () => {
-      // A creature in recording range
-      ctx.loadPuzzle('recording-basic');
-      await ctx.tick(16);
-    });
+  it('Square absorbs like R', async () => {
+    ctx.loadPuzzle('recording-basic'); // a creature in the pole's reach
+    await ctx.tick(16);
+    const pad = connectPad();
 
-    it('a tap starts recording, and the next tap stops it', async () => {
-      const pad = connectPad();
+    press(pad, SQUARE);
+    release(pad, SQUARE);
+    await ctx.finishPole();
 
-      press(pad, SQUARE);
-      await ctx.tick(100);
-      release(pad, SQUARE);
-      expect(RecordingManager.isRecording()).toBe(true);
-
-      await ctx.tick(1000);
-      press(pad, SQUARE);
-      release(pad, SQUARE);
-      expect(RecordingManager.isRecording()).toBe(false);
-    });
-
-    it('a hold records while held and stops on release', async () => {
-      const pad = connectPad();
-
-      press(pad, SQUARE);
-      await ctx.tick(800);
-      expect(RecordingManager.isRecording()).toBe(true);
-
-      release(pad, SQUARE);
-      expect(RecordingManager.isRecording()).toBe(false);
-    });
+    expect(ctx.getInventorySlot(0).song[0].pitch).toBe('C4');
+    expect(ctx.getCreatures()).toHaveLength(0);
   });
 
   it('any button dismisses the ending card, one with no key of its own too', () => {
@@ -289,16 +269,14 @@ describe('A pad that leaves lets go of everything it held', () => {
     await ctx.tick(16);
   });
 
-  it('a disconnect mid-hold releases the keys: a hold-to-record stops', async () => {
+  it('a disconnect mid-hold releases the keys', async () => {
     const pad = connectPad();
     press(pad, SQUARE);
     await ctx.tick(800);
-    expect(RecordingManager.isRecording()).toBe(true);
 
     disconnectPads();
 
     expect(heard).toEqual(['keydown KeyR', 'keyup KeyR']);
-    expect(RecordingManager.isRecording()).toBe(false);
   });
 
   it('a disconnect mid-walk rests the sticks and drops the run', () => {
@@ -323,7 +301,7 @@ describe('A pad that leaves lets go of everything it held', () => {
     pads = [];
     frame();
 
-    expect(RecordingManager.isRecording()).toBe(false);
+    expect(heard).toEqual(['keydown KeyR', 'keyup KeyR']);
     expect(gameState.input.stick.walk).toEqual({ x: 0, y: 0 });
   });
 });

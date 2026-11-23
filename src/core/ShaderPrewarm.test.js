@@ -16,6 +16,7 @@ import PortalManager from 'core/PortalManager';
 import DeployManager from 'core/DeployManager';
 import gameState from 'core/GameState';
 import CreatureLook from 'entities/CreatureLook';
+import PoleLook from 'entities/PoleLook';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import KeyHints from 'ui/KeyHints';
@@ -275,9 +276,7 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
 
   it('a gate fading under a correct performance', async () => {
     const [{ song }] = ctx.loadPuzzle('listening-gate-multi-note').entities;
-    ctx.setInventorySlot(0, song);
-    ctx.setActiveSlot(0);
-    ctx.pressKey('space');
+    ctx.startSinging(song);
     await ctx.advanceBeats(1.5); // mid-song
 
     const [gate] = ctx.getGates();
@@ -319,9 +318,7 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
 
   it('a gate glowing red, locked out by a wrong note', async () => {
     const [{ song }] = ctx.loadPuzzle('listening-gate-multi-note').entities;
-    ctx.setInventorySlot(0, [{ ...song[0], pitch: 'D4' }]);
-    ctx.setActiveSlot(0);
-    ctx.pressKey('space');
+    ctx.startSinging([{ ...song[0], pitch: 'D4' }]);
     await ctx.advanceBeats(0.5);
 
     const [gate] = ctx.getGates();
@@ -331,9 +328,7 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
 
   it('an activated fountain', async () => {
     const [{ song }] = ctx.loadPuzzle('listening-fountain-basic').entities;
-    ctx.setInventorySlot(0, song);
-    ctx.setActiveSlot(0);
-    ctx.pressKey('space');
+    ctx.startSinging(song);
     await ctx.advanceBeats(2);
 
     const [fountain] = gameState.activeArea.entityManager.getByType('fountain');
@@ -387,6 +382,22 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     expect(objectsIn(scene).filter((object) => object.isSprite)).toHaveLength(3);
     expect(coldPrograms(scene)).toEqual([]);
     hints.dispose();
+  });
+
+  it('the pole, out and flaring (drawn over the main view in a scene of its own)', () => {
+    const pole = new PoleLook(litScene().children.filter((child) => child.isLight));
+    pole.reach({ x: 0, y: 1, z: -3 }, 1, 0.5, [1, 0.5, 0.2]);
+    pole.root.visible = true;
+
+    expect(coldPrograms(pole.scene)).toEqual([]);
+  });
+
+  it("a creature being drawn into the pole's tip", () => {
+    const look = new CreatureLook(1);
+    look.setSuck(0.5, { x: 0, y: 0, z: -1.1 });
+
+    expect(look.body.visible).toBe(true);
+    expect(coldPrograms(look.object)).toEqual([]);
   });
 
   it('a clap ring', () => {

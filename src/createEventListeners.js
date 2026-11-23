@@ -1,8 +1,7 @@
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import { Random } from 'resound-sound';
-import RecordingManager from 'core/RecordingManager';
-import PlaybackManager from 'core/PlaybackManager';
+import AbsorbManager from 'core/AbsorbManager';
 import ClapManager from 'core/ClapManager';
 import DeployManager from 'core/DeployManager';
 import Tape from 'core/Tape';
@@ -12,12 +11,6 @@ import { nameFor } from 'core/inputGlyphs';
 import showToast from 'ui/Toast';
 
 const randomInstrument = new Random();
-
-// When the current recording started — distinguishes a quick R tap (toggle
-// mode: recording continues until the next R press) from a long hold
-// (walkie-talkie mode: releasing R stops).
-let recordStartedAt = 0;
-const RECORD_HOLD_THRESHOLD_MS = 400;
 
 // Per-key press timestamps for tap detection — only consulted while the
 // (dev-only) tap-impulse affordance is enabled.
@@ -107,27 +100,15 @@ const dispatchKeyboardActions = (event) => {
       }
       break;
     case 'Space':
-      // Perform the whole tape (all filled slots, concatenated)
-      if (acting) {
-        PlaybackManager.playTape();
+      // The pole releases the cursor slot's creature ahead (core/AbsorbManager)
+      if (acting && !repeat) {
+        AbsorbManager.release();
       }
       break;
     case 'KeyR':
-      // Hybrid recording control: a tap toggles recording on/off; a long
-      // hold records while held and stops on release.
-      if (value) {
-        if (repeat || !acting) break;
-        if (!RecordingManager.isRecording()) {
-          RecordingManager.startRecording();
-          recordStartedAt = Date.now();
-        } else {
-          RecordingManager.stopRecording();
-        }
-      } else if (
-        RecordingManager.isRecording() &&
-        Date.now() - recordStartedAt > RECORD_HOLD_THRESHOLD_MS
-      ) {
-        RecordingManager.stopRecording();
+      // The pole absorbs the nearest creature in reach into the tape
+      if (acting && !repeat) {
+        AbsorbManager.absorb();
       }
       break;
     case 'ArrowLeft':
@@ -184,6 +165,5 @@ const createEventListeners = () => {
   window.addEventListener('resize', () => gameState.updateScreenCenter());
 };
 
-// Export the instrument instance so other modules can control playback
 export { randomInstrument };
 export default createEventListeners;

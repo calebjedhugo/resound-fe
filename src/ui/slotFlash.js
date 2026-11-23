@@ -1,10 +1,10 @@
 /**
  * Tiny dependency-free bus for wordless slot feedback. Core modules
- * (PlaybackManager, RecordingManager) publish flashes; RecordingUI renders
- * them and KeyHints reads them for teachable moments. Two visual verbs only
- * (DESIGN.md "Design philosophy"):
- *   'miss'   - red pulse: a performance was judged and failed
- *   'silent' - grey pulse: nothing heard you / nothing to play or record
+ * (core/AbsorbManager) publish flashes; InventoryUI renders them. One visual
+ * verb (DESIGN.md "Design philosophy"):
+ *   'silent' - grey pulse: nothing there — no creature in reach of R, no
+ *              room on the strip, nothing to release or nowhere to put it
+ * (The red 'miss' pulse went with tape playback, 2026-11-23.)
  */
 const handlers = [];
 

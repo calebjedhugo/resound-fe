@@ -9,7 +9,7 @@ import Entity from 'entities/Entity';
  * that teleports the player to the world's ACTIVE cleanser (the gold
  * tile — the last one they stepped on) and disappears. One way, one use:
  * the gate closes behind you, and arrival lands you ON the active
- * cleanser, which fires as usual (tape wipe). World state — moved
+ * cleanser, which fires as usual (no tape wipe since 2026-11-23). World state — moved
  * creatures, opened gates — does NOT reset; that persistence is what
  * makes the gate a puzzle piece and not just an escape hatch.
  *

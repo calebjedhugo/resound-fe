@@ -2,20 +2,15 @@
 // This allows grid coordinates (0-64) to map to comfortable world space (0-192)
 export const WORLD_SCALE = 3;
 
-// Recording range as percentage of audible range
-// E.g., 0.5 means you must be within 50% of the audible range to record
-export const RECORDING_RANGE_PERCENTAGE = 0.5;
+// Absorb range as a fraction of a creature's audible range: the pole reaches
+// a creature within this share of how far it carries (the old recording
+// range, ruled 2026-11-23 — R absorbs where it used to record)
+export const ABSORB_RANGE_PERCENTAGE = 0.5;
 
-// Playback late grace, in BEATS (tempo-relative): a Space pressed within
-// this much after a beat starts immediately and snaps back onto the grid;
-// later presses wait for the next beat. Kept under the matcher's alignment
-// tolerance (0.13 beats) so a grace-path first onset still matches.
-export const PLAYBACK_LATE_GRACE_BEATS = 0.1;
-
-// The slot TAPE (ruled 2026-07-11): slots appear one at a time (ArrowRight
-// past a filled last slot appends a new empty one, up to the cap), and Space
-// performs the whole tape concatenated. There is no per-slot delete — the
-// whole tape is emptied by walking over a CleansingTile (2026-07-12).
+// The slot TAPE (ruled 2026-07-11; holds CREATURES since 2026-11-23): slots
+// appear one at a time (ArrowRight past a filled last slot appends a new
+// empty one, and absorbing with the cursor on a held creature appends one
+// for the new creature), up to the cap. No per-slot delete.
 export const TAPE_SLOT_CAP = 16;
 
 // Creature movement constants
@@ -69,7 +64,7 @@ export const REPULSION_FORCE_STRENGTH = 15.0;
 
 // Clap constants
 // Fixed range for clap effect (world units)
-// Matches typical recording range (50% of 15-unit audible range)
+// Matches the typical absorb range (50% of a 15-unit audible range)
 export const CLAP_RANGE = 7.5;
 
 // Default displacement when creature is clapped (fraction of whole note)
@@ -96,3 +91,8 @@ export const ELEVATION_HEIGHT = 3.0;
 // Maximum elevation difference (in levels) at which entities still collide
 // Entities more than this apart vertically are on different floors and pass through each other
 export const ELEVATION_COLLISION_THRESHOLD = 0.5;
+
+// The pole (core/AbsorbManager, entities/PoleLook; ruled 2026-11-23): R
+// absorbs a creature into the cursor slot, Space releases the cursor slot's
+// creature this far ahead along the camera heading (world units).
+export const RELEASE_DISTANCE = 2.5;

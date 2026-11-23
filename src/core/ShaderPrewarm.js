@@ -33,6 +33,7 @@
  */
 import * as THREE from 'three';
 import CreatureLook from 'entities/CreatureLook';
+import { standInMaterials as poleStandIns } from 'entities/PoleLook';
 import ClapVisual from 'ui/ClapVisual';
 import { createSky, standInMaterials } from 'entities/EnvironmentLook';
 import { createSeamMaterial, standInMaterials as entityStandIns } from 'entities/EntityLook';
@@ -101,6 +102,10 @@ function setup(mainScene) {
     new THREE.MeshBasicMaterial({ map: new THREE.Texture(), transparent: true, depthWrite: false }),
   ];
   for (const material of looks) standIns.add(new THREE.Mesh(box, material));
+  // The pole (entities/PoleLook: its own scene, lit like the world, drawn
+  // in the main view's context), in the very materials it draws with
+  const pole = poleStandIns();
+  for (const name of ['rod', 'tip', 'glow']) standIns.add(new THREE.Mesh(box, pole[name]));
   // The environment (entities/EnvironmentLook): the sky, a floor, and the
   // walls, instanced as every area draws them
   const environment = standInMaterials();
