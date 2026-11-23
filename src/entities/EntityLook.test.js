@@ -1,8 +1,9 @@
 /**
- * The entities' look (entities/EntityLook, DESIGN.md "Entity look"): an
- * open gate glows only on the opening the player looks into — its NEAR
- * face, the one walking in crosses — and only in the main view: never on
- * its other faces, never on a gate seen through a door or the cleanser gate.
+ * The entities' look (entities/EntityLook, DESIGN.md "Entity look"): a
+ * sealed gate lights only its outline from the eye; an open gate glows only
+ * on the opening the player looks into — its NEAR face, the one walking in
+ * crosses — and only in the main view: never on its other faces, never on a
+ * gate seen through a door or the cleanser gate.
  */
 import * as THREE from 'three';
 import gameState from 'core/GameState';
@@ -10,7 +11,7 @@ import PortalManager from 'core/PortalManager';
 import DeployManager from 'core/DeployManager';
 import { renderMainView } from 'core/passContext';
 import { WORLD_SCALE } from 'core/constants';
-import { looksInto } from 'entities/EntityLook';
+import { looksInto, outlineAt } from 'entities/EntityLook';
 
 const FACES = {
   north: { x: 0, z: -1 },
@@ -21,6 +22,82 @@ const FACES = {
 const centre = { x: 0, z: 0 };
 const facesLookedInto = (eye) =>
   Object.keys(FACES).filter((face) => looksInto(eye, centre, FACES[face]));
+
+// A sealed gate's box: its six faces' outward normals
+const SIDES = {
+  east: { x: 1, y: 0, z: 0 },
+  west: { x: -1, y: 0, z: 0 },
+  top: { x: 0, y: 1, z: 0 },
+  bottom: { x: 0, y: -1, z: 0 },
+  south: { x: 0, y: 0, z: 1 },
+  north: { x: 0, y: 0, z: -1 },
+};
+const gateCentre = { x: 0, y: WORLD_SCALE / 2, z: 0 };
+const GATE_HALF = WORLD_SCALE / 2;
+const offset = (eye, normal) =>
+  normal.x * (eye.x - gateCentre.x) +
+  normal.y * (eye.y - gateCentre.y) +
+  normal.z * (eye.z - gateCentre.z);
+
+/**
+ * How much each edge of the gate lights from `eye`, by its two faces'
+ * names: only faces toward the eye are drawn (back faces are culled), each
+ * lighting its edges by outlineAt at their midpoints.
+ */
+function edgesLit(eye) {
+  const lit = {};
+  for (const [name, normal] of Object.entries(SIDES)) {
+    if (offset(eye, normal) <= GATE_HALF) continue; // eslint-disable-line no-continue
+    for (const [acrossName, across] of Object.entries(SIDES)) {
+      if (Math.abs(across.x * normal.x + across.y * normal.y + across.z * normal.z) > 0.5) {
+        continue; // eslint-disable-line no-continue
+      }
+      const mid = {
+        x: gateCentre.x + (normal.x + across.x) * GATE_HALF,
+        y: gateCentre.y + (normal.y + across.y) * GATE_HALF,
+        z: gateCentre.z + (normal.z + across.z) * GATE_HALF,
+      };
+      const key = [name, acrossName].sort().join('|');
+      lit[key] = Math.max(lit[key] || 0, outlineAt(eye, gateCentre, mid, across));
+    }
+  }
+  return lit;
+}
+const outline = (eye) => {
+  const lit = edgesLit(eye);
+  return Object.keys(lit)
+    .filter((key) => lit[key] > 0.5)
+    .sort();
+};
+
+describe('A sealed gate lights only its outline from the eye', () => {
+  it('facing a panel squarely: only its four edges, a square', () => {
+    expect(outline({ x: 0.4, y: 1.8, z: 10 })).toEqual(
+      ['east|south', 'south|top', 'bottom|south', 'south|west'].sort()
+    );
+  });
+
+  it('off a corner: the line between the two faces seen is gone', () => {
+    const lit = outline({ x: 8, y: 1.8, z: 7 });
+    expect(lit).toHaveLength(6);
+    expect(lit).not.toContain('east|south');
+  });
+
+  it('from above: the edge between the top and the face seen is gone', () => {
+    expect(outline({ x: 0.4, y: 7, z: 10 })).toEqual(
+      ['bottom|south', 'east|south', 'south|west', 'east|top', 'top|west', 'north|top'].sort()
+    );
+  });
+
+  it('walking round a corner, its line fades out without popping', () => {
+    const corner = (x) => edgesLit({ x, y: 1.8, z: 10 })['east|south'] || 0;
+    expect(corner(0)).toBe(1);
+    expect(corner(4)).toBe(0);
+    for (let x = 0; x < 4; x += 0.02) {
+      expect(Math.abs(corner(x + 0.02) - corner(x))).toBeLessThan(0.1);
+    }
+  });
+});
 
 /** A renderer recording, at each pass, which of `frames` it would draw. */
 function recordingRenderer(frames) {

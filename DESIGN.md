@@ -494,15 +494,29 @@ entity TYPES, not for any level. Visual only.
 - **Gates: dark glass with electric edges.** A sealed gate is a slab of
   near-black glass (darker at the foot, faint veils deep inside that shift
   with the eye, glossier than the walls: the horizon on its faces at a
-  glance), all twelve edges drawn in pale electric light with a slow
-  shimmer, a faint engraved border inset where the staff sits. Walls have
-  only a top rim, so a gate never reads as wall. Lit by its area's singing
-  creatures like the walls. States:
+  glance), its OUTLINE from the eye drawn in pale electric light with a
+  slow shimmer, a faint engraved border inset where the staff sits. Walls
+  have only a top rim, so a gate never reads as wall. Lit by its area's
+  singing creatures like the walls. Its outline, then its states:
+  - **Outline only** (designer, 2026-11-22: "only the outline of the
+    aggregate visible outline should be visible. So I should see a square
+    only when facing a panel directly. When looking at a corner, that
+    corner line should not be visible"): an edge lights only where one of
+    its two faces turns toward the eye and the other away. Facing a panel
+    squarely: its four edges, a square; off a corner: the line between the
+    two faces seen is gone (a hexagon); from above: the top's edge with a
+    face seen is gone too. It fades out over a few degrees as the face
+    across turns past edge-on, so walking round a corner never pops it.
+    Each pass's own eye decides (a gate seen through a door: that door
+    pass's eye). Glow, charge, lockout red and flash ride the outline
+    alone, in every closed state (`EntityLook.outlineAt`, twin of its
+    GLSL). The engraved border stays on every face: it is the staff's
+    inset, a surface mark, never a corner line.
   - **Being sung toward**: the slab fades with the song (ruled
     2026-07-10, unchanged) while its edges CHARGE from the floor up with
     the song's progress — dim above the charge, bright below, a hot front
-    riding it — the edges holding on until the song ends.
-  - **Wrong note (lockout)**: slab and edges flood red, decaying over the
+    riding it — the outline holding on until the song ends.
+  - **Wrong note (lockout)**: slab and outline flood red, decaying over the
     lockout (`Gate.lockoutGlow`). Red is the gate's own meaning; it shows
     only on the closed look.
   - **Open**: no slab. Only the opening the player is looking INTO glows,
