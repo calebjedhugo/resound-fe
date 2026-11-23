@@ -106,7 +106,7 @@ const SUCK_GLSL = /* glsl */ `
     float newAlong = mix(along, tipAlong, travel);
     // A funnel: the girth closes faster than the point travels, twisting
     float squeeze = (1.0 - e) * (1.0 - e);
-    float ang = e * 2.4;
+    float ang = e * 1.1;
     vec3 swirl = lateral * cos(ang) + cross(axis, lateral) * sin(ang);
     return axis * newAlong + swirl * squeeze;
   }
@@ -555,8 +555,8 @@ export function suckPoint(p, tip, s, out = { x: 0, y: 0, z: 0 }) {
   const travel = Math.min(1, e + s * (1 - e) * 0.2);
   const newAlong = along + (tipLen - along) * travel;
   const squeeze = (1 - e) * (1 - e);
-  const c = Math.cos(e * 2.4);
-  const sn = Math.sin(e * 2.4);
+  const c = Math.cos(e * 1.1);
+  const sn = Math.sin(e * 1.1);
   // cross(axis, lateral)
   const cx = ay * lz - az * ly;
   const cy = az * lx - ax * lz;

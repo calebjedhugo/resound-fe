@@ -61,6 +61,10 @@ export const POLE_TIMES = Object.freeze({
 // radius): touching it, never inside it
 const CONTACT_GAP = 0.04;
 
+// Where the tip comes at a creature from, past the eye (world units): this
+// far to the view's right and down, toward the hand holding the pole
+const CONTACT_FROM = Object.freeze({ right: 2.2, down: 1.5 });
+
 const ease = (k) => {
   const t = Math.min(1, Math.max(0, k));
   return t * t * (3 - 2 * t);
@@ -234,7 +238,8 @@ class AbsorbManager {
     if (action.phase === 'pour') {
       const k = action.t / draw;
       creature.look.setSuck(1 - ease(k), this._tip);
-      this._showPole(1, 1 - ease(k));
+      // The flare dies as the creature starts to pour out
+      this._showPole(1, Math.max(0, 1 - k * 4));
       if (action.t < draw) return;
       creature.look.setSuck(0);
       this._next(action, 'retract');
@@ -406,8 +411,11 @@ class AbsorbManager {
   }
 
   /**
-   * The tip's touch on `creature`: its body's near surface, facing the
-   * player's eye, written into `out`.
+   * The tip's touch on `creature`, written into `out`: the point of its
+   * body's near surface facing where the pole comes from — the player's
+   * eye, offset to the right and down toward the hand (CONTACT_FROM), so
+   * the pole meets the body on its near flank and the body's pull into the
+   * tip is seen from the side, not end-on.
    */
   _contactOn(creature, out) {
     const { look } = creature;
@@ -420,9 +428,13 @@ class AbsorbManager {
       cz = look.object.position.z;
     }
     const eye = gameState.player.position;
-    let ex = eye.x - cx;
-    let ey = eye.y - cy;
-    let ez = eye.z - cz;
+    const [yaw] = CameraController.getView(gameState);
+    // The view's right (forward is (-sin yaw, 0, -cos yaw))
+    const rx = Math.cos(yaw);
+    const rz = -Math.sin(yaw);
+    let ex = eye.x + rx * CONTACT_FROM.right - cx;
+    let ey = eye.y - CONTACT_FROM.down - cy;
+    let ez = eye.z + rz * CONTACT_FROM.right - cz;
     const length = Math.hypot(ex, ey, ez) || 1;
     ex /= length;
     ey /= length;

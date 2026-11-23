@@ -29,9 +29,9 @@ const ANCHOR = Object.freeze({ x: 0.34, y: -0.38, z: -0.32 });
 const SEGMENT_RADII = [0.03, 0.024, 0.019, 0.015];
 const SEGMENT_OVERLAP = 1.18; // each segment this much longer than its share
 const MIN_SEGMENT = 0.08;
-const TIP_RADIUS = 0.045;
-const GLOW_RADIUS = 0.11;
-const GLOW_FLARE_GROWTH = 0.32;
+const TIP_RADIUS = 0.034;
+const GLOW_RADIUS = 0.07;
+const GLOW_FLARE_GROWTH = 0.14;
 const SHOWN_FROM = 0.01; // extension below which nothing draws
 
 // The tip's resting light (linear): pale, a little cold
@@ -68,8 +68,8 @@ const ROD_FRAGMENT = /* glsl */ `
     #include <clipping_planes_fragment>
     float ndv = clamp(dot(normalize(vNormalV), normalize(vViewV)), 0.0, 1.0);
     float rim = pow(1.0 - ndv, 3.0);
-    vec3 col = vec3(0.028, 0.031, 0.04) + vec3(0.11, 0.13, 0.17) * rim;
-    col += uTipCol * vNearTip * (0.25 + 0.5 * rim);
+    vec3 col = vec3(0.022, 0.025, 0.032) + vec3(0.08, 0.095, 0.13) * rim;
+    col += uTipCol * vNearTip * (0.15 + 0.4 * rim);
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <encodings_fragment>
@@ -289,7 +289,7 @@ class PoleLook {
       TIP_LIGHT[1] + (this._flareColour[1] - TIP_LIGHT[1]) * f,
       TIP_LIGHT[2] + (this._flareColour[2] - TIP_LIGHT[2]) * f
     );
-    glowAmount.value = 0.45 + 1.1 * f;
+    glowAmount.value = 0.35 + 0.65 * f;
     tipPosition.value.copy(tipNow);
   }
 }

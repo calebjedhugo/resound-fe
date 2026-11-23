@@ -7,7 +7,7 @@ import InputDevice, { KEYBOARD } from 'core/InputDevice';
 import { glyphFor } from 'core/inputGlyphs';
 import { makeGlyphCanvas, makeGlyphElement } from 'ui/glyphCanvas';
 import { getDistance } from 'core/utils';
-import { CLAP_RANGE, CREATURE_HOVER_HEIGHT } from 'core/constants';
+import { CLAP_RANGE } from 'core/constants';
 
 /**
  * KeyHints - wordless contextual key hints.
@@ -58,6 +58,10 @@ const BOB_AMPLITUDE = 0.25;
 const SPRITE_CANVAS_PX = 128;
 const SPRITE_WORLD_WIDTH = { space: 3.0 };
 const SPRITE_WORLD_WIDTH_DEFAULT = 1.4;
+// The release hint marks a spot only RELEASE_DISTANCE ahead, low over the
+// floor: drawn smaller, so it marks the spot instead of filling the view
+const SPRITE_SCALE = { release: 0.4 };
+const RELEASE_HINT_HEIGHT = 0.55;
 
 // The HUD glyphs on a pad, in CSS pixels
 const STICK_PX = 56;
@@ -203,8 +207,9 @@ class KeyHints {
     const glyphs = this._glyphs[family];
     this._sprites.forEach(([action, sprite]) => {
       const { texture, width, height } = glyphs.sprites[action];
+      const k = SPRITE_SCALE[action] || 1;
       sprite.material.map = texture;
-      sprite.scale.set(width, height, 1);
+      sprite.scale.set(width * k, height * k, 1);
     });
     this.moveEl.replaceChildren(glyphs.move);
     this.deployEl.replaceChildren(glyphs.deploy, this.deployCancelEl);
@@ -313,13 +318,13 @@ class KeyHints {
       this.releaseSprite.visible = false;
       return;
     }
-    // Over the spot it would come out onto, when there is one
+    // Low over the spot it would come out onto, when there is one
     const spot = AbsorbManager.releaseSpot(held.spec.size);
     if (!spot.valid) {
       this.releaseSprite.visible = false;
       return;
     }
-    this._floatOver(this.releaseSprite, spot, held.spec.size * 2 + CREATURE_HOVER_HEIGHT);
+    this._floatOver(this.releaseSprite, spot, RELEASE_HINT_HEIGHT);
   }
 
   _updateClap() {
