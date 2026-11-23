@@ -9,6 +9,7 @@ import SelectionManager from 'editor/viewport/SelectionManager';
 import EntityDragger from 'editor/viewport/EntityDragger';
 import GhostPreview from 'editor/viewport/GhostPreview';
 import RangeIndicator from 'editor/viewport/RangeIndicator';
+import GameLookLayer from 'editor/viewport/GameLookLayer';
 import ElevationSelector from 'editor/ui/ElevationSelector';
 import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
 import EntityToolbar from 'editor/ui/EntityToolbar';
@@ -36,7 +37,10 @@ import {
   releaseLinkBeforeDelete,
 } from 'editor/io/portalLinks';
 import { importPuzzle } from 'editor/io/importPuzzle';
+import { loadLook, saveLook } from 'editor/io/lookPreference';
+import SongAudition from 'editor/audio/SongAudition';
 import { availableElevations } from 'editor/util/elevations';
+import { ELEVATION_HEIGHT } from 'core/constants';
 
 // Entity types that carry a song (Edit Song menu item, dbl-click to edit).
 const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
@@ -104,6 +108,10 @@ export default class EditorApp {
       (message, kind) => this._showToast(message, kind)
     );
     this.entityPlacer = new EntityPlacer(this.scene, this.undoManager);
+    // The level as the game draws it (the default look), or the coloured
+    // schematic primitives: V / the toolbar's look button, remembered
+    this.gameLook = new GameLookLayer(this.scene);
+    this._look = loadLook();
     this.ghostPreview = new GhostPreview(this.scene);
     this.selectionManager = new SelectionManager(this.camera, this.entityPlacer);
     this.entityToolbar = new EntityToolbar(
@@ -114,10 +122,19 @@ export default class EditorApp {
         this.ghostPreview.setEntityType(toolType);
       }
     );
+    // A song heard in the editor (the song editor's Play, or A's quick
+    // audition) lights its creature in the game look, note by note
+    const previewNote = (entityId, pitch, seconds) => {
+      this.gameLook.noteOn(entityId, pitch, seconds);
+      this._requestFrame();
+    };
+    const previewStop = (entityId) => this.gameLook.silence(entityId);
     this.songEditorModal = new SongEditorModal(
       document.getElementById('editor-root'),
-      this.undoManager
+      this.undoManager,
+      { onNote: previewNote, onStop: previewStop }
     );
+    this.audition = new SongAudition({ onNote: previewNote, onStop: previewStop });
     this.contextMenu = new ContextMenu(document.getElementById('editor-viewport'));
     this.propertyPanel = new PropertyPanel(
       document.getElementById('property-panel'),
@@ -127,7 +144,7 @@ export default class EditorApp {
         this._deleteSelectedEntity();
       },
       (entityId) => {
-        this.songEditorModal.open(entityId);
+        this.openSongEditor(entityId);
       },
       (message, kind) => this._showToast(message, kind)
     );
@@ -143,7 +160,7 @@ export default class EditorApp {
       (entityId) => {
         if (entityId) this.selectionManager.select(entityId);
       },
-      (entityId) => this.songEditorModal.open(entityId)
+      (entityId) => this.openSongEditor(entityId)
     );
     this.toolbar = new EditorToolbar(document.getElementById('toolbar-panel'), {
       onUndo: () => this._undo(),
@@ -151,6 +168,7 @@ export default class EditorApp {
       canUndo: () => this.undoManager.canUndo(),
       canRedo: () => this.undoManager.canRedo(),
       onTest: () => this._testInGame(),
+      onToggleLook: () => this.toggleLook(),
     });
     this.puzzlePicker = new PuzzlePicker(
       document.getElementById('puzzle-panel'),
@@ -210,6 +228,7 @@ export default class EditorApp {
         this.gitPanel.clearNote();
       }
       this._syncGridToScene();
+      this._syncGameLook();
       this._refreshRangeIndicator();
       this._requestFrame();
       this._scheduleValidation();
@@ -234,8 +253,11 @@ export default class EditorApp {
         this.propertyPanel.hide();
       }
       this._refreshRangeIndicator();
+      this._outlineSelection();
       this._requestFrame();
     };
+
+    this._applyLook();
 
     // Restore saved session (auto-restore on load)
     this._restoreSession();
@@ -594,6 +616,7 @@ export default class EditorApp {
     this.elevationSelector.refresh();
     this.metadataPanel.refresh();
     this.selectionManager.deselect();
+    this._syncGameLook();
     if (this.toolbar) this.toolbar.refresh();
     const { id, name } = importedModel.getMetadata();
     if (this.puzzlePicker && !this._puzzleCommitted) {
@@ -644,7 +667,125 @@ export default class EditorApp {
     this.metadataPanel.refresh();
     this.entityPlacer.rebuildFromModel();
     this.selectionManager.deselect();
+    this._syncGameLook();
     this.toolbar.refresh();
+  }
+
+  // --- Songs: the song editor and quick audition --------------------------
+
+  /**
+   * Open an entity's song in the song editor (docked at the bottom), with
+   * the camera moved so the entity shows in the viewport above it — its
+   * creature lights there as Play sounds its song.
+   */
+  openSongEditor(entityId) {
+    this.audition.stop();
+    this._frameAboveEditor(entityId);
+    this.songEditorModal.open(entityId);
+  }
+
+  /**
+   * Play (or stop) an entity's song from the viewport: A, the entity menu's
+   * Play Song, the controller. Its creature lights note by note.
+   * @returns {boolean} whether it is playing now
+   */
+  auditionSong(entityId) {
+    const entity = this.undoManager.getEntity(entityId);
+    if (!entity || !SONG_ENTITY_TYPES.includes(entity.type)) return false;
+    const { song } = entity.data || {};
+    const empty = !song || (Array.isArray(song) ? song.length === 0 : !song.voices);
+    if (empty) {
+      this._showToast('No song to play yet — Edit Song writes one');
+      return false;
+    }
+    return this.audition.toggle(entityId, song, this.undoManager.getMetadata().tempo || 120);
+  }
+
+  /** A: audition the song of what stands under the cursor (else the selection). */
+  _auditionAtCursor() {
+    const atCursor = this._entityIdAtCell(this.editorScene.getHoveredGrid());
+    const id = atCursor !== null ? atCursor : this.selectionManager.selectedId;
+    const entity = id !== null ? this.undoManager.getEntity(id) : null;
+    if (!entity || !SONG_ENTITY_TYPES.includes(entity.type)) {
+      if (this.audition.playingId !== null) this.audition.stop();
+      else this._showToast('Put the cursor on a creature or gate to hear its song');
+      return;
+    }
+    this.auditionSong(id);
+  }
+
+  /**
+   * Move the camera (keeping its angle) so the entity sits in the upper part
+   * of the viewport, clear of the docked song editor.
+   */
+  _frameAboveEditor(entityId) {
+    const mesh = this.entityPlacer.getMeshById(entityId);
+    if (!mesh || !mesh.position || !this.camera.position.sub) return;
+    const { target } = this.controls;
+    const offset = this.camera.position.clone().sub(target);
+    // Toward the camera along the ground: the entity then shows above centre
+    const toward = offset.clone();
+    toward.y = 0;
+    if (toward.lengthSq() > 0) toward.normalize();
+    const along = offset.length() * 0.28;
+    target.set(
+      mesh.position.x + toward.x * along,
+      this.editorScene.activeElevation * ELEVATION_HEIGHT,
+      mesh.position.z + toward.z * along
+    );
+    this.camera.position.copy(target).add(offset);
+    this.controls.update();
+    this._requestFrame();
+  }
+
+  // --- The viewport's look (game / schematic) ----------------------------
+
+  /** Which look the viewport draws: 'game' (default) or 'schematic'. */
+  get look() {
+    return this._look;
+  }
+
+  /** Switch between the game look and the schematic look (V), remembered. */
+  toggleLook() {
+    this.setLook(this._look === 'game' ? 'schematic' : 'game');
+  }
+
+  /** @param {'game'|'schematic'} look */
+  setLook(look) {
+    if (look !== 'game' && look !== 'schematic') return;
+    this._look = look;
+    saveLook(look);
+    this._applyLook();
+    this._showToast(look === 'game' ? 'Game look (V)' : 'Schematic look (V)', 'success');
+  }
+
+  _applyLook() {
+    const game = this._look === 'game';
+    this.gameLook.visible = game;
+    this.entityPlacer.setLook(this._look);
+    this.floorRegionPanel.setSlabsVisible(!game);
+    const viewport = document.getElementById('editor-viewport');
+    if (viewport) viewport.classList.toggle('look-game', game);
+    if (this.toolbar && this.toolbar.setLook) this.toolbar.setLook(this._look);
+    this._syncGameLook();
+    this._requestFrame();
+  }
+
+  /**
+   * Rebuild what changed in the game look. Skipped in the schematic look:
+   * switching back syncs it, so a long schematic session builds nothing.
+   */
+  _syncGameLook() {
+    if (!this.gameLook || this._look !== 'game') return;
+    this.gameLook.sync(this.undoManager);
+    this._outlineSelection();
+  }
+
+  /** The game look's selection outline follows the selection. */
+  _outlineSelection() {
+    if (!this.gameLook || this._look !== 'game') return;
+    const id = this.selectionManager ? this.selectionManager.selectedId : null;
+    this.gameLook.setSelected(id, this.undoManager);
   }
 
   /** Open the current puzzle in the game (new tab) via the ?puzzle= deep link. */
@@ -853,7 +994,7 @@ export default class EditorApp {
       const entity = this.undoManager.getEntity(entityId);
       if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
         this.selectionManager.select(entityId);
-        this.songEditorModal.open(entityId);
+        this.openSongEditor(entityId);
       }
     });
 
@@ -877,7 +1018,11 @@ export default class EditorApp {
     if (entity && SONG_ENTITY_TYPES.includes(entity.type)) {
       items.push({
         label: 'Edit Song',
-        action: () => this.songEditorModal.open(entityId),
+        action: () => this.openSongEditor(entityId),
+      });
+      items.push({
+        label: this.audition.playingId === entityId ? 'Stop Song' : 'Play Song',
+        action: () => this.auditionSong(entityId),
       });
     }
 
@@ -1376,6 +1521,16 @@ export default class EditorApp {
           e.preventDefault();
           this._startFloorAtCursor();
           return;
+        case 'v':
+        case 'V':
+          e.preventDefault();
+          this.toggleLook();
+          return;
+        case 'a':
+        case 'A':
+          e.preventDefault();
+          this._auditionAtCursor();
+          return;
         default:
           break;
       }
@@ -1399,15 +1554,23 @@ export default class EditorApp {
   _requestFrame() {
     this._dirty = true;
     if (this._frameId == null) {
-      this._frameId = requestAnimationFrame(() => this._renderFrame());
+      this._frameId = requestAnimationFrame((now) => this._renderFrame(now));
     }
   }
 
-  _renderFrame() {
+  _renderFrame(now = 0) {
     this._frameId = null;
     if (!this._dirty) return;
     this._dirty = false;
+    const dt = this._lastFrameAt == null ? 0 : (now - this._lastFrameAt) / 1000;
+    this._lastFrameAt = now;
     this.controls.update(); // may emit 'change' (damping) → schedules the next frame
+    // The game look moves on its own (the sky, the creatures' wobble, a
+    // previewed song): while it shows, every frame asks for the next
+    if (this._look === 'game' && this.gameLook.animates) {
+      this.gameLook.update(dt);
+      this._requestFrame();
+    }
     this.editorScene.update();
     this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this._updateHud();
@@ -1458,9 +1621,11 @@ export default class EditorApp {
     clearTimeout(this._toastTimer);
     if (this._stopGitRefresh) this._stopGitRefresh();
     this.songEditorModal.dispose();
+    this.audition.dispose();
     this.worldOverview.dispose();
     this.contextMenu.dispose();
     this.ghostPreview.dispose();
+    this.gameLook.dispose();
     this.controls.dispose();
     this.renderer.dispose();
   }

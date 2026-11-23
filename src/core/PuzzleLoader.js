@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import Creature from 'entities/Creature';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
@@ -100,18 +99,7 @@ class PuzzleLoader {
    * the portal view so a neighbor seen through a doorway has its walls.
    */
   static perimeterWallPositions(gridSize) {
-    const positions = [];
-    for (let i = -1; i <= gridSize; i += 1) {
-      // Top edge (z = -1) and bottom edge (z = gridSize), including corners
-      positions.push({ x: i * WORLD_SCALE, y: 0, z: -1 * WORLD_SCALE });
-      positions.push({ x: i * WORLD_SCALE, y: 0, z: gridSize * WORLD_SCALE });
-    }
-    for (let i = 0; i < gridSize; i += 1) {
-      // Left edge (x = -1) and right edge (x = gridSize)
-      positions.push({ x: -1 * WORLD_SCALE, y: 0, z: i * WORLD_SCALE });
-      positions.push({ x: gridSize * WORLD_SCALE, y: 0, z: i * WORLD_SCALE });
-    }
-    return positions;
+    return Wall.perimeterPositions(gridSize);
   }
 
   /**
@@ -256,15 +244,7 @@ class PuzzleLoader {
       // pass by its doors (and freed with it: Area.dispose)
       const material = Wall.createBatchMaterial(area.light);
       area.ownedMaterials.push(material);
-      const batch = new THREE.InstancedMesh(Wall.GEOMETRY, material, wallPositions.length);
-      const matrix = new THREE.Matrix4();
-      wallPositions.forEach((p, i) => {
-        batch.setMatrixAt(i, matrix.makeTranslation(p.x, p.y + Wall.MESH_Y_OFFSET, p.z));
-      });
-      // three frustum-culls an InstancedMesh by object.boundingSphere; the
-      // instances span the whole area, not just the template box.
-      batch.computeBoundingSphere();
-      area.setStaticWalls(batch);
+      area.setStaticWalls(Wall.buildBatch(wallPositions, material));
     }
 
     // Its creatures' voices, built in idle time

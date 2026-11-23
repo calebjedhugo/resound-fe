@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WORLD_SCALE } from 'core/constants';
 import Entity from 'entities/Entity';
 import { createWallMaterial } from 'entities/EnvironmentLook';
 
@@ -52,7 +53,52 @@ class Wall extends Entity {
   }
 }
 
+/**
+ * Where an area's perimeter walls stand (world units): a ring just OUTSIDE
+ * the grid, rows/columns -1 and gridSize, corners included. Designers never
+ * place border walls (DESIGN.md "World / editor"); the game and the editor's
+ * game look both build them from here.
+ * @param {number} gridSize
+ * @returns {{x:number, y:number, z:number}[]}
+ */
+function perimeterPositions(gridSize) {
+  const positions = [];
+  for (let i = -1; i <= gridSize; i += 1) {
+    // Top edge (z = -1) and bottom edge (z = gridSize), including corners
+    positions.push({ x: i * WORLD_SCALE, y: 0, z: -1 * WORLD_SCALE });
+    positions.push({ x: i * WORLD_SCALE, y: 0, z: gridSize * WORLD_SCALE });
+  }
+  for (let i = 0; i < gridSize; i += 1) {
+    // Left edge (x = -1) and right edge (x = gridSize)
+    positions.push({ x: -1 * WORLD_SCALE, y: 0, z: i * WORLD_SCALE });
+    positions.push({ x: gridSize * WORLD_SCALE, y: 0, z: i * WORLD_SCALE });
+  }
+  return positions;
+}
+
+/**
+ * Every wall at `positions` (world units, each its floor point) as ONE
+ * InstancedMesh drawn with `material` (Wall.createBatchMaterial): the game's
+ * per-area wall batch (PuzzleLoader.buildArea), and the editor's.
+ * @param {{x:number, y:number, z:number}[]} positions
+ * @param {THREE.Material} material
+ * @returns {THREE.InstancedMesh}
+ */
+function buildBatch(positions, material) {
+  const batch = new THREE.InstancedMesh(WALL_GEOMETRY, material, positions.length);
+  const matrix = new THREE.Matrix4();
+  positions.forEach((p, i) => {
+    batch.setMatrixAt(i, matrix.makeTranslation(p.x, p.y + WALL_MESH_Y_OFFSET, p.z));
+  });
+  // three frustum-culls an InstancedMesh by object.boundingSphere; the
+  // instances span the whole area, not just the template box.
+  batch.computeBoundingSphere();
+  return batch;
+}
+
 Wall.GEOMETRY = WALL_GEOMETRY;
+Wall.perimeterPositions = perimeterPositions;
+Wall.buildBatch = buildBatch;
 Wall.createBatchMaterial = createBatchMaterial;
 Wall.MESH_Y_OFFSET = WALL_MESH_Y_OFFSET;
 

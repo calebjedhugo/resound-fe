@@ -129,7 +129,7 @@ export default class WorldOverview {
     this._isOpen = true;
 
     this._backdropEl = document.createElement('div');
-    this._backdropEl.className = 'song-modal-backdrop';
+    this._backdropEl.className = 'song-modal-backdrop world-modal-backdrop';
     this._backdropEl.addEventListener('mousedown', (e) => {
       if (e.target === this._backdropEl) this.close();
     });

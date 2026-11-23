@@ -33,6 +33,26 @@ export default class EntityPlacer {
     this._undoManager = undoManager;
     this._entityMeshes = new Map(); // entityId -> THREE.Mesh
     this._playerSpawnMesh = null;
+    // The schematic meshes are drawn only in the schematic look; in the game
+    // look (GameLookLayer draws the level) they stay as invisible pick
+    // targets: three raycasts a mesh whose material is hidden.
+    this._drawn = true;
+  }
+
+  /**
+   * Draw the schematic meshes ('schematic') or keep them only as pick
+   * targets ('game').
+   * @param {'game'|'schematic'} look
+   */
+  setLook(look) {
+    this._drawn = look === 'schematic';
+    this._entityMeshes.forEach((mesh) => this._applyDrawn(mesh));
+    if (this._playerSpawnMesh) this._applyDrawn(this._playerSpawnMesh);
+  }
+
+  _applyDrawn(mesh) {
+    // eslint-disable-next-line no-param-reassign
+    mesh.material.visible = this._drawn;
   }
 
   placeEntity(type, gridX, gridZ, elevation, data = {}) {
@@ -105,6 +125,7 @@ export default class EntityPlacer {
     const mesh = new THREE.Mesh(geo, mat);
     this._placeSpawnMesh(mesh, gridX, gridZ, elevation);
     mesh.rotation.x = Math.PI; // Point downward
+    this._applyDrawn(mesh);
     this._scene.add(mesh);
     this._playerSpawnMesh = mesh;
     mesh.userData = { type: 'player' };
@@ -126,6 +147,7 @@ export default class EntityPlacer {
     const mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS[type] });
     const mesh = new THREE.Mesh(geo, mat);
     this._fitMesh(mesh, { id, type, x: gridX, y: elevation, z: gridZ, data });
+    this._applyDrawn(mesh);
     this._scene.add(mesh);
     this._entityMeshes.set(id, mesh);
   }

@@ -95,15 +95,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .context-menu-item:hover,
 .context-menu-item.active { background: #0f3460; }
 .context-menu-item:disabled { color: #556677; cursor: default; }
-.song-modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
-.song-modal { background: #1a1a2e; border: 1px solid #0f3460; border-radius: 8px; width: 80vw; max-width: 1200px; height: 70vh; max-height: 800px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+.song-modal-backdrop { position: fixed; inset: 0; background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.15) 40%, rgba(0, 0, 0, 0.55) 100%); display: flex; align-items: flex-end; justify-content: center; z-index: 200; padding-bottom: 12px; }
+.song-modal { background: #1a1a2e; border: 1px solid #0f3460; border-radius: 8px; width: 80vw; max-width: 1200px; height: 54vh; max-height: 640px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+.world-modal-backdrop { align-items: center; padding-bottom: 0; background: rgba(0, 0, 0, 0.6); }
 .song-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #0f3460; }
 .song-modal-title { font-size: 14px; color: #8899aa; text-transform: uppercase; letter-spacing: 1px; }
 .song-modal-close { background: none; border: none; color: #8899aa; font-size: 20px; cursor: pointer; padding: 0 4px; }
 .song-modal-close:hover { color: #e0e0e0; }
 .song-modal-body { flex: 1; padding: 16px; overflow: auto; }
 .song-modal-footer { padding: 12px 16px; border-top: 1px solid #0f3460; display: flex; justify-content: flex-end; }
-.world-modal { width: 90vw; max-width: 1100px; height: 80vh; }
+.world-modal { width: 90vw; max-width: 1100px; height: 80vh; max-height: 800px; }
 .world-map-body { display: flex; flex-direction: column; gap: 8px; }
 .world-map-svg { flex: 1; min-height: 0; width: 100%; background: #0a1628; border: 1px solid #0f3460; border-radius: 4px; }
 .world-node { cursor: pointer; }
@@ -122,3 +123,4 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .world-issue { padding: 2px 0; }
 .world-issue-one-way { color: #ffaa44; }
 .world-issue-dangling { color: #ff4444; }
+.toolbar-look.active { color: #cfd8ea; border-color: #5a6a8a; }

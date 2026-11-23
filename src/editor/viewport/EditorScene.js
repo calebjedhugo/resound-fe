@@ -1,10 +1,15 @@
 import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { snapToGrid, gridToWorld } from 'editor/viewport/gridUtils';
+import { createOutlineBox, createOutlineMaterial } from 'editor/viewport/outlineBox';
 
 // Lift the cursor highlight above the floor slab (0.2 thick, centred on the
 // storey height, so its top is +0.1) so it is never hidden under a platform.
 const CURSOR_LIFT = 0.15;
+// The grid lines sit this far over their storey's floor, so they never
+// z-fight the game look's floor (its top is exactly at the storey height)
+const GRID_LIFT = 0.03;
+const CURSOR_COLOR = 0x44ff88;
 
 export default class EditorScene {
   constructor(scene, model) {
@@ -108,7 +113,7 @@ export default class EditorScene {
   _createHoverMesh() {
     const geo = new THREE.PlaneGeometry(WORLD_SCALE * 0.95, WORLD_SCALE * 0.95);
     const mat = new THREE.MeshBasicMaterial({
-      color: 0x44ff88,
+      color: CURSOR_COLOR,
       transparent: true,
       opacity: 0.3,
       side: THREE.DoubleSide,
@@ -118,6 +123,17 @@ export default class EditorScene {
     // The cursor is always shown — a cell is always selected.
     this._hoverMesh.visible = true;
     this._scene.add(this._hoverMesh);
+    // ...and its frame, drawn over everything: the cell under a wall, a
+    // gate's dark glass or a creature still shows where the cursor is
+    this._cursorFrame = createOutlineBox({
+      width: WORLD_SCALE * 0.95,
+      height: 0,
+      depth: WORLD_SCALE * 0.95,
+      thickness: 0.1,
+      material: createOutlineMaterial(CURSOR_COLOR, 0.9),
+      edges: 'base',
+    });
+    this._scene.add(this._cursorFrame);
   }
 
   _positionCursorMesh() {
@@ -125,6 +141,7 @@ export default class EditorScene {
     const world = gridToWorld(this._cursorCell.x, this._cursorCell.z);
     const elevY = this._activeElevation * ELEVATION_HEIGHT;
     this._hoverMesh.position.set(world.x, elevY + CURSOR_LIFT, world.z);
+    if (this._cursorFrame) this._cursorFrame.position.set(world.x, elevY + CURSOR_LIFT, world.z);
   }
 
   _createFloorDraftMesh() {
@@ -176,7 +193,7 @@ export default class EditorScene {
   /** Pin the grid + raycast plane to the active storey's height. */
   _positionGrid() {
     const y = this._activeElevation * ELEVATION_HEIGHT;
-    if (this._gridHelper) this._gridHelper.position.y = y;
+    if (this._gridHelper) this._gridHelper.position.y = y + GRID_LIFT;
     if (this._groundPlane) this._groundPlane.position.y = y;
   }
 

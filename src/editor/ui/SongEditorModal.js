@@ -1,17 +1,33 @@
 /**
  * SongEditorModal
  *
- * Modal dialog that wraps NotationEditor for full-screen song editing.
+ * Modal dialog that wraps NotationEditor for song editing.
  * Opened from the PropertyPanel "Edit Song..." button.
  * Handles backdrop, keyboard isolation, and focus management.
+ *
+ * It docks along the bottom of the window over a light backdrop, so the
+ * viewport above stays in sight: while Play sounds a creature's song, each
+ * note is reported (`onNote`) and the creature lights up in the viewport as
+ * it would in game; Stop (or closing) reports `onStop`.
  */
 import NotationEditor from 'editor/ui/NotationEditor';
 import { Synth } from 'resound-sound';
+import { noteSeconds } from 'editor/audio/SongAudition';
 
 export default class SongEditorModal {
-  constructor(rootContainer, undoManager) {
+  /**
+   * @param {HTMLElement} rootContainer
+   * @param {UndoManager} undoManager
+   * @param {object} [options]
+   * @param {(entityId:number, pitch:string, seconds:number) => void} [options.onNote]
+   *   a played note began (the song editor's Play)
+   * @param {(entityId:number) => void} [options.onStop] - playback stopped
+   */
+  constructor(rootContainer, undoManager, { onNote = () => {}, onStop = () => {} } = {}) {
     this._rootContainer = rootContainer;
     this._undoManager = undoManager;
+    this._onNote = onNote;
+    this._onStop = onStop;
     this._backdropEl = null;
     this._notationEditor = null;
     this._isOpen = false;
@@ -217,13 +233,30 @@ export default class SongEditorModal {
     if (this._player) return this._player;
     const hasAudio =
       typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+    let synth = null;
     if (hasAudio) {
       try {
-        this._player = new Synth();
+        synth = new Synth();
       } catch {
-        this._player = null;
+        synth = null;
       }
     }
+    if (!synth) return null;
+    // Each note it sounds lights the entity in the viewport (onNote); a stop
+    // puts it out (onStop). The editor talks to the wrapper only.
+    synth.noteCallback = (event) => {
+      if (this._entityId === null) return;
+      const { tempo } = this._undoManager.getMetadata();
+      this._onNote(this._entityId, event.pitch, noteSeconds(event, tempo));
+    };
+    this._player = {
+      synth,
+      play: (args) => synth.play(args),
+      stop: () => {
+        synth.stop();
+        if (this._entityId !== null) this._onStop(this._entityId);
+      },
+    };
     return this._player;
   }
 

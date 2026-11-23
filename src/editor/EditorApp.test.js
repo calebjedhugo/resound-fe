@@ -108,6 +108,22 @@ jest.mock('editor/viewport/EntityPlacer', () =>
     removeEntityById: jest.fn(),
     clearPlayerSpawn: jest.fn(),
     refreshLinkBadge: jest.fn(),
+    setLook: jest.fn(),
+  }))
+);
+
+// The game look builds the game's shaders: a stand-in that only records
+jest.mock('editor/viewport/GameLookLayer', () =>
+  jest.fn(() => ({
+    visible: true,
+    animates: false,
+    sync: jest.fn(),
+    update: jest.fn(),
+    setSelected: jest.fn(),
+    noteOn: jest.fn(),
+    silence: jest.fn(),
+    lookOf: jest.fn(() => null),
+    dispose: jest.fn(),
   }))
 );
 
@@ -1094,6 +1110,115 @@ describe('EditorApp wiring', () => {
       expect(app.selectionManager.selectedId).toBeNull();
       expect(document.getElementById('property-panel').textContent).toBe('');
       expect(app.rangeIndicator.hide).toHaveBeenCalled();
+    });
+  });
+
+  describe('the game look and the schematic look', () => {
+    beforeAll(() => localStorage.clear());
+    afterEach(() => localStorage.clear());
+
+    const press = (key) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      );
+
+    it('starts in the game look: the schematic meshes are pick targets only', () => {
+      expect(app.look).toBe('game');
+      expect(app.gameLook.visible).toBe(true);
+      expect(app.entityPlacer.setLook).toHaveBeenLastCalledWith('game');
+    });
+
+    it('V switches to the schematic look and back', () => {
+      press('v');
+      expect(app.look).toBe('schematic');
+      expect(app.gameLook.visible).toBe(false);
+      expect(app.entityPlacer.setLook).toHaveBeenLastCalledWith('schematic');
+
+      press('v');
+      expect(app.look).toBe('game');
+      expect(app.gameLook.visible).toBe(true);
+    });
+
+    it('the toolbar look button switches it too', () => {
+      document.querySelector('.toolbar-look').click();
+      expect(app.look).toBe('schematic');
+    });
+
+    it('is remembered: the next visit opens in the look last chosen', () => {
+      press('v');
+      app.dispose();
+      setupEditorDOM();
+      app = new EditorApp();
+      app.init();
+
+      expect(app.look).toBe('schematic');
+      expect(app.gameLook.visible).toBe(false);
+    });
+
+    it('builds nothing in the schematic look, and catches up when the game look returns', () => {
+      press('v');
+      app.gameLook.sync.mockClear();
+      app.undoManager.addEntity('wall', 1, 0, 1, {});
+      expect(app.gameLook.sync).not.toHaveBeenCalled();
+
+      press('v');
+      expect(app.gameLook.sync).toHaveBeenCalledWith(app.undoManager);
+    });
+  });
+
+  describe('hearing a song from the viewport (A)', () => {
+    const press = (key) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      );
+
+    it('plays the song of the creature under the cursor, lighting it note by note', async () => {
+      // The mocked scene's cursor is at (7, 7)
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, {
+        song: [
+          { pitch: 'E4', length: '1/2' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      });
+      press('a');
+
+      expect(app.audition.playingId).toBe(id);
+      // 120 bpm: a half note sounds 1 s
+      expect(app.gameLook.noteOn).toHaveBeenCalledWith(id, 'E4', 1);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(app.gameLook.noteOn).toHaveBeenLastCalledWith(id, 'G4', 0.5);
+    });
+
+    it('A again stops it, and the creature goes dark', () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, {
+        song: [{ pitch: 'E4', length: '1/1' }],
+      });
+      press('a');
+      press('a');
+
+      expect(app.audition.playingId).toBeNull();
+      expect(app.gameLook.silence).toHaveBeenCalledWith(id);
+    });
+
+    it("the song editor's Play lights the creature too, and Stop puts it out", async () => {
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, {
+        song: [{ pitch: 'E4', length: '1/2' }],
+      });
+      app.openSongEditor(id);
+      const button = (label) =>
+        [...document.querySelectorAll('.song-modal button')].find((b) => b.textContent === label);
+
+      button('Play').click();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(app.gameLook.noteOn).toHaveBeenCalledWith(id, 'E4', 1);
+
+      button('Stop').click();
+      expect(app.gameLook.silence).toHaveBeenCalledWith(id);
+    });
+
+    it('says why when there is no song under the cursor', () => {
+      press('a');
+      expect(document.querySelector('.viewport-toast').textContent).toMatch(/creature or gate/);
     });
   });
 

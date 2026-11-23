@@ -224,12 +224,26 @@ export default class FloorRegionPanel {
       });
 
       const mesh = new THREE.Mesh(geo, mat);
+      if (this._slabsVisible === false) mesh.visible = false;
       const centerX = (f.x1 + (f.x2 - f.x1 + 1) / 2) * WORLD_SCALE;
       const centerZ = (f.z1 + (f.z2 - f.z1 + 1) / 2) * WORLD_SCALE;
       const y = f.elevation * ELEVATION_HEIGHT;
       mesh.position.set(centerX, y, centerZ);
       this._editorScene._scene.add(mesh);
       this._floorMeshes.push(mesh);
+    });
+  }
+
+  /**
+   * Draw the floor slabs (the schematic look) or not (the game look draws
+   * the floor itself: GameLookLayer).
+   * @param {boolean} visible
+   */
+  setSlabsVisible(visible) {
+    this._slabsVisible = visible;
+    this._floorMeshes.forEach((m) => {
+      // eslint-disable-next-line no-param-reassign
+      m.visible = visible;
     });
   }
 

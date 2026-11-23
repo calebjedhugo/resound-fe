@@ -20,8 +20,10 @@ const SHORTCUTS = [
   ['F', 'Start a floor region here; arrows size, Enter commits'],
   ['Enter', "The entity's menu (song, links)"],
   ['Double-click', "Edit a creature's or gate's song"],
+  ['A', 'Play / stop the song under the cursor (its creature lights)'],
   ['Delete / Backspace', 'Delete the entity, or the floor region on an empty cell'],
   ['Escape', 'Deselect / cancel'],
+  ['V', 'Game look / schematic look'],
   ['Drag / Shift-drag / wheel', 'Orbit / pan / zoom the camera'],
   ['Cmd/Ctrl + Z', 'Undo'],
   ['Cmd/Ctrl + Shift + Z', 'Redo'],
@@ -59,11 +61,17 @@ export default class EditorToolbar {
     });
     this._testBtn.classList.add('toolbar-test');
 
+    this._lookBtn = this._iconBtn('◐', 'Game look / schematic look (V)', () => {
+      if (this._handlers.onToggleLook) this._handlers.onToggleLook();
+    });
+    this._lookBtn.classList.add('toolbar-look');
+
     this._helpBtn = this._iconBtn('?', 'Keyboard shortcuts', () => this._toggleHelp());
 
     row.appendChild(this._undoBtn);
     row.appendChild(this._redoBtn);
     row.appendChild(spacer);
+    row.appendChild(this._lookBtn);
     row.appendChild(this._testBtn);
     row.appendChild(this._helpBtn);
     wrapper.appendChild(row);
@@ -96,6 +104,21 @@ export default class EditorToolbar {
   _toggleHelp() {
     const showing = this._helpEl.style.display !== 'none';
     this._helpEl.style.display = showing ? 'none' : 'block';
+  }
+
+  /**
+   * Show which look the viewport draws.
+   * @param {'game'|'schematic'} look
+   */
+  setLook(look) {
+    if (!this._lookBtn) return;
+    const label =
+      look === 'game'
+        ? 'Game look — V switches to the schematic look'
+        : 'Schematic look — V switches to the game look';
+    this._lookBtn.title = label;
+    this._lookBtn.setAttribute('aria-label', label);
+    this._lookBtn.classList.toggle('active', look === 'game');
   }
 
   /** Reflect current undo/redo availability on the buttons. */
