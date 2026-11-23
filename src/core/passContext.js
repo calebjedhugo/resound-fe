@@ -9,7 +9,7 @@
  * view and a dozen-plus portal passes a frame alternate, so with three doors
  * open in The Star that was ~200 re-derivations a frame, ~4 ms/frame at 4x
  * CPU throttle (measured 2026-10-12). So every scene pass — the main view,
- * every PortalView pass (doors, the cleanser gate's pad), ShaderPrewarm —
+ * every PortalView pass (doors, the waystone gate's pad), ShaderPrewarm —
  * draws:
  *  - with exactly CLIP_PLANE_COUNT global clip planes (NO_CLIP_PLANES when
  *    the pass clips nothing: renderMainView);
@@ -35,7 +35,7 @@ export const NO_CLIP_PLANES = Object.freeze(
 // for each the material it is not wearing now (wearInMainView). A look that
 // belongs to the player's own eye alone (an open door's seam,
 // entities/EntityLook) lives there, so every other pass — doors, the
-// cleanser gate, the prewarm — draws the mesh as it always did. Each of the
+// waystone gate, the prewarm — draws the mesh as it always did. Each of the
 // two materials keeps its own program: swapping them re-derives nothing.
 // Parallel arrays, walked by index: the swap runs twice a frame and makes
 // no garbage (a Map's entries would, one array per mesh per walk)

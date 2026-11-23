@@ -622,13 +622,13 @@ describe('Every portal pass binds the same NUMBER of clip planes (2026-10-12)', 
   });
 });
 
-describe('Cleanser under a door mirrors to the partner face (one door, one tile)', () => {
-  // portal-b with a cleanser sitting ON its south-door cell (5, 7) — the
+describe('Waystone under a door mirrors to the partner face (one door, one tile)', () => {
+  // portal-b with a waystone sitting ON its south-door cell (5, 7) — the
   // portal panel can only paint beyond the window plane, so without a
   // mirror the tile clips to a sliver from the approaching side.
   const portalBWithTile = {
     ...portalB,
-    entities: [...portalB.entities, { type: 'cleanser', position: { x: 5, y: 0, z: 7 } }],
+    entities: [...portalB.entities, { type: 'waystone', position: { x: 5, y: 0, z: 7 } }],
   };
 
   afterEach(() => {
@@ -636,9 +636,9 @@ describe('Cleanser under a door mirrors to the partner face (one door, one tile)
     delete global.fetch;
   });
 
-  const mirrorsIn = (group) => group.children.filter((child) => child._isCleanserMirror);
+  const mirrorsIn = (group) => group.children.filter((child) => child._isWaystoneMirror);
 
-  it("shows the partner cell's cleanser at the local face of the door", async () => {
+  it("shows the partner cell's waystone at the local face of the door", async () => {
     installFetchMock({ 'portal-b': portalBWithTile });
     ctx.loadPuzzle('portal-a');
     await jest.runAllTimersAsync(); // let the neighbor area load
@@ -658,11 +658,11 @@ describe('Cleanser under a door mirrors to the partner face (one door, one tile)
 
     const [mirror] = mirrorsIn(gameState.activeArea.group);
     const neighbor = PortalManager._areas.get('portal-b');
-    const [tile] = neighbor.entityManager.getByType('cleanser');
+    const [tile] = neighbor.entityManager.getByType('waystone');
     expect(mirror.material).toBe(tile.mesh.material);
   });
 
-  it('no cleanser at the partner cell means no mirror', async () => {
+  it('no waystone at the partner cell means no mirror', async () => {
     installFetchMock({ 'portal-b': portalB });
     ctx.loadPuzzle('portal-a');
     await jest.runAllTimersAsync();

@@ -1,12 +1,12 @@
 /**
- * EntityLook — the gates, open doorways, ramps and cleansers in the storm
+ * EntityLook — the gates, open doorways, ramps and waystones in the storm
  * night (DESIGN.md "Entity look"; the world they stand in is
  * entities/EnvironmentLook's).
  *
  * The same rules as the walls and floor: near-neutral, low-chroma, DARK,
  * read by VALUE, so a creature's Messiaen colour stays the most vivid thing
  * in view. Colour is kept for meaning: the wrong note's red on a gate, and
- * the gold of the ACTIVE cleanser (and of the deployed gate that leads to
+ * the gold of the ACTIVE waystone (and of the deployed gate that leads to
  * it).
  *
  * - GATE: a slab of dark glass, every edge of its faces toward the eye
@@ -20,13 +20,13 @@
  *   where one of the box's faces turns toward the eye and the other away:
  *   outlineAt): within a thin band just inside it the view blurs and fades
  *   into what stands behind the doorway here, and nowhere else — only in
- *   the main view (createSeamMaterial). The deployed cleanser gate's
+ *   the main view (createSeamMaterial). The deployed waystone gate's
  *   panels do the same with a faint gold in the seam.
  * - RAMP: a wedge of the storeys' slate; chevrons crawl slowly UP its slope
  *   (the way up, at a glance) between pale side lines (its drops, like a
  *   storey's cliff edge); pale posts mark its top edge from up on the
  *   ledge. One geometry and one material for every ramp: one draw each.
- * - CLEANSER: a dark glass disc with a pale breathing ring (an emissive
+ * - WAYSTONE: a dark glass disc with a pale breathing ring (an emissive
  *   map); the active one's ring burns gold.
  *
  * All custom looks are unlit ShaderMaterials written in display values
@@ -59,8 +59,8 @@ export function bindAreaLight(material, light) {
   for (const key of LIGHT_KEYS) material.uniforms[key] = light.uniforms[key]; // eslint-disable-line no-param-reassign
 }
 
-// The active cleanser's gold (sRGB hex), on the deployed cleanser gate too
-export const CLEANSER_GOLD = 0xf0b85a;
+// The active waystone's gold (sRGB hex), on the deployed waystone gate too
+export const WAYSTONE_GOLD = 0xf0b85a;
 
 /** A Color holding a hex's DISPLAY values (shaders here write them out as they are). */
 function displayColour(hex) {
@@ -348,7 +348,7 @@ export function createGateMaterial(light = NO_LIGHT) {
 //
 // The seam is the player's own eye's: a panel wears its seam material only
 // while the main view draws (passContext.wearInMainView). In every other
-// pass — a door seen through a door, the cleanser gate's — it is its plain
+// pass — a door seen through a door, the waystone gate's — it is its plain
 // opaque picture, drawn and sorted as it always was.
 //
 // The seam material is TRANSPARENT so the fade can show the world behind
@@ -363,8 +363,8 @@ const PANEL_INSET = DOORWAY_OFFSET - PANEL_EPSILON;
 // panel is the box's side), and its taps
 const SEAM_BLUR = 0.02;
 const SEAM_TAPS = 8;
-// How much of the cleanser gate's gold tints its seam, at the outline
-const CLEANSER_SEAM_GOLD = 0.7;
+// How much of the waystone gate's gold tints its seam, at the outline
+const WAYSTONE_SEAM_GOLD = 0.7;
 
 // A panel's renderOrder: first among transparent things (and, in the passes
 // that draw it opaque, among opaque ones)
@@ -469,7 +469,7 @@ function addPortalSeam(shader) {
  * open portal's seam along the outline. Every panel's shares one program;
  * a panel's tint is its own.
  * @param {THREE.Texture} map
- * @param {?number} [tint] - sRGB hex the seam leans toward (the cleanser
+ * @param {?number} [tint] - sRGB hex the seam leans toward (the waystone
  *   gate's gold); none by default
  * @returns {THREE.MeshBasicMaterial}
  */
@@ -477,7 +477,7 @@ export function createSeamMaterial(map, tint = null) {
   const material = new THREE.MeshBasicMaterial({ map, transparent: true });
   material.userData.seam = {
     tint: { value: displayColour(tint === null ? 0xffffff : tint) },
-    tintAmount: { value: tint === null ? 0 : CLEANSER_SEAM_GOLD },
+    tintAmount: { value: tint === null ? 0 : WAYSTONE_SEAM_GOLD },
   };
   material.onBeforeCompile = addPortalSeam;
   return material;
@@ -654,14 +654,14 @@ export function bindRampLight(area) {
   RAMP_MATERIAL.uniformsNeedUpdate = true;
 }
 
-// ---- Cleanser -------------------------------------------------------------
+// ---- Waystone -------------------------------------------------------------
 
 // The disc's light, as a radial emissive map (lit where it is white): a
 // bright ring at the rim, a faint one inside, the middle dark glass
 const RING_SIZE = 64;
 
 /** The ring's brightness at `r` (0 centre, 1 rim). */
-export function cleanserRingAt(r) {
+export function waystoneRingAt(r) {
   const ring = (centre, width) => Math.exp(-(((r - centre) / width) ** 2));
   return Math.min(1, 0.1 + ring(0.9, 0.06) + 0.55 * ring(0.62, 0.035) + 0.2 * ring(0.3, 0.035));
 }
@@ -671,7 +671,7 @@ function createRingTexture() {
   for (let y = 0; y < RING_SIZE; y += 1) {
     for (let x = 0; x < RING_SIZE; x += 1) {
       const r = Math.hypot(x + 0.5 - RING_SIZE / 2, y + 0.5 - RING_SIZE / 2) / (RING_SIZE / 2);
-      const value = Math.round(cleanserRingAt(r) * 255);
+      const value = Math.round(waystoneRingAt(r) * 255);
       const i = (y * RING_SIZE + x) * 4;
       data[i] = value;
       data[i + 1] = value;
@@ -687,17 +687,17 @@ function createRingTexture() {
   return texture;
 }
 
-export const CLEANSER_RING_MAP = createRingTexture();
+export const WAYSTONE_RING_MAP = createRingTexture();
 
 // The disc's rim (its thin side) reads as part of the ring: where on the
 // map it samples
 const RIM_UV = [0.5 + 0.9 / 2, 0.5];
 
 /**
- * A cleanser disc's geometry: a thin cylinder whose caps map the ring
+ * A waystone disc's geometry: a thin cylinder whose caps map the ring
  * radially and whose rim samples the ring itself.
  */
-export function createCleanserGeometry() {
+export function createWaystoneGeometry() {
   const geometry = new THREE.CylinderGeometry(1.25, 1.25, 0.12, 48);
   const { normal, uv } = geometry.attributes || {};
   if (!normal || !uv) return geometry; // the test harness's stand-in three
@@ -710,7 +710,7 @@ export function createCleanserGeometry() {
 /**
  * One material per program these looks can need, for ShaderPrewarm's
  * never-disposed stand-ins: a gate sealed (opaque) and fading
- * (transparent), the ramps' and a cleanser disc's (a door panel's needs a
+ * (transparent), the ramps' and a waystone disc's (a door panel's needs a
  * scene target: ShaderPrewarm builds it with createSeamMaterial).
  */
 export function standInMaterials() {
@@ -720,8 +720,8 @@ export function standInMaterials() {
     gateSealed: createGateMaterial(),
     gateFading: fading,
     ramp: RAMP_MATERIAL,
-    cleanser: new THREE.MeshStandardMaterial({
-      emissiveMap: CLEANSER_RING_MAP,
+    waystone: new THREE.MeshStandardMaterial({
+      emissiveMap: WAYSTONE_RING_MAP,
       transparent: true,
     }),
   };

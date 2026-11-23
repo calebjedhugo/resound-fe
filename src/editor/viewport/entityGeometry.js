@@ -25,8 +25,8 @@ export function createEntityGeometry(type) {
       return new THREE.BoxGeometry(WORLD_SCALE * 0.95, WORLD_SCALE, WORLD_SCALE * 0.95);
     case 'ramp':
       return new THREE.BoxGeometry(WORLD_SCALE * 0.9, WORLD_SCALE * 0.5, WORLD_SCALE * 0.9);
-    case 'cleanser':
-      // A thin disc lying flush on the floor — mirrors CleansingTile's runtime
+    case 'waystone':
+      // A thin disc lying flush on the floor — mirrors Waystone's runtime
       // look (a flat cylinder), scaled to editor units.
       return new THREE.CylinderGeometry(
         WORLD_SCALE * 0.42,
@@ -48,7 +48,7 @@ export const Y_OFFSETS = {
   fountain: 0.25,
   wall: 0.5,
   ramp: 0.25,
-  cleanser: 0.06,
+  waystone: 0.06,
 };
 
 export const DEFAULT_Y_OFFSET = 0.5;

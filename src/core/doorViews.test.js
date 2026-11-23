@@ -302,7 +302,7 @@ describe('A crossing never rebuilds a door', () => {
 
     // Away in the neighbor: nothing draws the old area's door there, so a
     // pass through the neighbor's own door must never show it (frozen)
-    await PortalManager.teleportToCleanser({
+    await PortalManager.teleportToWaystone({
       puzzleId: 'portal-b',
       position: { x: 6, y: 0, z: 6 },
     });
@@ -310,7 +310,7 @@ describe('A crossing never rebuilds a door', () => {
     expect(visiblePanels(areaA.scene)).toEqual([]);
 
     // Back home: the same panels, shown again, and no warm-up to pay
-    await PortalManager.teleportToCleanser({
+    await PortalManager.teleportToWaystone({
       puzzleId: 'portal-a',
       position: { x: 15, y: 0, z: 3 },
     });
@@ -338,7 +338,7 @@ describe('A crossing never rebuilds a door', () => {
     expect(panelsOf(door)).toHaveLength(4);
 
     // Far from both portal areas: they unload, and every view goes first
-    await PortalManager.teleportToCleanser({
+    await PortalManager.teleportToWaystone({
       puzzleId: 'deploy-basic',
       position: { x: 7 * WORLD_SCALE, y: 0, z: 11 * WORLD_SCALE },
     });
@@ -399,7 +399,7 @@ describe('A world left behind', () => {
     const left = await visit();
 
     // Far from both portal areas: they unload, and the world goes on
-    await PortalManager.teleportToCleanser({
+    await PortalManager.teleportToWaystone({
       puzzleId: 'deploy-basic',
       position: { x: 7 * WORLD_SCALE, y: 0, z: 11 * WORLD_SCALE },
     });

@@ -320,7 +320,7 @@ describe('A creature taken and let out again is the same creature', () => {
 });
 
 describe('No creature duplicated or lost when an area is pruned and rebuilt', () => {
-  // Two rooms with no door between them: a jump (the cleanser gate's
+  // Two rooms with no door between them: a jump (the waystone gate's
   // teleport) from one prunes the other, and a jump back rebuilds it from
   // its puzzle file
   const ROOM_A = { ...TEST_PUZZLES['recording-basic'], id: 'pole-room-a' };
@@ -345,7 +345,7 @@ describe('No creature duplicated or lost when an area is pruned and rebuilt', ()
   });
 
   const jumpTo = async (puzzleId) => {
-    await PortalManager.teleportToCleanser({ puzzleId, position: MIDDLE });
+    await PortalManager.teleportToWaystone({ puzzleId, position: MIDDLE });
     face(0);
     await ctx.tick(16);
   };

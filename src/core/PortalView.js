@@ -232,7 +232,7 @@ class PortalView {
    *   looks out of (opposite the source face — the pair maps by
    *   translation); defaults to the partner's authored facing.
    * @param {?number} [options.seamTint] - sRGB hex the panel's seam leans
-   *   toward (the cleanser gate's gold; entities/EntityLook)
+   *   toward (the waystone gate's gold; entities/EntityLook)
    */
   constructor(gate, partnerGate, neighborArea, options = {}) {
     const {
@@ -775,7 +775,7 @@ class PortalView {
     // pass paints the panel's own one-frame-stale texture across the whole
     // doorway, which feeds back to solid black. A door of the area beyond
     // standing just behind the arrival cell puts its panel there too: a
-    // cleanser gate's mapped eye, a step from the gate, stands in that
+    // waystone gate's mapped eye, a step from the gate, stands in that
     // door's cell and the panel facing it filled the gate black (The Star
     // -> poc-clap, 2026-10-18). Hide a surface only when it actually sits
     // in that junk zone — inside the overreach slab behind the window AND

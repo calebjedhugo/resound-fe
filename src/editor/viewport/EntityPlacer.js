@@ -6,7 +6,7 @@ import { createEntityGeometry, Y_OFFSETS } from 'editor/viewport/entityGeometry'
 import { isValidGateId, nextGateId, usedGateIds } from 'editor/util/gateIds';
 
 // Entity types _createMesh knows how to place (player spawn is separate).
-const PLACEABLE_TYPES = ['creature', 'gate', 'fountain', 'wall', 'ramp', 'cleanser'];
+const PLACEABLE_TYPES = ['creature', 'gate', 'fountain', 'wall', 'ramp', 'waystone'];
 
 // Sensible starting data for a freshly-placed entity, so a new creature is
 // immediately usable and the properties panel reflects what is actually stored
@@ -36,9 +36,9 @@ export default class EntityPlacer {
   }
 
   placeEntity(type, gridX, gridZ, elevation, data = {}) {
-    // One thing per tile — except a cleanser, which may share a cell with the
-    // player spawn (spawning on a cleansing tile is legal; the tape starts
-    // empty anyway) and with a gate (a cleansing tile under a doorway).
+    // One thing per tile — except a waystone, which may share a cell with the
+    // player spawn (spawning on a waystone is legal) and with a gate (a
+    // waystone under a doorway).
     if (this._isCellOccupied(gridX, elevation, gridZ, type)) return null;
 
     if (type === 'player') {
@@ -70,19 +70,19 @@ export default class EntityPlacer {
 
   /**
    * True if cell (x,y,z) already holds something that blocks placing `type`
-   * there. A cleanser shares a cell with the player spawn AND with a gate
-   * (a cleansing tile under a doorway is legal); everything else is
+   * there. A waystone shares a cell with the player spawn AND with a gate
+   * (a waystone under a doorway is legal); everything else is
    * one-per-tile.
    */
   _isCellOccupied(x, y, z, type = null) {
     const entities = this._undoManager.getEntitiesAt(x, y, z);
     const spawn = this._undoManager.getPlayerSpawn();
     const spawnHere = Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
-    // A cleanser is blocked only by a non-gate entity (spawn never blocks it).
-    if (type === 'cleanser') return entities.some((e) => e.type !== 'gate');
-    // A gate tolerates a cleanser but nothing else (incl. the spawn).
-    if (type === 'gate') return spawnHere || entities.some((e) => e.type !== 'cleanser');
-    if (type === 'player') return entities.some((e) => e.type !== 'cleanser');
+    // A waystone is blocked only by a non-gate entity (spawn never blocks it).
+    if (type === 'waystone') return entities.some((e) => e.type !== 'gate');
+    // A gate tolerates a waystone but nothing else (incl. the spawn).
+    if (type === 'gate') return spawnHere || entities.some((e) => e.type !== 'waystone');
+    if (type === 'player') return entities.some((e) => e.type !== 'waystone');
     if (entities.length > 0) return true;
     return spawnHere;
   }

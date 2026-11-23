@@ -218,7 +218,7 @@ describe('EntityPlacer', () => {
       placer.placeEntity('player', 9, 3, 0); // the spawn moves
       placer.removeEntityById(ramp);
       placer.clearPlayerSpawn();
-      placer.placeEntity('cleanser', 4, 4, 0); // a cleanser under the gate
+      placer.placeEntity('waystone', 4, 4, 0); // a waystone under the gate
       selection.select(wall); // a highlighted mesh must not keep its highlight
 
       const steps = [];

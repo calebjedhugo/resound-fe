@@ -11,7 +11,7 @@
  *   sheet lightning flickering inside the clouds now and then. It depends
  *   only on the view DIRECTION, never the eye's position (it sits at
  *   infinity), and only on that direction's height and its azimuth taken
- *   four times round: every door and the cleanser gate turn the view by a
+ *   four times round: every door and the waystone gate turn the view by a
  *   multiple of 90 degrees, so a door shows the same sky, the same way
  *   round, as the sky beside it.
  * - THE STORM ANSWERS A GATE BEING SOLVED (tickEnvironment): the deck
@@ -66,8 +66,8 @@ const PALETTE = {
   slabUnder: 0x121418,
   cliffEdge: 0xb4bccf,
   // The entities (entities/EntityLook): dark glass gates with pale edge
-  // light, ramps of the storeys' slate, pale cleanser rings — the gold of
-  // the ACTIVE cleanser (and the gate that leads there) the one accent,
+  // light, ramps of the storeys' slate, pale waystone rings — the gold of
+  // the ACTIVE waystone (and the gate that leads there) the one accent,
   // red the wrong note's
   gateGlass: 0x10131a,
   gateFoot: 0x07080c,

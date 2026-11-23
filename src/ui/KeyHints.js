@@ -32,8 +32,8 @@ import { CLAP_RANGE } from 'core/constants';
  *              fleeting moment two creatures sing at once — that was flaky);
  *              retires on the first C pressed while the hint is up
  *   deploy   - "G" keycap, bottom-center HUD (above the move cluster): the
- *              deployable cleanser gate (core/DeployManager). Shows once an
- *              ACTIVE cleanser exists (the mechanic leads to it — before
+ *              deployable waystone gate (core/DeployManager). Shows once an
+ *              ACTIVE waystone exists (the mechanic leads to it — before
  *              that the key is silent). It teaches the WHOLE g-cycle,
  *              "g again to cancel" included: retires only when a deployed
  *              pad is removed or walked through (DeployManager retires it).
@@ -122,7 +122,7 @@ class KeyHints {
     document.body.appendChild(this.moveEl);
 
     // HUD: "G" keycap (a pad: its Triangle / Y / X) for the deployable
-    // cleanser gate, above the move cluster. While a gate is DEPLOYED, a 🚫
+    // waystone gate, above the move cluster. While a gate is DEPLOYED, a 🚫
     // badge appears beside the keycap: G now means cancel.
     this.deployEl = document.createElement('div');
     this.deployEl.id = 'hint-deploy';
@@ -266,10 +266,10 @@ class KeyHints {
   }
 
   _updateDeploy() {
-    // Teachable the moment the mechanic can work: an active cleanser exists
+    // Teachable the moment the mechanic can work: an active waystone exists
     // for the gate to lead to (in a level that teaches "deploy", the player
     // steps on one on the way in).
-    if (HintMemory.isRetired('deploy') || !gameState.activeCleanser) {
+    if (HintMemory.isRetired('deploy') || !gameState.activeWaystone) {
       this.deployEl.style.opacity = '0';
       return;
     }

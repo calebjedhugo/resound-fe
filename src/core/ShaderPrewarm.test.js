@@ -268,7 +268,7 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     ['the sky, the floor, the wall batch, gates and their notation', 'portal-two-pairs'],
     ['a raised floor with cliff edges, a ramp and a creature (halo included)', 'elevation-basic'],
     ['a fountain', 'listening-fountain-basic'],
-    ['a cleansing tile', 'deploy-basic'],
+    ['a waystone', 'deploy-basic'],
   ])('a level with %s', (_, puzzleId) => {
     ctx.loadPuzzle(puzzleId);
     expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
@@ -336,14 +336,14 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     expect(coldPrograms(fountain.mesh)).toEqual([]);
   });
 
-  it('the cleanser gate: its aiming phantom, the gold tile and the deployed gate', async () => {
+  it('the waystone gate: its aiming phantom, the gold tile and the deployed gate', async () => {
     const scene = litScene(); // the phantom shows in the main scene
     DeployManager.initialize(scene);
     ctx.loadPuzzle('deploy-basic');
     gameState.mode = 'PLAYING';
-    const [tile] = gameState.activeArea.entityManager.getByType('cleanser');
+    const [tile] = gameState.activeArea.entityManager.getByType('waystone');
     ctx.setPlayerPosition({ x: tile.position.x, y: 1.8, z: tile.position.z });
-    await ctx.tick(20); // stepping on it makes it the ACTIVE (gold) cleanser
+    await ctx.tick(20); // stepping on it makes it the ACTIVE (gold) waystone
     ctx.setPlayerPosition({ x: tile.position.x + 9, y: 1.8, z: tile.position.z + 6 });
     gameState.camera.viewCenter = [0, 0];
 
@@ -355,11 +355,11 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     DeployManager.renderPortal(recordingRenderer(), { position: gameState.player.position });
 
     expect(phantom).toBeDefined();
-    expect(tile.isActiveCleanser()).toBe(true);
-    const [pad] = gameState.activeArea.entityManager.getByType('cleanser-gate');
+    expect(tile.isActiveWaystone()).toBe(true);
+    const [pad] = gameState.activeArea.entityManager.getByType('waystone-gate');
     expect(objectsIn(pad.mesh).filter((mesh) => mesh._isPortalSurface)).toHaveLength(4);
     const looks = objectsIn(gameState.activeArea.group);
-    expect(looks.some((mesh) => mesh._isCleanserMirror)).toBe(true); // the tile, at the gate
+    expect(looks.some((mesh) => mesh._isWaystoneMirror)).toBe(true); // the tile, at the gate
     expect(coldPrograms(phantom)).toEqual([]);
     expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
     // ...and its panels as the main view draws them (the gold seam)

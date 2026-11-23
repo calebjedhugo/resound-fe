@@ -130,7 +130,7 @@ const dispatchKeyboardActions = (event) => {
       }
       break;
     case 'KeyG':
-      // Deployable cleanser gate: aim -> deploy -> remove (core/DeployManager)
+      // Deployable waystone gate: aim -> deploy -> remove (core/DeployManager)
       if (acting && !repeat) {
         DeployManager.toggle();
       }

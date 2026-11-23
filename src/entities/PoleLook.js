@@ -8,7 +8,7 @@
  *
  * MAIN VIEW ONLY: it lives in a scene of its own (never an area group, never
  * the main scene), drawn by `render` right after the main view, over its
- * depth (walls in front of it still hide it), so no door pass, cleanser-gate
+ * depth (walls in front of it still hide it), so no door pass, waystone-gate
  * pass or warm-up ever draws it. Its scene is lit like the world (program
  * keys count lights) and draws in the one pass context every pass shares
  * (core/passContext: CLIP_PLANE_COUNT planes, the canvas), so its programs

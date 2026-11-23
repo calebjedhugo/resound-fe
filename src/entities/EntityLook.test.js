@@ -4,7 +4,7 @@
  * into the world around them — a band just inside the outline, the way
  * through untouched, gone before the emerging side of the box can show,
  * and only in the main view: never on a door seen through a door or in the
- * cleanser gate's passes. An open gate draws no shell at all.
+ * waystone gate's passes. An open gate draws no shell at all.
  */
 import * as THREE from 'three';
 import gameState from 'core/GameState';
@@ -270,11 +270,11 @@ describe("The seam is the player's own eye's: drawn in the main view only", () =
     expect(renderer.passes.every((pass) => pass.drawn === gates.length)).toBe(true);
   });
 
-  it("the cleanser gate's seam leans gold, its passes draw it plain; it has no shell", async () => {
+  it("the waystone gate's seam leans gold, its passes draw it plain; it has no shell", async () => {
     DeployManager.initialize(new THREE.Scene()); // the phantom's scene
     ctx.loadPuzzle('deploy-basic');
     gameState.mode = 'PLAYING';
-    const [tile] = gameState.activeArea.entityManager.getByType('cleanser');
+    const [tile] = gameState.activeArea.entityManager.getByType('waystone');
     ctx.setPlayerPosition({ x: tile.position.x, y: 1.8, z: tile.position.z });
     await ctx.tick(20); // the tile turns active (gold)
     ctx.setPlayerPosition({ x: tile.position.x + 9, y: 1.8, z: tile.position.z + 6 });
@@ -283,7 +283,7 @@ describe("The seam is the player's own eye's: drawn in the main view only", () =
     DeployManager.update();
     DeployManager.toggle(); // deploy
     DeployManager.update();
-    const [pad] = gameState.activeArea.entityManager.getByType('cleanser-gate');
+    const [pad] = gameState.activeArea.entityManager.getByType('waystone-gate');
     const panels = () => panelsOf(pad.mesh);
     const renderer = recordingRenderer(() => [], panels);
     const camera = { position: gameState.player.position };

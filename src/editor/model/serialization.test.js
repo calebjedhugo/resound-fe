@@ -270,20 +270,20 @@ describe('Puzzle Serialization', () => {
       expect(wall.direction).toBeUndefined();
     });
 
-    it('serializes cleanser with position only, no extra fields', () => {
+    it('serializes waystone with position only, no extra fields', () => {
       const model = new EditorPuzzleModel();
-      model.setMetadata({ id: 'cleanser-test' });
+      model.setMetadata({ id: 'waystone-test' });
       model.setPlayerSpawn(0, 0, 0);
-      model.addEntity('cleanser', 6, 0, 12, {});
+      model.addEntity('waystone', 6, 0, 12, {});
 
       const json = serializePuzzle(model);
-      const cleanser = json.entities[0];
+      const waystone = json.entities[0];
 
-      expect(cleanser.type).toBe('cleanser');
-      expect(cleanser.position).toEqual({ x: 6, y: 0, z: 12 });
-      expect(cleanser.data).toBeUndefined();
-      expect(cleanser.song).toBeUndefined();
-      expect(cleanser.direction).toBeUndefined();
+      expect(waystone.type).toBe('waystone');
+      expect(waystone.position).toEqual({ x: 6, y: 0, z: 12 });
+      expect(waystone.data).toBeUndefined();
+      expect(waystone.song).toBeUndefined();
+      expect(waystone.direction).toBeUndefined();
     });
 
     it('omits clapDisplacement from JSON when null', () => {
@@ -484,10 +484,39 @@ describe('Puzzle Serialization', () => {
       expect(gate.data.song).toEqual([{ pitch: 'E4', length: '1/4' }]);
     });
 
-    it('deserializes a cleanser (position-only, walkable tile) and round-trips it', () => {
+    it('deserializes a waystone (position-only, walkable tile) and round-trips it', () => {
       const json = {
-        id: 'cleanser-import',
-        name: 'Cleanser Import',
+        id: 'waystone-import',
+        name: 'Waystone Import',
+        difficulty: 1,
+        gridSize: 15,
+        tempo: 120,
+        playerStart: { x: 0, y: 0, z: 0 },
+        entities: [{ type: 'waystone', position: { x: 6, y: 0, z: 12 } }],
+      };
+
+      const model = deserializePuzzle(json);
+      const entities = model.getEntities();
+      expect(entities.length).toBe(1);
+
+      const waystone = entities[0];
+      expect(waystone.type).toBe('waystone');
+      expect(waystone.x).toBe(6);
+      expect(waystone.y).toBe(0);
+      expect(waystone.z).toBe(12);
+      expect(waystone.data).toEqual({});
+
+      // Re-serializing preserves the waystone untouched.
+      const reserialized = serializePuzzle(model);
+      expect(reserialized.entities).toEqual([
+        { type: 'waystone', position: { x: 6, y: 0, z: 12 } },
+      ]);
+    });
+
+    it("loads a waystone saved under its old name ('cleanser') and saves it as a waystone", () => {
+      const json = {
+        id: 'old-cleanser',
+        name: 'Old Cleanser',
         difficulty: 1,
         gridSize: 15,
         tempo: 120,
@@ -496,20 +525,9 @@ describe('Puzzle Serialization', () => {
       };
 
       const model = deserializePuzzle(json);
-      const entities = model.getEntities();
-      expect(entities.length).toBe(1);
-
-      const cleanser = entities[0];
-      expect(cleanser.type).toBe('cleanser');
-      expect(cleanser.x).toBe(6);
-      expect(cleanser.y).toBe(0);
-      expect(cleanser.z).toBe(12);
-      expect(cleanser.data).toEqual({});
-
-      // Re-serializing preserves the cleanser untouched.
-      const reserialized = serializePuzzle(model);
-      expect(reserialized.entities).toEqual([
-        { type: 'cleanser', position: { x: 6, y: 0, z: 12 } },
+      expect(model.getEntities().map((e) => e.type)).toEqual(['waystone']);
+      expect(serializePuzzle(model).entities).toEqual([
+        { type: 'waystone', position: { x: 6, y: 0, z: 12 } },
       ]);
     });
 

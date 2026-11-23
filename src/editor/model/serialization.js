@@ -138,9 +138,9 @@ function serializeEntity(entity) {
     case 'wall':
       return { type: 'wall', position };
 
-    case 'cleanser':
-      // Walkable cleansing tile — position only, no song/data (mirrors wall).
-      return { type: 'cleanser', position };
+    case 'waystone':
+      // Walkable waystone — position only, no song/data (mirrors wall).
+      return { type: 'waystone', position };
 
     default:
       return { type: entity.type, position };
@@ -292,8 +292,9 @@ function deserializeEntity(model, entity) {
       model.addEntity('wall', x, y, z, {});
       break;
 
-    case 'cleanser':
-      model.addEntity('cleanser', x, y, z, {});
+    case 'cleanser': // its old name (constants ENTITY_TYPE_ALIASES): saved as a waystone
+    case 'waystone':
+      model.addEntity('waystone', x, y, z, {});
       break;
 
     default:

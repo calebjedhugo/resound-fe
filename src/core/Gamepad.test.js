@@ -3,7 +3,7 @@
  * The game controller (core/Gamepad), polled once a frame. Its buttons are
  * the keys they stand for: each press goes out once as its key's keydown and
  * each release as its keyup, so the game's own key listeners act on them
- * (the pole's absorb and release, the tape cursor, claps, the cleanser
+ * (the pole's absorb and release, the tape cursor, claps, the waystone
  * gate, the ending card; the
  * menus: see ui/Menu.test.js). Its
  * sticks are analog (walking and looking: see motion.test.js) and rest
@@ -171,10 +171,10 @@ describe("A controller's buttons are the keys they stand for", () => {
     expect(claps).toHaveBeenCalledTimes(1);
   });
 
-  it('Triangle aims the cleanser gate', async () => {
+  it('Triangle aims the waystone gate', async () => {
     ctx.loadPuzzle('deploy-basic');
     DeployManager.reset();
-    // Step on the cleanser: it becomes the gate's destination
+    // Step on the waystone: it becomes the gate's destination
     ctx.setPlayerPosition({ x: 7 * WORLD_SCALE, y: 0, z: 11 * WORLD_SCALE });
     await ctx.tick(20);
     const pad = connectPad();

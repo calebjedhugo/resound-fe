@@ -96,3 +96,11 @@ export const ELEVATION_COLLISION_THRESHOLD = 0.5;
 // absorbs a creature into the cursor slot, Space releases the cursor slot's
 // creature this far ahead along the camera heading (world units).
 export const RELEASE_DISTANCE = 2.5;
+
+// Puzzle JSON entity types that were renamed: the old string still loads
+// (POC levels and saved levels keep it), and the editor writes the new one.
+// The cleanser became the WAYSTONE (2026-11-23: it no longer cleans anything).
+export const ENTITY_TYPE_ALIASES = Object.freeze({ cleanser: 'waystone' });
+
+/** A puzzle entity's type under its current name (ENTITY_TYPE_ALIASES). */
+export const entityTypeOf = (type) => ENTITY_TYPE_ALIASES[type] || type;

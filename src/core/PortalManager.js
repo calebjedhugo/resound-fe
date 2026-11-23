@@ -63,7 +63,7 @@ import { getDistance } from 'core/utils';
 import { NO_CLIP_PLANES, createSceneTarget } from 'core/passContext';
 import { updateSceneMatrices } from 'core/sceneMatrices';
 import runInIdleSlices from 'core/idleSlices';
-import { CLEANSER_GOLD } from 'entities/EntityLook';
+import { WAYSTONE_GOLD } from 'entities/EntityLook';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
 // Stable empty list for the common no-seam case (avoids per-frame garbage)
@@ -125,10 +125,10 @@ function stepBetween(a, b) {
 // (that eye object itself is recorded): see _restsThisFrame
 const MIRROR_WRITER = 'mirror';
 
-/** The cleanser standing exactly on `gate`'s cell in `area`, if any. */
-function cleanserAtGate(area, gate) {
+/** The waystone standing exactly on `gate`'s cell in `area`, if any. */
+function waystoneAtGate(area, gate) {
   return area.entityManager
-    .getByType('cleanser')
+    .getByType('waystone')
     .find(
       (c) =>
         Math.abs(c.position.x - gate.position.x) < 0.01 &&
@@ -145,11 +145,11 @@ class PortalManager {
     this._doors = []; // one entry per linked gate PAIR with both areas loaded
     this._doorOf = new Map(); // gate -> its entry in _doors
     this._linkedGates = []; // active area's linked gates (crossing + views)
-    // Visual-only clones of a cleanser sitting under a door's PARTNER face
+    // Visual-only clones of a waystone sitting under a door's PARTNER face
     // (see _rebuildTileMirrors): { mesh, group } pairs, rebuilt with doors
     this._tileMirrors = [];
     // Areas pinned live beyond the link-adjacency rule — the deployable
-    // cleanser gate retains its destination so the pad's see-through view
+    // waystone gate retains its destination so the pad's see-through view
     // has a live scene to render (core/DeployManager).
     this._retained = new Set();
     // gate -> Map<facing, PortalView> (all four faces of an open door) or
@@ -165,13 +165,13 @@ class PortalManager {
     this._newViews = [];
     // Frame counter for face freshness: a face nobody's eye renders still
     // shows in other portals' mirrors, and must not freeze in time. One per
-    // REAL frame (renderPortals) — the cleanser gate's mapped-eye pre-pass
+    // REAL frame (renderPortals) — the waystone gate's mapped-eye pre-pass
     // runs inside the frame and never counts one.
     this._frameId = 0;
     // One per run of door passes (an eye's player faces + its mirror sweep):
     // which faces THIS eye already drew (view._playerFresh)
     this._passId = 0;
-    // Did any eye's door pass draw a face this frame (the cleanser gate's
+    // Did any eye's door pass draw a face this frame (the waystone gate's
     // pre-pass included)? Without one, the stale rotor has no viewer
     this._panelDrawn = false;
     // The player camera (once one with a pose has rendered): the lens that
@@ -408,7 +408,7 @@ class PortalManager {
 
   /**
    * The same door passes for ANOTHER eye inside the current frame — the
-   * deployed cleanser gate's mapped eye (DeployManager.renderPortal), so a
+   * deployed waystone gate's mapped eye (DeployManager.renderPortal), so a
    * door seen through the gate is see-through too. Counts no frame (face
    * freshness ages in real frames) and runs no stale rotor (renderPortals
    * runs it, once a frame); the player's renderPortals re-renders the faces
@@ -490,7 +490,7 @@ class PortalManager {
   /**
    * Render see-through views for the OPEN linked gates of a specific
    * (usually neighbor) area, for an arbitrary eye — the deployable
-   * cleanser gate's pre-pass uses this so a door seen through the gate is
+   * waystone gate's pre-pass uses this so a door seen through the gate is
    * itself see-through even when the destination isn't the active area.
    * Only doors whose partner area is loaded render (a partner at
    * link-depth 2 isn't live). Views land in the same per-gate registry as
@@ -520,7 +520,7 @@ class PortalManager {
   /**
    * Materialize EVERY face of an open door once its neighbor is loaded —
    * not just the player-eligible ones. A panel is sampled by OTHER portal
-   * passes too (mirror sightlines through doors, the cleanser gate's mapped
+   * passes too (mirror sightlines through doors, the waystone gate's mapped
    * eye), whose eyes see faces the player's own eye may never make
    * eligible; a lazily-created face sampled as a BLACK hole (the teleport
    * stress test: "portals start black, settle after walking around"). New
@@ -787,7 +787,7 @@ class PortalManager {
   }
 
   /**
-   * Public warm hook for views owned elsewhere (the cleanser gate's pad
+   * Public warm hook for views owned elsewhere (the waystone gate's pad
    * panels): one straight-on refresh of `view`, derived from its own gate
    * and facing.
    */
@@ -1196,7 +1196,7 @@ class PortalManager {
       }
     }
     if (stale.length === 0) return;
-    // A sight noted this frame or the last (the cleanser gate's pre-pass
+    // A sight noted this frame or the last (the waystone gate's pre-pass
     // sweeps ahead of the frame's count) reaches it; or nothing is known
     const known = this._sightsCut < this._frameId - 1;
     const unseen = (view) => known && !(view._sightFrame >= this._frameId - 1);
@@ -1669,7 +1669,7 @@ class PortalManager {
 
   /**
    * Pin an area live regardless of link adjacency (loading it if needed) —
-   * the deployable cleanser gate retains its destination so the pad's
+   * the deployable waystone gate retains its destination so the pad's
    * see-through view always has a live scene. Balanced by releaseArea.
    */
   retainArea(puzzleId) {
@@ -1684,32 +1684,32 @@ class PortalManager {
   }
 
   /**
-   * Build the see-through panels for a deployed cleanser gate: one
+   * Build the see-through panels for a deployed waystone gate: one
    * PortalView per cardinal face — the same box of windows an open linked
-   * door gets — each showing the ACTIVE cleanser's cell and the room
-   * beyond it, with the cleanser cell as the partner "gate" (a positional
+   * door gets — each showing the ACTIVE waystone's cell and the room
+   * beyond it, with the waystone cell as the partner "gate" (a positional
    * stub; there is no partner mesh to hide). Each face maps to the
    * OPPOSITE exit face, so walking in from any side continues seamlessly
-   * at the cleanser.
-   * @param {Entity} pad - the CleanserGatePad (its mesh anchor hosts the
+   * at the waystone.
+   * @param {Entity} pad - the WaystoneGatePad (its mesh anchor hosts the
    *   surfaces, at gate-box-center height like a real gate mesh)
-   * @param {{puzzleId: string, position: {x,y,z}}} target - active cleanser
+   * @param {{puzzleId: string, position: {x,y,z}}} target - active waystone
    * @returns {PortalView[]} empty while the destination area isn't loaded
    *   yet (retainArea's fetch may still be in flight)
    */
-  createCleanserGateViews(pad, target) {
+  createWaystoneGateViews(pad, target) {
     const destArea = this._areas.get(target.puzzleId);
     if (!destArea || !pad.mesh) return [];
     // A destination in the ACTIVE area lives in the main scene (its own
     // Area.scene is empty) — same rule as same-puzzle doors.
     const sceneOverride = destArea === this._activeArea ? this._mainScene : null;
-    const partnerStub = { position: target.position, mesh: null, gateId: 'active-cleanser' };
+    const partnerStub = { position: target.position, mesh: null, gateId: 'active-waystone' };
     return Object.keys(FACING_VECTORS).map((sourceFacing) => {
       const view = new PortalView(pad, partnerStub, destArea, {
         sceneOverride,
         sourceFacing,
         partnerFacing: OPPOSITE_FACING[sourceFacing] || 'south',
-        seamTint: CLEANSER_GOLD, // the gate that leads to the gold tile
+        seamTint: WAYSTONE_GOLD, // the gate that leads to the gold tile
       });
       view.setVisible(true);
       return view;
@@ -1747,13 +1747,13 @@ class PortalManager {
   }
 
   /**
-   * A cleanser under ONE face of a door is the same tile under BOTH faces —
+   * A waystone under ONE face of a door is the same tile under BOTH faces —
    * a linked pair is one cell seen from two sides. But the portal panel sits
    * on the far plane of the cell and can only paint what falls within the
    * doorway aperture; a floor tile in the doorway cell itself projects
    * mostly OUTSIDE the panel from an approaching eye, clipping it to a
    * sliver at the threshold. So each door face whose PARTNER cell holds a
-   * cleanser gets a visual-only mirror mesh at its own cell: a clone
+   * waystone gets a visual-only mirror mesh at its own cell: a clone
    * sharing the real tile's geometry AND material instance, so the
    * breathing pulse and clear-flash stay in sync for free (the neighbor is
    * fully live). Gameplay needs no mirror — stepping into the cell commits
@@ -1769,16 +1769,16 @@ class PortalManager {
   }
 
   /**
-   * If `fromGate`'s cell holds a cleanser and `toGate`'s own cell does not,
+   * If `fromGate`'s cell holds a waystone and `toGate`'s own cell does not,
    * clone the tile's mesh under `toGate` in `toArea`.
    */
   _mirrorDoorTile(fromArea, fromGate, toArea, toGate) {
-    const tile = cleanserAtGate(fromArea, fromGate);
-    if (!tile || !tile.mesh || cleanserAtGate(toArea, toGate)) return;
+    const tile = waystoneAtGate(fromArea, fromGate);
+    if (!tile || !tile.mesh || waystoneAtGate(toArea, toGate)) return;
     const mirror = tile.mesh.clone(); // shares geometry + material: glow stays in sync
     const lift = tile.mesh.position.y - tile.position.y;
     mirror.position.set(toGate.position.x, toGate.position.y + lift, toGate.position.z);
-    mirror._isCleanserMirror = true; // tag for tests/debugging
+    mirror._isWaystoneMirror = true; // tag for tests/debugging
     toArea.group.add(mirror);
     this._tileMirrors.push({ mesh: mirror, group: toArea.group });
   }
@@ -1938,16 +1938,16 @@ class PortalManager {
   }
 
   /**
-   * Travel to a cleanser tile (the deployable cleanser gate's arrival —
+   * Travel to a waystone tile (the deployable waystone gate's arrival —
    * see core/DeployManager): place the player ON the tile at
    * `target.position` in `target.puzzleId`, loading and swapping to that
    * area if it isn't the active one. Landing on the tile fires it as usual
-   * (it stays the active cleanser). The ONE world clock keeps
+   * (it stays the active waystone). The ONE world clock keeps
    * running — this is a crossing without a door, not a rebuild.
    * @param {{puzzleId: string, position: {x,y,z}}} target
    * @returns {Promise<boolean>} false if the target area can't be loaded
    */
-  async teleportToCleanser(target) {
+  async teleportToWaystone(target) {
     if (!target || !target.puzzleId || this._transitioning) return false;
 
     const arrive = (area) => {
@@ -1985,7 +1985,7 @@ class PortalManager {
     this._insideDoor = null; // not standing in any doorway after a jump
     this._afterActiveChange(); // rebuilds neighbors/doors; clears _transitioning
     // Same refresh path as a doorway crossing (hints re-arm, UI updates);
-    // no arrival gate — a cleanser jump can never be an ending
+    // no arrival gate — a waystone jump can never be an ending
     if (this._onCrossed) this._onCrossed(area.puzzle, null);
     return true;
   }

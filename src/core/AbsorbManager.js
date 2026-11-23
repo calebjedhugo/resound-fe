@@ -331,10 +331,10 @@ class AbsorbManager {
   /**
    * Where Space would release a creature of `radius` now: RELEASE_DISTANCE
    * ahead along the EFFECTIVE camera heading (mouse offset included, as the
-   * cleanser gate aims), on the player's own layer. Valid only if every
+   * waystone gate aims), on the player's own layer. Valid only if every
    * cell the body covers is walkable at that layer (no cliff edge under
    * it, off-grid, ramp) and holds no wall, gate (open or not), fountain or
-   * cleanser, nothing on the way there is a wall or closed gate, and the
+   * waystone, nothing on the way there is a wall or closed gate, and the
    * body collides with nothing (creatures, the player). The same object
    * every call (no garbage: the release hint asks every frame).
    * @param {number} [radius]
@@ -405,7 +405,7 @@ class AbsorbManager {
       if (there) {
         if (e.type === 'wall') return false;
         if (e.type === 'gate' && (whole || !e.isOpen)) return false;
-        if (whole && (e.type === 'fountain' || e.type === 'cleanser')) return false;
+        if (whole && (e.type === 'fountain' || e.type === 'waystone')) return false;
       }
     }
     return true;

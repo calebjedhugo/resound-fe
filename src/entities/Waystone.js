@@ -2,22 +2,23 @@ import * as THREE from 'three';
 import gameState from 'core/GameState';
 import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
 import Entity from 'entities/Entity';
-import { CLEANSER_GOLD, CLEANSER_RING_MAP, createCleanserGeometry } from 'entities/EntityLook';
+import { WAYSTONE_GOLD, WAYSTONE_RING_MAP, createWaystoneGeometry } from 'entities/EntityLook';
 
 /**
- * CleansingTile — a walkable floor tile that becomes the ACTIVE cleanser (the
- * deployable cleanser gate's destination, core/DeployManager) when the
+ * Waystone — a walkable floor tile that becomes the ACTIVE waystone (the
+ * deployable waystone gate's destination, core/DeployManager) when the
  * player steps onto it, flashing as they do (edge-triggered on entry).
  *
- * It used to empty the tape too (ruled 2026-07-12, replacing the
- * hold-to-delete verb). Since the tape holds CREATURES (2026-11-23), a wipe
- * would delete them, so it no longer touches the inventory — an INTERIM
- * ruling for the designer to revisit (DESIGN.md).
+ * It was the CLEANSER until 2026-11-23 (it emptied the tape; ruled
+ * 2026-07-12). Since the tape holds creatures a wipe would delete them, so
+ * it cleans nothing and is the WAYSTONE now (ruled 2026-11-23): only a place
+ * the G gate leads back to. Puzzle JSON may still say `cleanser`
+ * (constants ENTITY_TYPE_ALIASES).
  *
  * Like a gate, the player's coordinates only mean anything in THEIR active
  * area, so a tile in a neighbor area simulating behind a doorway never fires.
  */
-class CleansingTile extends Entity {
+class Waystone extends Entity {
   // A gentle breathing pulse (seconds per full cycle) — the wordless "this
   // does something" affordance. Advanced by deltaTime, never Date.now.
   static PULSE_PERIOD_S = 2.6;
@@ -29,18 +30,18 @@ class CleansingTile extends Entity {
   static FLASH_INTENSITY = 2.6;
   static FLASH_DECAY_PER_S = 3.5;
 
-  // Resting look — dark glass, a pale ring — and the ACTIVE cleanser's, its
+  // Resting look — dark glass, a pale ring — and the ACTIVE waystone's, its
   // ring burning gold: the last tile the player stepped on, where a
-  // deployed cleanser gate leads (core/DeployManager; its panels' seam
+  // deployed waystone gate leads (core/DeployManager; its panels' seam
   // leans the same gold). One tile is active at a time, world-wide. Gold is
   // the one accent the world's entities keep (entities/EntityLook).
   static BASE_COLOR = 0x252a34;
   static BASE_EMISSIVE = 0xb4c2de;
   static ACTIVE_COLOR = 0x3a3121;
-  static ACTIVE_EMISSIVE = CLEANSER_GOLD;
+  static ACTIVE_EMISSIVE = WAYSTONE_GOLD;
 
   constructor(position, data = {}) {
-    super('cleanser', position, data);
+    super('waystone', position, data);
     this._pulse = 0;
     this._flash = 0;
     this._wasPlayerInside = false;
@@ -54,14 +55,14 @@ class CleansingTile extends Entity {
    * @param {{x:number, y:number, z:number}} position - base world position
    */
   static buildTileMesh(position) {
-    const geometry = createCleanserGeometry();
+    const geometry = createWaystoneGeometry();
     const material = new THREE.MeshStandardMaterial({
-      color: CleansingTile.BASE_COLOR,
+      color: Waystone.BASE_COLOR,
       roughness: 0.25,
       metalness: 0.2,
-      emissive: CleansingTile.BASE_EMISSIVE,
-      emissiveMap: CLEANSER_RING_MAP,
-      emissiveIntensity: CleansingTile.PULSE_MIN,
+      emissive: Waystone.BASE_EMISSIVE,
+      emissiveMap: WAYSTONE_RING_MAP,
+      emissiveIntensity: Waystone.PULSE_MIN,
       transparent: true,
       opacity: 0.9,
     });
@@ -72,24 +73,24 @@ class CleansingTile extends Entity {
   }
 
   createMesh() {
-    this.mesh = CleansingTile.buildTileMesh(this.position);
+    this.mesh = Waystone.buildTileMesh(this.position);
   }
 
   /**
    * Per-frame: breathe the glow, decay any flash, and become the active
-   * cleanser when the player first steps onto the tile.
+   * waystone when the player first steps onto the tile.
    */
   update(deltaTime) {
     const dt = deltaTime || 0.016;
-    this._pulse = (this._pulse + dt / CleansingTile.PULSE_PERIOD_S) % 1;
+    this._pulse = (this._pulse + dt / Waystone.PULSE_PERIOD_S) % 1;
 
     const inside = this._playerInside();
     if (inside && !this._wasPlayerInside) {
       this._flash = 1; // spike the glow: the step is what claimed the tile
-      // Stepping on a cleanser makes it the ACTIVE one — the destination of
-      // a deployed cleanser gate. Stored positionally so it survives the
+      // Stepping on a waystone makes it the ACTIVE one — the destination of
+      // a deployed waystone gate. Stored positionally so it survives the
       // entity being pruned and rebuilt with its area.
-      gameState.activeCleanser = {
+      gameState.activeWaystone = {
         puzzleId: this.area ? this.area.id : null,
         position: { x: this.position.x, y: this.position.y, z: this.position.z },
       };
@@ -97,7 +98,7 @@ class CleansingTile extends Entity {
     this._wasPlayerInside = inside;
 
     if (this._flash > 0) {
-      this._flash = Math.max(0, this._flash - CleansingTile.FLASH_DECAY_PER_S * dt);
+      this._flash = Math.max(0, this._flash - Waystone.FLASH_DECAY_PER_S * dt);
     }
     this._applyLook();
   }
@@ -105,7 +106,7 @@ class CleansingTile extends Entity {
   /** Paint the current glow: breathing sine plus any decaying clear-flash. */
   _applyLook() {
     if (!this.mesh || !this.mesh.material) return;
-    const { PULSE_MIN, PULSE_MAX, FLASH_INTENSITY } = CleansingTile;
+    const { PULSE_MIN, PULSE_MAX, FLASH_INTENSITY } = Waystone;
     const breathe =
       PULSE_MIN + (PULSE_MAX - PULSE_MIN) * (0.5 - 0.5 * Math.cos(this._pulse * Math.PI * 2));
     const flash = this._flash * (FLASH_INTENSITY - PULSE_MAX);
@@ -114,18 +115,16 @@ class CleansingTile extends Entity {
     // reverts to cyan on its own, and a rebuilt area's tile picks its gold
     // back up — no registry to keep in sync. Painted only when it changes
     // (each setHex converts sRGB to linear: three Math.pow calls).
-    const active = this.isActiveCleanser();
+    const active = this.isActiveWaystone();
     if (active === this._paintedActive) return;
     this._paintedActive = active;
-    this.mesh.material.color.setHex(active ? CleansingTile.ACTIVE_COLOR : CleansingTile.BASE_COLOR);
-    this.mesh.material.emissive.setHex(
-      active ? CleansingTile.ACTIVE_EMISSIVE : CleansingTile.BASE_EMISSIVE
-    );
+    this.mesh.material.color.setHex(active ? Waystone.ACTIVE_COLOR : Waystone.BASE_COLOR);
+    this.mesh.material.emissive.setHex(active ? Waystone.ACTIVE_EMISSIVE : Waystone.BASE_EMISSIVE);
   }
 
-  /** Is THIS tile the world's active cleanser (positional match)? */
-  isActiveCleanser() {
-    const target = gameState.activeCleanser;
+  /** Is THIS tile the world's active waystone (positional match)? */
+  isActiveWaystone() {
+    const target = gameState.activeWaystone;
     if (!target) return false;
     if (this.area && target.puzzleId !== this.area.id) return false;
     return (
@@ -152,4 +151,4 @@ class CleansingTile extends Entity {
   }
 }
 
-export default CleansingTile;
+export default Waystone;

@@ -47,7 +47,7 @@ const PLACE_KEYS = {
   g: 'gate',
   w: 'wall',
   r: 'ramp',
-  l: 'cleanser',
+  l: 'waystone',
 };
 // A click whose pointer moved more than this many pixels since mousedown is a
 // drag (camera rotate/pan), not a selection.
@@ -255,19 +255,19 @@ export default class EditorApp {
 
   /**
    * True if a cell already holds something that blocks placing/moving `type`
-   * there. One per tile — except a cleanser, which may share a cell with the
-   * player spawn (spawning on a cleansing tile is legal) and with a gate (a
-   * cleansing tile under a doorway).
+   * there. One per tile — except a waystone, which may share a cell with the
+   * player spawn (spawning on a waystone is legal) and with a gate (a
+   * waystone under a doorway).
    */
   _isCellOccupied(x, y, z, type = null) {
     const entities = this.undoManager.getEntitiesAt(x, y, z);
     const spawn = this.undoManager.getPlayerSpawn();
     const spawnHere = Boolean(spawn && spawn.x === x && spawn.y === y && spawn.z === z);
-    // A cleanser is blocked only by a non-gate entity (spawn never blocks it).
-    if (type === 'cleanser') return entities.some((e) => e.type !== 'gate');
-    // A gate tolerates a cleanser but nothing else (incl. the spawn).
-    if (type === 'gate') return spawnHere || entities.some((e) => e.type !== 'cleanser');
-    if (type === 'player') return entities.some((e) => e.type !== 'cleanser');
+    // A waystone is blocked only by a non-gate entity (spawn never blocks it).
+    if (type === 'waystone') return entities.some((e) => e.type !== 'gate');
+    // A gate tolerates a waystone but nothing else (incl. the spawn).
+    if (type === 'gate') return spawnHere || entities.some((e) => e.type !== 'waystone');
+    if (type === 'player') return entities.some((e) => e.type !== 'waystone');
     if (entities.length > 0) return true;
     return spawnHere;
   }

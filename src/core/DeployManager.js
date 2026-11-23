@@ -2,39 +2,39 @@ import gameState from 'core/GameState';
 import HintMemory from 'core/HintMemory';
 import CameraController from 'core/CameraController';
 import PortalManager from 'core/PortalManager';
-import CleansingTile from 'entities/CleansingTile';
-import CleanserGatePad from 'entities/CleanserGatePad';
+import Waystone from 'entities/Waystone';
+import WaystoneGatePad from 'entities/WaystoneGatePad';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { DOORWAY_OFFSET, FACING_VECTORS } from 'core/portalMath';
 
 /**
- * DeployManager — the player's deployable cleanser gate.
+ * DeployManager — the player's deployable waystone gate.
  *
  * "G" cycles a three-state machine:
- *   idle     -> aiming:   a phantom cleanser floats two tiles ahead of the
+ *   idle     -> aiming:   a phantom waystone floats two tiles ahead of the
  *                         player (free placement — walkable spots only, but
  *                         NOT grid-quantized), tracking their movement AND
  *                         their look (the effective camera heading, mouse
  *                         offset included)
- *   aiming   -> deployed: the phantom becomes a real CleanserGatePad
+ *   aiming   -> deployed: the phantom becomes a real WaystoneGatePad
  *                         (refused in place if the spot is invalid)
  *   deployed -> idle:     the pad is picked back up ("g again to cancel")
  *
  * Walking onto the deployed pad teleports the player to the ACTIVE
- * cleanser (the gold tile — the last one stepped on) and consumes the pad.
+ * waystone (the gold tile — the last one stepped on) and consumes the pad.
  * One pad exists at a time, world-wide; it lives in the area it was placed
  * and dies with it if that area is pruned. Aiming requires an active
- * cleanser: the gate is "a remote opening of the drain you touched" — no
+ * waystone: the gate is "a remote opening of the drain you touched" — no
  * touched drain, no gate.
  *
  * A deployed gate looks like any other ACTIVATED gate: a box of
  * see-through portal panels — one PortalView per cardinal face, each
- * showing the live view of the active cleanser's cell and the room
+ * showing the live view of the active waystone's cell and the room
  * beyond (the gold tile is visible THROUGH the gate, so the pad draws no
- * cleanser disc of its own). Each panel self-culls to the eye's side,
+ * waystone disc of its own). Each panel self-culls to the eye's side,
  * exactly like a door's window box. The destination area is retained
  * live (PortalManager.retainArea) while the gate exists, and the views
- * retarget if the player claims a different active cleanser.
+ * retarget if the player claims a different active waystone.
  */
 
 // Two tiles ahead of the player.
@@ -60,9 +60,9 @@ class DeployManager {
     this._pad = null; // { area, id, entity } while deployed
     this._views = []; // the gate's see-through panels (one per face)
     this._viewKey = null; // what the current panels were built against
-    this._viewTarget = null; // the active cleanser the panels point at
+    this._viewTarget = null; // the active waystone the panels point at
     this._retainedId = null; // destination area pinned live for the views
-    // Visual clone of the destination cleanser tile under the gate — the
+    // Visual clone of the destination waystone tile under the gate — the
     // panel aperture can only paint past the window plane, so the tile in
     // the arrival cell would clip to a crescent; the mirror IS the "seen
     // through the gate" tile (same doctrine as door tile mirrors).
@@ -86,8 +86,8 @@ class DeployManager {
   toggle() {
     if (gameState.mode !== 'PLAYING' || !gameState.activeArea) return;
     if (this._state === 'idle') {
-      // No active cleanser = nowhere to lead; the key stays silent.
-      if (!gameState.activeCleanser) return;
+      // No active waystone = nowhere to lead; the key stays silent.
+      if (!gameState.activeWaystone) return;
       this._enterAiming();
     } else if (this._state === 'aiming') {
       this._deploy();
@@ -126,7 +126,7 @@ class DeployManager {
    * Doors seen THROUGH the gate must themselves be see-through, and the
    * player's own door pass can't provide that: the gate's mapped eye
    * looks at faces the player camera may never see. So door views render
-   * an extra pass here for the MAPPED eye (the pad->cleanser mapping is a
+   * an extra pass here for the MAPPED eye (the pad->waystone mapping is a
    * pure translation, shared by all four faces) before the panels sample
    * them. A destination in the ACTIVE area reuses the regular door passes
    * (renderPortalsFor; re-run afterwards for the player's real eye — each
@@ -185,7 +185,7 @@ class DeployManager {
     // Every panel clips along the APPROACH panel's doorway axis, as a door's
     // do (PortalManager._renderExteriorViews): a side panel's own plane cuts
     // only across ITS axis, so everything between the mapped eye and the
-    // gate along the approach painted into it. poc-jam's cleanser stands two
+    // gate along the approach painted into it. poc-jam's waystone stands two
     // cells in front of its entry door: an eye a few steps off the gate maps
     // into that door's cell, and the door's panel facing it, half a unit
     // ahead, filled both side walls black (2026-10-18).
@@ -251,13 +251,13 @@ class DeployManager {
 
   /**
    * Keep the see-through panels matched to the world: the destination is
-   * the CURRENT active cleanser (stepping on a new one retargets the
+   * the CURRENT active waystone (stepping on a new one retargets the
    * gate), its area must be live, and a destination in the active area
    * renders the main scene. Any mismatch rebuilds all four panels; hidden
    * whenever the gate isn't in the player's area (textures would be stale).
    */
   _syncView() {
-    const target = gameState.activeCleanser;
+    const target = gameState.activeWaystone;
     if (!target || !target.puzzleId) {
       this._disposeView();
       return;
@@ -277,8 +277,8 @@ class DeployManager {
     if (this._views.length === 0 && destArea) {
       // A box of windows, like any other activated gate: one panel per
       // cardinal face, each mapped so walking in from that side continues
-      // seamlessly at the cleanser.
-      this._views = PortalManager.createCleanserGateViews(this._pad.entity, target);
+      // seamlessly at the waystone.
+      this._views = PortalManager.createWaystoneGateViews(this._pad.entity, target);
       this._viewKey = this._views.length > 0 ? key : null;
       this._viewTarget = this._views.length > 0 ? target : null;
       this._buildTileMirror(destArea, target);
@@ -288,7 +288,7 @@ class DeployManager {
   }
 
   /**
-   * The destination cleanser, visible AT the gate: a clone of the real
+   * The destination waystone, visible AT the gate: a clone of the real
    * tile's mesh (shared material — gold and pulse stay in sync, the
    * destination is live) sitting under the gate. The panel aperture only
    * paints past the window plane, so without this the tile in the arrival
@@ -297,7 +297,7 @@ class DeployManager {
    */
   _buildTileMirror(destArea, target) {
     const tile = destArea.entityManager
-      .getByType('cleanser')
+      .getByType('waystone')
       .find(
         (c) =>
           Math.abs(c.position.x - target.position.x) < 0.01 &&
@@ -320,7 +320,7 @@ class DeployManager {
     }
     const lift = tile.mesh.position.y - tile.position.y;
     mirror.position.set(padPos.x, padPos.y + lift, padPos.z);
-    mirror._isCleanserMirror = true; // tag for tests/debugging
+    mirror._isWaystoneMirror = true; // tag for tests/debugging
     this._pad.area.group.add(mirror);
     this._tileMirror = mirror;
     this._tileMirrorGroup = this._pad.area.group;
@@ -356,7 +356,7 @@ class DeployManager {
     // and freed both again on deploy. Every aim paints it before it shows
     // (_updatePhantom), so it looks exactly like a new one.
     if (!this._phantom) {
-      this._phantom = CleansingTile.buildTileMesh({ x: 0, y: 0, z: 0 });
+      this._phantom = Waystone.buildTileMesh({ x: 0, y: 0, z: 0 });
       this._phantom.material.opacity = PHANTOM_OPACITY;
       if (this._scene) this._scene.add(this._phantom);
     }
@@ -374,18 +374,16 @@ class DeployManager {
     }
     this._phantom.visible = true;
     this._phantom.position.set(this._spot.x, this._spot.y + 0.08, this._spot.z);
-    this._phantom.material.color.setHex(
-      this._spot.valid ? CleansingTile.BASE_COLOR : INVALID_COLOR
-    );
+    this._phantom.material.color.setHex(this._spot.valid ? Waystone.BASE_COLOR : INVALID_COLOR);
     this._phantom.material.emissive.setHex(
-      this._spot.valid ? CleansingTile.BASE_EMISSIVE : INVALID_EMISSIVE
+      this._spot.valid ? Waystone.BASE_EMISSIVE : INVALID_EMISSIVE
     );
   }
 
   /**
    * Where the phantom sits: DEPLOY_DISTANCE along the camera heading,
    * dropped onto the nearest walkable level of that cell (reached from the
-   * player's own layer). Invalid over walls, gates, fountains, cleansers,
+   * player's own layer). Invalid over walls, gates, fountains, waystones,
    * ramps, or off-grid.
    */
   _aimSpot() {
@@ -414,7 +412,7 @@ class DeployManager {
         (e.type === 'wall' ||
           e.type === 'gate' ||
           e.type === 'fountain' ||
-          e.type === 'cleanser') &&
+          e.type === 'waystone') &&
         Math.abs(e.position.x - cellX) < WORLD_SCALE / 2 &&
         Math.abs(e.position.z - cellZ) < WORLD_SCALE / 2 &&
         Math.abs(e.position.y - y) < ELEVATION_HEIGHT / 2
@@ -426,7 +424,7 @@ class DeployManager {
   _deploy() {
     if (!this._spot || !this._spot.valid) return;
     const area = gameState.activeArea;
-    const pad = new CleanserGatePad({ x: this._spot.x, y: this._spot.y, z: this._spot.z });
+    const pad = new WaystoneGatePad({ x: this._spot.x, y: this._spot.y, z: this._spot.z });
     area.entityManager.add(pad);
     this._pad = { area, id: pad.id, entity: pad };
     this._hidePhantom();

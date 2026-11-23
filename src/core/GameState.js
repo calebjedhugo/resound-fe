@@ -99,11 +99,11 @@ class GameState {
     // one's absorb range; Creature.update keeps it current)
     this.absorb = { inRange: [] };
 
-    // The ACTIVE cleanser — the last cleansing tile the player stepped on
+    // The ACTIVE waystone — the last waystone the player stepped on
     // ({ puzzleId, position } or null). It glows gold instead of cyan, and
-    // it is where a deployed cleanser gate leads (core/DeployManager).
+    // it is where a deployed waystone gate leads (core/DeployManager).
     // Positional, not an entity reference: it survives area prune/rebuild.
-    this.activeCleanser = null;
+    this.activeWaystone = null;
   }
 
   // --- Active-area delegation -------------------------------------------
@@ -134,7 +134,7 @@ class GameState {
     this.player.inventory = [null];
     this.player.activeSlot = 0;
     this.absorb = { inRange: [] };
-    this.activeCleanser = null;
+    this.activeWaystone = null;
   }
 
   /**

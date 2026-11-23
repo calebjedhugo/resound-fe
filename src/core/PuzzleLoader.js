@@ -5,8 +5,8 @@ import Fountain from 'entities/Fountain';
 import Wall from 'entities/Wall';
 import Ramp from 'entities/Ramp';
 import Floor from 'entities/Floor';
-import CleansingTile from 'entities/CleansingTile';
-import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import Waystone from 'entities/Waystone';
+import { WORLD_SCALE, ELEVATION_HEIGHT, entityTypeOf } from 'core/constants';
 import Area from 'core/Area';
 import AudioPrewarm from 'core/AudioPrewarm';
 import CreatureRegistry from 'core/CreatureRegistry';
@@ -77,6 +77,19 @@ class PuzzleLoader {
       throw new Error('Puzzle teaches must be an array of hint ids');
     }
 
+    return this.normalize(puzzleData);
+  }
+
+  /**
+   * Give every entity its type's current name, in place (an old `cleanser`
+   * is a `waystone`: constants ENTITY_TYPE_ALIASES), so nothing past the
+   * loader ever sees a retired name. Idempotent.
+   * @returns {object} puzzleData
+   */
+  static normalize(puzzleData) {
+    for (const entity of puzzleData.entities || []) {
+      entity.type = entityTypeOf(entity.type);
+    }
     return puzzleData;
   }
 
@@ -110,6 +123,7 @@ class PuzzleLoader {
    * @returns {Area}
    */
   static buildArea(puzzleData) {
+    this.normalize(puzzleData);
     const area = new Area(puzzleData);
     const { entityManager } = area;
 
@@ -199,8 +213,8 @@ class PuzzleLoader {
           case 'wall':
             addWall(scaledPosition);
             break;
-          case 'cleanser':
-            entity = new CleansingTile(scaledPosition, entityData.data || {});
+          case 'waystone':
+            entity = new Waystone(scaledPosition, entityData.data || {});
             break;
           case 'ramp':
             entity = new Ramp(scaledPosition, {

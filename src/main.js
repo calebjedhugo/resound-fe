@@ -39,8 +39,8 @@ import createEventListeners from 'createEventListeners';
 import Creature from 'entities/Creature';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
-import CleansingTile from 'entities/CleansingTile';
-import CleanserGatePad from 'entities/CleanserGatePad';
+import Waystone from 'entities/Waystone';
+import WaystoneGatePad from 'entities/WaystoneGatePad';
 import { calmStorm, tickEnvironment } from 'entities/EnvironmentLook';
 
 // Three.js scene
@@ -85,7 +85,7 @@ PortalManager.initialize(scene, (puzzle, arrivalGate) => {
   if (arrivalGate && arrivalGate.ending) endingOverlay.show();
 });
 
-// The deployable cleanser gate's aiming phantom renders in the main scene
+// The deployable waystone gate's aiming phantom renders in the main scene
 DeployManager.initialize(scene);
 
 // The pole draws in a scene of its own, lit like this one (main view only)
@@ -251,7 +251,7 @@ function portalScenes() {
 function render() {
   stateMachine.render();
   // Open linked gates draw their see-through neighbor view before the main
-  // scene renders. The deployed cleanser gate goes FIRST: it pre-renders
+  // scene renders. The deployed waystone gate goes FIRST: it pre-renders
   // door views for its own mapped eye (so doors inside its panels are
   // see-through), then the regular door pass re-renders them for the
   // player's real eye — each surface shows its last completed write.
@@ -436,8 +436,8 @@ if (import.meta.env.DEV) {
           [Creature.prototype, 'updateMovement', 'creature.movement'],
           [Gate.prototype, 'update', 'entity.gate'],
           [Fountain.prototype, 'update', 'entity.fountain'],
-          [CleansingTile.prototype, 'update', 'entity.cleanser'],
-          [CleanserGatePad.prototype, 'update', 'entity.cleanserGatePad'],
+          [Waystone.prototype, 'update', 'entity.waystone'],
+          [WaystoneGatePad.prototype, 'update', 'entity.waystoneGatePad'],
           [PortalManager, '_mirrorDoorPairs', 'areas.mirrorDoorPairs'],
           [PortalManager, '_updateTempoGradient', 'areas.tempoGradient'],
           [PortalManager, 'update', 'update.crossing'],
@@ -449,7 +449,7 @@ if (import.meta.env.DEV) {
           [debugUI, 'update', 'update.debugUI'],
           [cameraModeBadge, 'update', 'update.cameraBadge'],
           [ShaderPrewarm, 'run', 'render.prewarm'],
-          [DeployManager, 'renderPortal', 'render.cleanserGate'],
+          [DeployManager, 'renderPortal', 'render.waystoneGate'],
           [PortalManager, 'renderPortals', 'render.doors'],
           [PortalManager, 'renderAreaPortals', 'render.areaDoors'],
           [PortalManager, '_renderExteriorViews', 'doors.playerFaces'],

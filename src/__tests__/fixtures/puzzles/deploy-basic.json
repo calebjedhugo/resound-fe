@@ -6,7 +6,7 @@
   "tempo": 120,
   "playerStart": { "x": 7, "y": 0, "z": 13 },
   "entities": [
-    { "type": "cleanser", "position": { "x": 7, "y": 0, "z": 11 } },
+    { "type": "waystone", "position": { "x": 7, "y": 0, "z": 11 } },
     { "type": "wall", "position": { "x": 7, "y": 0, "z": 5 } }
   ]
 }

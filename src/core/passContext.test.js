@@ -7,7 +7,7 @@
  * space, and a material showing such a target never encodes its texels twice.
  * (ShaderPrewarm.test drives the main view + real door passes + the prewarm
  * and asserts ONE context across all of them; DeployManager.test does the
- * cleanser-gate pad passes.)
+ * waystone-gate pad passes.)
  */
 import * as THREE from 'three';
 import PortalManager from 'core/PortalManager';

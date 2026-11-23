@@ -5,7 +5,7 @@
  *
  * A controller's buttons are keys (core/Gamepad): the face button at the
  * bottom of the diamond is Space (release a creature), the right one C
- * (clap), the left one R (absorb), the top one G (the cleanser gate), R1/RB moves
+ * (clap), the left one R (absorb), the top one G (the waystone gate), R1/RB moves
  * the tape cursor right, Share/View is P (sound). The Gamepad API's standard
  * layout numbers the face buttons by POSITION, so each family's glyph is the
  * label printed at that position: a Switch's bottom button is "B", its right

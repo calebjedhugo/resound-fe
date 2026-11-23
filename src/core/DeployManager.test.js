@@ -1,17 +1,17 @@
 /**
- * DeployManager Tests — the deployable cleanser gate.
+ * DeployManager Tests — the deployable waystone gate.
  *
  * G cycles idle -> aiming (phantom two tiles ahead, free placement) ->
  * deployed (a real walk-on pad) -> idle (picked back up). Walking onto the
- * pad teleports the player to the ACTIVE cleanser (the last one stepped
- * on), consumes the pad, and the arrival fires the cleanser as usual
+ * pad teleports the player to the ACTIVE waystone (the last one stepped
+ * on), consumes the pad, and the arrival fires the waystone as usual
  * (it no longer wipes the tape: 2026-11-23). One way, one use; world state does not reset.
  */
 import * as THREE from 'three';
 import gameState from 'core/GameState';
 import DeployManager from 'core/DeployManager';
 import PortalManager from 'core/PortalManager';
-import CleansingTile from 'entities/CleansingTile';
+import Waystone from 'entities/Waystone';
 import { CLIP_PLANE_COUNT } from 'core/passContext';
 import { WORLD_SCALE } from 'core/constants';
 import portalA from '../__tests__/fixtures/puzzles/portal-a.json';
@@ -20,9 +20,9 @@ import deployBasic from '../__tests__/fixtures/puzzles/deploy-basic.json';
 
 const take = (pitch) => ({ id: `held_${pitch}`, spec: { song: [{ pitch, length: '1/1' }] } });
 
-// deploy-basic geometry (world units): spawn (21, 39), cleanser (21, 33),
+// deploy-basic geometry (world units): spawn (21, 39), waystone (21, 33),
 // wall cell (21, 15). Facing "north" (-z) is yaw 0.
-const CLEANSER = { x: 7 * WORLD_SCALE, y: 0, z: 11 * WORLD_SCALE };
+const WAYSTONE = { x: 7 * WORLD_SCALE, y: 0, z: 11 * WORLD_SCALE };
 
 /** Stand the player somewhere, facing -z unless told otherwise. */
 function standAt(x, z, yaw = 0) {
@@ -31,13 +31,13 @@ function standAt(x, z, yaw = 0) {
   gameState.camera.viewCenter = [yaw, 0];
 }
 
-/** Walk onto the cleanser and let it fire (claims ACTIVE). */
-async function activateCleanser() {
-  standAt(CLEANSER.x, CLEANSER.z);
+/** Walk onto the waystone and let it fire (claims ACTIVE). */
+async function activateWaystone() {
+  standAt(WAYSTONE.x, WAYSTONE.z);
   await ctx.tick(20);
 }
 
-const padsInActiveArea = () => gameState.activeArea.entityManager.getByType('cleanser-gate');
+const padsInActiveArea = () => gameState.activeArea.entityManager.getByType('waystone-gate');
 
 /** Minimal stand-in for the game's WebGLRenderer (rendering is mocked). */
 function fakeRenderer() {
@@ -64,15 +64,15 @@ afterEach(() => {
 });
 
 describe('DeployManager state machine', () => {
-  it('G is silent while no cleanser has ever been stepped on', () => {
-    gameState.activeCleanser = null;
+  it('G is silent while no waystone has ever been stepped on', () => {
+    gameState.activeWaystone = null;
     standAt(21, 39);
     DeployManager.toggle();
     expect(DeployManager.state).toBe('idle');
   });
 
   it('G aims a phantom two tiles ahead of the player', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39); // facing -z, open floor two tiles ahead
     DeployManager.toggle();
     expect(DeployManager.state).toBe('aiming');
@@ -82,7 +82,7 @@ describe('DeployManager state machine', () => {
   });
 
   it('the phantom follows the player frame by frame', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(21, 39);
     DeployManager.toggle();
     standAt(24, 36);
@@ -92,7 +92,7 @@ describe('DeployManager state machine', () => {
   });
 
   it('second G deploys a pad at the phantom spot — NOT grid-quantized', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(31.4, 38.1); // off-center stance -> off-center pad
     DeployManager.toggle();
     DeployManager.toggle();
@@ -104,7 +104,7 @@ describe('DeployManager state machine', () => {
   });
 
   it('refuses to deploy onto a wall cell (stays aiming, phantom flags invalid)', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(21, 21); // two tiles north is the wall cell (21, 15)
     DeployManager.toggle();
     DeployManager.toggle();
@@ -113,7 +113,7 @@ describe('DeployManager state machine', () => {
   });
 
   it('third G removes the deployed pad', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -134,7 +134,7 @@ describe('Aiming answers the CAMERA, not just the body', () => {
   });
 
   it('the live mouse-look offset swings the phantom with the view', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39); // viewCenter yaw 0 (facing -z): straight-ahead spot is (30, 33)
     // Mouse pushed to the far left edge: effective yaw swings ~+90° -> aim -x
     gameState.input.mouseLookEnabled = true;
@@ -169,7 +169,7 @@ describe('ONE aiming phantom for the session', () => {
   });
 
   it('every aim shows the same phantom, never freed, hidden between aims', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle(); // aim
     expect(scene.children).toHaveLength(1); // the scene holds the phantom alone
@@ -199,14 +199,14 @@ describe('ONE aiming phantom for the session', () => {
   });
 
   it('an aim after one that ended red looks exactly like a fresh aim', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     const [phantom] = scene.children;
     const fresh = lookOf(phantom);
     expect(fresh).toMatchObject({
-      color: CleansingTile.BASE_COLOR,
-      emissive: CleansingTile.BASE_EMISSIVE,
+      color: Waystone.BASE_COLOR,
+      emissive: Waystone.BASE_EMISSIVE,
       transparent: true,
     });
     standAt(21, 21); // two tiles north is the wall cell: red
@@ -226,7 +226,7 @@ describe('The G hint teaches the whole cycle ("g again to cancel")', () => {
   it('deploying does NOT retire the hint; removing the pad does', async () => {
     const HintMemory = (await import('core/HintMemory')).default;
     HintMemory.reset();
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle(); // deployed
@@ -238,7 +238,7 @@ describe('The G hint teaches the whole cycle ("g again to cancel")', () => {
   it('walking through the pad also completes the lesson', async () => {
     const HintMemory = (await import('core/HintMemory')).default;
     HintMemory.reset();
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -251,8 +251,8 @@ describe('The G hint teaches the whole cycle ("g again to cancel")', () => {
 });
 
 describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any open door)', () => {
-  it('deploying stands a full window box on the gate — one panel per face, no cleanser disc', async () => {
-    await activateCleanser();
+  it('deploying stands a full window box on the gate — one panel per face, no waystone disc', async () => {
+    await activateWaystone();
     standAt(30, 39); // facing -z: gate at (30, 33)
     DeployManager.toggle();
     DeployManager.toggle();
@@ -275,7 +275,7 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
   });
 
   it('renders the destination through the face the eye is on (panels self-cull)', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -301,7 +301,7 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     // space: a pad pass in any other context than the door passes and the
     // main view around it would re-derive the program of every material
     // they share, at every switch (core/passContext)
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -333,8 +333,8 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     expect(target).toBeNull();
   });
 
-  it('shows the destination cleanser AT the gate (mirror tile, shared material)', async () => {
-    await activateCleanser();
+  it('shows the destination waystone AT the gate (mirror tile, shared material)', async () => {
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -343,22 +343,22 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
     // The panel aperture clips a floor tile in the arrival cell to a
     // crescent, so the tile is mirrored under the gate instead — cloned
     // from the real tile, material shared so the gold glow stays in sync.
-    const mirror = gameState.activeArea.group.children.find((child) => child._isCleanserMirror);
+    const mirror = gameState.activeArea.group.children.find((child) => child._isWaystoneMirror);
     expect(mirror).toBeDefined();
     expect(mirror.position.x).toBeCloseTo(30);
     expect(mirror.position.z).toBeCloseTo(39 - 2 * WORLD_SCALE);
-    const [tile] = gameState.activeArea.entityManager.getByType('cleanser');
+    const [tile] = gameState.activeArea.entityManager.getByType('waystone');
     expect(mirror.material).toBe(tile.mesh.material);
 
     DeployManager.toggle(); // remove
-    expect(gameState.activeArea.group.children.some((child) => child._isCleanserMirror)).toBe(
+    expect(gameState.activeArea.group.children.some((child) => child._isWaystoneMirror)).toBe(
       false
     );
   });
 
   it('pre-renders door views for the MAPPED eye so doors through the gate are see-through', async () => {
-    await activateCleanser();
-    standAt(30, 39); // gate at (30, 33); cleanser at (21, 33): offset (-9, 0, 0)
+    await activateWaystone();
+    standAt(30, 39); // gate at (30, 33); waystone at (21, 33): offset (-9, 0, 0)
     DeployManager.toggle();
     DeployManager.toggle();
     DeployManager.update();
@@ -374,7 +374,7 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
   });
 
   it('removing the gate disposes the panels and releases the retained area', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -388,9 +388,9 @@ describe('The deployed gate is SEE-THROUGH (a box of portal panels, like any ope
   });
 });
 
-describe('Walking through the deployed cleanser gate', () => {
-  it('teleports to the active cleanser, keeps the creatures held, and consumes the pad', async () => {
-    await activateCleanser();
+describe('Walking through the deployed waystone gate', () => {
+  it('teleports to the active waystone, keeps the creatures held, and consumes the pad', async () => {
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -403,10 +403,10 @@ describe('Walking through the deployed cleanser gate', () => {
     await ctx.tick(20);
     DeployManager.update();
 
-    // Arrived ON the active cleanser; the landing fires it, which no longer
+    // Arrived ON the active waystone; the landing fires it, which no longer
     // empties the tape (it holds creatures: interim ruling 2026-11-23)
-    expect(gameState.player.position.x).toBeCloseTo(CLEANSER.x);
-    expect(gameState.player.position.z).toBeCloseTo(CLEANSER.z);
+    expect(gameState.player.position.x).toBeCloseTo(WAYSTONE.x);
+    expect(gameState.player.position.z).toBeCloseTo(WAYSTONE.z);
     expect(gameState.player.inventory).toEqual([held]);
     // One use: the gate closed behind the player
     expect(padsInActiveArea()).toHaveLength(0);
@@ -414,10 +414,10 @@ describe('Walking through the deployed cleanser gate', () => {
   });
 
   it('world state does NOT reset on the jump (an open gate stays open)', async () => {
-    await activateCleanser();
+    await activateWaystone();
     // Fake a changed world: drop a pretend flag on the area
     const area = gameState.activeArea;
-    area.entityManager.getByType('cleanser')[0]._worldMark = 'kept';
+    area.entityManager.getByType('waystone')[0]._worldMark = 'kept';
 
     standAt(30, 39);
     DeployManager.toggle();
@@ -428,11 +428,11 @@ describe('Walking through the deployed cleanser gate', () => {
 
     // Same live area object, same entities — nothing rebuilt
     expect(gameState.activeArea).toBe(area);
-    expect(area.entityManager.getByType('cleanser')[0]._worldMark).toBe('kept');
+    expect(area.entityManager.getByType('waystone')[0]._worldMark).toBe('kept');
   });
 });
 
-describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
+describe('Cross-area travel (the waystone gate can go anywhere)', () => {
   function installFetchMock(puzzles) {
     global.fetch = jest.fn((url) => {
       const match = url.match(/^\/puzzles\/([a-zA-Z0-9_-]+)\.json$/);
@@ -457,7 +457,7 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     await jest.runAllTimersAsync(); // portal-b loads as a live neighbor
 
     const target = { puzzleId: 'portal-b', position: { x: 6, y: 0, z: 6 } };
-    const ok = await PortalManager.teleportToCleanser(target);
+    const ok = await PortalManager.teleportToWaystone(target);
 
     expect(ok).toBe(true);
     expect(gameState.activeArea.id).toBe('portal-b');
@@ -475,7 +475,7 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     PortalManager._areas.delete('portal-b');
     if (areaB) areaB.dispose();
 
-    const ok = await PortalManager.teleportToCleanser({
+    const ok = await PortalManager.teleportToWaystone({
       puzzleId: 'portal-b',
       position: { x: 6, y: 0, z: 6 },
     });
@@ -490,8 +490,8 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     await jest.runAllTimersAsync();
     gameState.mode = 'PLAYING';
     DeployManager.reset();
-    // Active cleanser lives in the NEIGHBOR (portal-b); deploy in portal-a
-    gameState.activeCleanser = { puzzleId: 'portal-b', position: { x: 6, y: 0, z: 6 } };
+    // Active waystone lives in the NEIGHBOR (portal-b); deploy in portal-a
+    gameState.activeWaystone = { puzzleId: 'portal-b', position: { x: 6, y: 0, z: 6 } };
     gameState.player.position = { x: 6, y: 1.8, z: 6 };
     gameState.player.elevation = 0;
     gameState.camera.viewCenter = [0, 0];
@@ -526,8 +526,8 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     hideSpy.mockRestore();
   });
 
-  it("a door beside the cleanser's cell never paints its panel over the gate's view", async () => {
-    // The Star -> poc-clap (playtest, 2026-10-18): the cleanser one cell in
+  it("a door beside the waystone's cell never paints its panel over the gate's view", async () => {
+    // The Star -> poc-clap (playtest, 2026-10-18): the waystone one cell in
     // front of an open door, the eye a step from the gate. The mapped eye
     // then stands in that door's cell, and the door's panel facing it sits
     // inside the gate pass's one-cell clip overreach, square between the
@@ -537,8 +537,8 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     await jest.runAllTimersAsync();
     gameState.mode = 'PLAYING';
     DeployManager.reset();
-    // portal-b's door stands at (15, 0, 21); the cleanser one cell north
-    gameState.activeCleanser = { puzzleId: 'portal-b', position: { x: 15, y: 0, z: 18 } };
+    // portal-b's door stands at (15, 0, 21); the waystone one cell north
+    gameState.activeWaystone = { puzzleId: 'portal-b', position: { x: 15, y: 0, z: 18 } };
     standAt(15, 3, Math.PI); // facing +z: the gate lands at (15, 0, 9)
     DeployManager.toggle();
     DeployManager.toggle();
@@ -576,7 +576,7 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
   });
 
   it("a door between the mapped eye and the gate never paints into the gate's side panels", async () => {
-    // The Star -> poc-jam (playtest, 2026-10-18): the cleanser two cells in
+    // The Star -> poc-jam (playtest, 2026-10-18): the waystone two cells in
     // front of an open door, the eye a few steps south of the gate. The
     // mapped eye then stands in that door's cell, the door's panel facing it
     // half a unit ahead, and the gate's side walls looked through it: solid
@@ -586,8 +586,8 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     await jest.runAllTimersAsync();
     gameState.mode = 'PLAYING';
     DeployManager.reset();
-    // portal-b's door stands at (15, 0, 21); the cleanser two cells north
-    gameState.activeCleanser = { puzzleId: 'portal-b', position: { x: 15, y: 0, z: 15 } };
+    // portal-b's door stands at (15, 0, 21); the waystone two cells north
+    gameState.activeWaystone = { puzzleId: 'portal-b', position: { x: 15, y: 0, z: 15 } };
     standAt(15, 3, Math.PI); // facing +z: the gate lands at (15, 0, 9)
     DeployManager.toggle();
     DeployManager.toggle();
@@ -645,7 +645,7 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
     await jest.runAllTimersAsync();
     const before = gameState.activeArea;
 
-    const ok = await PortalManager.teleportToCleanser({
+    const ok = await PortalManager.teleportToWaystone({
       puzzleId: 'no-such-puzzle',
       position: { x: 0, y: 0, z: 0 },
     });
@@ -657,7 +657,7 @@ describe('Cross-area travel (the cleanser gate can go anywhere)', () => {
 
 describe('The deployed gate draws only what can show, and never shows a blank panel', () => {
   // portal-a: its door (world 15, 0, 6) leads into portal-b. The gate goes
-  // two tiles south of a player standing north of the door; the cleanser it
+  // two tiles south of a player standing north of the door; the waystone it
   // leads to sits one cell east of the gate, so its mapped eye stays north
   // of the door like the player's (that door's south face is in nobody's
   // sightline: only the stale rotor ever refreshes it).
@@ -690,7 +690,7 @@ describe('The deployed gate draws only what can show, and never shows a blank pa
     ctx.loadPuzzle('portal-a');
     gameState.mode = 'PLAYING';
     DeployManager.reset();
-    gameState.activeCleanser = target;
+    gameState.activeWaystone = target;
     standAt(15, 3, Math.PI); // facing +z: the gate lands at (15, 0, 9)
     DeployManager.toggle();
     DeployManager.toggle();
@@ -706,7 +706,7 @@ describe('The deployed gate draws only what can show, and never shows a blank pa
   });
 
   it('a fresh gate never shows a panel before a pass has written it', async () => {
-    await activateCleanser();
+    await activateWaystone();
     standAt(30, 39);
     DeployManager.toggle();
     DeployManager.toggle();
@@ -804,9 +804,9 @@ describe('The deployed gate draws only what can show, and never shows a blank pa
   it('a tile in ANOTHER area: its mirror keeps its own material and glows in step', async () => {
     // Different scenes light differently: one material drawn in both
     // re-derived its shader program at every switch (core/passContext)
-    await deployInPortalA({ puzzleId: 'deploy-basic', position: CLEANSER });
-    const tile = PortalManager.getArea('deploy-basic').entityManager.getByType('cleanser')[0];
-    const mirror = gameState.activeArea.group.children.find((child) => child._isCleanserMirror);
+    await deployInPortalA({ puzzleId: 'deploy-basic', position: WAYSTONE });
+    const tile = PortalManager.getArea('deploy-basic').entityManager.getByType('waystone')[0];
+    const mirror = gameState.activeArea.group.children.find((child) => child._isWaystoneMirror);
     expect(mirror).toBeDefined();
     expect(mirror.material).not.toBe(tile.mesh.material);
 
@@ -816,7 +816,7 @@ describe('The deployed gate draws only what can show, and never shows a blank pa
     expect(mirror.material.emissiveIntensity).toBe(tile.mesh.material.emissiveIntensity);
     expect(mirror.material.color.getHex()).toBe(tile.mesh.material.color.getHex());
     expect(mirror.material.emissive.getHex()).toBe(tile.mesh.material.emissive.getHex());
-    expect(mirror.material.emissive.getHex()).toBe(CleansingTile.ACTIVE_EMISSIVE); // the gold ring
+    expect(mirror.material.emissive.getHex()).toBe(Waystone.ACTIVE_EMISSIVE); // the gold ring
 
     const freed = jest.spyOn(mirror.material, 'dispose');
     DeployManager.toggle(); // pick the gate back up
