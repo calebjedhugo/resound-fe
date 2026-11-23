@@ -1,5 +1,6 @@
 import Gate from 'entities/Gate';
 import gameState from 'core/GameState';
+import { renderMainView } from 'core/passContext';
 import { drawnObjects } from '../__tests__/helpers/drawList';
 
 // Gates latch (ruled 2026-07-10): they open when their song is performed to
@@ -261,8 +262,24 @@ describe('Gate shell drawing', () => {
     expect(shellDrawn(gate)).toBe(true);
   });
 
-  it('an open gate keeps only its rippling frame: no slab, and nothing hidden behind it', () => {
+  it('an open plain gate draws nothing at all: an empty opening (only doors ripple)', () => {
     const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+
+    gate.open();
+    renderMainView(
+      { clippingPlanes: [], render: () => expect(gate.mesh.material.visible).toBe(false) },
+      gate.mesh,
+      {}
+    );
+
+    expect(shellDrawn(gate)).toBe(false);
+    expect(drawnObjects(gate.mesh)).toEqual(gate.notationDisplay.meshes);
+    gate.close();
+    expect(shellDrawn(gate)).toBe(true);
+  });
+
+  it('an open door keeps only its rippling frame: no slab, nothing hidden behind it', () => {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song, link });
 
     gate.open();
 
@@ -281,7 +298,7 @@ describe('Gate shell drawing', () => {
     const door = new Gate({ x: 30, y: 0, z: 30 }, { song, link, alwaysOpen: true });
     expect(shellDrawn(door)).toBe(false);
     const doorway = new Gate({ x: 30, y: 0, z: 30 }, { song, alwaysOpen: true });
-    expect(doorway.mesh.material.opacity).toBe(0); // only its frame
+    expect(shellDrawn(doorway)).toBe(false); // an empty opening
   });
 
   it('a fading shell draws until the song has faded it all the way out', () => {

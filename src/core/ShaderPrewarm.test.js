@@ -298,8 +298,14 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     expect(coldPrograms(gameState.activeArea.group)).toEqual([]);
   });
 
-  it("an open gate's rippling frame", () => {
-    const gate = new Gate({ x: 0, y: 0, z: 0 }, staffSong('E3'));
+  it("an open door's rippling frame", () => {
+    const gate = new Gate(
+      { x: 0, y: 0, z: 0 },
+      {
+        ...staffSong('E3'),
+        link: { puzzleId: 'elsewhere', gateId: 'beyond' },
+      }
+    );
     gate.open();
     gate.mesh.material.visible = true; // as the main view draws it
     expect(coldPrograms(gate.mesh)).toEqual([]);

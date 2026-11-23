@@ -349,9 +349,10 @@ class Gate extends Entity {
    * not the mesh's subtree. (An opacity-0 draw painted nothing yet cost a
    * draw call in every pass that saw it, and still wrote depth: a
    * translucent creature in an open gate's cell could vanish behind it.)
-   * The one exception is an open gate's rippling frame (entities/EntityLook:
+   * The one exception is an open DOOR's rippling frame (entities/EntityLook:
    * the face the player looks into, where walking in crosses): drawn in the
-   * main view only, writing no depth — every door pass skips it.
+   * main view only, writing no depth — every door pass skips it. An open
+   * plain gate draws nothing (only doors ripple).
    * Opacity is a uniform; of these only `transparent` reaches the shader
    * program (three's OPAQUE define), so the program is re-derived only
    * when that flips — not every fade frame.
@@ -366,9 +367,12 @@ class Gate extends Entity {
     const u = m.uniforms;
     u.uOpacity.value = opacity;
     u.uProgress.value = this.isOpen ? 0 : this._fade;
-    // Open: its rippling frame, in the main view only (it owns visibility)
-    showOpenFrame(m, this.isOpen);
-    if (!this.isOpen) m.visible = !transparent || opacity > 0;
+    // An open DOOR: its rippling frame, in the main view only (that owns
+    // its visibility). An open plain gate: nothing at all, an empty opening
+    // (ruled 2026-11-22: only doors ripple)
+    const frame = this.isOpen && Boolean(this.link);
+    showOpenFrame(m, frame);
+    if (!frame) m.visible = !this.isOpen && (!transparent || opacity > 0);
   }
 
   /** The wrong note's red on the shell now, 0..1 (decaying over the lockout). */

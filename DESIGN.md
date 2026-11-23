@@ -138,7 +138,8 @@ automated playtesters can observe them.)
     doors and plain gates alike, so `isOpen` drives collision + full
     transparency. The red mismatch flash still lands on the CLOSED look.
     (2026-11-22, designer request: an open gate glows "in motion, like a
-    rippling portal" — only on the near opening the player looks into,
+    rippling portal" — doors only (a plain gate stays an empty opening),
+    only on the near opening the player looks into,
     in the main view, the way through completely clear. See "Entity
     look".)
   - The notation **stays displayed forever**; there is still no permanent
@@ -474,12 +475,15 @@ Rules (keep any later work coherent):
   encode); precomputed textures over per-pixel noise; every program has a
   ShaderPrewarm stand-in.
 
+Ruled 2026-11-22: the storm's colour washing the whole deck near a song's
+end is fine — keep it; gates the creatures solve on their own stir the sky
+too — keep it.
+
 Open questions for the designer: whether sheet lightning stays (or follows
 the world's tempo); whether the levels should drift along the tempo
-gradient (calmer sky early, a stormier deck later); how strong the storm's
-colour should run (it washes the whole deck near a song's end).
+gradient (calmer sky early, a stormier deck later).
 
-## Entity look (2026-11-22 — draft for designer review)
+## Entity look (2026-11-22 — reviewed; rulings below)
 
 The entities brought into the approved environment
 (`entities/EntityLook.js`). Designer: "The sealed gates need the same dark
@@ -512,14 +516,16 @@ entity TYPES, not for any level. Visual only.
     dominant offset from the gate's centre (`EntityLook.looksInto`, twin of
     its GLSL). It keeps a rippling frame: its edge line and light rippling
     in over a thin band (~0.22) at its edges, nothing over the way through,
-    no depth written. It is the gate's own shell, drawn by the main view
+    no depth written — on DOORS only: an open plain gate draws nothing
+    (ruled 2026-11-22, below). It is the door's own shell, drawn by the main view
     alone (`passContext.showInMainViewOnly`): its other faces, and every
     gate seen inside a door view, a door-in-a-door or the cleanser gate,
     draw no border — door passes skip it outright. A door's view panels
     (at the back of the cell) are plain: the view is untouched.
   - **Linked vs plain**: identical while closed ("A closed linked gate
-    looks like any closed gate", ruled 2026-07-06); open, a door shows its
-    view, a plain gate its frame.
+    looks like any closed gate", ruled 2026-07-06, reaffirmed 2026-11-22);
+    open, a door shows its view and rippling near face, a plain gate is an
+    empty opening.
   - **The deployed cleanser gate**: the same frame in GOLD on the face you
     step through — it leads to the gold tile (same rules: one face, main
     view only; `EntityLook.createOpenFrame`).
@@ -543,12 +549,20 @@ entity TYPES, not for any level. Visual only.
   wrong note, gold = your cleanser and its gate); never a saturated hue a
   chord could own on a surface. Unlit ShaderMaterials in display values,
   honouring the clip planes, each with a ShaderPrewarm stand-in; an open
-  gate's frame is its shell's one draw, in the main view only.
+  door's frame is its shell's one draw, in the main view only.
 
-Open questions for the designer: the cleanser's gold vs the key hints'
-gold labels; whether open plain gates should keep their frame at all, or
-only doors ripple; whether linked doors should ever look different while
-closed (the 2026-07-06 ruling says no).
+Rulings (designer, 2026-11-22):
+
+- **Only doors ripple.** An open PLAIN gate has no frame and no glow: an
+  empty opening, its floating staff the only cue (no other cue added — the
+  missing slab and the clear cell read as open). Doors keep the near-face
+  ripple; the deployed cleanser gate keeps its gold near-face frame (it is
+  a portal).
+- **Cleansers are pale, the active one gold** (replacing "the rest stay
+  cyan") — fine.
+- **The cleanser's gold matching the key hints' gold labels** — fine.
+- **Linked doors look like plain gates while closed** — keep them the same
+  (2026-07-06 ruling stands).
 
 ## World / editor (settled)
 

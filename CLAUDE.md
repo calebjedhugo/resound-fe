@@ -362,7 +362,8 @@ instead of "fixing" it.
 - **Entity look** (`entities/EntityLook.js`, DESIGN.md "Entity look"):
   gates are a per-gate unlit ShaderMaterial (`createGateMaterial`: state in
   uniforms uOpacity/uProgress/uLockout/uOpen, `bindAreaLight` on first
-  update; `Gate.lockoutGlow` reads the red). **An open gate's shell is its
+  update; `Gate.lockoutGlow` reads the red). An open PLAIN gate draws no
+  shell at all (ruled 2026-11-22: only doors ripple). **An open door's shell is its
   rippling frame, drawn ONLY by the main view** (`showOpenFrame` →
   `passContext.showInMainViewOnly`: `renderMainView` shows those materials
   for its own render, every other pass skips them) **and ONLY on the face
