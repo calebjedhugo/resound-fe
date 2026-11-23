@@ -13,17 +13,25 @@ Creatures sing melodies on a musical clock. A gate or fountain that hears its
 song sung exactly unlocks/activates. The player carries CREATURES: R pokes a
 nearby creature with a telescoping pole and absorbs it into the slot strip;
 Space lets the selected creature out again a few steps ahead, where it sings
-its song as before (since 2026-11-23 — the player no longer records or plays
+its song as before — its first note on the beat Space was pressed on (or the
+next one) (since 2026-11-23 — the player no longer records or plays
 anything back). Activating fountains completes the puzzle.
 
 ## Game rules agents get for free
 
-- **No aiming at targets.** There is no crosshair. Sound is omnidirectional;
-  absorbing takes the nearest creature in reach, whatever you face. Releasing
+- **No aiming at targets, but the pole needs you to FACE the creature.**
+  There is no crosshair. Sound is omnidirectional. Absorbing (R) takes a
+  creature in reach that is in front of you (its body within ~40° of where
+  you look, mouse offset included) and that you can SEE (no wall, closed
+  gate, door, raised floor or ramp in between) — the best centred, then the
+  nearest; the reach mark "×N" and the R hint count exactly those. Releasing
   puts the creature ~2.5 units ahead along your view, on walkable floor of
-  your own storey where its body fits (not in walls, gates, fountains,
-  cleansers, ramps, over a cliff edge or off the grid) — else a grey slot
-  flash and nothing happens.
+  your own storey where its body fits and you can see it land (not in
+  walls, gates, fountains, waystones, ramps, over a cliff edge, past a wall's
+  corner or off the grid) — else a grey slot flash and nothing happens. A
+  released creature sings its first note on the beat you pressed Space on
+  (just past a beat counts as that beat), then every `interval` beats from
+  there.
 - **Sound carries by its SOURCE's audible range.** A creature's song reaches a
   gate/fountain if the distance is ≤ the *creature's* `audibleRange`.
 - **Creatures can activate targets themselves — by design.** A creature in
@@ -68,9 +76,12 @@ anything back). Activating fountains completes the puzzle.
   creatures since 2026-11-23): boots with ONE slot; ←/→ move the cursor and
   → on a filled last slot appends a new empty one (up to 16). A slot shows
   the held creature as a small glowing orb and its song's note count. There
-  is no delete. A **cleansing tile** (a gently pulsing floor pad) no longer
-  empties the strip — it only becomes the cleanser gate's destination
-  (interim ruling 2026-11-23).
+  is no delete. A **waystone** (a gently pulsing floor pad; it was the
+  "cleanser" until 2026-11-23) clears nothing: stepping on it makes it the
+  gold one, where the G gate leads back to.
+- **The world remembers.** An area you leave far behind is unloaded and
+  rebuilt when you come back — exactly as you left it (creatures where you
+  moved them, gates open, fountains activated).
 - **Mismatch feedback is visual**: a completed wrong phrase flashes the
   gate/fountain RED for ~600ms. Animations are hard to catch in single
   screenshots — use the F3 debug panel, which mirrors the last judged phrase
@@ -87,7 +98,8 @@ anything back). Activating fountains completes the puzzle.
   dismiss it — visibly and audibly, with the completion screen on top.
 - **Pause (Esc) titles**: "Paused" mid-game; "Puzzle Complete!" only when
   every fountain in the CURRENT session is activated.
-- **Claps (C)** nudge creature song timing; harmonies attract (consonant) or
+- **No clapping** (removed 2026-11-23): to retime a creature, absorb it and
+  release it on the beat you want. Harmonies attract (consonant) or
   repel (dissonant) creatures while they sing; perfect intervals do nothing.
   Forces apply only WHILE a creature sings and hears another note within its
   OWN audibleRange (the listener's range — unlike gate audibility, which
@@ -107,11 +119,10 @@ anything back). Activating fountains completes the puzzle.
 | Mouse | Look (offset-from-center style, no pointer lock) |
 | M | Toggle mouse-look off/on (toast + persistent badge when off) |
 | I/J/K/L | Keyboard look (up/left/down/right) |
-| R | Absorb the nearest creature in reach into the cursor slot (or a new slot at the end if that one is full) |
+| R | Absorb the creature you face, in reach and in sight, into the cursor slot (or a new slot at the end if that one is full) |
 | Space | Release the cursor slot's creature ~2.5 ahead |
 | ←/→ | Move the slot cursor (→ on a filled last slot adds a new one) |
 | ↑/↓, Enter or Space, C | In a menu (pause, main): move the focus (wraps), choose, back out (resume). The pause menu has Invert Look and Sound On/Off entries |
-| C | Clap |
 | N | Metronome |
 | P | Sound on/off (toast; works paused too; time keeps running while off) |
 | F3 | Debug info overlay (hidden by default) |
@@ -129,8 +140,8 @@ A game controller (PS4 DualShock 4, or any pad the browser maps to the
 | Right stick | Look (fine near center) |
 | Cross | Release a creature (Space) |
 | Square | Absorb a creature (R) |
-| Circle | Clap (C) |
-| Triangle | Cleanser gate (G) |
+| Circle | Back out of a menu (C); nothing in the world |
+| Triangle | Waystone gate (G) |
 | L1 / R1, d-pad ←/→ | Slot cursor (←/→) |
 | Options | Pause / resume (Esc) |
 | Share | Sound on/off (P) |

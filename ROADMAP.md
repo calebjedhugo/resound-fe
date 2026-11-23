@@ -137,7 +137,7 @@ Bigger architectural ideas (exploratory, likely the backbone of the game):
 - ✅ First-person movement and camera
 - ✅ Recording system (5-slot inventory)
 - ✅ Playback with beat quantization
-- ✅ Clap mechanic (displaces creature timing, quantized to 16th notes)
+- ✅ Clap mechanic (displaces creature timing, quantized to 16th notes) — REMOVED 2026-11-23: a released creature sings its first note on the beat it is let out instead (DESIGN.md)
 - ⚠️ Accidental overwrite prevention for recordings (basic, could improve)
 
 ## Audio Systems

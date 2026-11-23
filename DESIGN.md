@@ -23,9 +23,11 @@ automated playtesters can observe them.)
   deployed." SUPERSEDES recording, tape playback, the playback etiquette and
   red-miss rules below, each marked). The controls and UI are the old ones,
   reused:
-  - **R / Square absorbs** the nearest creature the pole reaches — the old
-    recording rule: active area, real distance ≤ `audibleRange × 0.5`, never
-    through a door — into the CURSOR slot. If the cursor slot already holds
+  - **R / Square absorbs** a creature the pole reaches — the old recording
+    rule (active area, real distance ≤ `audibleRange × 0.5`, never through a
+    door) AND, since the rulings below, only one IN FRONT of the player and
+    IN SIGHT; of those, the best centred, then the nearest — into the CURSOR
+    slot. If the cursor slot already holds
     a creature, it goes into a NEW slot at the end of the strip and the
     cursor follows ("If there is already a creature in the slot, simply make
     a new one"; an empty last slot is reused). Refused with the grey slot
@@ -34,18 +36,22 @@ automated playtesters can observe them.)
   - **Space / Cross releases** the cursor slot's creature 2.5 units ahead
     along the effective camera heading, on walkable floor of the player's
     own storey where its body fits — never in or over a wall, gate,
-    fountain, cleanser, ramp, cliff edge or off the grid, nor into another
-    body. Bad spot or empty slot: grey flash. The slot is empty after.
+    fountain, waystone, ramp, cliff edge or off the grid, nor into another
+    body, nor anywhere the player can't SEE it land (past a wall's corner,
+    a closed gate or a door: the same sightline as absorbing). Bad spot or
+    empty slot: grey flash. The slot is empty after.
   - **One pole action at a time**; R and Space during one are ignored.
   - **Absorbed = silent at once**: the creature stops singing the moment the
     tip touches it (no partial song reaches a gate after that) and stops
     moving; its body leaves the world once drawn in. **Released = the same
     creature**: same song, timing, range, body, speed and VOICE (the timbre
-    it rolled), singing on its OLD BEAT (next sing beat congruent, modulo
-    its interval, to its old schedule), alive only once the pole is back.
+    it rolled) — but its schedule starts again on the beat it is let out
+    (ruling below; it used to keep its old phase). It stays still and out of
+    reach until the pole is back.
   - **Nothing duplicates or vanishes across area pruning**: a puzzle's own
     creature, once absorbed, never respawns when the area is rebuilt from
-    its JSON; a released creature lives on in its area, where it stood.
+    its JSON; a released creature lives on in its area, where it stood (and
+    since the ruling below, so does everything else that happened there).
   - **The look** (the designer: "poking the creature with a pole, and the
     creature is absorbed into it … not just get smaller, but deformed toward
     the end of the pole and back out again"): a first-person telescoping
@@ -65,11 +71,81 @@ automated playtesters can observe them.)
     floats low over the release spot while a creature is held (retires on
     the first release). The tape's grow hint is gone (nothing is ever
     overwritten).
-  - **Interim ruling — the CleansingTile no longer clears the inventory**
-    (2026-11-23): a wipe would now delete creatures. It still becomes the
-    active cleanser for the G gate. Revisit: whether a tile should do
-    anything to the strip, and whether a strip needs any clearing at all.
-  See `core/AbsorbManager.js`, `core/CreatureRegistry.js`,
+  - **The cleanser is the WAYSTONE** (ruled 2026-11-23, after the interim
+    "it no longer clears the inventory" — the designer: fine, it's the
+    waystone now). It cleans nothing; it stays as a game element: stepping
+    on one makes it the ACTIVE (gold) waystone, and the G gate takes the
+    player back to the last one they stepped on. Entity `waystone`
+    (`entities/Waystone.js`, `entities/WaystoneGatePad.js`, "the waystone
+    gate"); puzzle JSON that says `cleanser` still loads as a waystone
+    (the POC files keep it), and the editor writes `waystone`.
+  - **Absorb only what you face** (ruled 2026-11-23, SUPERSEDING "No
+    aiming… no facing checks — ever" for absorbing): a creature is in reach
+    only while some part of its body lies within **40°** either side of the
+    EFFECTIVE camera heading (mouse offset included — the heading a release
+    aims along), horizontally. 40° keeps the cone well inside the view
+    (a 16:9 view is ~53° either side; at the cone's edge the body still
+    shows at the screen's edge — judged in-game), so the pole never takes
+    what the player can't see. The reach mark (×N), the R hint and R share
+    the one rule (`core/poleReach`; Creature `isAbsorbable`), so neither
+    ever promises an absorb R would refuse. Among those in reach R takes
+    the best centred, then the nearest (off-centre share of the cone plus
+    distance share of the reach, lowest wins).
+  - **Walls block absorbing** (ruled 2026-11-23): the sightline from the
+    eye to the creature's floating centre must be clear — of walls (their
+    2.5-high boxes: from a storey above you can look over one), closed
+    gates, and ANY door (an open linked gate shows another place, never
+    this area behind it; an open plain gate is an empty doorway and lets
+    the sight through), of a storey's slab wherever the sightline crosses
+    its height (a creature up on a platform is out of sight from beneath,
+    and one below a ledge from the middle of it), and of a ramp's wedge.
+    The sightline walks every grid cell it crosses — both cells where it
+    passes exactly through a corner, so it never squeezes between two
+    walls meeting corner to corner. A release must land where that same
+    sightline reaches (the release spot's old two-sample path check missed
+    a corner squeeze; the sightline catches it).
+  - **The world forgets nothing** (ruled 2026-11-23, superseding "their
+    state resets on the next visit"): an area pruned beyond link-depth 1
+    comes back, when it is rebuilt from its JSON, as it was left. At the
+    prune each of its puzzle entities' state is snapshotted
+    (`core/WorldMemory`, grown out of CreatureRegistry) and handed back as
+    the area is built again: a creature where it was pushed or lured, on
+    its layer, drifting as it was, in its own voice (its rolled timbre),
+    singing on its own phase — its next sing beat from the ONE world clock,
+    never from the rebuild; a gate open or closed, a close waiting on a
+    performer, its openings count (no new storm strike) and its last
+    completion; a fountain activated (latched and lit, its song not played
+    again). The active waystone was already remembered by place
+    (`gameState.activeWaystone`). What is NOT kept: what a gate was hearing
+    mid-performance (a performance doesn't outlive its listener's area).
+    A deployed waystone gate now keeps its own area live while it stands
+    (it used to die with a pruned area). Measured in the POC chain
+    (2026-11-23, dev build): a prune's snapshot 0.03-0.18 ms per area
+    (57-177 entities), a rebuild's lookups 0.12 ms in all, the rebuild
+    itself ~4.6 ms as before — no measurable cost. The only real cost is a
+    deployed gate's area simulating while it stands.
+  - **A released creature sings its FIRST NOTE ON THE BEAT IT IS LET OUT,
+    and this REPLACES CLAPPING** (ruled 2026-11-23). The press is quantized
+    as the tape's playback start was: within `RELEASE_LATE_GRACE_BEATS`
+    (0.1 beat) past a beat it IS that beat — the first note sounds at once
+    and the rest of that song is drawn back onto the grid — else the next
+    beat. Its schedule restarts there (next sing beat = that beat, then +=
+    interval), whatever phase it sang on before. The pole's reach-out,
+    flare and pour (0.87 s at rest) are compressed to finish just before
+    that beat, never quicker than 0.25 s (`RELEASE_MIN_EMERGE_S`); with the
+    beat closer than that it starts singing while still pouring out of the
+    tip — singing, but still and out of reach until the pole is back. Its
+    voice and first song are built at the press (`AudioPrewarm.prepareNow`,
+    ~1.4 ms on the key press, measured), so the beat it sings on builds no
+    audio node. Like every creature song its onset lands on the first frame
+    at or after the beat (measured in-game: 157.02 and 202.001 for beats
+    157 and 202). **Clapping is gone**: the C key does nothing in the
+    world, the pad's Circle only backs out of menus, and the clap hint, the
+    clap ring, the creature's white clap flash and `clapDisplacement` went
+    with it (old puzzle JSON that has the field still loads; the field is
+    ignored and the editor no longer writes it). Retiming a creature is
+    now: take it, and let it out on the beat you want.
+  See `core/AbsorbManager.js`, `core/WorldMemory.js`, `core/poleReach.js`,
   `entities/PoleLook.js`, `CreatureLook` `setSuck`.
 
 - **(SUPERSEDED 2026-11-23 — there is no recording.) Recording timing is a puzzle skill.** A recording is exactly what sounds
@@ -80,15 +156,17 @@ automated playtesters can observe them.)
   welcome; automation of the timing itself is not. Future puzzles combine
   this skill with clap displacement: shifting creature song timing (C key /
   `clapDisplacement`) to line recordings up with targets is intended
-  solution space.
+  solution space. (Clapping was removed too, 2026-11-23: a creature is
+  retimed by releasing it on the beat.)
 - **Creatures can activate gates/fountains themselves.** A creature in range
   singing a target's exact song solves it with no player input. Self-solving
   layouts are legal; the editor's job is to WARN about them (it does), not
   prevent them.
-- **No aiming.** Sound is omnidirectional and proximity-based. No crosshair,
-  no facing checks at targets — ever. (Since 2026-11-23 the pole takes the
-  nearest creature in reach whatever you face; only WHERE a release lands
-  follows the view.)
+- **No aiming at targets.** Sound is omnidirectional and proximity-based. No
+  crosshair, no facing checks at gates or fountains. (The POLE is the one
+  exception, ruled 2026-11-23: it absorbs only a creature in front of the
+  player and in sight — see "Absorb only what you face" above — and a
+  release lands where the view points. Still no crosshair.)
 - **Creatures collide with the player's body, symmetrically** (fixed
   2026-07-11): a lured creature parks at contact distance (creature radius
   0.9 + player radius 0.4 = 1.3) instead of entering the player's space —
@@ -246,7 +324,9 @@ automated playtesters can observe them.)
     first cleanser ships in `poc-two-keys`, mid-corridor at the entry so
     the player walks through it on the way in (trial placement — 2026-07-12).
   - **The ACTIVE cleanser + the deployable cleanser gate** (ruled
-    2026-07-18). Stepping on a cleanser makes it the ACTIVE one — it turns
+    2026-07-18; since 2026-11-23 the cleanser is the WAYSTONE and this is
+    the waystone gate — names below as they were). Stepping on a cleanser
+    makes it the ACTIVE one — it turns
     GOLD (the rest stay pale; one active tile world-wide) and becomes the
     destination of the player's deployable gate. "G" cycles: aim (a phantom
     cleanser two tiles ahead along the EFFECTIVE camera heading — mouse
@@ -277,7 +357,7 @@ automated playtesters can observe them.)
     WHOLE cycle (it retires only when a deployed pad is removed or walked
     through, not on deploy). Aiming itself still can't be exited without
     deploying — revisit after play. See `core/DeployManager.js`,
-    `entities/CleanserGatePad.js`, `PortalManager.teleportToCleanser`.
+    `entities/WaystoneGatePad.js`, `PortalManager.teleportToWaystone`.
   Solo starts keep the beat grid with the late grace expressed in BEATS
   (`PLAYBACK_LATE_GRACE_BEATS`, kept under the matcher tolerance so a
   grace-path onset still matches). See `PlaybackManager`, `core/Tape.js`.
@@ -315,7 +395,8 @@ automated playtesters can observe them.)
   stick looks, its tilt squared so a small tilt aims finely (full tilt ~1.5x the keyboard's look
   speed). Buttons ARE keys (each press goes out once as its key, no
   auto-repeat): Cross = Space (release), Square = R (absorb; since
-  2026-11-23 — it used to record, tap toggling), Circle = C, Triangle = G,
+  2026-11-23 — it used to record, tap toggling), Circle = C (which only
+  backs out of menus since clapping went, 2026-11-23), Triangle = G,
   L1/R1 and d-pad ←/→ = the tape cursor,
   Options = Esc, Share = P (sound on/off); any other button is an unbound
   key (it still wakes the start gate and dismisses the ending card). A held key drives its axis
@@ -326,8 +407,8 @@ automated playtesters can observe them.)
   after 0.4 s held, then every 0.15 s); Cross (Space, Enter) chooses, Circle
   (C) backs out (resumes from pause), Options (Esc) still toggles pause.
   The focus starts on the first entry each time a menu opens and follows
-  the mouse. Nothing in the world answers while a menu is up (no pole, clap
-  or tape-cursor move behind it). The ending card's link stays mouse-only:
+  the mouse. Nothing in the world answers while a menu is up (no pole or
+  tape-cursor move behind it). The ending card's link stays mouse-only:
   a pad press can't open a tab. Browsers don't count a pad
   press (or Esc) as the gesture that unlocks audio, so either wakes the
   start gate only into a world with sound; on a fresh page the gate stays up and
@@ -390,8 +471,8 @@ CREATURES".)
 - **Lit while ANY of its notes sounds**: a glowing core with swirling
   internal filaments + a soft additive halo. Each note ONSET flares, the
   glow settles to a sustain while the note holds, and it fades back to the
-  bubble when the creature goes silent (rests inside a song included). The
-  clap flashes it white. Onset = the instrument's note callback; end = onset
+  bubble when the creature goes silent (rests inside a song included).
+  (The clap's white flash went with clapping, 2026-11-23.) Onset = the instrument's note callback; end = onset
   beat + notated length on the musical clock (or the instrument stopping).
 - **It floats**: the rendered body hovers `CREATURE_HOVER_HEIGHT` above its
   floor with a gentle bob; the physics position stays on the floor.
@@ -515,7 +596,7 @@ creatures are the light; the world is the dark around them.
     one. Nothing else in the environment takes a hue.
   - **Through doors**: one response for the whole world (shared
     uniforms), so the main view, every door pass, door-in-a-door views and
-    the cleanser gate all show the same storm, continuous across every
+    the waystone gate all show the same storm, continuous across every
     seam. Everything it does is about the zenith, the horizon or the whole
     deck — still a function of view direction (4-fold symmetric). A gate
     in a neighbour area drives it only through its face in the player's
@@ -553,7 +634,7 @@ Rules (keep any later work coherent):
 - **Entities follow the same rules** ("Entity look"): colour only where it
   means something.
 - **The sky is a function of view direction only** — its height, and its
-  azimuth taken FOUR times round. Every door and the cleanser gate turn the
+  azimuth taken FOUR times round. Every door and the waystone gate turn the
   view by quarter turns, so this is what keeps a door's sky continuous with
   the sky beside it. Never give the sky a feature that is not 90-degree
   symmetric, nor one that differs between areas.
@@ -635,7 +716,7 @@ entity TYPES, not for any level. Visual only.
     part of the gate seen through the gate should not have the border
     around it"): a panel wears its seam material only while the main view
     draws (`passContext.wearInMainView`), so a door seen inside a door
-    view, a door-in-a-door or the cleanser gate's view shows plain,
+    view, a door-in-a-door or the waystone gate's view shows plain,
     opaque panels — as every door pass always drew them. The seam
     material is transparent (so the fade shows the world behind) but
     drawn first among transparent things and writing depth, so everything
@@ -649,7 +730,7 @@ entity TYPES, not for any level. Visual only.
     looks like any closed gate", ruled 2026-07-06, reaffirmed 2026-11-22);
     open, a door shows its view, softly seamed into the world at its
     outline, a plain gate is an empty opening.
-  - **The deployed cleanser gate**: the same seam — it is a portal, so
+  - **The deployed waystone gate**: the same seam — it is a portal, so
     the same outline rule — leaning faintly GOLD toward the outline, so
     it stays the gate to the gold tile at a glance (main view only;
     PortalManager gives its panels `seamTint`). It has no frame mesh.
@@ -658,19 +739,19 @@ entity TYPES, not for any level. Visual only.
   that way (the way up at a glance); pale lines along its sides (drops,
   like a storey's cliff edge); pale posts mark its top edge from up on the
   ledge.
-- **Cleansers**: a dark glass disc lit by a pale breathing ring (rim ring,
-  a fainter inner one); the ACTIVE one's ring burns GOLD (replacing
-  cyan/gold, 2026-11-22). The aiming phantom is the same disc,
-  translucent, red over an invalid spot. Gold is the only accent kept
-  besides the wrong note's red; it is reserved for the active cleanser and
-  the gate that leads to it.
+- **Waystones** (the cleansers, renamed 2026-11-23): a dark glass disc lit
+  by a pale breathing ring (rim ring, a fainter inner one); the ACTIVE
+  one's ring burns GOLD (replacing cyan/gold, 2026-11-22). The aiming
+  phantom is the same disc, translucent, red over an invalid spot. Gold is
+  the only accent kept besides the wrong note's red; it is reserved for
+  the active waystone and the gate that leads to it.
 - **Fountains** (likely to be cut): only what keeps them in the theme —
   dark stone, pale and lit from within once activated (was blue/cyan).
-- **Unchanged**: the clap ring (white: the clap's own light, as it flashes
-  creatures white); the wordless key hint sprites (`ui/KeyHints.js`, out of
-  scope here — their gold labels share the active cleanser's gold).
+- **Unchanged**: the wordless key hint sprites (`ui/KeyHints.js`, out of
+  scope here — their gold labels share the active waystone's gold). (The
+  clap ring went with clapping, 2026-11-23.)
 - **Rules**: low-chroma and value-led; colour only for meaning (red =
-  wrong note, gold = your cleanser and its gate); never a saturated hue a
+  wrong note, gold = your waystone and its gate); never a saturated hue a
   chord could own on a surface. Unlit ShaderMaterials in display values,
   honouring the clip planes, each with a ShaderPrewarm stand-in; an open
   door draws no shell, and its seam is its panels' own, in the main view
@@ -750,8 +831,8 @@ rulings, in the designer's words where it matters:
   never reset by a crossing.
 - **Crossing preserves the neighbor's state.** What you saw through the door
   is exactly what you walk into — crossing swaps areas, never rebuilds them.
-  Areas beyond link-depth 1 unload (their state resets on the next visit;
-  deeper streaming is a later stage).
+  Areas beyond link-depth 1 unload — and since 2026-11-23 come back as they
+  were left (core/WorldMemory; "The world forgets nothing" above).
 - **Links are bidirectional and auto-synced.** Linking A→B writes B→A into
   the target file; clearing/renaming/deleting keeps the partner in sync
   (`editor/io/portalLinks.js`). Never hand-author a one-way link. The world
@@ -910,11 +991,14 @@ rulings, in the designer's words where it matters:
   `teaches: []` shows none — and the editor round-trips the field
   (a 2026-07-16 editor save used to drop it, which un-gated every hint on
   the hand-edited POC areas). In the POC chain `slots` is taught only at
-  the duet (III) and `clap` only at the clap (VIII).
+  the duet (III) and `clap` only at the clap (VIII). (The `clap` lesson has
+  no hint since clapping went, 2026-11-23; the id is left in the POC JSON,
+  harmless.)
   Hints: WASD cluster (idle at spawn), floating "R" over the creature the
   pole would absorb (lesson id `record`), a small spacebar low over the
   release spot while a creature is held (lesson id `playback`; both renamed
-  in play 2026-11-23, the ids are puzzle vocabulary), and a floating "C" over the nearest
+  in play 2026-11-23, the ids are puzzle vocabulary), and (until clapping
+  was removed, 2026-11-23) a floating "C" over the nearest
   clap-range creature (3D reach — the clap pair sits on plinths), shown
   steadily whenever a clap could land (designer's change, committed
   2026-11-22: gating it on two creatures singing at once was flaky). On a
@@ -1083,29 +1167,28 @@ rulings, in the designer's words where it matters:
 
 ## Open design calls — ask the designer before changing
 
-- **The pole (2026-11-23), for the designer to rule on after play:**
-  (1) the CleansingTile no longer clears the strip (interim, above);
-  (2) absorbing a creature you face away from works (no aiming) — the pole
-  reaches behind you, so you see the slot fill and the creature vanish but
-  not the pole; (3) a pole through a wall: a creature in reach behind a
-  wall can be absorbed, and the rod disappears into the wall (it is drawn
-  against the world's depth); (4) the player can walk while the pole is
-  out — the tip stays on the creature and the rod stretches after you;
-  (5) a puzzle creature that MOVED (lured, pushed) still resets to its JSON
-  spot when its area is pruned and rebuilt — only absorbed/released
-  creatures are remembered; (6) the POC levels were built around
-  recording, so their solutions no longer hold (they are being replaced);
-  the editor's solvability validator still reasons about recorded pitches.
-
-- **Cleanser placement beyond area II (2026-07-12).** The hold-to-delete
-  verb is gone; the only tape-clear is the CleansingTile, and only ONE
-  ships so far (poc-two-keys entry corridor, a trial). Areas V (the dance)
-  and IX (the finale) previously leaned on delete for tape hygiene (force
-  spray / "serious tape surgery") and now have no in-area clear — a player
-  with a cluttered tape there can only re-record slots in place, not shrink
-  the tape. Decide whether V/IX (or the finale approach) need their own
-  cleansers, and whether re-crossing area II's tile mid-puzzle (wiping fresh
-  room-1 takes) is an acceptable foot-gun or wants guarding.
+- **The pole (2026-11-23), for the designer to rule on after play.**
+  RESOLVED the same day: (1) the cleanser no longer clears — fine, it is
+  the WAYSTONE now; (2) absorbing a creature you face away from — no: the
+  pole takes only what you face (40°); (3) a pole through a wall — no:
+  walls block absorbing; (4) walking while the pole is out — fine, as is;
+  (5) moved creatures resetting on a rebuild — no: the world forgets
+  nothing. Still open: (6) the POC levels were built around recording
+  (and VIII around clapping), so their solutions no longer hold (they are
+  being replaced); the editor's solvability validator still reasons about
+  recorded pitches.
+- **New with the 2026-11-23 rulings, for the designer:** (a) the sightline
+  runs to the creature's CENTRE: a creature half hidden by a wall's corner
+  (its centre behind it) is refused even though half its body shows —
+  conservative, never promises a reach through a wall; (b) at 120 bpm a
+  release's way out is compressed from 0.87 s to the time left before the
+  beat (0.25 s at the least), so most releases look brisk, and a press in
+  the last ~half of a beat sings while still pouring out; (c) a deployed
+  waystone gate keeps its area live wherever the player goes (one extra
+  simulated area at most).
+- **Cleanser placement beyond area II (2026-07-12).** RESOLVED 2026-11-23:
+  nothing clears the strip any more (the cleanser is the waystone), so
+  there is nothing to place for tape hygiene.
 - (gameplay word-toasts were RESOLVED 2026-07-10: replaced by the slot-flash
   language. Mouse-look toggle, sound on/off, metronome, and puzzle-load-error
   toasts remain as settings/dev feedback.)

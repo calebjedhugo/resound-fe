@@ -11,13 +11,13 @@ This document defines the structure for Resound puzzle files.
   "difficulty": number,              // 1 (Easy), 2 (Medium), 3 (Hard)
   "gridSize": number,                // Grid dimension (typically 15-64)
   "tempo": number,                   // BPM (typically 120)
-  "clapDisplacement": "string",      // OPTIONAL: Default beat displacement for claps (e.g., "1/8", "1/4")
-                                     // If omitted, uses system default (1/16)
+  "clapDisplacement": "string",      // RETIRED 2026-11-23 (clapping removed): ignored if present,
+                                     // never written by the editor
   "teaches": ["string"],             // OPTIONAL: key-hint verbs this puzzle teaches — any of
                                      // "move", "record" (the R absorb hint since 2026-11-23),
                                      // "playback" (the Space release hint since 2026-11-23),
-                                     // "clap", "deploy" (the G cleanser gate). "slots" and
-                                     // "delete" are retired (accepted, show nothing).
+                                     // "deploy" (the G waystone gate). "slots", "delete" and
+                                     // "clap" are retired (accepted, show nothing).
                                      // Hints for these verbs are ACTIVE in this puzzle; each
                                      // retires ONCE PERFORMED for the rest of the playthrough
                                      // (ruled 2026-07-16 — doorway crossings never re-arm; a
@@ -41,7 +41,7 @@ This document defines the structure for Resound puzzle files.
   "entities": [                      // Array of game entities
     {
       "type": "string",              // Entity type: "creature", "gate", "fountain",
-                                     // "wall", "ramp", "cleanser"
+                                     // "wall", "ramp", "waystone" ("cleanser" loads as one)
       "id": "string",                // Gates only: stable id, unique within the puzzle
                                      // (e.g., "east-door"). Auto-assigned by the editor.
       "facing": "string",            // Gates only: doorway plane — "north", "south",
@@ -73,7 +73,7 @@ This document defines the structure for Resound puzzle files.
         ],
         "interval": number,          // Beats between song repetitions (creatures only)
         "audibleRange": number,      // Audio range in world units (creatures only)
-        "clapDisplacement": "string" // OPTIONAL: Override puzzle default for this creature
+        "clapDisplacement": "string" // RETIRED 2026-11-23: ignored if present
       },
       "song": [                      // For gates and fountains (different format)
         { "pitch": "string", "length": "string" }
@@ -86,15 +86,15 @@ This document defines the structure for Resound puzzle files.
 }
 ```
 
-### Cleanser (`type: "cleanser"`)
+### Waystone (`type: "waystone"`; old name `"cleanser"`)
 
-A walkable floor tile that empties the player's tape when they step onto it
-(the replacement for the retired hold-to-delete verb — see `DESIGN.md` "the
-slot TAPE"). Only needs a `position`; it takes no `song` or `data`. It gently
-pulses as a wordless "this does something" affordance, and clearing is
-edge-triggered on entry (standing on it doesn't repeatedly wipe; leaving and
-re-entering does). Place one where you want a safe, deliberate reset — e.g. in
-a 1-wide corridor so crossing it is unavoidable (`poc-two-keys` entry).
+A walkable floor tile. Stepping onto it (edge-triggered on entry) makes it
+the ACTIVE waystone — its ring turns gold, one world-wide — and the place the
+player's G gate (the waystone gate) leads back to. Only needs a `position`;
+it takes no `song` or `data`. It gently pulses as a wordless "this does
+something" affordance. It was the CLEANSER until 2026-11-23 (it emptied the
+tape); it cleans nothing now. Files that say `"type": "cleanser"` (the POC
+levels, older saves) load as a waystone; the editor saves `"waystone"`.
 
 ## Elevation System
 

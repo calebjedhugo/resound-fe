@@ -103,8 +103,9 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 
 **Read [`DESIGN.md`](DESIGN.md) before changing gameplay, matching, or editor validation.**
 Several behaviors that look like bugs are designed — e.g. creatures may
-legally self-solve puzzles, and there is no aiming at targets (the pole takes
-the nearest creature in reach). When playtesting surfaces one, document it there
+legally self-solve puzzles, and there is no aiming at gates or fountains
+(only the pole has a facing rule: it takes a creature in front of you, in
+sight). When playtesting surfaces one, document it there
 instead of "fixing" it.
 
 ---
@@ -123,12 +124,14 @@ instead of "fixing" it.
   tape's piano pre-render went with tape playback, 2026-11-23.)
 - **Each creature's NEXT song is built ahead too** (`Creature.prepareNextSong`
   → `AudioPrewarm.prepareSong` → `Random.prepare`: every note's nodes,
-  unstarted and unconnected), asked for as a song ends, after a clap and at
+  unstarted and unconnected), asked for as a song ends and at
   construction, so the frame its onset lands in builds no audio node
   (creatures share onsets: The Star starts 10-11 notes in one frame). Idle
   time first; else forced `NOTES_LEAD_MS` before the song, ONE song per
-  task, on voices already built (never builds a voice). A stop (clap)
-  drops the built notes, hence the re-ask. Needs a resound-sound with
+  task, on voices already built (never builds a voice). The one exception:
+  a creature let out of the pole has its voice AND first song built at
+  the press (`AudioPrewarm.prepareNow`, ~1.4 ms on the key press): it
+  sings on that beat or the next, on a fresh instrument. Needs a resound-sound with
   `Random.prepare` (older: no-op, its tests skip)
 - **A Random voice is ~0.6 MB** of Chrome wavetable per (creature, pitch) at
   44.1-48 kHz; above 88.2 kHz resound-sound builds none (one would be
@@ -141,9 +144,14 @@ instead of "fixing" it.
 ### Musical Timing
 - **NEVER use `Date.now()` or `performance.now()` for music** - always use MusicalClock
 - Quantization happens to nearest 16th note
-- A released creature keeps its PHASE: its next sing beat stays congruent,
-  modulo its interval, to the schedule it had when absorbed (`Creature.toSpec`
-  `phase`; `wake`)
+- **A released creature sings its first note on the beat of the press**
+  (ruled 2026-11-23, replacing clapping): within `RELEASE_LATE_GRACE_BEATS`
+  (0.1) past a beat it is that beat (sounds at once, the rest of that song
+  snapped back onto the grid via note offsets), else the next; its schedule
+  restarts there (`Creature` `data.firstSingBeat`; `releaseBeatFor`). A
+  creature REBUILT after a prune keeps its PHASE instead (`toSpec` `phase`:
+  next sing beat from the world clock, core/WorldMemory). No clapping (C
+  does nothing in the world; Circle only backs out of menus)
 - Matching tolerates sounds AFTER the aligned window but a foreign note
   INSIDE it corrupts, and (ruled 2026-07-16) a wrong note is judged
   IMMEDIATELY — red flash on the note itself, creature noise included —
@@ -228,7 +236,7 @@ instead of "fixing" it.
   before its first write (`PortalView.written`), and stays
   VISIBLE whatever side the player's eye is on (front-side culling
   hides them from behind) — a panel is sampled by OTHER portals' passes
-  (mirror sightlines, the cleanser gate's mapped eye), and a lazily-created
+  (mirror sightlines, the waystone gate's mapped eye), and a lazily-created
   or hidden face used to sample as a BLACK hole until the player looked at
   it directly (the teleport stress test, fixed 2026-07-18). **Views OUTLIVE
   crossings**: kept while both their areas stay loaded (`_retargetViews`
@@ -261,7 +269,7 @@ instead of "fixing" it.
   (the right door, straight-on) for one frame, up to ~3 frames per such
   face old (The Star, all doors: ~2-3 s). Keyed off `_playerFresh` (a face that was
   ELIGIBLE but frustum-culled still needs a mirror render). Freshness ages
-  in REAL frames: the cleanser gate's mapped-eye door pass
+  in REAL frames: the waystone gate's mapped-eye door pass
   (`renderPortalsFor`) counts none. Its pad panels age via their own rotor
   (DeployManager.renderPortal), and a frame with no pad pass to run (gate
   off screen) skips that door pre-pass too.
@@ -374,11 +382,11 @@ instead of "fixing" it.
   material is transparent but drawn first among transparent things
   (`PANEL_RENDER_ORDER`), writing depth. Its hook gets the eye from the
   view matrix (three hands MeshBasicMaterial no `cameraPosition`). The
-  deployed cleanser gate's seam leans gold (`seamTint`, PortalManager).
+  deployed waystone gate's seam leans gold (`seamTint`, PortalManager).
   Ramps share ONE geometry (wedge + posts) and ONE material, lit per ramp
   via `onBeforeRender` → `bindRampLight` (uniformsNeedUpdate, like
-  creatures). Cleansers stay MeshStandardMaterial with the shared
-  `CLEANSER_RING_MAP` emissive map
+  creatures). Waystones stay MeshStandardMaterial with the shared
+  `WAYSTONE_RING_MAP` emissive map
 - **ONE pass context for every scene draw** (`core/passContext.js`; ruled
   2026-10-16). three keys a material's shader program by clip-plane COUNT,
   output colour space, instancing and the scene's lights; a material drawn
@@ -418,7 +426,8 @@ instead of "fixing" it.
   (ruled 2026-07-16 — performing it retires the hint; crossings never
   re-arm, a fresh world entry resets), no browser storage. No `teaches` =
   all hints eligible (dev levels); the editor round-trips the field. POC:
-  `clap` only at the clap (`slots`, the grow hint, retired 2026-11-23)
+  `clap` at the clap is now a dead id (no clap hint since 2026-11-23;
+  `slots`, the grow hint, retired the same day)
 - Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
 - `ui/StartGate.js` freezes the world per level start until a key/click.
@@ -485,14 +494,18 @@ instead of "fixing" it.
 
 ### The pole & the tape (ruled 2026-11-23; recording and playback RETIRED)
 - **R absorbs, Space releases** (`core/AbsorbManager`, DESIGN.md "The
-  inventory holds CREATURES"). R takes the nearest creature with
-  `isAbsorbable` (active area, real distance ≤ `audibleRange × 0.5`,
-  `gameState.absorb.inRange`) into the cursor slot, or — the cursor slot
+  inventory holds CREATURES"). R takes, of the creatures with
+  `isAbsorbable` (active area, real distance ≤ `audibleRange × 0.5`, IN
+  FRONT — body within `REACH_HALF_ANGLE` 40° of the effective camera yaw —
+  and IN SIGHT: `core/poleReach` `lineOfSight`; `gameState.absorb.inRange`),
+  the lowest `reachScore` (best centred, then nearest) into the cursor slot, or — the cursor slot
   holding one — a new slot at the end (`Tape.slotForAbsorb`); nothing in
   reach / a full strip = grey slot flash. Space releases the cursor slot's
   creature `RELEASE_DISTANCE` (2.5) ahead along the effective camera yaw,
-  only on walkable floor of the player's layer where its radius fits
-  (`releaseSpot`); else grey flash. ONE pole action at a time. Plain presses
+  only on walkable floor of the player's layer where its radius fits and
+  the eye can see it land (`releaseSpot`, `lineOfSight`); else grey flash.
+  **The reach mark (×N), the R hint and R all read `inRange`** — never give
+  one of them its own eligibility rule ONE pole action at a time. Plain presses
   (no tap/hold), keyboard and pad alike
 - **A slot holds a SPEC, not a song**: `{id, spec, colour, css}`, spec =
   `Creature.toSpec()` (song, interval, audibleRange, size, maxSpeed,
@@ -502,16 +515,23 @@ instead of "fixing" it.
 - **Commit points**: absorb — the creature is `hold()`-ed (instrument
   disposed: silent at once; no physics) and lands in its slot the moment the
   tip CONNECTS, its body leaves its area when drawn in; release — a fresh
-  Creature built `dormant` in the active area at once, `wake()`-d when the
-  pole is back. A crossing finishes the action at once (`finishNow`)
-- **`core/CreatureRegistry`** (world-level, reset by `PortalManager.reset`):
-  per puzzle id, the puzzle creatures absorbed (by `entities` index; skipped
-  by `PuzzleLoader.buildArea`) and the creatures released there (spec +
-  position, rebuilt by buildArea; `snapshot` at prune). Never let an area
-  rebuild bypass buildArea
+  Creature built `dormant` (held: still, out of reach — but NOT `silenced`,
+  so it sings from its release beat) in the active area at once, `wake()`-d
+  when the pole is back. The release's extend + flare + pour are scaled to
+  end just before that beat (min `RELEASE_MIN_EMERGE_S` 0.25 s). A crossing
+  finishes the action at once (`finishNow`)
+- **`core/WorldMemory`** (world-level, reset by `PortalManager.reset`; was
+  CreatureRegistry): the world forgets nothing across pruning. Per puzzle
+  id: each puzzle entity's `saveState()` (by `entities` index) snapshotted
+  at prune and handed back by `PuzzleLoader.buildArea` (`restoreState`; a
+  creature is BUILT from it: position, spec incl. voice + phase), the puzzle
+  creatures absorbed (skipped) and the creatures released there (rebuilt).
+  A new mutable field on Creature/Gate/Fountain belongs in its
+  saveState/restoreState. Never let an area rebuild bypass buildArea. A
+  deployed waystone gate retains its own area (`retainArea` is ref-counted)
 - **The look**: `entities/PoleLook` — a telescoping rod drawn in its OWN
   scene right after the main view (`AbsorbManager.render` in main.js
-  `render`), over its depth: never in a door/cleanser/warm-up pass or an
+  `render`), over its depth: never in a door/waystone/warm-up pass or an
   area group; its scene mirrors the world's lights so its programs match
   ShaderPrewarm's stand-ins (`standInMaterials`). The tip meets the creature
   on its near flank toward the hand (`CONTACT_FROM`) so the pull is seen
@@ -520,10 +540,11 @@ instead of "fixing" it.
   `suckPoint` — change both), set by `CreatureLook.setSuck` (halo +
   `lightInto` fade with it; `frustumCulled` off while deformed)
 - The strip (`core/Tape.js`, cap `TAPE_SLOT_CAP`): ←/→ move the cursor (→ on
-  a filled last slot appends). No delete. **A `cleanser`
-  (`entities/CleansingTile.js`) no longer clears it** (interim ruling
-  2026-11-23: a wipe would delete creatures) — it only becomes the active
-  cleanser. Under a LINKED door the portal panel would clip the tile to a
+  a filled last slot appends). No delete. **The cleanser is the WAYSTONE**
+  (`entities/Waystone.js`, ruled 2026-11-23): it clears nothing, it only
+  becomes the active waystone. Puzzle JSON type `cleanser` is an alias
+  (`constants` `ENTITY_TYPE_ALIASES`, `PuzzleLoader.normalize`, the editor's
+  import); the editor writes `waystone`. Under a LINKED door the portal panel would clip the tile to a
   sliver (it only paints past the window plane), so `PortalManager` mirrors
   it: a visual-only clone at the partner face, sharing the real tile's
   material so the glow syncs (`_rebuildTileMirrors`)
@@ -533,14 +554,14 @@ instead of "fixing" it.
   over `AbsorbManager.target()`, the release hint (Space, small) low over
   the release spot; their puzzle lesson ids stay `record` / `playback`
   (puzzle JSON vocabulary); `slots` is gone
-- **The ACTIVE cleanser + deployable cleanser gate** (ruled 2026-07-18):
-  stepping on a cleanser turns it GOLD (one active tile world-wide) and
+- **The ACTIVE waystone + deployable waystone gate** (ruled 2026-07-18):
+  stepping on a waystone turns it GOLD (one active tile world-wide) and
   makes it the destination of the player's deployable gate. G cycles
-  aim → deploy → remove (`core/DeployManager`): a phantom cleanser two
+  aim → deploy → remove (`core/DeployManager`): a phantom waystone two
   tiles ahead along the EFFECTIVE camera heading (mouse offset included;
   free placement, NOT grid-quantized, red = invalid), deployed as a
-  `CleanserGatePad`; walking into the gate teleports to the active
-  cleanser (`PortalManager.teleportToCleanser`, cross-area, loads on
+  `WaystoneGatePad`; walking into the gate teleports to the active
+  waystone (`PortalManager.teleportToWaystone`, cross-area, loads on
   demand) and consumes it. The deployed gate LOOKS LIKE any activated
   gate: a box of see-through PortalView panels (one per face; pad mesh
   is an empty anchor at gate-center height). The gold tile shows AT the
@@ -553,13 +574,13 @@ instead of "fixing" it.
   `renderPortalsFor`, a neighbor destination's own doors via
   `renderAreaPortals`, hidden again after sampling). Its area is
   RETAINED (`PortalManager.retainArea`) while the gate exists; views
-  retarget when a new cleanser is claimed. One-way, one use; arrival
+  retarget when a new waystone is claimed. One-way, one use; arrival
   fires the
-  cleanser (no tape wipe since 2026-11-23); world state does NOT reset.
+  waystone (no tape wipe since 2026-11-23); world state does NOT reset.
   Taught in IX via `teaches: ["deploy"]` (G keycap HUD hint, retiring
   only when a gate is removed/walked through; while deployed the hint
   wears a 🚫 badge — G means cancel). Aiming requires an active
-  cleanser. See DESIGN.md "The ACTIVE cleanser"
+  waystone. See DESIGN.md "The ACTIVE waystone"
 
 ---
 
@@ -588,4 +609,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-11-23 — the pole: R absorbs a creature into the tape, Space releases it (`core/AbsorbManager`, `entities/PoleLook`, the body shader's suck deformation, `core/CreatureRegistry`); recording, tape playback and the cleanser's tape wipe retired; earlier the same day — an open door's outline is a soft seam in its view panels (blur + fade into the world, main view only, gone before the emerging side shows), no open shell; the cleanser gate's seam leans gold; 2026-11-22 — key hints follow the device in hand (controller glyphs by family: PlayStation, Xbox, Switch, generic; `core/InputDevice`, `core/inputGlyphs`); sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-23 — the designer's pole rulings: the cleanser renamed the WAYSTONE (`cleanser` still loads); R absorbs only a creature in front (40°) and in sight (`core/poleReach`), the reach mark/hint/R on one rule; the world remembers every area's state across pruning (`core/WorldMemory`, was CreatureRegistry); a released creature sings its first note on the press's beat, which replaces clapping (ClapManager, ClapVisual, the C hint, `clapDisplacement` removed); earlier the same day — the pole: R absorbs a creature into the tape, Space releases it (`core/AbsorbManager`, `entities/PoleLook`, the body shader's suck deformation, `core/CreatureRegistry`); recording, tape playback and the waystone's tape wipe retired; earlier the same day — an open door's outline is a soft seam in its view panels (blur + fade into the world, main view only, gone before the emerging side shows), no open shell; the waystone gate's seam leans gold; 2026-11-22 — key hints follow the device in hand (controller glyphs by family: PlayStation, Xbox, Switch, generic; `core/InputDevice`, `core/inputGlyphs`); sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold waystone rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
