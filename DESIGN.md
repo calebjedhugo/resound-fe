@@ -792,8 +792,11 @@ Rulings (designer, 2026-11-22):
   "the updated look for the creatures" in the editor): the level as the game
   draws it, by the game's own modules, with editor cues (cursor, selection,
   links, ranges) drawn over it; V switches to the coloured schematic. A song
-  heard in the editor lights its creature as in game. Play opens the level in
-  the game at its spawn; the pause menu leads back. The editor plays from a
+  heard in the editor lights its creature as in game. Play is one tab
+  (asked for 2026-11-23: "a single tab experience for the preview"): the
+  camera glides to the player's eye at the spawn and the game takes over
+  from that very frame; the pause menu's Back to Editor glides back to
+  exactly where the editor was. The editor plays from a
   controller too ("make it easy to use with the PlayStation controller"):
   `src/editor/CLAUDE.md` has the mapping.
 

@@ -152,22 +152,56 @@ edits show up in the game on a manual reload.
   audition of the song under the cursor (`audio/SongAudition.js`, a Synth;
   also the entity menu's Play Song). Editor audio is audible by design.
 
-## Play (2026-11-23)
+## Play (2026-11-23; one tab: `play/PlayPreview.js`)
 
 - **Play** (toolbar ▶, **Cmd/Ctrl+Enter**, the controller's Options menu)
   = `EditorApp.play()`: refuses (toast) an unnamed puzzle or one with no
-  player spawn; writes the last edit (`_settleAutoSave`); opens
-  `/?puzzle=<id>&from=editor` (`core/playLink`). The game skips the menu,
-  keeps the start gate, starts at the spawn. One named tab
-  (`PLAY_WINDOW_NAME`): a second Play reloads it. With no user activation (a
-  controller press) or a blocked popup it plays in THIS tab, stashing the
-  undo history in sessionStorage (`resound-editor-history`, restored only if
-  the reloaded level is unchanged).
-- **Back to Editor** — the game's pause menu entry (only `from=editor`):
-  a tab the editor opened posts `resound:back-to-editor` to its opener and
-  closes; otherwise it loads `/editor.html?puzzle=<id>`, which the editor
-  opens from disk (then strips the query). It returns to the level Play
-  launched, not the area the player walked to.
+  player spawn; writes the last edit (`_settleAutoSave`); then
+  `PlayPreview.start`. States: `idle → entering → playing → returning →
+  idle` (`preview.state`; `landed`, `gameReady` while entering).
+- **Entering**: the editor stands aside (`_standAside`: keys ignored except
+  Esc = cancel, `EditorGamepad.stop()`, OrbitControls off, audition and song
+  playback stopped, the game look forced, every editor mark hidden —
+  `GameLookLayer.setCuesVisible(false)` + every scene child but the look's
+  root and the lights). The sidebar slides left, the pad legend / HUD /
+  docked song editor fade, and the camera glides (`GLIDE_MS` 1 s, eased,
+  across then down: `play/glide.js`) to the eye at the spawn with the
+  game's lens: `core/playerView` (`spawnEye`, `viewQuaternion`, `START_YAW/
+  PITCH`) and `EYE_HEIGHT` / `VIEW_FOV/NEAR/FAR` in `core/constants` — the
+  same numbers the game reads. Editor coordinates = game + `GAME_OFFSET`
+  (half a cell, `viewport/gridUtils`). **The canvas covers the window for
+  the whole preview** (`.play-canvas`, sized once) and the camera's
+  `setViewOffset` keeps the picture centred on the part the sidebar leaves
+  (no per-frame canvas resize); with the sidebar gone it is the game's
+  full-window view. A late frame moves the glide on by at most
+  `MAX_STEP_MS` (it pauses, never jumps).
+- **The game** loads unseen in a same-origin iframe over everything
+  (`.play-frame`, `allow="autoplay; gamepad"`, `/?puzzle=<id>&from=editor`).
+  Same origin = the SAME main thread, so the protocol (`core/playLink`)
+  keeps the game's heavy work off the glide: WAITING (game listening) →
+  LANDED (editor: camera still at the eye; carries the editor's sky clock,
+  `environmentClock`) → the game builds and draws behind its VEILED start
+  gate (world held, gate unseen, pad off) → READY (its first frame is
+  painted, with its own eye pose; the editor settles onto it if it
+  differs) → 150 ms cross-fade → GO (iframe focused; the game takes the
+  pad, `Gamepad.setActive(true)` latching held buttons; its gate lifts at
+  once if audio can run, else shows as at any level start). A game slower
+  than the glide: the camera holds at the eye, look frozen, small gold ring
+  (`.play-loading`). FAILED / no READY 20 s after landing / Esc: toast,
+  glide home. Messages are taken only from the iframe's own window.
+- **Playing**: the editor draws nothing (`frame()` → no draw).
+- **Back to Editor** (pause menu, or Cmd/Ctrl+Enter in the game): the game
+  holds still with its menu hidden, mutes its master gain, gives up the pad,
+  and posts BACK `{areaId, pose, sky}`. The editor draws that view (only if
+  `areaId` is the edited level; else the spawn's), fades the iframe out,
+  REMOVES it (its AudioContext closes, rAF and pad polling end with the
+  document: a fresh game every Play), glides home to the exact saved
+  camera (position, quaternion, fov, near, far, orbit target) while the
+  sidebar slides back, then `_comeBack` restores look, marks, focus,
+  controls and `EditorGamepad.start()` (a button still held is latched: no
+  press). Selection, panels, cursor and undo history never left.
+- A game opened by itself with `from=editor` (no editor around it): Back to
+  Editor loads `/editor.html?puzzle=<id>`, which the editor opens from disk.
 
 ## Controller (2026-11-23; `input/EditorGamepad.js`)
 
@@ -207,9 +241,11 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
   duration, □ delete, L1/R1 longer/shorter duration, △ play/stop, L2 dot,
   R2 rest, Options sharp→flat→natural, Share other staff, ○ close.
 - **Menus** (ContextMenu): d-pad ↑/↓, ✕ choose, ○ close.
-- Caveats: a pad press is no user activation, so Play from the pad plays in
-  the editor's tab, and audio stays locked until a real key/click; window
-  prompts/confirms (link by id, deletes) need the keyboard/mouse.
+- Caveats: a pad press is no user activation: a Play from the pad starts
+  the game's audio only if the browser allows it (the editor page was
+  clicked/keyed before), else the game's normal start gate asks for a key
+  or click; window prompts/confirms (link by id, deletes) need the
+  keyboard/mouse.
 
 ## Portal links (cross-puzzle gate links)
 
