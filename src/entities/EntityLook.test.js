@@ -1,9 +1,10 @@
 /**
  * The entities' look (entities/EntityLook, DESIGN.md "Entity look"): a
- * sealed gate lights only its outline from the eye; an open gate glows only
- * on the opening the player looks into — its NEAR face, the one walking in
- * crosses — and only in the main view: never on its other faces, never on a
- * gate seen through a door or the cleanser gate.
+ * closed gate lights every edge of its faces toward the eye ("normal
+ * corners"); an open door's ripple follows only the portal's outline from
+ * the eye, a band just inside it with the way through untouched, and only
+ * in the main view: never on a gate seen through a door or the cleanser
+ * gate.
  */
 import * as THREE from 'three';
 import gameState from 'core/GameState';
@@ -11,19 +12,9 @@ import PortalManager from 'core/PortalManager';
 import DeployManager from 'core/DeployManager';
 import { renderMainView } from 'core/passContext';
 import { WORLD_SCALE } from 'core/constants';
-import { looksInto, outlineAt } from 'entities/EntityLook';
+import { edgeShown, portalBandAt } from 'entities/EntityLook';
 
-const FACES = {
-  north: { x: 0, z: -1 },
-  south: { x: 0, z: 1 },
-  east: { x: 1, z: 0 },
-  west: { x: -1, z: 0 },
-};
-const centre = { x: 0, z: 0 };
-const facesLookedInto = (eye) =>
-  Object.keys(FACES).filter((face) => looksInto(eye, centre, FACES[face]));
-
-// A sealed gate's box: its six faces' outward normals
+// A gate's box: its six faces' outward normals
 const SIDES = {
   east: { x: 1, y: 0, z: 0 },
   west: { x: -1, y: 0, z: 0 },
@@ -40,11 +31,11 @@ const offset = (eye, normal) =>
   normal.z * (eye.z - gateCentre.z);
 
 /**
- * How much each edge of the gate lights from `eye`, by its two faces'
- * names: only faces toward the eye are drawn (back faces are culled), each
- * lighting its edges by outlineAt at their midpoints.
+ * How much each edge of the gate lights from `eye`, closed or `open`, by
+ * its two faces' names: only faces toward the eye are drawn (back faces are
+ * culled), each lighting its edges by edgeShown at their midpoints.
  */
-function edgesLit(eye) {
+function edgesLit(eye, open) {
   const lit = {};
   for (const [name, normal] of Object.entries(SIDES)) {
     if (offset(eye, normal) <= GATE_HALF) continue; // eslint-disable-line no-continue
@@ -58,39 +49,83 @@ function edgesLit(eye) {
         z: gateCentre.z + (normal.z + across.z) * GATE_HALF,
       };
       const key = [name, acrossName].sort().join('|');
-      lit[key] = Math.max(lit[key] || 0, outlineAt(eye, gateCentre, mid, across));
+      lit[key] = Math.max(lit[key] || 0, edgeShown(open, eye, gateCentre, mid, across));
     }
   }
   return lit;
 }
-const outline = (eye) => {
-  const lit = edgesLit(eye);
+const shownEdges = (eye, open) => {
+  const lit = edgesLit(eye, open);
   return Object.keys(lit)
     .filter((key) => lit[key] > 0.5)
     .sort();
 };
 
-describe('A sealed gate lights only its outline from the eye', () => {
-  it('facing a panel squarely: only its four edges, a square', () => {
-    expect(outline({ x: 0.4, y: 1.8, z: 10 })).toEqual(
+const HEAD_ON = { x: 0.4, y: 1.8, z: 10 };
+const CORNER = { x: 8, y: 1.8, z: 7 };
+const ABOVE = { x: 0.4, y: 7, z: 10 };
+
+describe('A closed gate lights normal corners: every edge of its faces toward the eye', () => {
+  it('facing a panel squarely: its four edges', () => {
+    expect(shownEdges(HEAD_ON, false)).toEqual(
       ['east|south', 'south|top', 'bottom|south', 'south|west'].sort()
     );
   });
 
-  it('off a corner: the line between the two faces seen is gone', () => {
-    const lit = outline({ x: 8, y: 1.8, z: 7 });
+  it('off a corner: both faces whole, the corner line between them too', () => {
+    const lit = shownEdges(CORNER, false);
+    expect(lit).toHaveLength(7);
+    expect(lit).toContain('east|south');
+  });
+
+  it('from above: the top and the face seen, the edge between them too', () => {
+    const lit = shownEdges(ABOVE, false);
+    expect(lit).toHaveLength(7);
+    expect(lit).toContain('south|top');
+  });
+});
+
+describe("An open door's ripple follows the portal's outline from the eye", () => {
+  it("facing it squarely: only the near face's four edges, a square", () => {
+    expect(shownEdges(HEAD_ON, true)).toEqual(
+      ['east|south', 'south|top', 'bottom|south', 'south|west'].sort()
+    );
+  });
+
+  it('off a corner: the outer outline, no line between the two faces seen', () => {
+    const lit = shownEdges(CORNER, true);
     expect(lit).toHaveLength(6);
     expect(lit).not.toContain('east|south');
   });
 
-  it('from above: the edge between the top and the face seen is gone', () => {
-    expect(outline({ x: 0.4, y: 7, z: 10 })).toEqual(
+  it('from above: the edge between the top and the face seen is hidden', () => {
+    expect(shownEdges(ABOVE, true)).toEqual(
       ['bottom|south', 'east|south', 'south|west', 'east|top', 'top|west', 'north|top'].sort()
     );
   });
 
+  it('its band sits just inside the outline; the way through is untouched', () => {
+    const { south } = SIDES;
+    const onSouth = (x, y) => ({ x, y: gateCentre.y + y, z: GATE_HALF });
+    // Head-on: at every edge of the near face, nowhere in its middle
+    expect(portalBandAt(HEAD_ON, gateCentre, onSouth(0, GATE_HALF - 0.02), south)).toBeGreaterThan(
+      0.9
+    );
+    expect(portalBandAt(HEAD_ON, gateCentre, onSouth(GATE_HALF - 0.02, 0), south)).toBeGreaterThan(
+      0.9
+    );
+    expect(portalBandAt(HEAD_ON, gateCentre, onSouth(0, 0), south)).toBe(0);
+    expect(portalBandAt(HEAD_ON, gateCentre, onSouth(0, GATE_HALF - 0.3), south)).toBe(0);
+    // Off a corner: none along the corner line (only near the outline's
+    // own edges where they meet it)
+    expect(portalBandAt(CORNER, gateCentre, onSouth(GATE_HALF - 0.02, 0), south)).toBe(0);
+    expect(portalBandAt(CORNER, gateCentre, onSouth(-GATE_HALF + 0.02, 0), south)).toBeGreaterThan(
+      0.9
+    );
+  });
+
   it('walking round a corner, its line fades out without popping', () => {
-    const corner = (x) => edgesLit({ x, y: 1.8, z: 10 })['east|south'] || 0;
+    const corner = (x) => edgesLit({ x, y: 1.8, z: 10 }, true)['east|south'] || 0;
     expect(corner(0)).toBe(1);
     expect(corner(4)).toBe(0);
     for (let x = 0; x < 4; x += 0.02) {
@@ -117,46 +152,11 @@ function recordingRenderer(frames) {
   };
 }
 
-describe('An open gate glows on the opening the player looks into', () => {
+describe('An open frame draws in the main view only', () => {
   afterEach(() => {
     DeployManager.reset();
     PortalManager.reset();
     delete global.fetch;
-  });
-
-  it('the one face toward the eye: never the others, never two at once', () => {
-    expect(facesLookedInto({ x: 0.5, z: 6 })).toEqual(['south']);
-    expect(facesLookedInto({ x: -7, z: 2 })).toEqual(['west']);
-    // Off a corner, the face the eye is further out from
-    expect(facesLookedInto({ x: 5, z: -4 })).toEqual(['east']);
-    expect(facesLookedInto({ x: 4, z: -5 })).toEqual(['north']);
-    // Exactly on the diagonal still one face
-    expect(facesLookedInto({ x: 3, z: 3 })).toHaveLength(1);
-  });
-
-  it('its NEAR face: the one a walk into the gate crosses to enter the cell', () => {
-    // A door commits its crossing on entering the gate's cell (PortalManager)
-    const half = WORLD_SCALE / 2;
-    const enteredThrough = (eye) => {
-      for (let t = 0; t <= 1; t += 0.001) {
-        const x = eye.x * (1 - t);
-        const z = eye.z * (1 - t);
-        if (Math.abs(x) < half && Math.abs(z) < half) {
-          return Math.abs(Math.abs(x) - half) < Math.abs(Math.abs(z) - half)
-            ? (x > 0 && 'east') || 'west'
-            : (z > 0 && 'south') || 'north';
-        }
-      }
-      return null;
-    };
-    for (const eye of [
-      { x: 1, z: 12 },
-      { x: -9, z: 2 },
-      { x: 5, z: -4 },
-      { x: 4, z: -5 },
-    ]) {
-      expect(facesLookedInto(eye)).toEqual([enteredThrough(eye)]);
-    }
   });
 
   it('in the main view only: every door pass draws no frame at all', () => {

@@ -139,9 +139,8 @@ automated playtesters can observe them.)
     transparency. The red mismatch flash still lands on the CLOSED look.
     (2026-11-22, designer request: an open gate glows "in motion, like a
     rippling portal" — doors only (a plain gate stays an empty opening),
-    only on the near opening the player looks into,
-    in the main view, the way through completely clear. See "Entity
-    look".)
+    only around the portal's silhouette from the eye, in the main view,
+    the way through completely clear. See "Entity look".)
   - The notation **stays displayed forever**; there is still no permanent
     `isActivated` on gates.
     Fountains are unchanged (latch on the exact full match). Re-crossing a
@@ -517,54 +516,59 @@ entity TYPES, not for any level. Visual only.
 - **Gates: dark glass with electric edges.** A sealed gate is a slab of
   near-black glass (darker at the foot, faint veils deep inside that shift
   with the eye, glossier than the walls: the horizon on its faces at a
-  glance), its OUTLINE from the eye drawn in pale electric light with a
-  slow shimmer, a faint engraved border inset where the staff sits. Walls
-  have only a top rim, so a gate never reads as wall. Lit by its area's
-  singing creatures like the walls. Its outline, then its states:
-  - **Outline only** (designer, 2026-11-22: "only the outline of the
-    aggregate visible outline should be visible. So I should see a square
-    only when facing a panel directly. When looking at a corner, that
-    corner line should not be visible"): an edge lights only where one of
-    its two faces turns toward the eye and the other away. Facing a panel
-    squarely: its four edges, a square; off a corner: the line between the
-    two faces seen is gone (a hexagon); from above: the top's edge with a
-    face seen is gone too. It fades out over a few degrees as the face
-    across turns past edge-on, so walking round a corner never pops it.
-    Each pass's own eye decides (a gate seen through a door: that door
-    pass's eye). Glow, charge, lockout red and flash ride the outline
-    alone, in every closed state (`EntityLook.outlineAt`, twin of its
-    GLSL). The engraved border stays on every face: it is the staff's
-    inset, a surface mark, never a corner line.
+  glance), its edges drawn in pale electric light with a slow shimmer, a
+  faint engraved border inset where the staff sits. Walls have only a top
+  rim, so a gate never reads as wall. Lit by its area's singing creatures
+  like the walls. Its edges, then its states:
+  - **Normal corners while closed** (designer, 2026-11-22: "There should
+    be the silhouette when the portal is open and normal corners when it's
+    closed"): every edge of every face toward the eye lights — off a
+    corner, the line between the two faces seen too; back edges never show
+    (back faces are culled). Glow, charge, lockout red and flash ride
+    those edges in every closed state, never thinner than about a pixel.
+    The engraved border stays on every face: it is the staff's inset, a
+    surface mark. (The silhouette belongs to the open portal, below —
+    never to a closed gate.)
   - **Being sung toward**: the slab fades with the song (ruled
     2026-07-10, unchanged) while its edges CHARGE from the floor up with
     the song's progress — dim above the charge, bright below, a hot front
-    riding it — the outline holding on until the song ends.
-  - **Wrong note (lockout)**: slab and outline flood red, decaying over the
+    riding it — the edges holding on until the song ends.
+  - **Wrong note (lockout)**: slab and edges flood red, decaying over the
     lockout (`Gate.lockoutGlow`). Red is the gate's own meaning; it shows
     only on the closed look.
-  - **Open**: no slab. Only the opening the player is looking INTO glows,
-    and only in the main view (designer: "The only part of the gate that
-    should have the glow is the part you are looking into. Any part of the
-    gate seen through the gate should not have the border around it"; and
-    "transport actually happens when you walk through the part of the gate
-    that is closest to you. That's what should be glowing"): the gate's
-    NEAR face, the one a walk in crosses (a door commits its crossing on
-    entering the cell) — the one face whose outward axis is the eye's
-    dominant offset from the gate's centre (`EntityLook.looksInto`, twin of
-    its GLSL). It keeps a rippling frame: its edge line and light rippling
-    in over a thin band (~0.22) at its edges, nothing over the way through,
-    no depth written — on DOORS only: an open plain gate draws nothing
-    (ruled 2026-11-22, below). It is the door's own shell, drawn by the main view
-    alone (`passContext.showInMainViewOnly`): its other faces, and every
-    gate seen inside a door view, a door-in-a-door or the cleanser gate,
-    draw no border — door passes skip it outright. A door's view panels
-    (at the back of the cell) are plain: the view is untouched.
+  - **Open: the portal's silhouette ripples.** No slab. The glow follows
+    the open portal's OUTLINE as seen from the eye — the aggregate visible
+    outline of the door's box (designer, 2026-11-22: "There should be the
+    silhouette when the portal is open"; earlier: "only the outline of the
+    aggregate visible outline should be visible. So I should see a square
+    only when facing a panel directly. When looking at a corner, that
+    corner line should not be visible"). An edge is on it where one of its
+    two faces turns toward the eye and the other away: head-on, the near
+    face's four edges (a square); off a corner, the outer outline (a
+    hexagon) with no line between the two faces seen; from above, the edge
+    between the top and the face seen is hidden too. An edge fades over a
+    few degrees as the face across it turns past edge-on, so walking round
+    never pops it (`EntityLook.outlineAt` / `edgeShown`, twins of the
+    GLSL). The edge line and light rippling in over a thin band (~0.22)
+    just inside that outline, on the faces toward the eye
+    (`EntityLook.portalBandAt`); everything else on those faces draws
+    nothing, no depth written ("Direct view into the portal should be
+    completely unobstructed. The ripple should only be around the edges").
+    In the main view only ("Any part of the gate seen through the gate
+    should not have the border around it"): it is the door's own shell,
+    drawn by the main view alone (`passContext.showInMainViewOnly`), so
+    every gate seen inside a door view, a door-in-a-door or the cleanser
+    gate draws no border — door passes skip it outright. On DOORS only: an
+    open plain gate draws nothing (ruled 2026-11-22, below). A door's view
+    panels (at the back of the cell) are plain: the view is untouched.
+    (This replaced a frame on the NEAR face alone, which off a corner
+    poked over a wall as a stray triangle.)
   - **Linked vs plain**: identical while closed ("A closed linked gate
     looks like any closed gate", ruled 2026-07-06, reaffirmed 2026-11-22);
-    open, a door shows its view and rippling near face, a plain gate is an
-    empty opening.
-  - **The deployed cleanser gate**: the same frame in GOLD on the face you
-    step through — it leads to the gold tile (same rules: one face, main
+    open, a door shows its view and rippling silhouette, a plain gate is
+    an empty opening.
+  - **The deployed cleanser gate**: the same frame in GOLD — it is a
+    portal, so the same silhouette rule — leading to the gold tile (main
     view only; `EntityLook.createOpenFrame`).
 - **Ramps**: a wedge of the storeys' slate (one shared geometry, posts
   included: one draw a ramp). Chevrons point UP the slope and crawl slowly
@@ -592,9 +596,9 @@ Rulings (designer, 2026-11-22):
 
 - **Only doors ripple.** An open PLAIN gate has no frame and no glow: an
   empty opening, its floating staff the only cue (no other cue added — the
-  missing slab and the clear cell read as open). Doors keep the near-face
-  ripple; the deployed cleanser gate keeps its gold near-face frame (it is
-  a portal).
+  missing slab and the clear cell read as open). Doors keep the ripple
+  (now on their silhouette); the deployed cleanser gate keeps its gold
+  frame (it is a portal: silhouette too).
 - **Cleansers are pale, the active one gold** (replacing "the rest stay
   cyan") — fine.
 - **The cleanser's gold matching the key hints' gold labels** — fine.

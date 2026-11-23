@@ -366,10 +366,12 @@ instead of "fixing" it.
   shell at all (ruled 2026-11-22: only doors ripple). **An open door's shell is its
   rippling frame, drawn ONLY by the main view** (`showOpenFrame` →
   `passContext.showInMainViewOnly`: `renderMainView` shows those materials
-  for its own render, every other pass skips them) **and ONLY on the face
-  the player looks into** — the NEAR face, where walking in crosses
-  (`looksInto` + its GLSL twin — change both); a thin band at its edges,
-  never over the way through, no depth. Door view panels are plain
+  for its own render, every other pass skips them) **and ONLY around the
+  portal's silhouette from the eye** (an edge where one face turns toward
+  the eye and the other away: `outlineAt`/`edgeShown`/`portalBandAt` + their
+  GLSL twins — change both); a thin band just inside it, never over the way
+  through, no depth. A CLOSED gate lights every edge of its faces toward
+  the eye ("normal corners"). Door view panels are plain
   (PortalView's MeshBasicMaterial + `showStoredTexels`). The deployed
   cleanser gate gets a gold frame of its own (`createOpenFrame`, freed by
   `releaseOpenFrame` in `CleanserGatePad.dispose`). Ramps share ONE geometry

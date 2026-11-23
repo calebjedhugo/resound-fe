@@ -9,19 +9,17 @@
  * the gold of the ACTIVE cleanser (and of the deployed gate that leads to
  * it).
  *
- * - GATE: a slab of dark glass, its OUTLINE from the eye drawn in pale
- *   electric light (an edge lights only where one of its faces turns toward
- *   the eye and the other away: outlineAt), a faint engraved border inset
- *   where the staff sits on its pale halo. A correct performance fades the
- *   slab (Gate) while its outline CHARGES from the floor up with the song's
+ * - GATE: a slab of dark glass, every edge of its faces toward the eye
+ *   drawn in pale electric light, a faint engraved border inset where the
+ *   staff sits on its pale halo. A correct performance fades the slab
+ *   (Gate) while its edges CHARGE from the floor up with the song's
  *   progress, a hot front riding the charge; a wrong note floods it red for
- *   the lockout. An open gate
- *   has no slab: only the face the player looks into — the NEAR face, the
- *   one they cross by walking in (PortalManager commits on entering the
- *   cell) — keeps a rippling frame, a thin band at its edges with nothing
- *   over the way through, and only in the main view (looksInto,
- *   showOpenFrame). A door's view panels stay plain. The deployed cleanser
- *   gate has a gold frame of its own (createOpenFrame).
+ *   the lockout. An open door has no slab: only the open portal's OUTLINE
+ *   from the eye (an edge on it where one of its faces turns toward the eye
+ *   and the other away: outlineAt) keeps a rippling frame, a thin band just
+ *   inside it with nothing over the way through, and only in the main view
+ *   (showOpenFrame). A door's view panels stay plain. The deployed cleanser
+ *   gate has a gold frame of its own, by the same rule (createOpenFrame).
  * - RAMP: a wedge of the storeys' slate; chevrons crawl slowly UP its slope
  *   (the way up, at a glance) between pale side lines (its drops, like a
  *   storey's cliff edge); pale posts mark its top edge from up on the
@@ -68,60 +66,33 @@ function displayColour(hex) {
   return colour;
 }
 
-// ---- The opening the player looks into --------------------------------------
-//
-// An open gate glows only on the face the player is looking INTO, and only
-// in the main view: never on its other faces, never on a gate seen through
-// a door (designer, 2026-11-22: "The only part of the gate that should have
-// the glow is the part you are looking into. Any part of the gate seen
-// through the gate should not have the border around it"). The face looked
-// into is the one whose outward axis is the eye's dominant offset from the
-// gate's centre, on the eye's side — one face at a time (x wins a tie).
-
-/**
- * Is the eye looking into the gate face with this outward normal? (The
- * twin of LOOKS_INTO_GLSL — change both.)
- * @param {{x: number, z: number}} eye
- * @param {{x: number, z: number}} centre - the gate's centre
- * @param {{x: number, z: number}} outward - the face's unit normal
- * @returns {boolean}
- */
-export function looksInto(eye, centre, outward) {
-  const ex = eye.x - centre.x;
-  const ez = eye.z - centre.z;
-  if (Math.abs(outward.x) > 0.5) return Math.abs(ex) >= Math.abs(ez) && ex * outward.x > 0;
-  if (Math.abs(outward.z) > 0.5) return Math.abs(ez) > Math.abs(ex) && ez * outward.z > 0;
-  return false;
-}
-
-const LOOKS_INTO_GLSL = /* glsl */ `
-  bool looksInto(vec3 eye, vec3 centre, vec3 outward) {
-    vec2 e = eye.xz - centre.xz;
-    if (abs(outward.x) > 0.5) return abs(e.x) >= abs(e.y) && e.x * outward.x > 0.0;
-    if (abs(outward.z) > 0.5) return abs(e.y) > abs(e.x) && e.y * outward.z > 0.0;
-    return false;
-  }
-`;
-
 // ---- Gate -----------------------------------------------------------------
 
 // A gate box is WORLD_SCALE on every side, centred on its mesh
 const GATE_HALF = WORLD_SCALE / 2;
 
-// ---- A sealed gate's outline ----------------------------------------------
+// ---- Which edges light ------------------------------------------------------
 //
-// A sealed gate lights only its OUTLINE from the eye, never an edge inside
-// it (designer, 2026-11-22: "I should see a square only when facing a panel
-// directly. When looking at a corner, that corner line should not be
+// A CLOSED gate lights every edge of each face it turns toward the eye —
+// "normal corners" (designer, 2026-11-22: "There should be the silhouette
+// when the portal is open and normal corners when it's closed"); its back
+// edges never show (back faces are culled).
+//
+// An OPEN portal lights only its OUTLINE from the eye, never an edge inside
+// it (designer, 2026-11-22: "only the outline of the aggregate visible
+// outline should be visible. So I should see a square only when facing a
+// panel directly. When looking at a corner, that corner line should not be
 // visible"): an edge glows only where one of its two faces turns toward the
-// eye and the other away. Any face drawn turns toward the eye (back faces
-// are culled), so its edge is on the outline when the face ACROSS that edge
-// turns away. The line fades out as that face turns past edge-on toward the
-// eye, over OUTLINE_FADE of the cosine, so walking round a corner never
-// pops it. Each pass's own eye decides (three's cameraPosition: a door
-// pass's is its mapped eye).
+// eye and the other away. Any face drawn turns toward the eye, so its edge
+// is on the outline when the face ACROSS that edge turns away. The line
+// fades out as that face turns past edge-on toward the eye, over
+// OUTLINE_FADE of the cosine, so walking round a corner never pops it.
+// Each pass's own eye decides (three's cameraPosition), though an open
+// frame draws in the main view only.
 
 const OUTLINE_FADE = 0.08;
+// How far in from the outline an open portal's rippling band reaches
+const PORTAL_BAND = 0.22;
 
 /**
  * How much a gate edge shows, at `point` on it, on a face turned toward the
@@ -142,6 +113,48 @@ export function outlineAt(eye, centre, point, across) {
   const turned = (out - GATE_HALF) / Math.hypot(eye.x - point.x, eye.y - point.y, eye.z - point.z);
   const t = Math.min(1, Math.max(0, turned / OUTLINE_FADE));
   return 1 - t * t * (3 - 2 * t);
+}
+
+/**
+ * How much a gate edge shows, at `point` on it, on a face turned toward the
+ * eye: closed, every such edge; open, only the portal's outline
+ * (outlineAt). (The twin of the shader's `shown` — change both.)
+ * @param {boolean} open
+ * @param {{x: number, y: number, z: number}} eye
+ * @param {{x: number, y: number, z: number}} centre - the gate's centre
+ * @param {{x: number, y: number, z: number}} point - on the edge
+ * @param {{x: number, y: number, z: number}} across - a unit box axis
+ * @returns {number}
+ */
+export function edgeShown(open, eye, centre, point, across) {
+  return open ? outlineAt(eye, centre, point, across) : 1;
+}
+
+const AXES = ['x', 'y', 'z'];
+
+/**
+ * How much of an open portal's rippling band covers `point`, on its face
+ * with outward unit normal `normal` turned toward the eye: full at the
+ * portal's outline, gone PORTAL_BAND in from it — so nothing over the way
+ * through, and nothing along an edge inside the outline. Before the
+ * ripple. (The twin of the shader's `bands` — change both.)
+ * @param {{x: number, y: number, z: number}} eye
+ * @param {{x: number, y: number, z: number}} centre - the gate's centre
+ * @param {{x: number, y: number, z: number}} point - on the face
+ * @param {{x: number, y: number, z: number}} normal - a unit box axis
+ * @returns {number}
+ */
+export function portalBandAt(eye, centre, point, normal) {
+  let band = 0;
+  for (const axis of AXES) {
+    if (Math.abs(normal[axis]) < 0.5) {
+      const local = point[axis] - centre[axis];
+      const across = { x: 0, y: 0, z: 0, [axis]: Math.sign(local) };
+      const t = Math.min(1, Math.max(0, (GATE_HALF - Math.abs(local)) / PORTAL_BAND));
+      band = Math.max(band, outlineAt(eye, centre, point, across) * (1 - t * t * (3 - 2 * t)));
+    }
+  }
+  return band;
 }
 
 // For all three axes at once: of a point on a face, how much the edge
@@ -194,7 +207,6 @@ const GATE_FRAGMENT = /* glsl */ `
   ${KEY_GLSL}
   ${LIGHT_GLSL}
   ${FINISH_GLSL}
-  ${LOOKS_INTO_GLSL}
   ${OUTLINE_GLSL}
 
   // An edge line, \`dist\` from it: never thinner than about a pixel (no
@@ -216,27 +228,29 @@ const GATE_FRAGMENT = /* glsl */ `
     float edge = d.x + d.y + d.z - min(d.x, min(d.y, d.z)) - max(d.x, max(d.y, d.z));
     float h = vLocal.y / ${(2 * GATE_HALF).toFixed(2)} + 0.5;
     float fw = fwidth(edge);
-    float line = edgeLine(edge);
-    // A sealed gate's lines: only its outline from this eye (outlineAt),
-    // each edge on its own so a corner of the outline stays whole
-    vec3 shown = outlineAt(cameraPosition, vCentre, vWorld, vLocal) * (1.0 - abs(n));
+    // Which of this face's edges light, each on its own so a corner stays
+    // whole: every one while closed, only the portal's outline from this
+    // eye once open (outlineAt; edgeShown is the twin)
+    vec3 shown = (1.0 - abs(n)) *
+      (uOpen > 0.5 ? outlineAt(cameraPosition, vCentre, vWorld, vLocal) : vec3(1.0));
     vec3 lines = shown * vec3(edgeLine(d.x), edgeLine(d.y), edgeLine(d.z));
     vec3 near = shown * exp(-d * 14.0);
-    float outline = max(lines.x, max(lines.y, lines.z));
+    float lit = max(lines.x, max(lines.y, lines.z));
     float shimmer = 0.85 + 0.15 * sin(uEnvTime * 2.3 + (vLocal.x + vLocal.y + vLocal.z) * 2.1);
 
     vec3 col;
     float alpha;
     if (uOpen > 0.5) {
-      // Open: no slab — only the face the player looks into (the near one:
-      // where walking in crosses) keeps a frame and light rippling in from
-      // it over a thin band at its edges (nothing past it: the way through
-      // is clear). Drawn in the main view only (showOpenFrame)
-      float looked = looksInto(cameraPosition, vCentre, n) ? 1.0 : 0.0;
-      float band = 1.0 - smoothstep(0.0, 0.22, edge);
-      float ripple = 0.5 + 0.5 * sin(edge * 30.0 - uEnvTime * 3.0 + sin(h * 9.0 + uEnvTime * 1.3) * 1.2);
+      // Open: no slab — only the portal's outline keeps a frame, and light
+      // rippling in from it over a thin band (nothing past it: the way
+      // through is clear; portalBandAt is the twin). Drawn in the main view
+      // only (showOpenFrame)
+      vec3 bands = shown * (1.0 - smoothstep(0.0, ${PORTAL_BAND.toFixed(2)}, d));
+      vec3 ripples = 0.5 + 0.5 * sin(d * 30.0 - uEnvTime * 3.0 + sin(h * 9.0 + uEnvTime * 1.3) * 1.2);
+      vec3 glow = bands * bands * (0.15 + 0.45 * ripples);
+      float ripple = dot(ripples, bands) / max(bands.x + bands.y + bands.z, 0.001);
       col = uGlow * (0.7 + 0.5 * ripple) * shimmer;
-      alpha = looked * max(line * 0.9, band * band * (0.15 + 0.45 * ripple));
+      alpha = max(lit * 0.9, max(glow.x, max(glow.y, glow.z)));
     } else {
       // Dark glass, darker at the foot, with faint veils deep inside that
       // shift as the eye moves
@@ -254,7 +268,7 @@ const GATE_FRAGMENT = /* glsl */ `
       float inset = 1.0 - smoothstep(0.012, 0.012 + fw, abs(edge - 0.2));
       col += GATE_EDGE * inset * 0.1 * (1.0 - smoothstep(0.02, 0.06, fw));
 
-      // The outline: pale electric light, CHARGING from the floor up as a
+      // The edges: pale electric light, CHARGING from the floor up as a
       // correct performance goes on, a hot front riding the charge
       float sung = step(0.001, uProgress);
       float charged = sung * (1.0 - smoothstep(uProgress - 0.02, uProgress + 0.02, h));
@@ -267,9 +281,9 @@ const GATE_FRAGMENT = /* glsl */ `
       col = mix(col, LOCKOUT * (0.3 + 0.3 * h), uLockout * 0.6);
       // ...glowing faintly onto the glass beside them
       col += edgeCol * max(near.x, max(near.y, near.z)) * 0.12 * (1.0 - uLockout * 0.5);
-      col = mix(col, edgeCol, clamp(outline, 0.0, 1.0));
-      // The slab fades with the song; its outline holds on until it ends
-      alpha = max(uOpacity, outline * (1.0 - uProgress * uProgress * uProgress));
+      col = mix(col, edgeCol, clamp(lit, 0.0, 1.0));
+      // The slab fades with the song; its edges hold on until it ends
+      alpha = max(uOpacity, lit * (1.0 - uProgress * uProgress * uProgress));
     }
     gl_FragColor = vec4(finish(col, creatureLight(vWorld, n) * 1.2).rgb, alpha);
   }
@@ -321,8 +335,8 @@ export function showOpenFrame(material, open) {
 
 /**
  * A rippling open frame standing alone — the deployed cleanser gate's (it
- * has no slab): a gate box whose material shows only the face the player
- * looks into, in the main view. Its material is its own: free it with
+ * has no slab): a gate box whose material shows only the portal's outline
+ * from the eye, in the main view. Its material is its own: free it with
  * releaseOpenFrame.
  * @param {number} [glow] - sRGB hex
  * @returns {THREE.Mesh}
