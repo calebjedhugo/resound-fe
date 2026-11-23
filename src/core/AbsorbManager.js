@@ -367,7 +367,8 @@ class AbsorbManager {
       }
     }
     // ...and the way there (no reaching through a wall's corner)
-    for (const f of [1 / 3, 2 / 3]) {
+    for (let third = 1; third <= 2; third += 1) {
+      const f = third / 3;
       const cell = grid.worldToGrid(
         position.x + dx * RELEASE_DISTANCE * f,
         position.z + dz * RELEASE_DISTANCE * f
