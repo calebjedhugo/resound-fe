@@ -1184,8 +1184,9 @@ rulings, in the designer's words where it matters:
   (5) moved creatures resetting on a rebuild — no: the world forgets
   nothing. Still open: (6) the POC levels were built around recording
   (and VIII around clapping), so their solutions no longer hold (they are
-  being replaced); the editor's solvability validator still reasons about
-  recorded pitches.
+  being replaced) — the designer confirmed 2026-11-23 that this is
+  expected. The editor's validator was reworded the same day (creatures
+  are the only singers).
 - **New with the 2026-11-23 rulings, for the designer:** (a) the sightline
   runs to the creature's CENTRE: a creature half hidden by a wall's corner
   (its centre behind it) is refused even though half its body shows —
@@ -1194,7 +1195,9 @@ rulings, in the designer's words where it matters:
   beat (0.25 s at the least), so most releases look brisk, and a press in
   the last ~half of a beat sings while still pouring out; (c) a deployed
   waystone gate keeps its area live wherever the player goes (one extra
-  simulated area at most).
+  simulated area at most). RESOLVED 2026-11-23: the designer accepted all
+  three as built — (a) centre sightline stays, (b) singing while still
+  pouring out is fine, (c) the waystone gate keeping its area live is fine.
 - **Cleanser placement beyond area II (2026-07-12).** RESOLVED 2026-11-23:
   nothing clears the strip any more (the cleanser is the waystone), so
   there is nothing to place for tape hygiene.
