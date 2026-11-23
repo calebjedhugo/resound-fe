@@ -9,11 +9,13 @@
  * the gold of the ACTIVE cleanser (and of the deployed gate that leads to
  * it).
  *
- * - GATE: a slab of dark glass, its twelve edges drawn in pale electric
- *   light, a faint engraved border inset where the staff sits on its pale
- *   halo. A correct performance fades the slab (Gate) while its edges
- *   CHARGE from the floor up with the song's progress, a hot front riding
- *   the charge; a wrong note floods it red for the lockout. An open gate
+ * - GATE: a slab of dark glass, its OUTLINE from the eye drawn in pale
+ *   electric light (an edge lights only where one of its faces turns toward
+ *   the eye and the other away: outlineAt), a faint engraved border inset
+ *   where the staff sits on its pale halo. A correct performance fades the
+ *   slab (Gate) while its outline CHARGES from the floor up with the song's
+ *   progress, a hot front riding the charge; a wrong note floods it red for
+ *   the lockout. An open gate
  *   has no slab: only the face the player looks into — the NEAR face, the
  *   one they cross by walking in (PortalManager commits on entering the
  *   cell) — keeps a rippling frame, a thin band at its edges with nothing
@@ -106,6 +108,52 @@ const LOOKS_INTO_GLSL = /* glsl */ `
 // A gate box is WORLD_SCALE on every side, centred on its mesh
 const GATE_HALF = WORLD_SCALE / 2;
 
+// ---- A sealed gate's outline ----------------------------------------------
+//
+// A sealed gate lights only its OUTLINE from the eye, never an edge inside
+// it (designer, 2026-11-22: "I should see a square only when facing a panel
+// directly. When looking at a corner, that corner line should not be
+// visible"): an edge glows only where one of its two faces turns toward the
+// eye and the other away. Any face drawn turns toward the eye (back faces
+// are culled), so its edge is on the outline when the face ACROSS that edge
+// turns away. The line fades out as that face turns past edge-on toward the
+// eye, over OUTLINE_FADE of the cosine, so walking round a corner never
+// pops it. Each pass's own eye decides (three's cameraPosition: a door
+// pass's is its mapped eye).
+
+const OUTLINE_FADE = 0.08;
+
+/**
+ * How much a gate edge shows, at `point` on it, on a face turned toward the
+ * eye: 1 while the face across the edge (outward normal `across`) turns
+ * away — the edge is on the outline — fading to 0 as that face turns toward
+ * the eye. (The twin of OUTLINE_GLSL — change both.)
+ * @param {{x: number, y: number, z: number}} eye
+ * @param {{x: number, y: number, z: number}} centre - the gate's centre
+ * @param {{x: number, y: number, z: number}} point - on the edge
+ * @param {{x: number, y: number, z: number}} across - a unit box axis
+ * @returns {number}
+ */
+export function outlineAt(eye, centre, point, across) {
+  const out =
+    across.x * (eye.x - centre.x) + across.y * (eye.y - centre.y) + across.z * (eye.z - centre.z);
+  // The cosine of the eye's sight of the face across, at the edge (below 0:
+  // it turns away)
+  const turned = (out - GATE_HALF) / Math.hypot(eye.x - point.x, eye.y - point.y, eye.z - point.z);
+  const t = Math.min(1, Math.max(0, turned / OUTLINE_FADE));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+// For all three axes at once: of a point on a face, how much the edge
+// toward each side shows (the face's own axis has no edge: masked by the
+// caller)
+const OUTLINE_GLSL = /* glsl */ `
+  vec3 outlineAt(vec3 eye, vec3 centre, vec3 world, vec3 local) {
+    vec3 turned = (sign(local) * (eye - centre) - ${GATE_HALF.toFixed(2)}) / length(eye - world);
+    return 1.0 - smoothstep(0.0, ${OUTLINE_FADE.toFixed(2)}, turned);
+  }
+`;
+
 const GATE_VERTEX = /* glsl */ `
   varying vec3 vLocal;
   varying vec3 vWorld;
@@ -147,22 +195,34 @@ const GATE_FRAGMENT = /* glsl */ `
   ${LIGHT_GLSL}
   ${FINISH_GLSL}
   ${LOOKS_INTO_GLSL}
+  ${OUTLINE_GLSL}
+
+  // An edge line, \`dist\` from it: never thinner than about a pixel (no
+  // shimmer far off), and no brighter in total for being widened
+  float edgeLine(float dist) {
+    float fw = fwidth(dist);
+    float width = max(0.035, fw * 1.25);
+    return (1.0 - smoothstep(width, width + fw, dist)) * min(1.0, 0.05 / width);
+  }
 
   void main() {
     #include <clipping_planes_fragment>
     vec3 n = normalize(vNormalW);
     vec3 v = normalize(cameraPosition - vWorld);
-    // How far this point of a face is from the face's nearest edge: of the
-    // three distances to the box's sides, the middle one (the least is the
-    // face's own, ~0)
+    // How far this point of a face is from each of the box's sides, and from
+    // the face's nearest edge: the middle one (the least is the face's own,
+    // ~0)
     vec3 d = ${GATE_HALF.toFixed(2)} - abs(vLocal);
     float edge = d.x + d.y + d.z - min(d.x, min(d.y, d.z)) - max(d.x, max(d.y, d.z));
     float h = vLocal.y / ${(2 * GATE_HALF).toFixed(2)} + 0.5;
-    // The edge line: never thinner than about a pixel (no shimmer far off),
-    // and no brighter in total for being widened
     float fw = fwidth(edge);
-    float width = max(0.035, fw * 1.25);
-    float line = (1.0 - smoothstep(width, width + fw, edge)) * min(1.0, 0.05 / width);
+    float line = edgeLine(edge);
+    // A sealed gate's lines: only its outline from this eye (outlineAt),
+    // each edge on its own so a corner of the outline stays whole
+    vec3 shown = outlineAt(cameraPosition, vCentre, vWorld, vLocal) * (1.0 - abs(n));
+    vec3 lines = shown * vec3(edgeLine(d.x), edgeLine(d.y), edgeLine(d.z));
+    vec3 near = shown * exp(-d * 14.0);
+    float outline = max(lines.x, max(lines.y, lines.z));
     float shimmer = 0.85 + 0.15 * sin(uEnvTime * 2.3 + (vLocal.x + vLocal.y + vLocal.z) * 2.1);
 
     vec3 col;
@@ -194,7 +254,7 @@ const GATE_FRAGMENT = /* glsl */ `
       float inset = 1.0 - smoothstep(0.012, 0.012 + fw, abs(edge - 0.2));
       col += GATE_EDGE * inset * 0.1 * (1.0 - smoothstep(0.02, 0.06, fw));
 
-      // The edges: pale electric light, CHARGING from the floor up as a
+      // The outline: pale electric light, CHARGING from the floor up as a
       // correct performance goes on, a hot front riding the charge
       float sung = step(0.001, uProgress);
       float charged = sung * (1.0 - smoothstep(uProgress - 0.02, uProgress + 0.02, h));
@@ -206,10 +266,10 @@ const GATE_FRAGMENT = /* glsl */ `
       edgeCol = mix(edgeCol, LOCKOUT * 1.4, uLockout);
       col = mix(col, LOCKOUT * (0.3 + 0.3 * h), uLockout * 0.6);
       // ...glowing faintly onto the glass beside them
-      col += edgeCol * exp(-edge * 14.0) * 0.12 * (1.0 - uLockout * 0.5);
-      col = mix(col, edgeCol, clamp(line, 0.0, 1.0));
-      // The slab fades with the song; its edges hold on until it ends
-      alpha = max(uOpacity, line * (1.0 - uProgress * uProgress * uProgress));
+      col += edgeCol * max(near.x, max(near.y, near.z)) * 0.12 * (1.0 - uLockout * 0.5);
+      col = mix(col, edgeCol, clamp(outline, 0.0, 1.0));
+      // The slab fades with the song; its outline holds on until it ends
+      alpha = max(uOpacity, outline * (1.0 - uProgress * uProgress * uProgress));
     }
     gl_FragColor = vec4(finish(col, creatureLight(vWorld, n) * 1.2).rgb, alpha);
   }
