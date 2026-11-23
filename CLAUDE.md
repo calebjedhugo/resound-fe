@@ -341,13 +341,37 @@ instead of "fixing" it.
   holds the batch. The floor is ONE merged mesh per area too (`Floor`:
   ground + slabs + cliff-edge lines)
 - **Environment look** (`entities/EnvironmentLook.js`, DESIGN.md
-  "Environment look", DRAFT): sky (one shared mesh per `Area.group`, drawn
-  last among opaques at infinity, a function of view DIRECTION only, its
-  azimuth 4-fold so quarter-turn doors agree), wall + floor shaders lit by
-  `Area.light` (creatures' glow, refreshed in `Area.update`), lightning
-  ticked by main.js `update` (`tickEnvironment`). All unlit ShaderMaterials
-  in DISPLAY values (no output encode), all honour clip planes; a new one
-  needs a `standInMaterials` entry (ShaderPrewarm)
+  "Environment look", APPROVED direction): sky (one shared mesh per
+  `Area.group`, drawn last among opaques at infinity, a function of view
+  DIRECTION only, its azimuth 4-fold so quarter-turn doors agree), wall +
+  floor shaders lit by `Area.light` (creatures' glow, refreshed in
+  `Area.update`; the floor has NO cell grid), lightning and the storm's
+  answer to gate solving ticked by main.js `update`
+  (`tickEnvironment(dt, activeArea)`, `calmStorm()` at world entry). All
+  unlit ShaderMaterials in DISPLAY values (no output encode), all honour
+  clip planes; a new one needs a `standInMaterials` entry (ShaderPrewarm)
+- **The storm answers gate solving** (DESIGN.md): `Gate.solveProgress`
+  (the shell fade) of the active area's gates, the furthest along (nearer
+  counts more), builds `WORLD_UNIFORMS` uStorm/uDeckTime/uStormCol/uStrike
+  — SHARED uniform objects every environment and entity material holds,
+  so every scene and door shows one storm. Its colour is the creatures'
+  (`CreatureLook.harmonyLightInto` of `messiaenColourCached` over
+  `Gate.soundingHeardInto`: the gate's own captured notes still sounding);
+  `Gate.openings` counts openings, each strikes. Keep it 4-fold symmetric
+  and area-independent (no per-gate direction in the sky)
+- **Entity look** (`entities/EntityLook.js`, DESIGN.md "Entity look"):
+  gates are a per-gate unlit ShaderMaterial (`createGateMaterial`: state in
+  uniforms uOpacity/uProgress/uLockout/uOpen, `bindAreaLight` on first
+  update; `Gate.lockoutGlow` reads the red); an open PLAIN gate still
+  draws its shell as a depth-less rippling frame, a door does not (its
+  panels ripple). Door panels use `createDoorwayMaterial` (a ShaderMaterial
+  writing stored texels as they are; `material.map` is an accessor onto its
+  uMap uniform, so PortalView's buffer swap is unchanged; the ripple stays
+  in a `DOORWAY_RIPPLE_BAND` at the edges, NEVER over the view inside;
+  `tintDoorway` = the cleanser gate's gold). Ramps share ONE geometry
+  (wedge + posts) and ONE material, lit per ramp via `onBeforeRender` →
+  `bindRampLight` (uniformsNeedUpdate, like creatures). Cleansers stay
+  MeshStandardMaterial with the shared `CLEANSER_RING_MAP` emissive map
 - **ONE pass context for every scene draw** (`core/passContext.js`; ruled
   2026-10-16). three keys a material's shader program by clip-plane COUNT,
   output colour space, instancing and the scene's lights; a material drawn
@@ -499,4 +523,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-11-22 — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-22 — environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

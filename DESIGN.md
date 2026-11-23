@@ -137,6 +137,10 @@ automated playtesters can observe them.)
     round 4): transparency is the game's vocabulary for "open", for linked
     doors and plain gates alike, so `isOpen` drives collision + full
     transparency. The red mismatch flash still lands on the CLOSED look.
+    (2026-11-22, designer request: an open gate glows "in motion, like a
+    rippling portal" — a plain one keeps only a rippling frame, a door's
+    panels ripple in a band at their edges; the way through stays
+    completely clear. See "Entity look".)
   - The notation **stays displayed forever**; there is still no permanent
     `isActivated` on gates.
     Fountains are unchanged (latch on the exact full match). Re-crossing a
@@ -181,7 +185,7 @@ automated playtesters can observe them.)
     the player walks through it on the way in (trial placement — 2026-07-12).
   - **The ACTIVE cleanser + the deployable cleanser gate** (ruled
     2026-07-18). Stepping on a cleanser makes it the ACTIVE one — it turns
-    GOLD (the rest stay cyan; one active tile world-wide) and becomes the
+    GOLD (the rest stay pale; one active tile world-wide) and becomes the
     destination of the player's deployable gate. "G" cycles: aim (a phantom
     cleanser two tiles ahead along the EFFECTIVE camera heading — mouse
     offset included, so it answers the look as well as the body; free
@@ -358,11 +362,15 @@ forces, recording, matching and audio are untouched.
   is up (`core/ShaderPrewarm`), so the first note and the first open door
   no longer stall on shader compiles (perf pass 2026-10-12).
 
-## Environment look (DRAFT 2026-11-22 — pending designer review)
+## Environment look (APPROVED direction 2026-11-22)
 
-The designer delegated it ("something that complements the creatures");
-this is a first draft to react to (`entities/EnvironmentLook.js`). Visual
-only — collision, elevation, puzzles and audio are untouched.
+The designer delegated it ("something that complements the creatures"),
+reviewed the first pass and approved the direction: **the overall darkness
+is confirmed and the creature glow is approved** ("We're heading in the
+right direction overall"). Later work stays inside it
+(`entities/EnvironmentLook.js`; the entities: "Entity look" below). Visual
+only — collision, elevation, puzzles and audio are untouched. Items still
+DRAFT are marked.
 
 **Concept: the storm the ball lightning was born in, at night.** The
 creatures are the light; the world is the dark around them.
@@ -371,20 +379,64 @@ creatures are the light; the world is the dark around them.
   overhead) over a cold, luminous horizon band; below the horizon (seen
   from high storeys) a dark abyss. Now and then soft sheet lightning
   flickers inside the clouds (1-3 quick pulses every ~9-22 s, cool and
-  low-chroma — atmosphere, never an event).
+  low-chroma — atmosphere, never an event). *(DRAFT: whether the lightning
+  stays, or follows the world's tempo.)*
+- **The storm answers a gate being solved** (designer request 2026-11-22:
+  "The sky should have some sort of interaction with the world. Let's try
+  an interaction when a gate is being solved"; and "The sky interacting
+  with the portals should match the color of the harmony being played at
+  any given moment"). *(DRAFT, for review.)*
+  - **Trigger**: a correct performance under way at a gate in the player's
+    area (`Gate.solveProgress`: the shell's fade, 0..1). The gate that is
+    furthest along drives it, nearer counting more (full within 12 units,
+    down to a third at 36+).
+  - **What it does**: as the song progresses the deck gathers (more of
+    it, heavier) and turns and drifts in faster, the clear eye overhead
+    closes, and sheet lightning comes more often. The deck's thin parts,
+    the rim of the closing eye, the zenith and the horizon glow in the
+    LIGHT of the harmony the gate hears at that moment — its own ear
+    (`Gate.soundingHeardInto`: the notes it captured, by the source's
+    range and through doors, still within their notated length), coloured
+    by `core/messiaenColour` exactly as a creature singing that chord
+    glows (`CreatureLook.harmonyLightInto`: chroma faded in OKLab, a lone
+    note lifted toward pearl). It follows chord changes at the creatures'
+    pace (`HARMONY_COLOUR_TAU`), a first light snapping in as theirs does,
+    and fades back to the neutral storm when the music stops (a rest
+    included). The gate's OPENING strikes: three quick pulses and an
+    afterglow of lightning in that light (a third neutral flash, so a pale
+    lone note still reads) over the sky, the walls' faces, the floor's
+    sheen and glass; then the storm settles. A wrong note ends the
+    performance, so the storm simply settles.
+  - **The one hue exception**: here the sky IS the chord's colour, echoing
+    the music — the same light as the singing creatures, never a competing
+    one. Nothing else in the environment takes a hue.
+  - **Through doors**: one response for the whole world (shared
+    uniforms), so the main view, every door pass, door-in-a-door views and
+    the cleanser gate all show the same storm, continuous across every
+    seam. Everything it does is about the zenith, the horizon or the whole
+    deck — still a function of view direction (4-fold symmetric). A gate
+    in a neighbour area drives it only through its face in the player's
+    area (a door's faces share ears). A world entry calms it at once.
+  - **Cost**: four uniforms and a few lines in shaders that already run
+    (sky, walls, floor, gates); no pass, light or texture.
 - **Walls**: dark layered stone, darker at the foot, a lighter cap and a
   thin pale RIM along every top edge — walls silhouette against the
   horizon glow, so walls vs openings read at a glance.
-- **Floor**: polished dark slate with a faint cell grid (fades with
-  distance) that catches the horizon glow at grazing angles. Raised
-  storeys are a shade lighter; every CLIFF edge (a storey edge nothing
-  walkable continues past — not where storeys meet, not a ramp's ends,
-  not a wall's foot) carries a pale line.
-- **Creature light**: a singing creature lights the floor and walls
-  around it in its own glow colour, flaring with each onset (shader-side,
-  up to 8 per area, the brightest; no three.js lights, no shadows).
-- **Staff halo**: a staff's ink sits on a soft pale halo of itself, so it
-  reads over an open door's dark view as well as on a gate's colour.
+- **Floor**: polished dark slate, faintly mottled, catching the horizon
+  glow at grazing angles. No cell grid (removed 2026-11-22, designer: "let's
+  get rid of the grid on the floor"). Raised storeys are a shade lighter;
+  every CLIFF edge (a storey edge nothing walkable continues past — not
+  where storeys meet, not a ramp's ends, not a wall's foot) carries a pale
+  line.
+- **Creature light** (approved): a singing creature lights the floor,
+  walls, gates and ramps around it in its own glow colour, flaring with
+  each onset (shader-side, up to 8 per area, the brightest; no three.js
+  lights, no shadows).
+- **Staff halo**: a staff's ink sits on a soft pale halo of itself, wide
+  and dense enough (2026-11-22) that on a gate's dark glass the staff
+  reads as lit from behind, and it reads over an open door's dark view.
+  The designer: "The notation halo works if we fix that too" (the gates,
+  now dark).
 
 Rules (keep any later work coherent):
 
@@ -392,25 +444,89 @@ Rules (keep any later work coherent):
   low-chroma (cool greys), DARK; the scene reads by value, never hue. No
   environment hue that could pass for a Messiaen chord colour (no warm
   accents, no saturated blue/green/turquoise), and nothing as bright as a
-  lit creature except thin rim/edge lines and the brief lightning.
-- **Gameplay accents are not environment**: gates, fountains, ramps,
-  cleansers keep their own colours (unchanged by this draft).
+  lit creature except thin rim/edge lines and the brief lightning. The
+  one exception is the storm answering a gate, which shows the chord's
+  own light (above).
+- **Entities follow the same rules** ("Entity look"): colour only where it
+  means something.
 - **The sky is a function of view direction only** — its height, and its
   azimuth taken FOUR times round. Every door and the cleanser gate turn the
   view by quarter turns, so this is what keeps a door's sky continuous with
   the sky beside it. Never give the sky a feature that is not 90-degree
-  symmetric.
+  symmetric, nor one that differs between areas.
 - **Cost**: the world redraws through every door pass, so: one draw for
   the sky, one per area for all its walls (instanced), one for its whole
   floor; unlit shaders written in display values (no per-pixel output
   encode); precomputed textures over per-pixel noise; every program has a
   ShaderPrewarm stand-in.
 
-Open questions for the designer: overall darkness (the draft errs dark so
-creature colour dominates); whether sheet lightning stays (or follows the
-world's tempo); whether the nine POC levels should drift along the tempo
-gradient (e.g. calmer sky early, a stormier deck toward The Star); the
-staff halo (it touches the notation's look).
+Open questions for the designer: whether sheet lightning stays (or follows
+the world's tempo); whether the levels should drift along the tempo
+gradient (calmer sky early, a stormier deck later); how strong the storm's
+colour should run (it washes the whole deck near a song's end).
+
+## Entity look (2026-11-22 — draft for designer review)
+
+The entities brought into the approved environment
+(`entities/EntityLook.js`). Designer: "The sealed gates need the same dark
+theme too … I think the next step is probably just to work on the other
+entities." The levels are throwaway test levels, so these are rules for
+entity TYPES, not for any level. Visual only.
+
+- **Gates: dark glass with electric edges.** A sealed gate is a slab of
+  near-black glass (darker at the foot, faint veils deep inside that shift
+  with the eye, glossier than the walls: the horizon on its faces at a
+  glance), all twelve edges drawn in pale electric light with a slow
+  shimmer, a faint engraved border inset where the staff sits. Walls have
+  only a top rim, so a gate never reads as wall. Lit by its area's singing
+  creatures like the walls. States:
+  - **Being sung toward**: the slab fades with the song (ruled
+    2026-07-10, unchanged) while its edges CHARGE from the floor up with
+    the song's progress — dim above the charge, bright below, a hot front
+    riding it — the edges holding on until the song ends.
+  - **Wrong note (lockout)**: slab and edges flood red, decaying over the
+    lockout (`Gate.lockoutGlow`). Red is the gate's own meaning; it shows
+    only on the closed look.
+  - **Open**: no slab. A plain gate keeps a rippling frame (its edges, and
+    light rippling in over a band ~0.3 wide at them — nothing past it,
+    no depth written). A door's panels show the room beyond with the
+    ripple only in a band round their edges: **the view inside is
+    untouched** (designer: "Direct view into the portal should be
+    completely unobstructed. The ripple should only be around the
+    edges" — checked by pixel readback with the world held still: an
+    open door's pixels inside the band are unchanged with the ripple on
+    and off).
+  - **Linked vs plain**: identical while closed ("A closed linked gate
+    looks like any closed gate", ruled 2026-07-06); open, a door shows its
+    view, a plain gate its frame.
+  - **The deployed cleanser gate**: its panels ripple GOLD — it leads to
+    the gold tile.
+- **Ramps**: a wedge of the storeys' slate (one shared geometry, posts
+  included: one draw a ramp). Chevrons point UP the slope and crawl slowly
+  that way (the way up at a glance); pale lines along its sides (drops,
+  like a storey's cliff edge); pale posts mark its top edge from up on the
+  ledge.
+- **Cleansers**: a dark glass disc lit by a pale breathing ring (rim ring,
+  a fainter inner one); the ACTIVE one's ring burns GOLD (replacing
+  cyan/gold, 2026-11-22). The aiming phantom is the same disc,
+  translucent, red over an invalid spot. Gold is the only accent kept
+  besides the wrong note's red; it is reserved for the active cleanser and
+  the gate that leads to it.
+- **Fountains** (likely to be cut): only what keeps them in the theme —
+  dark stone, pale and lit from within once activated (was blue/cyan).
+- **Unchanged**: the clap ring (white: the clap's own light, as it flashes
+  creatures white); the wordless key hint sprites (`ui/KeyHints.js`, out of
+  scope here — their gold labels share the active cleanser's gold).
+- **Rules**: low-chroma and value-led; colour only for meaning (red =
+  wrong note, gold = your cleanser and its gate); never a saturated hue a
+  chord could own on a surface. Unlit ShaderMaterials in display values,
+  honouring the clip planes, each with a ShaderPrewarm stand-in; no new
+  draw calls (a plain open gate's frame is its shell's one draw).
+
+Open questions for the designer: the cleanser's gold vs the key hints'
+gold labels; whether open plain gates should keep their frame at all, or
+only doors ripple; whether linked doors should ever look different while
+closed (the 2026-07-06 ruling says no).
 
 ## World / editor (settled)
 
@@ -583,8 +699,8 @@ rulings, in the designer's words where it matters:
 - **Doors are omnidirectional (ruled 2026-07-07):** every side of a linked
   gate can be walked through, and EVERY face the player can see shows the
   view through the door (two at a corner — a working open door never shows
-  a green shell from any angle; only unlinked and dangling gates keep the
-  open-gate green). Applies to ALL links — same-puzzle teleports and
+  a shell from any angle; unlinked and dangling gates show only their
+  rippling open frame). Applies to ALL links — same-puzzle teleports and
   cross-puzzle doors are one mechanism. `facing` still exists in the schema
   (default "north") but the editor's Facing dropdown is PARKED (commented
   in PropertyPanel); Caleb may bring it back.
