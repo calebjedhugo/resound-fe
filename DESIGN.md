@@ -789,8 +789,9 @@ rulings, in the designer's words where it matters:
   recording range, floating spacebar over a target in playback reach, slot
   arrows when recording would overwrite the active slot, "⌫" after a
   judged miss with two or more takes, and a floating "C" over the nearest
-  clap-range creature (3D reach — the clap pair sits on plinths) while two
-  or more audible creatures sing AT ONCE.
+  clap-range creature (3D reach — the clap pair sits on plinths), shown
+  steadily whenever a clap could land (designer's change, committed
+  2026-11-22: gating it on two creatures singing at once was flaky).
 - **Boot straight into the world, not the menu.** The first manifest entry
   is the intro level and the game's front door; the menu is reachable via
   Esc → Main Menu. The `?puzzle=<id>` editor deep link wins over the default.

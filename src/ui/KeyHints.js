@@ -23,9 +23,10 @@ import { CLAP_RANGE } from 'core/constants';
  *              blooms at the next position with a pulsing ► when recording
  *              over the filled LAST slot is imminent; retires on first cursor
  *              move. See RecordingUI.updateGrowHint.
- *   clap     - "C" sprite over the nearest clap-range creature while TWO OR
- *              MORE audible creatures sing at once (the chord a clap can fix);
- *              retires on the first C pressed at such a moment
+ *   clap     - "C" sprite over the nearest creature within clap range,
+ *              shown steadily whenever a clap could land (not gated on the
+ *              fleeting moment two creatures sing at once — that was flaky);
+ *              retires on the first C pressed while the hint is up
  *   deploy   - "G" keycap, bottom-center HUD (above the move cluster): the
  *              deployable cleanser gate (core/DeployManager). Shows once an
  *              ACTIVE cleanser exists (the mechanic leads to it — before
@@ -310,24 +311,16 @@ class KeyHints {
       this.clapSprite.visible = false;
       return;
     }
-    // The teachable moment: two or more audible creatures are singing AT THE
-    // SAME TIME (the clash a clap untangles) and one is within clap range.
-    const { position } = gameState.player;
-    const singing = gameState.entities.filter(
-      (e) =>
-        e.type === 'creature' &&
-        e.instrument?.playbackState?.isPlaying &&
-        getDistance(position, e.position) <= e.audibleRange
-    );
-    if (singing.length < 2) {
-      this.clapSprite.visible = false;
-      return;
-    }
-    // 3D clap reach — the clap pair may sit on plinths (visible pens); a
-    // creature within true clap range is a clap invitation regardless of
+    // The clap invitation: ANY creature within clap reach — the hint stays up
+    // steadily whenever a clap could land, not only during the fleeting moment
+    // two creatures happen to sing at once (that timing-gated version was
+    // flaky). 3D clap reach — the clap pair may sit on plinths (visible pens);
+    // a creature within true clap range is a clap invitation regardless of
     // level. (Puzzles that DON'T teach clap never show this hint at all —
     // hints are gated by the puzzle's `teaches` list.)
-    const inClapRange = singing
+    const { position } = gameState.player;
+    const inClapRange = gameState.entities
+      .filter((e) => e.type === 'creature')
       .map((c) => ({ c, d: getDistance(position, c.position) }))
       .filter(({ d }) => d <= CLAP_RANGE)
       .sort((a, b) => a.d - b.d);
