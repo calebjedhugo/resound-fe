@@ -16,7 +16,8 @@
  *   the charge; a wrong note floods it red for the lockout. An open gate
  *   has no slab: a plain one keeps only its frame, rippling; a door's
  *   panels show the room beyond with the ripple round their edges
- *   (doorway material) and NOTHING over the view inside that band.
+ *   (doorway material) and NOTHING over the view inside that band — and
+ *   only on the opening the player looks into, in the main view (looksInto).
  * - RAMP: a wedge of the storeys' slate; chevrons crawl slowly UP its slope
  *   (the way up, at a glance) between pale side lines (its drops, like a
  *   storey's cliff edge); pale posts mark its top edge from up on the
@@ -31,6 +32,7 @@
  */
 import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
+import { MAIN_VIEW } from 'core/passContext';
 import {
   WORLD_UNIFORMS,
   PALETTE_GLSL,
@@ -50,6 +52,41 @@ export function bindAreaLight(material, light) {
   for (const key of LIGHT_KEYS) material.uniforms[key] = light.uniforms[key]; // eslint-disable-line no-param-reassign
 }
 
+// ---- The opening the player looks into --------------------------------------
+//
+// An open gate glows only on the face the player is looking INTO, and only
+// in the main view: never on its other faces, never on a gate seen through
+// a door (designer, 2026-11-22: "The only part of the gate that should have
+// the glow is the part you are looking into. Any part of the gate seen
+// through the gate should not have the border around it"). The face looked
+// into is the one whose outward axis is the eye's dominant offset from the
+// gate's centre, on the eye's side — one face at a time (x wins a tie).
+
+/**
+ * Is the eye looking into the gate face with this outward normal? (The
+ * twin of LOOKS_INTO_GLSL — change both.)
+ * @param {{x: number, z: number}} eye
+ * @param {{x: number, z: number}} centre - the gate's centre
+ * @param {{x: number, z: number}} outward - the face's unit normal
+ * @returns {boolean}
+ */
+export function looksInto(eye, centre, outward) {
+  const ex = eye.x - centre.x;
+  const ez = eye.z - centre.z;
+  if (Math.abs(outward.x) > 0.5) return Math.abs(ex) >= Math.abs(ez) && ex * outward.x > 0;
+  if (Math.abs(outward.z) > 0.5) return Math.abs(ez) > Math.abs(ex) && ez * outward.z > 0;
+  return false;
+}
+
+const LOOKS_INTO_GLSL = /* glsl */ `
+  bool looksInto(vec3 eye, vec3 centre, vec3 outward) {
+    vec2 e = eye.xz - centre.xz;
+    if (abs(outward.x) > 0.5) return abs(e.x) >= abs(e.y) && e.x * outward.x > 0.0;
+    if (abs(outward.z) > 0.5) return abs(e.y) > abs(e.x) && e.y * outward.z > 0.0;
+    return false;
+  }
+`;
+
 // ---- Gate -----------------------------------------------------------------
 
 // A gate box is WORLD_SCALE on every side, centred on its mesh
@@ -59,10 +96,12 @@ const GATE_VERTEX = /* glsl */ `
   varying vec3 vLocal;
   varying vec3 vWorld;
   varying vec3 vNormalW;
+  varying vec3 vCentre;
   #include <common>
   #include <clipping_planes_pars_vertex>
   void main() {
     vLocal = position;
+    vCentre = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     vec4 world = modelMatrix * vec4(position, 1.0);
     vWorld = world.xyz;
     vNormalW = normal; // gates are never rotated
@@ -77,6 +116,7 @@ const GATE_FRAGMENT = /* glsl */ `
   uniform float uProgress; // how far a correct performance has come, 0..1
   uniform float uLockout; // the wrong note's red, decaying over the lockout
   uniform float uOpen; // 1: open — only the rippling frame draws
+  uniform float uMainView; // 1 in the main view only (core/passContext MAIN_VIEW)
   uniform float uEnvTime;
   uniform float uFlash;
   uniform vec3 uStormCol;
@@ -85,12 +125,14 @@ const GATE_FRAGMENT = /* glsl */ `
   varying vec3 vLocal;
   varying vec3 vWorld;
   varying vec3 vNormalW;
+  varying vec3 vCentre;
   #include <common>
   #include <clipping_planes_pars_fragment>
   ${PALETTE_GLSL}
   ${KEY_GLSL}
   ${LIGHT_GLSL}
   ${FINISH_GLSL}
+  ${LOOKS_INTO_GLSL}
 
   void main() {
     #include <clipping_planes_fragment>
@@ -112,12 +154,14 @@ const GATE_FRAGMENT = /* glsl */ `
     vec3 col;
     float alpha;
     if (uOpen > 0.5) {
-      // Open: no slab, only the frame, and light rippling in from it over
-      // a band at the edges (nothing past it: the way through is clear)
+      // Open: no slab — only the face the player looks into, in the main
+      // view, keeps a frame and light rippling in from it over a band at
+      // its edges (nothing past it: the way through is clear)
+      float looked = uMainView * (looksInto(cameraPosition, vCentre, n) ? 1.0 : 0.0);
       float band = 1.0 - smoothstep(0.0, 0.3, edge);
       float ripple = 0.5 + 0.5 * sin(edge * 30.0 - uEnvTime * 3.0 + sin(h * 9.0 + uEnvTime * 1.3) * 1.2);
       col = PORTAL_GLOW * (0.7 + 0.5 * ripple) * shimmer;
-      alpha = max(line * 0.9, band * band * (0.15 + 0.45 * ripple));
+      alpha = looked * max(line * 0.9, band * band * (0.15 + 0.45 * ripple));
     } else {
       // Dark glass, darker at the foot, with faint veils deep inside that
       // shift as the eye moves
@@ -172,6 +216,7 @@ export function createGateMaterial(light = NO_LIGHT) {
       uProgress: { value: 0 },
       uLockout: { value: 0 },
       uOpen: { value: 0 },
+      uMainView: MAIN_VIEW,
     },
     vertexShader: GATE_VERTEX,
     fragmentShader: GATE_FRAGMENT,
@@ -183,11 +228,22 @@ export function createGateMaterial(light = NO_LIGHT) {
 // ---- Doorway panels (an open door's see-through faces) ---------------------
 
 const DOORWAY_VERTEX = /* glsl */ `
+  uniform float uMainView;
   varying vec2 vUv;
+  varying float vRipple;
   #include <common>
   #include <clipping_planes_pars_vertex>
+  ${LOOKS_INTO_GLSL}
   void main() {
     vUv = uv;
+    // A panel faces outward (+z) from just inside the OPPOSITE face of its
+    // gate (PortalView): it is the opening the player looks into when that
+    // outward face is — and only in the main view
+    vec3 outward = normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0));
+    vec3 centre = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz + outward * ${(
+      WORLD_SCALE / 2
+    ).toFixed(2)};
+    vRipple = uMainView * (looksInto(cameraPosition, centre, outward) ? 1.0 : 0.0);
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <clipping_planes_vertex>
@@ -203,6 +259,7 @@ const DOORWAY_FRAGMENT = /* glsl */ `
   uniform vec3 uGlow;
   uniform float uEnvTime;
   varying vec2 vUv;
+  varying float vRipple;
   #include <common>
   #include <clipping_planes_pars_fragment>
 
@@ -213,7 +270,7 @@ const DOORWAY_FRAGMENT = /* glsl */ `
     vec3 col = texture2D(uMap, vUv).rgb;
     vec2 e2 = min(vUv, 1.0 - vUv);
     float edge = min(e2.x, e2.y) * ${WORLD_SCALE.toFixed(1)};
-    if (edge < ${DOORWAY_RIPPLE_BAND.toFixed(2)}) {
+    if (vRipple > 0.5 && edge < ${DOORWAY_RIPPLE_BAND.toFixed(2)}) {
       // Light rippling in from the frame: travelling rings, wavering along it
       float band = 1.0 - edge / ${DOORWAY_RIPPLE_BAND.toFixed(2)};
       float along = vUv.x + vUv.y;
@@ -252,6 +309,7 @@ export function createDoorwayMaterial(map, glow = DOOR_GLOW) {
       uMap: { value: map },
       uGlow: { value: displayColour(glow) },
       uEnvTime: WORLD_UNIFORMS.uEnvTime,
+      uMainView: MAIN_VIEW,
     },
     vertexShader: DOORWAY_VERTEX,
     fragmentShader: DOORWAY_FRAGMENT,

@@ -138,9 +138,8 @@ automated playtesters can observe them.)
     doors and plain gates alike, so `isOpen` drives collision + full
     transparency. The red mismatch flash still lands on the CLOSED look.
     (2026-11-22, designer request: an open gate glows "in motion, like a
-    rippling portal" — a plain one keeps only a rippling frame, a door's
-    panels ripple in a band at their edges; the way through stays
-    completely clear. See "Entity look".)
+    rippling portal" — only on the opening the player looks into, in the
+    main view, the way through completely clear. See "Entity look".)
   - The notation **stays displayed forever**; there is still no permanent
     `isActivated` on gates.
     Fountains are unchanged (latch on the exact full match). Re-crossing a
@@ -487,20 +486,29 @@ entity TYPES, not for any level. Visual only.
   - **Wrong note (lockout)**: slab and edges flood red, decaying over the
     lockout (`Gate.lockoutGlow`). Red is the gate's own meaning; it shows
     only on the closed look.
-  - **Open**: no slab. A plain gate keeps a rippling frame (its edges, and
-    light rippling in over a band ~0.3 wide at them — nothing past it,
-    no depth written). A door's panels show the room beyond with the
-    ripple only in a band round their edges: **the view inside is
+  - **Open**: no slab. Only the opening the player is looking INTO glows,
+    and only in the main view (designer: "The only part of the gate that
+    should have the glow is the part you are looking into. Any part of the
+    gate seen through the gate should not have the border around it"): the
+    one face whose outward axis is the eye's dominant offset from the
+    gate's centre (`EntityLook.looksInto`, twin of its GLSL). Its other
+    faces, and every gate seen inside a door view, a door-in-a-door or the
+    cleanser gate, draw no border (`passContext.MAIN_VIEW` is 1 only while
+    the main view draws). On a plain gate that face keeps a rippling frame
+    (its edges, light rippling in over a band ~0.3 wide, no depth
+    written); on a door it is the panel showing the room beyond, the
+    ripple only in a band round its edges: **the view inside is
     untouched** (designer: "Direct view into the portal should be
     completely unobstructed. The ripple should only be around the
     edges" — checked by pixel readback with the world held still: an
     open door's pixels inside the band are unchanged with the ripple on
-    and off).
+    and off). A door's ripple sits on that panel, at the back of the
+    cell, framing the view.
   - **Linked vs plain**: identical while closed ("A closed linked gate
     looks like any closed gate", ruled 2026-07-06); open, a door shows its
     view, a plain gate its frame.
-  - **The deployed cleanser gate**: its panels ripple GOLD — it leads to
-    the gold tile.
+  - **The deployed cleanser gate**: the panel looked into ripples GOLD —
+    it leads to the gold tile (same rules: one face, main view only).
 - **Ramps**: a wedge of the storeys' slate (one shared geometry, posts
   included: one draw a ramp). Chevrons point UP the slope and crawl slowly
   that way (the way up at a glance); pale lines along its sides (drops,

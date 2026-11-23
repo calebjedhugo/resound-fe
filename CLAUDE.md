@@ -364,7 +364,11 @@ instead of "fixing" it.
   uniforms uOpacity/uProgress/uLockout/uOpen, `bindAreaLight` on first
   update; `Gate.lockoutGlow` reads the red); an open PLAIN gate still
   draws its shell as a depth-less rippling frame, a door does not (its
-  panels ripple). Door panels use `createDoorwayMaterial` (a ShaderMaterial
+  panels ripple). **The ripple shows ONLY on the face the player looks
+  into (`looksInto` + its GLSL twin — change both) and ONLY in the main
+  view** (`passContext.MAIN_VIEW`, 1 just while `renderMainView` draws):
+  never on a gate seen through a door or the cleanser gate. Door panels
+  use `createDoorwayMaterial` (a ShaderMaterial
   writing stored texels as they are; `material.map` is an accessor onto its
   uMap uniform, so PortalView's buffer swap is unchanged; the ripple stays
   in a `DOORWAY_RIPPLE_BAND` at the edges, NEVER over the view inside;

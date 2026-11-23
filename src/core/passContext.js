@@ -33,6 +33,17 @@ export const NO_CLIP_PLANES = Object.freeze(
 );
 
 /**
+ * A shared uniform object, 1 only while the MAIN view draws (renderMainView)
+ * and 0 in every other pass (doors, the cleanser gate, the prewarm). Looks
+ * that belong to the player's own eye alone read it — an open door's ripple
+ * shows only on the opening the player looks into, never on a gate seen
+ * through a door (entities/EntityLook). three uploads a material's uniforms
+ * on its first draw in every render call, so the value each pass draws
+ * with is the value it had then; flipping it changes no program.
+ */
+export const MAIN_VIEW = { value: 0 };
+
+/**
  * Draw the main view to the canvas under the shared context: it clips
  * nothing, but binds CLIP_PLANE_COUNT (no-op) planes like every other pass.
  * Restores the renderer's planes afterwards.
@@ -40,7 +51,9 @@ export const NO_CLIP_PLANES = Object.freeze(
 export function renderMainView(renderer, scene, camera) {
   const previousPlanes = renderer.clippingPlanes;
   renderer.clippingPlanes = NO_CLIP_PLANES;
+  MAIN_VIEW.value = 1;
   renderer.render(scene, camera);
+  MAIN_VIEW.value = 0;
   renderer.clippingPlanes = previousPlanes;
 }
 
