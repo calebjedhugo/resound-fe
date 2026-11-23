@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Resound** is a first-person musical puzzle game built with Three.js and Web Audio API. Players record melodies from singing creatures and play them back to unlock gates and activate fountains by matching specific musical harmonies.
+**Resound** is a first-person musical puzzle game built with Three.js and Web Audio API. Singing creatures unlock gates and activate fountains whose songs they sing; the player carries creatures with a telescoping pole — absorbing one into the slot strip and releasing it elsewhere (since 2026-11-23; recording and playback are retired).
 
 **Tech Stack:** Vanilla JavaScript (ES2021), Three.js, Web Audio API, Vite
 
@@ -102,9 +102,9 @@ To create a puzzle: add JSON file following schema, then add entry to manifest.
 ## Design Intent
 
 **Read [`DESIGN.md`](DESIGN.md) before changing gameplay, matching, or editor validation.**
-Several behaviors that look like bugs are designed — e.g. recording is raw
-R-press→R-release (NEVER auto-trim), creatures may legally self-solve puzzles,
-and there is no aiming. When playtesting surfaces one, document it there
+Several behaviors that look like bugs are designed — e.g. creatures may
+legally self-solve puzzles, and there is no aiming at targets (the pole takes
+the nearest creature in reach). When playtesting surfaces one, document it there
 instead of "fixing" it.
 
 ---
@@ -115,15 +115,12 @@ instead of "fixing" it.
 - AudioContext must be resumed on user interaction (handled in main.js)
 - Don't create oscillators until needed (memory leak if not stopped)
 - **Audio is built ahead** (`core/AudioPrewarm`, from `PuzzleLoader.buildArea`):
-  every area's creature voices (`Random.warm`, one job per pitch) and
-  creature pitches for the tape's piano (the tape only holds creature notes;
-  one velocity layer, 0.7). Flat out while the StartGate is up, else only in
-  idle periods with room for the job (8 ms timer slices without
-  requestIdleCallback: in Safari piano renders wait for the gate; so does a
-  session's first, which also builds the shared phase bank: 47 ms at 4x) — an
-  unwarmed note still plays, built lazily. Only work that builds something
-  runs or sets a job's price (`isWarm`, `canRenderNow`). A world reset drops
-  the queued creature voices (piano pitches stay)
+  every area's creature voices (`Random.warm`, one job per pitch). Flat out
+  while the StartGate is up, else only in idle periods with room for the job
+  (8 ms timer slices without requestIdleCallback) — an unwarmed note still
+  plays, built lazily. Only work that builds something runs or sets a job's
+  price (`isWarm`). A world reset drops the queued creature voices. (The
+  tape's piano pre-render went with tape playback, 2026-11-23.)
 - **Each creature's NEXT song is built ahead too** (`Creature.prepareNextSong`
   → `AudioPrewarm.prepareSong` → `Random.prepare`: every note's nodes,
   unstarted and unconnected), asked for as a song ends, after a clap and at
@@ -144,10 +141,9 @@ instead of "fixing" it.
 ### Musical Timing
 - **NEVER use `Date.now()` or `performance.now()` for music** - always use MusicalClock
 - Quantization happens to nearest 16th note
-- Playback: Space performs the WHOLE tape (all filled slots, concatenated
-  seamlessly — takes are stored dense); solo starts snap to the beat grid
-  (late grace is `PLAYBACK_LATE_GRACE_BEATS`, tempo-relative); Space
-  during a playback is ignored (one performance at a time)
+- A released creature keeps its PHASE: its next sing beat stays congruent,
+  modulo its interval, to the schedule it had when absorbed (`Creature.toSpec`
+  `phase`; `wake`)
 - Matching tolerates sounds AFTER the aligned window but a foreign note
   INSIDE it corrupts, and (ruled 2026-07-16) a wrong note is judged
   IMMEDIATELY — red flash on the note itself, creature noise included —
@@ -163,11 +159,12 @@ instead of "fixing" it.
 ### Creatures
 - Harmony forces apply only WHILE the creature is singing and another note
   sounds within the creature's OWN audibleRange (the listener's range, not
-  the source's — unlike gate/recording audibility)
+  the source's — unlike gate audibility). The player sings nothing (since
+  2026-11-23); tests sound a song through the harness's test singer
 - Perfect intervals (unison, octave) don't affect movement
 - **`interval` = beats between song STARTS**, not the rest gap — it must
   exceed the song's length or the creature sings continuously (and never
-  moves, and clean recording takes become nearly impossible)
+  moves)
 - **Look = ball lightning, visual only** (`entities/CreatureLook.js`, DESIGN.md
   "Creature look"): floats (mesh placed only via `placeMesh`); colour from the harmony
   it hears via `forEachSoundSource` — the forces' source model; never add a second one
@@ -192,7 +189,7 @@ instead of "fixing" it.
   key off `isOpen`. See DESIGN.md.
 - **Gates can link across puzzles (portals)**: `link: {puzzleId, gateId}` on
   a gate makes it a door — walking into it while OPEN swaps to the linked
-  puzzle (`core/PortalManager.js`; recordings persist). A link may target a
+  puzzle (`core/PortalManager.js`; the held creatures persist). A link may target a
   gate in the SAME puzzle (in-level teleport door; never a gate to itself).
   Links are bidirectional and editor-managed via `editor/io/portalLinks.js`
   — never hand-author one-way links. See DESIGN.md "Gate links / portals" +
@@ -202,7 +199,7 @@ instead of "fixing" it.
   link-depth-1 neighbors FULLY LIVE (simulating every frame).
   `gameState.entities`/`elevationGrid`/`currentPuzzle` are getters that
   delegate to the ACTIVE area — simulation code must use `entity.area`
-  (a neighbor's entities must never reach active-area matching, recording,
+  (a neighbor's entities must never reach active-area matching, absorbing,
   collision, or forces except through the doorway model).
 - **Neighbors build in IDLE time** (`PuzzleLoader.buildAreaWhenIdle`): their
   staves engrave in `requestIdleCallback` slices (`core/idleSlices`), then
@@ -421,7 +418,7 @@ instead of "fixing" it.
   (ruled 2026-07-16 — performing it retires the hint; crossings never
   re-arm, a fresh world entry resets), no browser storage. No `teaches` =
   all hints eligible (dev levels); the editor round-trips the field. POC:
-  `slots` only at the duet, `clap` only at the clap
+  `clap` only at the clap (`slots`, the grow hint, retired 2026-11-23)
 - Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
   `?puzzle=<id>` deep link wins. Menu via Esc
 - `ui/StartGate.js` freezes the world per level start until a key/click.
@@ -445,7 +442,7 @@ instead of "fixing" it.
   else name): playstation / xbox / switch / generic. Glyphs and key names
   live in ONE table, `core/inputGlyphs` (`glyphFor`, `nameFor`; constants,
   no per-call allocation), drawn by `ui/glyphCanvas` in the hints' gold
-  style. KeyHints/RecordingUI draw each family's glyphs ONCE (cached
+  style. KeyHints/InventoryUI draw each family's glyphs ONCE (cached
   canvases/CanvasTextures; a sprite swaps `material.map`, same program —
   no new material, nothing for ShaderPrewarm). Text naming a key: use
   `nameFor(action, InputDevice.familyOf(event), InputDevice.padId)`
@@ -469,8 +466,10 @@ instead of "fixing" it.
 - Dev-only `window.__resoundDebug` exposes `camera` + `renderer` +
   `syncCameraToPlayer` for scripted browser verification (reposition +
   screenshot), `setTapImpulse(true)` to re-enable the tap-impulse
-  affordance, and `countProgramDerivations(frames)` (shader-program
-  re-derivations per frame; see "ONE pass context")
+  affordance, `setPoleSlowmo(factor)` to slow the pole's absorb/release
+  animations (screenshot mid-deformation; a huge factor freezes it), and
+  `countProgramDerivations(frames)` (shader-program re-derivations per
+  frame; see "ONE pass context")
 - **Performance: `await __resoundDebug.profile(frames)`** (`core/FrameProfiler`)
   times every frame phase (self + inclusive ms, keyed by caller), frame
   percentiles, draw calls and GPU ms PER PASS, derivations and heap; it
@@ -484,22 +483,56 @@ instead of "fixing" it.
 - All notation *rendering* (engraving) lives in the published `resound-notation` package — the editor here consumes it — see that repo's docs for the coordinate model
 - **When engraving looks wrong**: fix it in `resound-notation`, publish a new version, then bump this repo's dependency and `npm install`. Do **not** hand-copy `dist/` into `node_modules` (see `src/editor/CLAUDE.md`)
 
-### Recording & the tape
-- Can only record within creature's `audibleRange × 0.5`
-- The inventory is a growable TAPE (`core/Tape.js`, cap `TAPE_SLOT_CAP`):
-  ←/→ move the cursor (→ on a filled last slot appends), R records into
-  the cursor slot IN PLACE. Digit keys are gone. There is NO per-slot
-  delete (retired 2026-07-12) — clearing the whole tape is a `cleanser`
-  entity (`entities/CleansingTile.js`): a pulsing walkable tile that
-  empties the tape when you step onto it (edge-triggered, active-area
-  only). A cleanse can leave an empty tape, so gen-poc.js still asserts
-  every pocket is escapable from an empty tape. A cleanser MAY share a
-  cell with a gate (editor allows it). Under a LINKED door the portal
-  panel would clip the tile to a sliver (it only paints past the window
-  plane), so `PortalManager` mirrors it: a visual-only clone at the
-  partner face, sharing the real tile's material so the glow syncs
-  (`_rebuildTileMirrors`); gameplay needs no mirror — crossing commits
-  on entry and the REAL tile fires on arrival
+### The pole & the tape (ruled 2026-11-23; recording and playback RETIRED)
+- **R absorbs, Space releases** (`core/AbsorbManager`, DESIGN.md "The
+  inventory holds CREATURES"). R takes the nearest creature with
+  `isAbsorbable` (active area, real distance ≤ `audibleRange × 0.5`,
+  `gameState.absorb.inRange`) into the cursor slot, or — the cursor slot
+  holding one — a new slot at the end (`Tape.slotForAbsorb`); nothing in
+  reach / a full strip = grey slot flash. Space releases the cursor slot's
+  creature `RELEASE_DISTANCE` (2.5) ahead along the effective camera yaw,
+  only on walkable floor of the player's layer where its radius fits
+  (`releaseSpot`); else grey flash. ONE pole action at a time. Plain presses
+  (no tap/hold), keyboard and pad alike
+- **A slot holds a SPEC, not a song**: `{id, spec, colour, css}`, spec =
+  `Creature.toSpec()` (song, interval, audibleRange, size, maxSpeed,
+  `voice`, `phase`). **Voice = the Random's rolled timbre** (waveform,
+  filterCutoff, envelope, harmonics — resound-sound rolls it with
+  Math.random, NOT from the instrument id), copied onto the new Random
+- **Commit points**: absorb — the creature is `hold()`-ed (instrument
+  disposed: silent at once; no physics) and lands in its slot the moment the
+  tip CONNECTS, its body leaves its area when drawn in; release — a fresh
+  Creature built `dormant` in the active area at once, `wake()`-d when the
+  pole is back. A crossing finishes the action at once (`finishNow`)
+- **`core/CreatureRegistry`** (world-level, reset by `PortalManager.reset`):
+  per puzzle id, the puzzle creatures absorbed (by `entities` index; skipped
+  by `PuzzleLoader.buildArea`) and the creatures released there (spec +
+  position, rebuilt by buildArea; `snapshot` at prune). Never let an area
+  rebuild bypass buildArea
+- **The look**: `entities/PoleLook` — a telescoping rod drawn in its OWN
+  scene right after the main view (`AbsorbManager.render` in main.js
+  `render`), over its depth: never in a door/cleanser/warm-up pass or an
+  area group; its scene mirrors the world's lights so its programs match
+  ShaderPrewarm's stand-ins (`standInMaterials`). The tip meets the creature
+  on its near flank toward the hand (`CONTACT_FROM`) so the pull is seen
+  from the side. The creature deforms in the SHARED body vertex shader
+  (`uSuck` 0..1, `uTip` in object space; `SUCK_GLSL` + its JS twin
+  `suckPoint` — change both), set by `CreatureLook.setSuck` (halo +
+  `lightInto` fade with it; `frustumCulled` off while deformed)
+- The strip (`core/Tape.js`, cap `TAPE_SLOT_CAP`): ←/→ move the cursor (→ on
+  a filled last slot appends). No delete. **A `cleanser`
+  (`entities/CleansingTile.js`) no longer clears it** (interim ruling
+  2026-11-23: a wipe would delete creatures) — it only becomes the active
+  cleanser. Under a LINKED door the portal panel would clip the tile to a
+  sliver (it only paints past the window plane), so `PortalManager` mirrors
+  it: a visual-only clone at the partner face, sharing the real tile's
+  material so the glow syncs (`_rebuildTileMirrors`)
+- `ui/InventoryUI` (was RecordingUI): slots show the held creature's orb +
+  note count, a landing pop; the reach mark (pale ring, ×N) over the cursor
+  slot pulses red during an absorb. KeyHints: the absorb hint (R) floats
+  over `AbsorbManager.target()`, the release hint (Space, small) low over
+  the release spot; their puzzle lesson ids stay `record` / `playback`
+  (puzzle JSON vocabulary); `slots` is gone
 - **The ACTIVE cleanser + deployable cleanser gate** (ruled 2026-07-18):
   stepping on a cleanser turns it GOLD (one active tile world-wide) and
   makes it the destination of the player's deployable gate. G cycles
@@ -522,7 +555,7 @@ instead of "fixing" it.
   RETAINED (`PortalManager.retainArea`) while the gate exists; views
   retarget when a new cleanser is claimed. One-way, one use; arrival
   fires the
-  cleanser (tape wipe — intended cost); world state does NOT reset.
+  cleanser (no tape wipe since 2026-11-23); world state does NOT reset.
   Taught in IX via `teaches: ["deploy"]` (G keycap HUD hint, retiring
   only when a gate is removed/walked through; while deployed the hint
   wears a 🚫 badge — G means cancel). Aiming requires an active
@@ -555,4 +588,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-11-23 — an open door's outline is a soft seam in its view panels (blur + fade into the world, main view only, gone before the emerging side shows), no open shell; the cleanser gate's seam leans gold; 2026-11-22 — key hints follow the device in hand (controller glyphs by family: PlayStation, Xbox, Switch, generic; `core/InputDevice`, `core/inputGlyphs`); sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-23 — the pole: R absorbs a creature into the tape, Space releases it (`core/AbsorbManager`, `entities/PoleLook`, the body shader's suck deformation, `core/CreatureRegistry`); recording, tape playback and the cleanser's tape wipe retired; earlier the same day — an open door's outline is a soft seam in its view panels (blur + fade into the world, main view only, gone before the emerging side shows), no open shell; the cleanser gate's seam leans gold; 2026-11-22 — key hints follow the device in hand (controller glyphs by family: PlayStation, Xbox, Switch, generic; `core/InputDevice`, `core/inputGlyphs`); sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

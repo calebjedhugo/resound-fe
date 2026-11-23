@@ -9,7 +9,7 @@ them, the correct action is to document, not change code.
 **Any design that requires words to be comprehensible is not a good design.**
 Communicate through placement, color, iconography, and animation — not toasts
 and labels. Examples of the pattern: the mismatch red flash on a gate/fountain
-that heard a wrong phrase, the slot "pop" when a recording lands, the glow of
+that heard a wrong phrase, the slot "pop" when a creature lands in it, the glow of
 a singing creature, floating target notation above gates/fountains. Prefer
 adding/refining a visual channel over adding text. (The debug panel, F3, is a
 dev tool and exempt — it also mirrors transient animations in text so
@@ -17,7 +17,62 @@ automated playtesters can observe them.)
 
 ## Core mechanics (settled)
 
-- **Recording timing is a puzzle skill.** A recording is exactly what sounds
+- **The inventory holds CREATURES: R absorbs one with a pole, Space releases
+  it** (ruled 2026-11-23 — the designer: "Instead of recording, the creature
+  is put into inventory. Instead of playback, the selected creature is
+  deployed." SUPERSEDES recording, tape playback, the playback etiquette and
+  red-miss rules below, each marked). The controls and UI are the old ones,
+  reused:
+  - **R / Square absorbs** the nearest creature the pole reaches — the old
+    recording rule: active area, real distance ≤ `audibleRange × 0.5`, never
+    through a door — into the CURSOR slot. If the cursor slot already holds
+    a creature, it goes into a NEW slot at the end of the strip and the
+    cursor follows ("If there is already a creature in the slot, simply make
+    a new one"; an empty last slot is reused). Refused with the grey slot
+    flash when nothing is in reach or the strip is full (16). Plain presses:
+    no tap/hold.
+  - **Space / Cross releases** the cursor slot's creature 2.5 units ahead
+    along the effective camera heading, on walkable floor of the player's
+    own storey where its body fits — never in or over a wall, gate,
+    fountain, cleanser, ramp, cliff edge or off the grid, nor into another
+    body. Bad spot or empty slot: grey flash. The slot is empty after.
+  - **One pole action at a time**; R and Space during one are ignored.
+  - **Absorbed = silent at once**: the creature stops singing the moment the
+    tip touches it (no partial song reaches a gate after that) and stops
+    moving; its body leaves the world once drawn in. **Released = the same
+    creature**: same song, timing, range, body, speed and VOICE (the timbre
+    it rolled), singing on its OLD BEAT (next sing beat congruent, modulo
+    its interval, to its old schedule), alive only once the pole is back.
+  - **Nothing duplicates or vanishes across area pruning**: a puzzle's own
+    creature, once absorbed, never respawns when the area is rebuilt from
+    its JSON; a released creature lives on in its area, where it stood.
+  - **The look** (the designer: "poking the creature with a pole, and the
+    creature is absorbed into it … not just get smaller, but deformed toward
+    the end of the pole and back out again"): a first-person telescoping
+    pole, dark rod and pale softly glowing tip, from a hand at the lower
+    right of view (main view only, hidden at rest). Absorb (~1.1 s): the
+    pole extends until its tip touches the creature's near flank (the side
+    toward the hand, so the pull is seen from the side) → the body is drawn
+    into the tip, the side nearest it first and the far side last, a
+    twisting funnel narrowing to a point — never a uniform shrink; its halo
+    and light fade with it → the tip flares in the creature's colour → the
+    pole retracts. Release is the exact reverse: extend, flare, the creature
+    pours out of the tip and reforms, retract, alive. The slot shows the
+    held creature as a small glowing orb in its colour with its song's note
+    count; the old mic badge is the REACH mark (a pale ring, ×N creatures in
+    reach) and pulses red during an absorb. Key hints: R floats over the
+    creature R would take (retires on the first absorb), a small spacebar
+    floats low over the release spot while a creature is held (retires on
+    the first release). The tape's grow hint is gone (nothing is ever
+    overwritten).
+  - **Interim ruling — the CleansingTile no longer clears the inventory**
+    (2026-11-23): a wipe would now delete creatures. It still becomes the
+    active cleanser for the G gate. Revisit: whether a tile should do
+    anything to the strip, and whether a strip needs any clearing at all.
+  See `core/AbsorbManager.js`, `core/CreatureRegistry.js`,
+  `entities/PoleLook.js`, `CreatureLook` `setSuck`.
+
+- **(SUPERSEDED 2026-11-23 — there is no recording.) Recording timing is a puzzle skill.** A recording is exactly what sounds
   between R-press and R-release — rotated phrases and repeats are valid
   takes. **Never add auto-trim/auto-stop/auto-align** (tried once during
   playtest iteration, reverted by the designer). Feedback that helps players
@@ -30,8 +85,10 @@ automated playtesters can observe them.)
   singing a target's exact song solves it with no player input. Self-solving
   layouts are legal; the editor's job is to WARN about them (it does), not
   prevent them.
-- **No aiming.** Sound is omnidirectional and proximity-based. Recording and
-  playback care only about distance. No crosshair, no facing checks — ever.
+- **No aiming.** Sound is omnidirectional and proximity-based. No crosshair,
+  no facing checks at targets — ever. (Since 2026-11-23 the pole takes the
+  nearest creature in reach whatever you face; only WHERE a release lands
+  follows the view.)
 - **Creatures collide with the player's body, symmetrically** (fixed
   2026-07-11): a lured creature parks at contact distance (creature radius
   0.9 + player radius 0.4 = 1.3) instead of entering the player's space —
@@ -49,9 +106,10 @@ automated playtesters can observe them.)
   ruling and a constant retune.
 - **Sound carries by the SOURCE's `audibleRange`** (not the listener's).
   A creature's song reaches a gate/fountain iff distance ≤ the creature's
-  range; playback inherits the `audibleRange` of the recorded creature.
-  (Decided 2026-07-02; the editor validator uses the same semantics.)
-- **Playback etiquette:** targets hear everything at once — notes interleaved
+  range. (Decided 2026-07-02; the editor validator uses the same semantics.
+  The playback half — a tape carrying its creature's range — went with
+  playback, 2026-11-23.)
+- **(SUPERSEDED 2026-11-23 — the player no longer plays.) Playback etiquette:** targets hear everything at once — notes interleaved
   during a playback corrupt the match. "Play while other sounds are quiet"
   is intended gameplay, not a bug.
 - **Matching: the gate must hear its song EXACTLY — and how that happens
@@ -154,7 +212,10 @@ automated playtesters can observe them.)
     "sustain gate" (open only while its song sounds) can return as a rare
     vocabulary element.
 
-- **The inventory is a TAPE, and Space performs all of it** (ruled
+- **(SUPERSEDED 2026-11-23 by "The inventory holds CREATURES" above: the
+  strip, its cursor and → growth stand; R records, Space performs the tape
+  and the cleanser's wipe do not. Kept for history.) The inventory is a
+  TAPE, and Space performs all of it** (ruled
   2026-07-11, superseding the 2026-07-10 queue-on-Space chaining — its
   intent, effortless multi-slot sequencing, is now automatic). The slot
   strip is a growable tape (boot = ONE slot, cap `TAPE_SLOT_CAP`):
@@ -230,7 +291,8 @@ automated playtesters can observe them.)
   dance's anchors ALTERNATE.
 - **Wordless failure feedback is the SLOT FLASH language** (ruled
   2026-07-10, replacing the gameplay toasts; the R7 red-slot proposal
-  shipped): RED pulse on the active slot = a performance was judged and
+  shipped; since 2026-11-23 only the GREY pulse remains — R or Space found
+  nothing to do — the red one went with playback): RED pulse on the active slot = a performance was judged and
   MISSED, fired at JUDGMENT time and only for phrases inside the player's
   own playback window (ambient creature noise never flashes it); GREY pulse
   = nothing heard you / nothing there (playback out of every target's range,
@@ -252,8 +314,9 @@ automated playtesters can observe them.)
   L2 runs, and clicking L3 runs until the stick comes back to rest; right
   stick looks, its tilt squared so a small tilt aims finely (full tilt ~1.5x the keyboard's look
   speed). Buttons ARE keys (each press goes out once as its key, no
-  auto-repeat): Cross = Space, Square = R (tap toggles, hold records while
-  held), Circle = C, Triangle = G, L1/R1 and d-pad ←/→ = the tape cursor,
+  auto-repeat): Cross = Space (release), Square = R (absorb; since
+  2026-11-23 — it used to record, tap toggling), Circle = C, Triangle = G,
+  L1/R1 and d-pad ←/→ = the tape cursor,
   Options = Esc, Share = P (sound on/off); any other button is an unbound
   key (it still wakes the start gate and dismisses the ending card). A held key drives its axis
   alone (stick + key never doubles the speed).
@@ -263,7 +326,7 @@ automated playtesters can observe them.)
   after 0.4 s held, then every 0.15 s); Cross (Space, Enter) chooses, Circle
   (C) backs out (resumes from pause), Options (Esc) still toggles pause.
   The focus starts on the first entry each time a menu opens and follows
-  the mouse. Nothing in the world answers while a menu is up (no tape, clap
+  the mouse. Nothing in the world answers while a menu is up (no pole, clap
   or tape-cursor move behind it). The ending card's link stays mouse-only:
   a pad press can't open a tab. Browsers don't count a pad
   press (or Esc) as the gesture that unlocks audio, so either wakes the
@@ -316,7 +379,9 @@ automated playtesters can observe them.)
 
 Creatures are **ball lightning**, after Cixin Liu's *Ball Lightning*
 (`entities/CreatureLook.js`). Visual only — physics, collision radius,
-forces, recording, matching and audio are untouched.
+forces, matching and audio are untouched. (Since 2026-11-23 the body also
+deforms into the pole's tip as it is absorbed: "The inventory holds
+CREATURES".)
 
 - **Silent = a subtle bubble** (Liu's unexcited macro-electron): mostly
   transparent, Fresnel rim, faint thin-film shimmer, slow surface wobble.
@@ -846,10 +911,10 @@ rulings, in the designer's words where it matters:
   (a 2026-07-16 editor save used to drop it, which un-gated every hint on
   the hand-edited POC areas). In the POC chain `slots` is taught only at
   the duet (III) and `clap` only at the clap (VIII).
-  Hints: WASD cluster (idle at spawn), floating "R" over a creature in
-  recording range, floating spacebar over a target in playback reach, slot
-  arrows when recording would overwrite the active slot, "⌫" after a
-  judged miss with two or more takes, and a floating "C" over the nearest
+  Hints: WASD cluster (idle at spawn), floating "R" over the creature the
+  pole would absorb (lesson id `record`), a small spacebar low over the
+  release spot while a creature is held (lesson id `playback`; both renamed
+  in play 2026-11-23, the ids are puzzle vocabulary), and a floating "C" over the nearest
   clap-range creature (3D reach — the clap pair sits on plinths), shown
   steadily whenever a clap could land (designer's change, committed
   2026-11-22: gating it on two creatures singing at once was flaky). On a
@@ -1017,6 +1082,20 @@ rulings, in the designer's words where it matters:
   should open into an explorable world rather than a puzzle list.
 
 ## Open design calls — ask the designer before changing
+
+- **The pole (2026-11-23), for the designer to rule on after play:**
+  (1) the CleansingTile no longer clears the strip (interim, above);
+  (2) absorbing a creature you face away from works (no aiming) — the pole
+  reaches behind you, so you see the slot fill and the creature vanish but
+  not the pole; (3) a pole through a wall: a creature in reach behind a
+  wall can be absorbed, and the rod disappears into the wall (it is drawn
+  against the world's depth); (4) the player can walk while the pole is
+  out — the tip stays on the creature and the rod stretches after you;
+  (5) a puzzle creature that MOVED (lured, pushed) still resets to its JSON
+  spot when its area is pruned and rebuilt — only absorbed/released
+  creatures are remembered; (6) the POC levels were built around
+  recording, so their solutions no longer hold (they are being replaced);
+  the editor's solvability validator still reasons about recorded pitches.
 
 - **Cleanser placement beyond area II (2026-07-12).** The hold-to-delete
   verb is gone; the only tape-clear is the CleansingTile, and only ONE

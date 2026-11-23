@@ -9,42 +9,47 @@ skill.
 ## The game in one paragraph
 
 Resound is a first-person 3D musical puzzle game (Three.js + Web Audio).
-Creatures sing melodies on a musical clock. The player records a creature's
-melody and plays it back near gates and fountains; matching a target's song
-unlocks/activates it. Activating fountains completes the puzzle.
+Creatures sing melodies on a musical clock. A gate or fountain that hears its
+song sung exactly unlocks/activates. The player carries CREATURES: R pokes a
+nearby creature with a telescoping pole and absorbs it into the slot strip;
+Space lets the selected creature out again a few steps ahead, where it sings
+its song as before (since 2026-11-23 — the player no longer records or plays
+anything back). Activating fountains completes the puzzle.
 
 ## Game rules agents get for free
 
-- **No aiming, ever.** There is no crosshair or facing requirement. Sound is
-  omnidirectional; recording and playback are proximity-based only.
+- **No aiming at targets.** There is no crosshair. Sound is omnidirectional;
+  absorbing takes the nearest creature in reach, whatever you face. Releasing
+  puts the creature ~2.5 units ahead along your view, on walkable floor of
+  your own storey where its body fits (not in walls, gates, fountains,
+  cleansers, ramps, over a cliff edge or off the grid) — else a grey slot
+  flash and nothing happens.
 - **Sound carries by its SOURCE's audible range.** A creature's song reaches a
-  gate/fountain if the distance is ≤ the *creature's* `audibleRange`. Playback
-  inherits the `audibleRange` of the creature it was recorded from.
+  gate/fountain if the distance is ≤ the *creature's* `audibleRange`.
 - **Creatures can activate targets themselves — by design.** A creature in
   range singing a target's exact song will solve it with no player input. The
   editor warns about this layout ("the puzzle will solve itself").
-- **Play back while the creature is quiet.** Targets capture ALL notes they
-  hear into one stream; notes interleaved DURING your playback corrupt the
-  performance. (Stale notes heard BEFORE your playback don't spoil it — see
-  the exact-matching rule below.)
-- **Recording range is half the audible range** (`audibleRange × 0.5`). You
-  must be close.
-- **Recording timing is a core puzzle skill — BY DESIGN.** Recording captures
-  exactly what sounds between R-press and R-release: start mid-song and you
-  get a rotated phrase; leave it running and you get repeats. Neither is a
-  bug, and the game must NOT auto-trim/auto-align (an auto-stop was tried in
-  R4 and reverted by the designer). In later puzzles, clap-displacing creature
-  songs and timing the recording window IS the solution. The live hint shows
-  a running captured-note count ("Recording — N notes captured… press R to
-  stop") so the player can learn the timing skill.
+- **Targets hear everything at once.** They capture ALL notes they hear into
+  one stream; another creature's notes interleaved inside a song corrupt it.
+- **Absorb range is half the audible range** (`audibleRange × 0.5`, real
+  distance in your own area — never through a door). You must be close.
+- **Absorbing (R):** the pole extends, the creature is drawn into its tip and
+  goes SILENT the moment the tip touches it; it lands in the cursor slot, or —
+  if that slot already holds a creature — in a new slot at the end of the
+  strip (the cursor follows). Nothing in reach, or a full strip (16): grey
+  flash. **Releasing (Space):** the creature pours out of the tip and comes
+  alive when the pole is back, singing on its old beat with its old voice;
+  the slot empties. An empty slot or a bad spot: grey flash. One pole action
+  at a time (R/Space during one are ignored). A creature you took from a
+  level does not reappear when you come back; one you let out stays where
+  you left it.
 - **Matching: the gate must hear its song EXACTLY — surroundings don't
   matter** (2026-07-11): the target is a rhythm timeline (pitch + duration
   + relative beat position, quantized to 16ths), with rests as expected
   gaps. A performance matches when every target note sounds at the right
   relative beat and nothing else sounds INSIDE the aligned window. Sounds
   before/after the window are ignored — a door opens whenever its song
-  occurs cleanly anywhere in a longer performance (so playing the whole
-  tape opens every door you've earned in range). Rotated takes fail; notes
+  occurs cleanly anywhere in a longer performance. Rotated phrases fail; notes
   during a target's rests fail; a foreign note during the window corrupts
   (a continuous singer beside a door jams it forever). Judgment fires the
   instant the target's last note completes. Polyphonic targets
@@ -59,24 +64,24 @@ unlocks/activates it. Activating fountains completes the puzzle.
   `alwaysOpen: true` faces are permanently passable (one-way doors). A gate
   flagged `ending: true` rolls a dismissible "Thanks for playing" overlay
   when the player ARRIVES through it (the demo's closing card).
-- **The inventory is a TAPE** (2026-07-11): boots with ONE slot; ←/→ move
-  the cursor and → on a filled last slot appends a new empty one (up to
-  16); R records into the cursor slot in place; Space performs the WHOLE
-  tape concatenated. Digit keys no longer select slots. There is NO
-  per-slot delete (retired 2026-07-12): to clear the tape you walk over a
-  **cleansing tile** — a gently pulsing floor pad (first one is in the
-  entry corridor of area II, "Two Keys") that empties the whole tape when
-  you step onto it.
+- **The inventory is a strip of creature slots** (2026-07-11 tape, holding
+  creatures since 2026-11-23): boots with ONE slot; ←/→ move the cursor and
+  → on a filled last slot appends a new empty one (up to 16). A slot shows
+  the held creature as a small glowing orb and its song's note count. There
+  is no delete. A **cleansing tile** (a gently pulsing floor pad) no longer
+  empties the strip — it only becomes the cleanser gate's destination
+  (interim ruling 2026-11-23).
 - **Mismatch feedback is visual**: a completed wrong phrase flashes the
   gate/fountain RED for ~600ms. Animations are hard to catch in single
   screenshots — use the F3 debug panel, which mirrors the last judged phrase
   in text ("↳ heard N-note phrase — NO MATCH (Xs ago)"). That line is the
-  sanctioned animation proxy for testers. A failed playback also still toasts
-  (out-of-range with distances vs heard-but-not-recognized).
+  sanctioned animation proxy for testers.
 - **Other wordless cues to watch for** (design philosophy: placement, color,
-  iconography, animation over words): slot "pops" (scale flash) when a
-  recording lands; occupied slots show a persistent note count; the mic badge
-  reads "×N" (creatures in earshot); creatures pulse while singing.
+  iconography, animation over words): a slot "pops" (scale flash) when a
+  creature lands in it; a grey slot flash means R/Space did nothing; the
+  reach mark over the cursor slot (a pale ring, badge "×N") shows while a
+  creature is in the pole's reach and pulses red while one is drawn in;
+  creatures glow while singing.
 - **The world freezes while the start/help overlay is up** (H): no singing,
   no clock, no creature movement. Self-solving layouts complete after you
   dismiss it — visibly and audibly, with the completion screen on top.
@@ -85,8 +90,9 @@ unlocks/activates it. Activating fountains completes the puzzle.
 - **Claps (C)** nudge creature song timing; harmonies attract (consonant) or
   repel (dissonant) creatures while they sing; perfect intervals do nothing.
   Forces apply only WHILE a creature sings and hears another note within its
-  OWN audibleRange (the listener's range — unlike gate/recording audibility,
-  which uses the source's).
+  OWN audibleRange (the listener's range — unlike gate audibility, which
+  uses the source's). The player sings nothing, so only creatures (and
+  fountains) push and pull creatures now.
 - **Perimeter walls are auto-generated just OUTSIDE the grid** — every grid
   cell is playable; designers never place border walls.
 - **Ground floor (elevation 0) is implicit everywhere.** Floor regions are
@@ -101,11 +107,10 @@ unlocks/activates it. Activating fountains completes the puzzle.
 | Mouse | Look (offset-from-center style, no pointer lock) |
 | M | Toggle mouse-look off/on (toast + persistent badge when off) |
 | I/J/K/L | Keyboard look (up/left/down/right) |
-| R | Recording toggle (tap on/tap off); long-hold = hold-to-record; records into the cursor slot |
-| Space | Perform the whole tape (all filled slots, in order) |
-| ←/→ | Move the tape cursor (→ on a filled last slot adds a new one) |
+| R | Absorb the nearest creature in reach into the cursor slot (or a new slot at the end if that one is full) |
+| Space | Release the cursor slot's creature ~2.5 ahead |
+| ←/→ | Move the slot cursor (→ on a filled last slot adds a new one) |
 | ↑/↓, Enter or Space, C | In a menu (pause, main): move the focus (wraps), choose, back out (resume). The pause menu has Invert Look and Sound On/Off entries |
-| (clear the tape) | Walk over a pulsing **cleansing tile** — empties the whole tape (no delete key) |
 | C | Clap |
 | N | Metronome |
 | P | Sound on/off (toast; works paused too; time keeps running while off) |
@@ -122,11 +127,11 @@ A game controller (PS4 DualShock 4, or any pad the browser maps to the
 | L2 (hold) | Run |
 | L3 (click) | Run, until the left stick returns to rest |
 | Right stick | Look (fine near center) |
-| Cross | Perform the tape (Space) |
-| Square | Record, like R (tap toggles, hold records while held) |
+| Cross | Release a creature (Space) |
+| Square | Absorb a creature (R) |
 | Circle | Clap (C) |
 | Triangle | Cleanser gate (G) |
-| L1 / R1, d-pad ←/→ | Tape cursor (←/→) |
+| L1 / R1, d-pad ←/→ | Slot cursor (←/→) |
 | Options | Pause / resume (Esc) |
 | Share | Sound on/off (P) |
 | D-pad ↑/↓, left stick ↑/↓ | In a menu: move the focus (↑/↓; the stick repeats while held) |
@@ -236,7 +241,7 @@ JSON.stringify((window.__ears||[]).splice(0))
   the menu (fixed: watcher ignores public/puzzles/**; needed a dev-server
   restart); (2) slot digit keys were documented but unbound (now 1–5);
   (3) recording auto-stop/auto-align was added, then REVERTED — the designer
-  confirmed recording timing is intentional gameplay (see rule above); a live
+  confirmed recording timing is intentional gameplay (rule retired with recording, 2026-11-23); a live
   captured-note count replaced it; (4) impulses drained one per frame —
   crawled in throttled background tabs (now drain fully each frame); (5) menu
   checkmark rendered before the name, reading as the previous row's (moved
@@ -275,5 +280,6 @@ JSON.stringify((window.__ears||[]).splice(0))
   with no progress-reset affordance (designer call); fresh-eyes sweep
   skipped.
 - Testing tip: the dev build exposes `window.__resoundDebug` ({gameState,
-  scene, entityManager, PlaybackManager, ListeningManager}) — for
-  coordinator/diagnostic use, NOT for code-blind agents.
+  scene, AbsorbManager, ListeningManager, ...}; `setPoleSlowmo(n)` slows the
+  pole's animations) — for coordinator/diagnostic use, NOT for code-blind
+  agents.

@@ -43,8 +43,8 @@ src/
   core/
     MusicalClock.js
     MusicalClock.test.js         # Timing tests
-    RecordingManager.js
-    RecordingManager.test.js     # Recording tests
+    AbsorbManager.js
+    AbsorbManager.test.js        # The pole: absorb / release tests
 ```
 
 ---
@@ -54,24 +54,30 @@ src/
 A global `ctx` (test context) is automatically created before each test and cleaned up after. Tests are **async** because `tick()` uses fake timers to handle instrument playback.
 
 ```javascript
-describe('Recording a creature song', () => {
-  it('captures notes into inventory when player records nearby creature', async () => {
-    // Arrange: load a test puzzle with creature in recording range
+describe('Absorbing a creature (R)', () => {
+  it('takes the creature in reach into the empty cursor slot', async () => {
+    // Arrange: load a test puzzle with a creature in the pole's reach
     ctx.loadPuzzle('recording-basic');
     await ctx.tick(16); // Update creature state
 
-    // Act: hold R to record, advance time, release R
-    ctx.holdKey('r');
-    await ctx.advanceBeats(4);
-    ctx.releaseKey('r');
+    // Act: press R and let the pole's animation run out
+    ctx.pressKey('r');
+    await ctx.finishPole();
 
-    // Assert
-    const recorded = ctx.getInventorySlot(0);
-    expect(recorded).not.toBeNull();
-    expect(recorded[0].pitch).toBe('C4');
+    // Assert: the slot holds the creature's spec; the creature left the world
+    expect(ctx.getInventorySlot(0).song[0].pitch).toBe('C4');
+    expect(ctx.getCreatures()).toHaveLength(0);
   });
 });
 ```
+
+A test that needs a song SOUNDED (a gate judging it, the harmony forces or
+colour it gives creatures, the storm's answer) uses the **test singer**:
+`ctx.startSinging(song, tempo?, range = 15)` sings it once from the player's
+position in the player's area, heard by every listener as any source is
+(it took the place of the player's tape playback, retired 2026-11-23);
+`ctx.stopSinging()` silences it. Test-only — nothing in the game sings for
+the player.
 
 Test puzzles live in `src/__tests__/fixtures/puzzles/` and are registered in `testUtils.js`.
 
@@ -91,23 +97,27 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `await ctx.advanceMs(n)` | Advance time by milliseconds |
 | `ctx.getCurrentBeat()` | Get current beat |
 | **Input Simulation** | |
-| `ctx.holdKey(key)` | Press and hold a key (w/a/s/d/r/space/c/shift) |
+| `ctx.holdKey(key)` | Press and hold a key (w/a/s/d/r/space/c/shift/arrowleft/arrowright) |
 | `ctx.releaseKey(key)` | Release a held key |
 | `ctx.pressKey(key)` | Press and immediately release |
 | **Player State** | |
 | `ctx.setPlayerPosition(pos)` | Set player position directly |
 | `ctx.getPlayerPosition()` | Get player position |
-| **Inventory** | |
-| `ctx.getInventorySlot(n)` | Get song from inventory slot |
-| `ctx.setInventorySlot(n, song)` | Set inventory slot directly |
-| `ctx.setActiveSlot(n)` | Set active inventory slot |
+| **Inventory (the pole)** | |
+| `ctx.getInventorySlot(n)` | The creature spec a slot holds (`Creature.toSpec`), or null |
+| `ctx.setInventorySlot(n, spec)` | Put a creature spec straight into a slot (null empties it) |
+| `ctx.setActiveSlot(n)` | Set the slot cursor |
+| `await ctx.finishPole()` | Run the pole's absorb/release animation to its end |
+| `ctx.getCreaturesInRange()` | Creatures the pole can reach now |
+| **A test singer** | |
+| `ctx.startSinging(song, tempo?, range?)` | A source at the player's position sings `song` once |
+| `ctx.stopSinging()` | The test singer stops and leaves |
 | **Entities** | |
 | `ctx.getCreatures()` | Get all creatures |
 | `ctx.getGates()` | Get all gates |
 | `ctx.isGateOpen(gate)` | Check if gate is open |
 | `ctx.isFountainActive(fountain)` | Check if fountain is active |
-| **Recording** | |
-| `ctx.isRecording()` | Check if recording is active |
+| **Notes** | |
 | `ctx.getEmittedNotes()` | Get all notes emitted during test |
 
 ---
@@ -122,7 +132,7 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 **Not mocked (tested as integrated units):**
 - GameState
 - MusicalClock
-- RecordingManager, PlaybackManager
+- AbsorbManager, CreatureRegistry, Tape
 - ListeningManager
 - SongMatcher, HarmonyAnalyzer
 - Entity classes (Creature, Gate, Fountain)
@@ -135,19 +145,20 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | File | Behavior Tested |
 |------|-----------------|
 | `src/core/MusicalClock.test.js` | Beat calculation, quantization, tempo conversions |
-| `src/core/RecordingManager.test.js` | Capturing creature notes into inventory |
-| `src/core/PlaybackManager.test.js` | Playing recorded songs, note emission timing; a reset or new world stops the tape (pending start, notes under way, the old end timer), and a performance started right after a reset plays alone and whole (nothing of the old tape, none of its own notes lost) |
+| `src/core/AbsorbManager.test.js` | The pole: R absorbs the creature in reach into the empty cursor slot, or a new slot at the end when the cursor slot holds one; refused (grey flash) with nothing in reach or a full strip; the creature falls silent the moment the tip connects and is drawn in, near side first; Space releases the cursor slot's creature 2.5 ahead on the floor, refused (grey flash) for an empty slot, off the grid, over a cliff edge, onto a ramp, into a wall or gate, or where a creature is in the way; a released creature stays silent until the pole is back, then sings and a gate nearby hears it; one pole action at a time; a creature taken and let out sounds the same (its voice) and sings on its old beat (phase modulo its interval, after a clap); no creature duplicated or lost when its area is pruned and rebuilt (core/CreatureRegistry: absorbed puzzle creatures stay gone, released ones live on where they stood, a released one taken again is gone, a new world starts afresh) |
+| `src/core/Tape.test.js` | The slot strip: one slot at boot, → grows it only past a filled last slot, capped |
+| `src/entities/CleansingTile.test.js` | Stepping on a tile claims it as the active cleanser (gold, positional) and flashes it; it leaves the creatures held alone (interim ruling 2026-11-23); a neighbour area's tile never fires |
 | `src/core/ListeningManager.test.js` | Gates/Fountains recognizing correct songs |
 | `src/core/phraseMatching.test.js` | Anchored rhythm matching (embedded targets, rotations, prefixes, in-window extras, rests, chords, voices, trim horizon); the cached verdict gates/fountains use equals a fresh judgment at every call — over recorded play of real levels (`fixtures/listening/heard-streams.json`, with the verdicts from before the cache) and random streams — and is re-judged only when something new is heard or a turn passes |
 | `src/entities/Fountain.test.js` | An activated fountain's song plays alone: its area's creatures stay hushed for the song (and until the last of overlapping songs ends; given back even if the song fails), while another fountain's song plays over it unsilenced; a fountain's song stops when its area goes |
 | `src/core/NeighborLoading.test.js` | Neighbor areas build in idle slices (≤1 staff per slice with no idle time to spare), assemble + go live in ONE slice (never partially built; ONE world clock; a staff no layout fits fails nothing), stand down when the world moves on or a crossing builds them first; timer slices without requestIdleCallback |
 | `src/ui/StartGate.test.js` | The scrim goes up while the world loads (input swallowed, nothing wakes it) and is wakeable by any key/click once the world is built — one overlay throughout; Esc (no user activation) wakes it only into sound, like a pad press: locked audio keeps it up and it asks for a key or a click |
-| `src/entities/Creature.test.js` | Creature movement from consonance/dissonance; ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials); leaving the world (no note once its area goes, its voices let go, one voice per song pitch) |
-| `src/entities/EnvironmentLook.test.js` | The environment's look: every scene a pass draws (the main view, each neighbour beyond a door) has the one shared sky, drawn behind everything and never culled or clipped away by where it stands; the floor traces a cliff line along every storey edge you could step off — none where storeys meet, at a ramp's ends, at the foot of a wall on the storey, or along the grid edge; slabs top out at the walk height; a singing creature lights its area in its own colour from where it floats, silent ones throw none, and past the cap the brightest win; lightning flickers briefly and rarely and always dies away; the storm answers a gate being solved (a tape playing its song, frame by frame): calm and colourless while nothing is solved, building with the performance in the light of the chord the gate hears (E major red, then A major sapphire), a strike when the gate opens that dies away, back to the neutral storm when the music stops short, and a far gate stirring it less than a near one |
+| `src/entities/Creature.test.js` | Creature movement from consonance/dissonance (a test singer at the player's position); the pole's reach (absorb range, not through doors); ball-lightning look (lit/flare/colour, lone-note paleness, dissonance fringe, register, shared materials); leaving the world (no note once its area goes, its voices let go, one voice per song pitch); drawn into the pole (`suckPoint`, the body shader's JS twin: untouched at 0, all in the tip at 1, near side first, a teardrop whose far side stays round — never a shrink — travelling as a whole; the halo and the light it throws fade with it, never frustum-culled while deformed) |
+| `src/entities/EnvironmentLook.test.js` | The environment's look: every scene a pass draws (the main view, each neighbour beyond a door) has the one shared sky, drawn behind everything and never culled or clipped away by where it stands; the floor traces a cliff line along every storey edge you could step off — none where storeys meet, at a ramp's ends, at the foot of a wall on the storey, or along the grid edge; slabs top out at the walk height; a singing creature lights its area in its own colour from where it floats, silent ones throw none, and past the cap the brightest win; lightning flickers briefly and rarely and always dies away; the storm answers a gate being solved (a test singer singing its song, frame by frame): calm and colourless while nothing is solved, building with the performance in the light of the chord the gate hears (E major red, then A major sapphire), a strike when the gate opens that dies away, back to the neutral storm when the music stops short, and a far gate stirring it less than a near one |
 | `src/entities/EntityLook.test.js` | An open door's seam follows the portal's outline from the eye (head-on the near face's four edges, off a corner the outer six with no corner line, from above the top/front edge left out), its band just inside that outline, never along the hidden corner line; a view panel fades where the sight of it enters the box beside the outline, the middle of every panel untouched, nothing for an eye inside the box; walking round a corner (far off and close by) an edge is full head-on and gone by the time the face beyond it turns toward the eye, the panel beside it too, smoothly (no step pops it); drawn in the main view only — every door pass and the cleanser gate's passes draw plain opaque panels, the main view every panel with its seam, plain again after it; the seam's panels sort as if opaque (first of the translucent things, writing depth); an open door draws no shell in any pass, closed again its slab everywhere; the cleanser gate's seam leans gold and it has no frame mesh, a door's leans no colour |
 | `src/core/messiaenColour.test.js` | Creature colour from the surrounding harmony (triad fit, reflections by triad, added sixth, lone-note paleness, painter's complement + dissonance, register lightness; memoized path = reference) |
-| `src/core/AudioPrewarm.test.js` | Each built area's creature pitches are pre-rendered for the tape's piano (first strike plays from a buffer) and creature voices are built before their first note; renders wait for an idle period with room for what the last one cost, except behind the StartGate, and the session's first (it builds the phase bank too) runs only behind it, first of the gate's jobs (an early wake still gets it), arming no idle callback meanwhile; a world reset drops waiting creature voices, keeps the piano's. What it costs a frame in play (main-thread time on a mocked clock): a timer task without requestIdleCallback runs at most an 8 ms slice (a render waits for the gate); nothing runs flat out once the gate drops; a pitch a strike rendered first, or a render the piano's full pool would only queue, never lets a render start without room. Each creature's next song is built ahead, so no note builds an audio node as it starts (timer-started notes and chords too): in idle time, in timer slices without requestIdleCallback, and on a machine with no idle time by its deadline, frames before the song and one song per task; its first song behind the StartGate; a clapped creature's again (the clap's stop drops them); a world reset drops waiting songs |
-| `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share; every look the game builds, in every state it shows (levels; a staff waiting for its texture, arrived, fading; fading and locked-out gates, open doors (and their panels as the main view draws them, with the seam), an activated fountain; the cleanser gate's phantom, gold tile and panels (its gold seam too); key hints, clap ring), finds its program among the prewarm's never-disposed stand-ins (so no world entry relinks one) |
+| `src/core/AudioPrewarm.test.js` | Each built area's creature voices are built before their first note, flat out behind the StartGate; a world reset drops waiting creature voices. What it costs a frame in play (main-thread time on a mocked clock): a timer task without requestIdleCallback runs at most an 8 ms slice; nothing runs flat out once the gate drops. Each creature's next song is built ahead, so no note builds an audio node as it starts (timer-started notes and chords too): in idle time, in timer slices without requestIdleCallback, and on a machine with no idle time by its deadline, frames before the song and one song per task; its first song behind the StartGate; a clapped creature's again (the clap's stop drops them); a world reset drops waiting songs |
+| `src/core/ShaderPrewarm.test.js` | Shader programs drawn behind the StartGate, in the ONE pass context the main view and every door pass share; every look the game builds, in every state it shows (levels; a staff waiting for its texture, arrived, fading; fading and locked-out gates, open doors (and their panels as the main view draws them, with the seam), an activated fountain; the cleanser gate's phantom, gold tile and panels (its gold seam too); key hints, clap ring; the pole out and flaring, a creature being drawn into its tip), finds its program among the prewarm's never-disposed stand-ins (so no world entry relinks one) |
 | `src/core/FrameProfiler.test.js` | Dev profiler times each call by caller (self excludes timed children), counts draw calls and GPU time per pass, reports the worst frames first, and unwraps everything after a run |
 | `src/core/passContext.test.js` | Main view binds no-op clip planes; door targets render in the canvas colour space; panels never encode twice |
 | `src/core/doorViews.test.js` | Door views over their lifetime: the frame a door opens shows the eye's own perspective, each new face is written once, all of them in the frame the door opens (a face another door's view shows before that view's pass; none waits for a later frame), no pass samples an unwritten panel; crossings keep views (same-area teleport, round trip) and an unloading area takes its panels with it; a world left for the menu can be collected (nothing the door passes keep holds on to it) |
@@ -163,14 +174,14 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 | `src/core/windowSize.test.js` | Booting in a 0x0 window (hidden pane): straight-ahead view; camera, canvas and screen center follow resizes |
 | `src/editor/io/devServer.test.js` | Dev puzzle writer (vite.config.js): prettier-formatted writes, unchanged files left alone, one write at a time in arrival order (a waiting save takes the newer content); git status from one spawn (branch, ahead/behind, upstream gone, detached) in real temp repos |
 | `src/editor/ui/FloorRegionPanel.test.js` | Floor slabs follow the floor list through undo/redo; a refresh that changes no floor keeps the meshes |
-| `src/editor/viewport/RangeIndicator.test.js` | A selected creature's audible/recordable spheres: moved (not rebuilt) while the range holds, rebuilt and freed when it changes |
+| `src/editor/viewport/RangeIndicator.test.js` | A selected creature's audible/absorb-range spheres: moved (not rebuilt) while the range holds, rebuilt and freed when it changes |
 | `src/editor/ui/GitPanel.test.js` | Editor git status: one read at a time (mid-read refreshes fold into one trailing read); buttons follow the last status after an action; an action's result (or error) stays up through later reads of the same status, until the status changes, the next action, or it is cleared |
 | `src/resoundModules/playerControls/motion/motion.test.js` | The player's move (the real `motion.js`): standing still ends every frame bit for bit where they stood (ground, platform, ramp) and costs no collision query; anything that moves or re-layers them, or a new floor plan, re-floors them by the next frame; a first step (ahead or aside) is a full pass's step, walls included. A controller: a stick inside the dead zone is no move at all (bit for bit, no collision query, the view unturned); the left stick walks at its tilt (full tilt = the keyboard's step), a held key drives its axis alone, a click of L3 runs until the stick rests, a disconnect mid-walk stops them; the right stick turns at its tilt squared (full tilt 1.5x the keyboard), within the pitch limits |
-| `src/core/Gamepad.test.js` | The controller's buttons are keys (jsdom, fake pads): each press goes out once as its key's keydown and its release as keyup, however long held; an unbound button is an unbound key; through the game's own listeners Cross performs the tape, Circle claps, Triangle aims the cleanser gate, L1/R1 move the tape cursor, Square records like R (tap toggles, hold records while held), Share presses P (sound on/off), any button dismisses the ending card. No pad, no work (the pads are never read); a standard-layout pad first; a pad pressed before load is picked up. A pad that leaves (event or not) lets go of everything: keys up (a hold-to-record stops), sticks at rest, the run dropped. The d-pad's up/down press the arrow keys the menus move by. Sticks read 0 inside the dead zone and rest outside play. The start gate wakes on a pad press only with audio running: locked audio keeps it up (it asks for a key or click), a resume that starts audio wakes it, and a late resume never drops the next world's gate |
+| `src/core/Gamepad.test.js` | The controller's buttons are keys (jsdom, fake pads): each press goes out once as its key's keydown and its release as keyup, however long held; an unbound button is an unbound key; through the game's own listeners Cross releases the cursor slot's creature, Circle claps, Triangle aims the cleanser gate, L1/R1 move the slot cursor, Square absorbs like R, Share presses P (sound on/off), any button dismisses the ending card. No pad, no work (the pads are never read); a standard-layout pad first; a pad pressed before load is picked up. A pad that leaves (event or not) lets go of everything: keys up, sticks at rest, the run dropped. The d-pad's up/down press the arrow keys the menus move by. Sticks read 0 inside the dead zone and rest outside play. The start gate wakes on a pad press only with audio running: locked audio keeps it up (it asks for a key or click), a resume that starts audio wakes it, and a late resume never drops the next world's gate |
 | `src/core/InputDevice.test.js` | The device in hand (jsdom, fake pads): a pad button (an unbound one too) or a stick leaving its dead zone switches to the pad, already switched when its key goes out; a real key, a mouse button or the mouse travelling switches back (a nudge doesn't); a pad merely connected, a stick resting inside its dead zone, a held button or a stick held over while the mouse moves switches nothing more (no flicker); a pad leaving switches back; another pad shows its own family. Family from every id form (Chrome vendor/product, Firefox vendor-product-name with or without leading zeros, Safari's name alone, unknown and missing ids). Each action's glyph and name per family (constants); the keyboard-look badge stands down on a pad |
-| `src/ui/KeyHints.test.js` | Each hint's glyph per family (R / Space / C / G sprites and HUD, the move cluster's WASD or two sticks, the tape's grow hint ► or right shoulder; the spacebar wide, a face button round); a hint on screen swaps in place (same sprite, place, visibility; the move cluster stays up); no frame draws or uploads a glyph: each family's canvases are drawn once, the first time it shows, and reused |
-| `src/core/Sound.test.js` | Sound on/off (jsdom, fake pads, resound-sound's own master output): P and Share turn it off and on in play and while paused (a held P toggles once), with a toast naming the key (each pad family's own button: Share, Create, View, Minus, Select; P after a pad press names P); the pause menu's Sound entry sits under Invert Look, flips by Enter / Space / click and keeps the focus, and follows a key press while paused; behind the start gate (built or still loading) P and Share only wake / are swallowed, never toggle; off never suspends the context, and a creature still sings, the clock counts and recording captures its song; a page loaded after turning it off starts silent with the menu saying so, a first visit has sound on |
-| `src/ui/Menu.test.js` | The menus (pause, main) with the keyboard and a controller (jsdom, fake pads): the focus starts on the first entry whenever a menu opens, moves with the d-pad's or the keyboard's up/down (wrapping at the ends) and follows the mouse; the left stick steps once per tilt, repeats while held (after 400 ms, then every 150 ms), and holds on while wavering under its tilt; Cross / Enter / Space choose (Invert Look flips, Resume resumes, a puzzle starts; a held Enter chooses once), Circle / C back out (resume; nothing in the main menu); nothing in the world answers a menu (no tape, no clap, the tape cursor stays) |
+| `src/ui/KeyHints.test.js` | Each hint's glyph per family (R / Space / C / G sprites and HUD — absorb, release, clap, cleanser gate — the move cluster's WASD or two sticks; the spacebar wide, a face button round); a hint on screen swaps in place (same sprite, place, visibility; the move cluster stays up); no frame draws or uploads a glyph: each family's canvases are drawn once, the first time it shows, and reused |
+| `src/core/Sound.test.js` | Sound on/off (jsdom, fake pads, resound-sound's own master output): P and Share turn it off and on in play and while paused (a held P toggles once), with a toast naming the key (each pad family's own button: Share, Create, View, Minus, Select; P after a pad press names P); the pause menu's Sound entry sits under Invert Look, flips by Enter / Space / click and keeps the focus, and follows a key press while paused; behind the start gate (built or still loading) P and Share only wake / are swallowed, never toggle; off never suspends the context, and a creature still sings, the clock counts and the pole absorbs it; a page loaded after turning it off starts silent with the menu saying so, a first visit has sound on |
+| `src/ui/Menu.test.js` | The menus (pause, main) with the keyboard and a controller (jsdom, fake pads): the focus starts on the first entry whenever a menu opens, moves with the d-pad's or the keyboard's up/down (wrapping at the ends) and follows the mouse; the left stick steps once per tilt, repeats while held (after 400 ms, then every 150 ms), and holds on while wavering under its tilt; Cross / Enter / Space choose (Invert Look flips, Resume resumes, a puzzle starts; a held Enter chooses once), Circle / C back out (resume; nothing in the main menu); nothing in the world answers a menu (no release, no clap, the slot cursor stays) |
 | `src/core/CameraController.test.js` | Look limits: keyboard pitch stops at straight up/down; a mouse beyond the look band turns the view at most a quarter turn |
 | `deploy/build.test.js` | Real Vite builds (`deploy/__tests__/viteBuild.mjs`): a tuning edit renames only game chunks (three + resound packages keep their cached names), and so does an import-order edit (an early module starts using a three export the game already imports: it adds no export, and three exports by real names); the game page loads no editor code and one copy of each package; the deploy build (`RESOUND_BUILD=game`) holds the game alone, with no dynamic import (so no modulepreload polyfill); its stylesheet is a hashed asset, byte-for-byte; the POC stage drops the editor, ships only `poc-*` levels, preloads exactly the JSON the boot fetches, each once (replayed through PuzzleLoader + PortalManager: the default boot, an empty deep link, a deep link to every level and to one it doesn't ship; the page's script run for each query string, first in the head and plain), precompresses every text file (each `.gz` unzips to its file) and lists exactly its assets |
 | `deploy/upload.test.js` | `deploy/upload.sh` against a local web root: new assets + puzzles land before `index.html`; the previous deploy's assets stay, older ones are pruned; a re-run or a first deploy prunes nothing; a deploy that stopped after its `index.html` landed (rsync exit 23 on a stale file it can't delete) keeps its assets through the next deploy, is pruned by the one after, and on a root with no record leaves none; unchanged files keep their mtime (ETag) |
@@ -190,10 +201,10 @@ All tests use `createTestContext()` from `helpers/testUtils.js`. This provides:
 
 | Constant | Value | Used In |
 |----------|-------|---------|
-| Recording range | `audibleRange × 0.5` | RecordingManager tests |
-| Note quantization | 16th notes | Recording tests |
-| Playback late grace | 0.1 beats (tempo-relative) | Playback tests |
-| Playback chaining | queues on the song's largest-unit boundary | Playback tests |
+| Absorb range | `audibleRange × 0.5` | AbsorbManager / Creature tests |
+| Release distance | 2.5 units ahead | AbsorbManager tests |
+| Pole timeline | extend 0.25 s, draw 0.5 s, flare 0.12 s, retract 0.25 s | AbsorbManager tests |
+| Tape slot cap | 16 | Tape / AbsorbManager tests |
 | Clap range | 7.5 units | ClapManager tests |
 | Clap displacement | 1/16 note | ClapManager tests |
 
