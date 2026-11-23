@@ -431,6 +431,18 @@ instead of "fixing" it.
   A pad press is NO user activation, nor is Esc (HTML spec): the StartGate
   wakes on either only with audio running (`_wakeIntoSound`); never let it
   drop into a silent world. Share = KeyP (sound on/off)
+- **Hints follow the device in hand** (`core/InputDevice`, DESIGN.md "A game
+  controller"): Gamepad calls `InputDevice.usePad(pad)` on a button DOWN or
+  a stick LEAVING its dead zone (edge, not level: no flicker), BEFORE the
+  key goes out; a real key / mouse button / ~24 px of mouse travel (window
+  capture listeners) switches back. Family from the pad `id` (vendor id,
+  else name): playstation / xbox / switch / generic. Glyphs and key names
+  live in ONE table, `core/inputGlyphs` (`glyphFor`, `nameFor`; constants,
+  no per-call allocation), drawn by `ui/glyphCanvas` in the hints' gold
+  style. KeyHints/RecordingUI draw each family's glyphs ONCE (cached
+  canvases/CanvasTextures; a sprite swaps `material.map`, same program —
+  no new material, nothing for ShaderPrewarm). Text naming a key: use
+  `nameFor(action, InputDevice.familyOf(event), InputDevice.padId)`
 - **Sound on/off** (`core/Sound.js`, DESIGN.md "Sound on/off"): Settings
   `muted` -> resound-sound `audioContextManager.setMuted()` (fades the
   library's master output; needs resound-sound with `getOutput`/`setMuted`).
@@ -537,4 +549,4 @@ instead of "fixing" it.
 
 ---
 
-*Last Updated: 2026-11-22 — sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*
+*Last Updated: 2026-11-22 — key hints follow the device in hand (controller glyphs by family: PlayStation, Xbox, Switch, generic; `core/InputDevice`, `core/inputGlyphs`); sound on/off (pause menu entry, P, Share; `core/Sound`, resound-sound's master gain, time runs on); environment look APPROVED; entities in it (`entities/EntityLook`: dark-glass gates with charging electric edges, rippling open gates/doors with the view untouched, slate ramps with chevrons, pale/gold cleanser rings), the storm answering a gate being solved in the harmony's colour, no floor grid; earlier the same day — environment look DRAFT (storm-night sky, walls, floor, creature light; `entities/EnvironmentLook`), every wall in one instanced batch with per-instance door-pass hiding, one merged floor mesh per area, staff ink on a pale halo; menus played by keyboard arrows/Enter and the controller (d-pad/left stick, Cross, Circle; `ui/Menu`), world actions only in play; Esc wakes the start gate only into sound; 2026-10-18 — game controller support (`core/Gamepad`: analog sticks, buttons as synthetic keys, a start gate that only wakes into sound); a door's faces all written in its opening frame; door targets at twice their panel's pixels (four times across, eight up at 32-64 px, where a staff's lines are a pixel tall; straight-on warm-ups at half), neighbours handed to the GPU in idle time; each creature's next song built ahead (onset frames build no audio nodes); 2026-10-17 — area-build perf: idle-time neighbor builds, shared staff engravings, per-world puzzle cache, start gate up before loading; survive a 0x0 boot (hidden pane): finite view, resize refit, GameLoop outlives a throwing frame; creature colour reworked from the Messiaen sources (reflections by triad, complementary flicker, register lightness)*

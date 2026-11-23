@@ -1,7 +1,11 @@
+import InputDevice from 'core/InputDevice';
+
 /**
  * CameraModeBadge - persistent indicator shown while mouse-look is disabled,
  * so the camera mode is never a mystery (the M keypress toast is transient
- * and easy to miss).
+ * and easy to miss). Keyboard and mouse only: with a controller in hand
+ * (core/InputDevice) the right stick looks whatever the mode, so the badge
+ * stands down until the keyboard or mouse is taken up again.
  */
 class CameraModeBadge {
   constructor() {
@@ -25,7 +29,8 @@ class CameraModeBadge {
   }
 
   update(gameState) {
-    const shouldShow = gameState.mode === 'PLAYING' && !gameState.input.mouseLookEnabled;
+    const shouldShow =
+      gameState.mode === 'PLAYING' && !gameState.input.mouseLookEnabled && !InputDevice.isPad();
     if (shouldShow === this.visible) return;
     this._ensureElement();
     this.element.style.display = shouldShow ? 'block' : 'none';

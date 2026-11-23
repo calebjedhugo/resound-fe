@@ -7,6 +7,8 @@ import ClapManager from 'core/ClapManager';
 import DeployManager from 'core/DeployManager';
 import Tape from 'core/Tape';
 import Sound from 'core/Sound';
+import InputDevice from 'core/InputDevice';
+import { nameFor } from 'core/inputGlyphs';
 import showToast from 'ui/Toast';
 
 const randomInstrument = new Random();
@@ -22,7 +24,8 @@ const RECORD_HOLD_THRESHOLD_MS = 400;
 const keyPressedAt = {};
 const TAP_THRESHOLD_MS = 250;
 
-const dispatchKeyboardActions = ({ code, type, repeat, fromGamepad }) => {
+const dispatchKeyboardActions = (event) => {
+  const { code, type, repeat } = event;
   let value;
   if (type === 'keydown') value = true;
   else if (type === 'keyup') value = false;
@@ -97,7 +100,9 @@ const dispatchKeyboardActions = ({ code, type, repeat, fromGamepad }) => {
       // key (a press there only wakes it).
       if (value && !repeat) {
         const on = Sound.toggle();
-        const key = fromGamepad ? 'Share' : 'P';
+        // The key that was pressed, by name: P, or the pad's own (Share,
+        // Create, View...)
+        const key = nameFor('sound', InputDevice.familyOf(event), InputDevice.padId);
         showToast(on ? 'Sound on' : `Sound off — ${key} to turn it on`, { duration: 3000 });
       }
       break;

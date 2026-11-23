@@ -2,7 +2,13 @@ import gameState from 'core/GameState';
 import RecordingManager from 'core/RecordingManager';
 import PlaybackManager from 'core/PlaybackManager';
 import HintMemory from 'core/HintMemory';
+import InputDevice, { KEYBOARD } from 'core/InputDevice';
+import { glyphFor } from 'core/inputGlyphs';
+import { makeGlyphElement } from 'ui/glyphCanvas';
 import { onSlotFlash } from 'ui/slotFlash';
+
+// The grow hint's glyph on a pad (a shoulder button), in CSS pixels tall
+const GROW_GLYPH_PX = 24;
 
 /**
  * RecordingUI - Manages inventory and recording UI in bottom-right corner
@@ -103,6 +109,8 @@ class RecordingUI {
     // that blooms at the next tape position with the ► (ArrowRight) glyph
     // pulsing inside it, so the hint reads as "a new slot goes HERE." It lives
     // in the tape strip itself; display toggles so it takes no space when idle.
+    // On a pad the glyph is the button that moves the cursor right (R1, RB…:
+    // core/inputGlyphs), drawn once per family and kept.
     this.growHintSlot = document.createElement('div');
     this.growHintSlot.style.cssText = `
       width: 50px;
@@ -115,14 +123,16 @@ class RecordingUI {
       justify-content: center;
       pointer-events: none;
     `;
-    const growArrow = document.createElement('div');
-    growArrow.textContent = '►';
-    growArrow.style.cssText = `
+    this.growArrow = document.createElement('div');
+    this.growArrow.style.cssText = `
       font-size: 26px;
       color: rgba(255, 255, 255, 0.95);
       animation: grow-hint-pulse 1.1s ease-in-out infinite;
     `;
-    this.growHintSlot.appendChild(growArrow);
+    this.growHintSlot.appendChild(this.growArrow);
+    this._growGlyphs = {};
+    this.showGrowGlyph(InputDevice.family);
+    InputDevice.onChange((family) => this.showGrowGlyph(family));
     this.inventoryContainer.appendChild(this.growHintSlot);
     this._prevActiveSlot = gameState.player.activeSlot;
 
@@ -134,6 +144,18 @@ class RecordingUI {
       }
     `;
     document.head.appendChild(growStyle);
+  }
+
+  /** The grow hint's glyph for `family`: ► on the keyboard, a pad's shoulder. */
+  showGrowGlyph(family) {
+    if (!this._growGlyphs[family]) {
+      const glyph = glyphFor('tapeRight', family);
+      this._growGlyphs[family] =
+        family === KEYBOARD
+          ? document.createTextNode(glyph.label)
+          : makeGlyphElement(glyph, GROW_GLYPH_PX);
+    }
+    this.growArrow.replaceChildren(this._growGlyphs[family]);
   }
 
   /** Build one slot element. */

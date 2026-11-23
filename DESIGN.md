@@ -269,8 +269,31 @@ automated playtesters can observe them.)
   press (or Esc) as the gesture that unlocks audio, so either wakes the
   start gate only into a world with sound; on a fresh page the gate stays up and
   shows its one line, "press a key or click to start sound" — settings
-  feedback like the mouse-look toast, not gameplay words. The key hints
-  still show keyboard glyphs.
+  feedback like the mouse-look toast, not gameplay words.
+  **The key hints follow the device in hand** (asked for 2026-11-22: "if
+  using a controller let's switch the hints to be that of the controller.
+  Bonus if we can detect the type of controller and adapt the hint to the
+  controller."): the last MEANINGFUL input decides — a pad button going
+  down or a stick leaving its dead zone switches to the pad's glyphs; a
+  real key, a mouse button or the mouse travelling ~24 px switches back
+  (and a pad leaving, none left). A pad merely connected, a stick at rest,
+  or a stick held over while the mouse moves switches nothing, so nothing
+  flickers. Hints on screen swap their glyph in place. The family comes
+  from the pad's id (vendor id where the browser gives one, else its
+  name): **PlayStation** (Square / Cross / Circle / Triangle drawn as
+  shapes, L/R sticks, R1, Share — Create on a DualSense), **Xbox** (X / A /
+  B / Y, LS/RS, RB, View), **Switch** (Y / B / A / X: the standard layout
+  is positional, so the bottom button is "B"; L/R, R, Minus), **generic**
+  (the four-button diamond with the button's position lit; RB, Select).
+  Glyphs stay in the hints' one style — dark cap, white rim, GOLD mark —
+  with no button colours (red over a creature would read as the wrong
+  note's red). The move cluster becomes the left and right sticks; the
+  tape's grow hint its right shoulder; the G hint the top face button. The
+  sound toast names the pressed button ("Sound off — View to turn it on").
+  The keyboard-look badge (I/J/K/L, mouse look off) stands down while a pad
+  is in hand. The start gate's line stays "press a key or click to start
+  sound" (a pad press can't unlock audio). `core/InputDevice`,
+  `core/inputGlyphs`, `ui/glyphCanvas`.
 - **Invert Look** (pause menu, 2026-10-18): pushing the right stick or the
   mouse up looks down. The I/K keys keep their named directions. Remembered
   across visits (`core/Settings`, localStorage `resound-settings`).
@@ -279,8 +302,8 @@ automated playtesters can observe them.)
   "Sound: On/Off" entry (under Invert Look; Cross / Enter / Space flips it,
   the focus stays), the **P** key, or a controller's **Share**, in play and
   while paused alike. The key shows a brief toast ("Sound off — P to turn it
-  on" / "Sound on"; Share's names Share), settings feedback like the
-  mouse-look toast. Off is silence ONLY: it fades resound-sound's master
+  on" / "Sound on"; a pad's names its own button: Share, Create, View...),
+  settings feedback like the mouse-look toast. Off is silence ONLY: it fades resound-sound's master
   output to 0 in 20 ms, and the audio context keeps running, so the musical
   clock, the creatures' songs, recording, listening and judgments go on
   exactly as with sound on. Remembered across visits (`core/Settings`
@@ -791,7 +814,9 @@ rulings, in the designer's words where it matters:
   judged miss with two or more takes, and a floating "C" over the nearest
   clap-range creature (3D reach — the clap pair sits on plinths), shown
   steadily whenever a clap could land (designer's change, committed
-  2026-11-22: gating it on two creatures singing at once was flaky).
+  2026-11-22: gating it on two creatures singing at once was flaky). On a
+  controller every hint shows that pad's own button instead (see "A game
+  controller plays too").
 - **Boot straight into the world, not the menu.** The first manifest entry
   is the intro level and the game's front door; the menu is reachable via
   Esc → Main Menu. The `?puzzle=<id>` editor deep link wins over the default.

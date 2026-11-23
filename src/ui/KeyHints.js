@@ -3,6 +3,9 @@ import gameState from 'core/GameState';
 import HintMemory from 'core/HintMemory';
 import RecordingManager from 'core/RecordingManager';
 import DeployManager from 'core/DeployManager';
+import InputDevice, { KEYBOARD } from 'core/InputDevice';
+import { glyphFor } from 'core/inputGlyphs';
+import { makeGlyphCanvas, makeGlyphElement } from 'ui/glyphCanvas';
 import { getDistance } from 'core/utils';
 import { CLAP_RANGE } from 'core/constants';
 
@@ -33,6 +36,13 @@ import { CLAP_RANGE } from 'core/constants';
  *              that the key is silent). It teaches the WHOLE g-cycle,
  *              "g again to cancel" included: retires only when a deployed
  *              pad is removed or walked through (DeployManager retires it).
+ *
+ * The glyphs follow the device in hand (core/InputDevice): keycaps on the
+ * keyboard, a controller's own buttons on a pad — its family's face-button
+ * marks for R / Space / C / G, the left and right sticks for the move
+ * cluster (core/inputGlyphs, drawn by ui/glyphCanvas). A hint on screen
+ * swaps its glyph in place. Each glyph is drawn once per family and kept:
+ * nothing is drawn or uploaded per frame.
  */
 
 const MOVE_HINT_DELAY_S = 1.5;
@@ -42,54 +52,24 @@ const MOVE_HINT_DELAY_S = 1.5;
 const SPRITE_HEIGHT = 2.6;
 const BOB_AMPLITUDE = 0.25;
 
-/** Draw a single keycap onto a canvas context. */
-function drawKeycap(c, x, y, w, h, label) {
-  const r = Math.min(w, h) * 0.18;
-  c.beginPath();
-  c.moveTo(x + r, y);
-  c.arcTo(x + w, y, x + w, y + h, r);
-  c.arcTo(x + w, y + h, x, y + h, r);
-  c.arcTo(x, y + h, x, y, r);
-  c.arcTo(x, y, x + w, y, r);
-  c.closePath();
-  c.fillStyle = 'rgba(16, 20, 32, 0.92)';
-  c.fill();
-  c.lineWidth = Math.max(3, h * 0.05);
-  c.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-  c.stroke();
-  if (label) {
-    c.fillStyle = '#ffd97a';
-    c.font = `bold ${Math.floor(h * 0.55)}px monospace`;
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText(label, x + w / 2, y + h / 2 + h * 0.03);
-  }
-}
+// Each hint sprite's glyph canvas height, and its width in the world by
+// glyph kind (the spacebar is wide)
+const SPRITE_CANVAS_PX = 128;
+const SPRITE_WORLD_WIDTH = { space: 3.0 };
+const SPRITE_WORLD_WIDTH_DEFAULT = 1.4;
 
-/** Build a camera-facing sprite showing one keycap ("R") or a spacebar. */
-function makeKeycapSprite(kind) {
-  const canvas = document.createElement('canvas');
-  const c = canvas.getContext('2d');
-  let worldW;
-  if (kind === 'space') {
-    canvas.width = 320;
-    canvas.height = 112;
-    drawKeycap(c, 8, 8, 304, 96, '');
-    worldW = 3.0;
-  } else {
-    canvas.width = 128;
-    canvas.height = 128;
-    drawKeycap(c, 8, 8, 112, 112, kind);
-    worldW = 1.4;
-  }
-  const texture = new THREE.CanvasTexture(canvas);
+// The HUD glyphs on a pad, in CSS pixels
+const STICK_PX = 56;
+const FACE_PX = 40;
+
+/** A camera-facing sprite for an in-world hint; its glyph is set later. */
+function makeHintSprite() {
   const material = new THREE.SpriteMaterial({
-    map: texture,
+    map: null,
     transparent: true,
     depthTest: false,
   });
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(worldW, (worldW * canvas.height) / canvas.width, 1);
   sprite.visible = false;
   sprite.renderOrder = 999;
   return sprite;
@@ -99,6 +79,7 @@ function makeKeycapSprite(kind) {
 function makeKeycapEl(label, sizePx = 34) {
   const el = document.createElement('div');
   el.textContent = label;
+  el.dataset.glyph = label;
   el.style.cssText = `
     width: ${sizePx}px;
     height: ${sizePx}px;
@@ -118,7 +99,7 @@ class KeyHints {
   constructor(scene) {
     this.scene = scene;
 
-    // HUD: WASD cluster, bottom-center
+    // HUD: the move cluster (WASD, or a pad's two sticks), bottom-center
     this.moveEl = document.createElement('div');
     this.moveEl.id = 'hint-move';
     this.moveEl.style.cssText = `
@@ -127,27 +108,17 @@ class KeyHints {
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
       opacity: 0;
       transition: opacity 0.4s;
       pointer-events: none;
       z-index: 1000;
       animation: hint-breathe 1.6s ease-in-out infinite;
     `;
-    const topRow = document.createElement('div');
-    topRow.appendChild(makeKeycapEl('W'));
-    const bottomRow = document.createElement('div');
-    bottomRow.style.cssText = 'display: flex; gap: 4px;';
-    ['A', 'S', 'D'].forEach((k) => bottomRow.appendChild(makeKeycapEl(k)));
-    this.moveEl.appendChild(topRow);
-    this.moveEl.appendChild(bottomRow);
     document.body.appendChild(this.moveEl);
 
-    // HUD: "G" keycap for the deployable cleanser gate, above the move
-    // cluster. While a gate is DEPLOYED, a 🚫 badge appears beside the
-    // keycap: G now means cancel.
+    // HUD: "G" keycap (a pad: its Triangle / Y / X) for the deployable
+    // cleanser gate, above the move cluster. While a gate is DEPLOYED, a 🚫
+    // badge appears beside the keycap: G now means cancel.
     this.deployEl = document.createElement('div');
     this.deployEl.id = 'hint-deploy';
     this.deployEl.style.cssText = `
@@ -164,7 +135,6 @@ class KeyHints {
       z-index: 1000;
       animation: hint-breathe 1.6s ease-in-out infinite;
     `;
-    this.deployEl.appendChild(makeKeycapEl('G'));
     this.deployCancelEl = document.createElement('div');
     this.deployCancelEl.textContent = '🚫';
     this.deployCancelEl.style.cssText = `
@@ -172,11 +142,11 @@ class KeyHints {
       line-height: 1;
       display: none;
     `;
-    this.deployEl.appendChild(this.deployCancelEl);
     document.body.appendChild(this.deployEl);
 
     // The "grow the tape" (slots) hint lives in the tape strip itself now —
-    // RecordingUI blooms a ghost slot with a pulsing ► at the next position.
+    // RecordingUI blooms a ghost slot with a pulsing ► (a pad: its right
+    // shoulder) at the next position.
 
     const style = document.createElement('style');
     style.textContent = `
@@ -187,13 +157,25 @@ class KeyHints {
     `;
     document.head.appendChild(style);
 
-    // In-world sprites
-    this.recordSprite = makeKeycapSprite('R');
-    this.playbackSprite = makeKeycapSprite('space');
-    this.clapSprite = makeKeycapSprite('C');
+    // In-world sprites, by the action each one hints
+    this.recordSprite = makeHintSprite();
+    this.playbackSprite = makeHintSprite();
+    this.clapSprite = makeHintSprite();
+    this._sprites = [
+      ['record', this.recordSprite],
+      ['play', this.playbackSprite],
+      ['clap', this.clapSprite],
+    ];
     this.scene.add(this.recordSprite);
     this.scene.add(this.playbackSprite);
     this.scene.add(this.clapSprite);
+
+    // Every glyph drawn so far, by family: each hint's sprite texture (and
+    // its world size), the move cluster and the deploy glyph. Drawn the
+    // first time a family shows, kept for the next time it does.
+    this._glyphs = {};
+    this._applyFamily(InputDevice.family);
+    this._stopFollowing = InputDevice.onChange((family) => this._applyFamily(family));
 
     this._bobPhase = 0;
     this._stillTime = 0;
@@ -213,6 +195,63 @@ class KeyHints {
       }
     };
     window.addEventListener('keydown', this._keyHandler);
+  }
+
+  /**
+   * Show `family`'s glyphs in every hint, drawing them the first time:
+   * each sprite takes its texture (the material keeps its program), the HUD
+   * hints their elements. Hints on screen stay where they are.
+   */
+  _applyFamily(family) {
+    if (!this._glyphs[family]) this._glyphs[family] = this._drawGlyphs(family);
+    const glyphs = this._glyphs[family];
+    this._sprites.forEach(([action, sprite]) => {
+      const { texture, width, height } = glyphs.sprites[action];
+      sprite.material.map = texture;
+      sprite.scale.set(width, height, 1);
+    });
+    this.moveEl.replaceChildren(glyphs.move);
+    this.deployEl.replaceChildren(glyphs.deploy, this.deployCancelEl);
+  }
+
+  /** Draw every hint's glyph for `family` (once per family). */
+  _drawGlyphs(family) {
+    const sprites = {};
+    this._sprites.forEach(([action]) => {
+      const glyph = glyphFor(action, family);
+      const canvas = makeGlyphCanvas(glyph, SPRITE_CANVAS_PX);
+      const width = SPRITE_WORLD_WIDTH[glyph.kind] || SPRITE_WORLD_WIDTH_DEFAULT;
+      sprites[action] = {
+        texture: new THREE.CanvasTexture(canvas),
+        width,
+        height: (width * canvas.height) / canvas.width,
+      };
+    });
+
+    let move;
+    let deploy;
+    if (family === KEYBOARD) {
+      // W over A S D
+      const [up, ...row] = glyphFor('move', family).labels;
+      move = document.createElement('div');
+      move.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 4px;';
+      const topRow = document.createElement('div');
+      topRow.appendChild(makeKeycapEl(up));
+      const bottomRow = document.createElement('div');
+      bottomRow.style.cssText = 'display: flex; gap: 4px;';
+      row.forEach((k) => bottomRow.appendChild(makeKeycapEl(k)));
+      move.appendChild(topRow);
+      move.appendChild(bottomRow);
+      deploy = makeKeycapEl(glyphFor('deploy', family).label);
+    } else {
+      // The left stick walks, the right one looks
+      move = document.createElement('div');
+      move.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+      move.appendChild(makeGlyphElement(glyphFor('move', family), STICK_PX));
+      move.appendChild(makeGlyphElement(glyphFor('look', family), STICK_PX));
+      deploy = makeGlyphElement(glyphFor('deploy', family), FACE_PX);
+    }
+    return { sprites, move, deploy };
   }
 
   /** Per-frame evaluation. Call only while PLAYING and the world is awake. */
@@ -354,6 +393,10 @@ class KeyHints {
 
   dispose() {
     window.removeEventListener('keydown', this._keyHandler);
+    this._stopFollowing();
+    Object.values(this._glyphs).forEach(({ sprites }) =>
+      Object.values(sprites).forEach(({ texture }) => texture.dispose())
+    );
     this.moveEl.remove();
     this.deployEl.remove();
     this.scene.remove(this.recordSprite);

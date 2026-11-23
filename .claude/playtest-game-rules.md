@@ -136,6 +136,14 @@ Any button wakes the start gate, but only into a world with sound: on a
 fresh page a pad press (or Esc) can't unlock audio, so the gate stays up and
 asks for a key or a click.
 
+The key hints follow the device in hand: a pad button or a stick leaving its
+dead zone switches them to that pad's buttons (PlayStation shapes, Xbox
+X/A/B/Y, Switch Y/B/A/X, or a generic pad's lit diamond position; the move
+cluster becomes the two sticks), a real key or the mouse switches back. To
+see them without a pad, override `navigator.getGamepads` with a fake pad
+whose `id` names the family (e.g. "Xbox Wireless Controller (STANDARD
+GAMEPAD Vendor: 045e Product: 0b13)") and dispatch `gamepadconnected`.
+
 - **Movement/look are HELD-KEY for players** (2026-07-12): the camera
   moves/turns every frame a key is DOWN and stops exactly on release — no
   post-release lurch. You are a code-blind, human-like tester, so drive input

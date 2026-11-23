@@ -28,6 +28,7 @@ import ListeningManager from 'core/ListeningManager';
 import PortalManager from 'core/PortalManager';
 import DeployManager from 'core/DeployManager';
 import Gamepad from 'core/Gamepad';
+import InputDevice from 'core/InputDevice';
 import ShaderPrewarm from 'core/ShaderPrewarm';
 import { beginFrame, updateSceneMatrices } from 'core/sceneMatrices';
 import HintMemory from 'core/HintMemory';
@@ -330,6 +331,7 @@ async function initializeGame() {
   createEventListeners();
   window.addEventListener('keydown', handleKeyDown);
   Gamepad.initialize();
+  InputDevice.initialize();
 
   // Start game loop
   gameLoop.start();

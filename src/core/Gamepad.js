@@ -1,4 +1,5 @@
 import gameState from 'core/GameState';
+import InputDevice from 'core/InputDevice';
 
 /**
  * Gamepad - the game controller: a PS4 DualShock 4, or anything else the
@@ -19,6 +20,10 @@ import gameState from 'core/GameState';
  * other key would: it still wakes the StartGate and dismisses the ending
  * card. The events carry `fromGamepad`, for the StartGate: a pad press is no
  * user activation, so it can't be the gesture that lets audio start.
+ *
+ * A button going down, or a stick leaving its dead zone, tells
+ * core/InputDevice the pad is in hand (the key hints show its buttons); a
+ * pad connected, or held with its sticks at rest, says nothing.
  *
  * Game only: the editor never polls it.
  */
@@ -116,6 +121,9 @@ class Gamepad {
 
   static _stepAt = 0;
 
+  // Whether each stick (left, right) was past its dead zone last poll
+  static _sticksOut = [false, false];
+
   /** Listen for pads coming and going (the game page only, once). */
   static initialize() {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
@@ -149,10 +157,13 @@ class Gamepad {
       const pressed = i < buttons.length && buttons[i].pressed;
       if (pressed !== !!this._down[i]) {
         this._down[i] = pressed;
+        // Before the key goes out, so whoever hears it sees the pad
+        if (pressed) InputDevice.usePad(pad);
         sendKey(pressed ? 'keydown' : 'keyup', BUTTON_KEYS[i] || UNBOUND_KEY);
       }
     }
 
+    this._noticeSticks(pad);
     this._step(menu ? axis(pad, 1) : 0);
     const { stick } = gameState.input;
     if (!awake) {
@@ -166,6 +177,19 @@ class Gamepad {
     const walking = stick.walk.x !== 0 || stick.walk.y !== 0;
     this._runLatched = walking && (this._runLatched || !!this._down[L3]);
     stick.running = this._runLatched || !!this._down[L2];
+  }
+
+  /**
+   * A stick leaving its dead zone puts the pad in hand (core/InputDevice),
+   * once as it leaves: a stick held over doesn't keep claiming it from a
+   * mouse moved meanwhile, and a stick at rest never does.
+   */
+  static _noticeSticks(pad) {
+    for (let s = 0; s < 2; s += 1) {
+      const out = Math.hypot(axis(pad, s * 2), axis(pad, s * 2 + 1)) > DEAD_ZONE;
+      if (out && !this._sticksOut[s]) InputDevice.usePad(pad);
+      this._sticksOut[s] = out;
+    }
   }
 
   /**
@@ -206,6 +230,9 @@ class Gamepad {
     }
     this._step(0);
     this._rest();
+    this._sticksOut = [false, false];
+    // No pad left to play with: back to the keyboard's glyphs
+    InputDevice.useKeyboard();
   }
 
   static _rest() {

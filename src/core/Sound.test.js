@@ -21,8 +21,12 @@ const SHARE = 8;
 let pads = [];
 Object.defineProperty(navigator, 'getGamepads', { value: () => pads, configurable: true });
 
-function connectPad() {
+// A DualShock 4, as Chrome names it
+const DUALSHOCK_4 = 'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)';
+
+function connectPad(id = DUALSHOCK_4) {
   const pad = {
+    id,
     connected: true,
     mapping: 'standard',
     axes: [0, 0, 0, 0],
@@ -149,6 +153,46 @@ describe("the controller's Share button", () => {
 
     tap(pad, SHARE);
     expect(master()).toBe(1);
+  });
+
+  it.each([
+    [
+      'a DualSense',
+      'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      'Create',
+    ],
+    [
+      'an Xbox pad',
+      'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)',
+      'View',
+    ],
+    [
+      'a Switch Pro Controller',
+      'Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)',
+      'Minus',
+    ],
+    [
+      'a pad of no known family',
+      'USB Gamepad (STANDARD GAMEPAD Vendor: 0079 Product: 0011)',
+      'Select',
+    ],
+  ])("the toast names %s's own button", (_pad, id, name) => {
+    const pad = connectPad(id);
+
+    tap(pad, SHARE);
+
+    expect(toasts()).toEqual([`Sound off — ${name} to turn it on`]);
+  });
+
+  it('the P key after a pad press names P', () => {
+    const pad = connectPad();
+    tap(pad, SHARE);
+
+    key('KeyP');
+
+    expect(toasts()).toEqual(['Sound off — Share to turn it on', 'Sound on']);
+    key('KeyP');
+    expect(toasts()[2]).toBe('Sound off — P to turn it on');
   });
 
   it('works while paused too', () => {
