@@ -25,6 +25,15 @@ export const DEFAULT_CREATURE_SIZE = 0.9;
 // Visual only: physics position, collision and elevation never see it.
 export const CREATURE_HOVER_HEIGHT = 0.35;
 
+// The player's eye: this high over the floor they stand on, and the lens
+// the game sees through (resoundModules/playerControls/motion's camera;
+// core/playerView). The editor's Play glides its camera onto exactly this
+// eye and lens, so its last frame is the game's first
+export const EYE_HEIGHT = 1.8;
+export const VIEW_FOV = 75; // degrees, vertical
+export const VIEW_NEAR = 0.1;
+export const VIEW_FAR = 500;
+
 // Player size (radius in world units, for force calculations)
 export const PLAYER_SIZE = 0.5;
 

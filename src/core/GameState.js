@@ -1,4 +1,6 @@
 import { MusicalClock } from 'resound-sound';
+import { EYE_HEIGHT } from 'core/constants';
+import { START_YAW, START_PITCH } from 'core/playerView';
 
 // Stable empty list for "no area loaded" reads of gameState.entities
 const NO_ENTITIES = Object.freeze([]);
@@ -27,7 +29,7 @@ class GameState {
     this.stateMachine = null;
 
     this.player = {
-      position: { x: 0, y: 1.8, z: 0 },
+      position: { x: 0, y: EYE_HEIGHT, z: 0 },
       rotation: { x: 0, y: 0 },
       elevation: 0,
       // The TAPE: a growable strip of slots, each holding one absorbed
@@ -92,7 +94,9 @@ class GameState {
     };
 
     this.camera = {
-      viewCenter: [0, 0], // Accumulated camera rotation
+      // Accumulated camera rotation [yaw, pitch]; a world starts facing north
+      // (core/playerView: the editor's Play lands on the same view)
+      viewCenter: [START_YAW, START_PITCH],
     };
 
     // Creatures the pole can absorb right now (active area, within each
@@ -128,7 +132,7 @@ class GameState {
     // dropping the pointer here just empties the delegated views above.
     this.activeArea = null;
     this.musicalClock = null;
-    this.player.position = { x: 0, y: 1.8, z: 0 };
+    this.player.position = { x: 0, y: EYE_HEIGHT, z: 0 };
     this.player.rotation = { x: 0, y: 0 };
     this.player.elevation = 0;
     this.player.inventory = [null];

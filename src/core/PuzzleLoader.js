@@ -11,6 +11,7 @@ import AudioPrewarm from 'core/AudioPrewarm';
 import WorldMemory from 'core/WorldMemory';
 import ElevationGrid from 'core/ElevationGrid';
 import runInIdleSlices from 'core/idleSlices';
+import { spawnEye } from 'core/playerView';
 import NotationDisplay from 'ui/NotationDisplay';
 import { syncCameraToPlayer } from 'resoundModules/playerControls/motion/motion';
 
@@ -304,11 +305,8 @@ class PuzzleLoader {
    * crossings place the player at the partner gate instead.
    */
   static placePlayerAtStart(puzzleData, gameState) {
-    gameState.player.position = {
-      x: puzzleData.playerStart.x * WORLD_SCALE,
-      y: puzzleData.playerStart.y * ELEVATION_HEIGHT + 1.8,
-      z: puzzleData.playerStart.z * WORLD_SCALE,
-    };
+    // The eye at the spawn (core/playerView: the editor's Play glides onto it)
+    gameState.player.position = spawnEye(puzzleData.playerStart);
     gameState.player.elevation = puzzleData.playerStart.y;
     syncCameraToPlayer(gameState.player.position);
   }

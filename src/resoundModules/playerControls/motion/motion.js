@@ -3,11 +3,12 @@ import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import resolveSlide from 'core/SlideResolver';
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
-import { PLAYER_COLLISION_RADIUS } from 'core/constants';
+import { PLAYER_COLLISION_RADIUS, EYE_HEIGHT, VIEW_FOV, VIEW_NEAR, VIEW_FAR } from 'core/constants';
 import { renderMainView } from 'core/passContext';
 
-const fixedYPosition = 1.8; // Player height in meters
-const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
+const fixedYPosition = EYE_HEIGHT; // Player height in meters
+// The game's lens (core/constants; the editor's Play lands on the same one)
+const camera = new THREE.PerspectiveCamera(VIEW_FOV, 1, VIEW_NEAR, VIEW_FAR);
 camera.position.y = fixedYPosition;
 
 const renderer = new THREE.WebGLRenderer();

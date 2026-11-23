@@ -49,6 +49,7 @@ import {
   DEFAULT_CREATURE_SIZE,
   DOORWAY_COMMIT_DEPTH,
   PLAYER_COLLISION_RADIUS,
+  EYE_HEIGHT,
 } from 'core/constants';
 import {
   FACING_VECTORS,
@@ -776,7 +777,7 @@ class PortalManager {
       {
         position: {
           x: gate.position.x + v.x * WORLD_SCALE * 1.5,
-          y: gate.position.y + 1.8,
+          y: gate.position.y + EYE_HEIGHT,
           z: gate.position.z + v.z * WORLD_SCALE * 1.5,
         },
         pose: lens && { quaternion: WARM_UP_TURN[facing], fov: lens.fov, aspect: lens.aspect },
@@ -1929,7 +1930,7 @@ class PortalManager {
 
     gameState.player.position = {
       x: partner.position.x + offset.x,
-      y: partner.position.y + 1.8,
+      y: partner.position.y + EYE_HEIGHT,
       z: partner.position.z + offset.z,
     };
     gameState.player.elevation = Math.round(partner.position.y / ELEVATION_HEIGHT);
@@ -1960,7 +1961,7 @@ class PortalManager {
     const arrive = (area) => {
       gameState.player.position = {
         x: target.position.x,
-        y: target.position.y + 1.8,
+        y: target.position.y + EYE_HEIGHT,
         z: target.position.z,
       };
       gameState.player.elevation = Math.round(target.position.y / ELEVATION_HEIGHT);
