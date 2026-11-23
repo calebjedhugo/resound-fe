@@ -1441,6 +1441,108 @@ describe('EditorApp writes each edit to its own puzzle', () => {
     jest.restoreAllMocks();
   });
 
+  describe('Play: the level in the game', () => {
+    let opened;
+    beforeEach(() => {
+      opened = [];
+      jest.spyOn(window, 'open').mockImplementation((url, name) => {
+        opened.push({ url, name, log: [...log] });
+        return {};
+      });
+    });
+    afterEach(() => {
+      sessionStorage.clear();
+      window.history.replaceState(null, '', '/');
+    });
+
+    const toast = () => document.querySelector('.viewport-toast').textContent;
+
+    it("saves the last edit, then opens the game on the level at its spawn, in the editor's one game tab", async () => {
+      await openEditorOn('a');
+      app.undoManager.setPlayerSpawn(2, 0, 3);
+
+      expect(await app.play()).toBe(true);
+
+      expect(opened).toEqual([
+        { url: '/?puzzle=a&from=editor', name: 'resound-play', log: ['write a'] },
+      ]);
+      expect(disk.a.playerStart).toEqual({ x: 2, y: 0, z: 3 });
+    });
+
+    it('a second Play reloads that same tab instead of opening another', async () => {
+      await openEditorOn('a');
+      app.undoManager.setPlayerSpawn(2, 0, 3);
+      await app.play();
+      await app.play();
+
+      expect(opened.map((o) => o.name)).toEqual(['resound-play', 'resound-play']);
+    });
+
+    it('Cmd/Ctrl+Enter plays too', async () => {
+      await openEditorOn('a');
+      app.undoManager.setPlayerSpawn(2, 0, 3);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true }));
+      await jest.advanceTimersByTimeAsync(600);
+
+      expect(opened.map((o) => o.url)).toEqual(['/?puzzle=a&from=editor']);
+    });
+
+    it("won't play a puzzle with no name yet, and says why", async () => {
+      await openEditorOn('a');
+      app._newPuzzle();
+      app.undoManager.setPlayerSpawn(2, 0, 3);
+
+      expect(await app.play()).toBe(false);
+      expect(opened).toEqual([]);
+      expect(toast()).toMatch(/Name the puzzle/);
+    });
+
+    it("won't play a level with no player spawn, and says why", async () => {
+      await openEditorOn('a');
+      app.undoManager.clearPlayerSpawn();
+
+      expect(await app.play()).toBe(false);
+      expect(opened).toEqual([]);
+      expect(toast()).toMatch(/player spawn/);
+    });
+
+    it('with no gesture to open a tab (a controller), plays in this tab and keeps the undo history for the way back', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {}); // jsdom can't navigate
+      await openEditorOn('a');
+      app.undoManager.setPlayerSpawn(2, 0, 3);
+      await app.play({ sameTab: true });
+      expect(opened).toEqual([]);
+      app.dispose();
+
+      // The game's Back to Editor: the editor again, on the level
+      document.body.innerHTML = '';
+      setupEditorDOM();
+      window.history.replaceState(null, '', '/editor.html?puzzle=a');
+      app = new EditorApp();
+      app.init();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(app.undoManager.getMetadata().id).toBe('a');
+      expect(app.undoManager.canUndo()).toBe(true);
+      app._undo();
+      expect(app.undoManager.getPlayerSpawn()).toEqual({ x: 0, y: 0, z: 0 });
+    });
+
+    it("a game tab's Back to Editor brings the editor its level", async () => {
+      await openEditorOn('a');
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          data: { type: 'resound:back-to-editor', puzzleId: 'b' },
+        })
+      );
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(app.undoManager.getMetadata().id).toBe('b');
+      expect(toast()).toMatch(/Back from the game/);
+    });
+  });
+
   it('writes an edit made just before opening another puzzle to its own file', async () => {
     await openEditorOn('a');
 

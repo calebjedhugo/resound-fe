@@ -40,6 +40,7 @@ import Fountain from 'entities/Fountain';
 import Waystone from 'entities/Waystone';
 import WaystoneGatePad from 'entities/WaystoneGatePad';
 import { calmStorm, tickEnvironment } from 'entities/EnvironmentLook';
+import { playRequest, backToEditor } from 'core/editorLink';
 
 // Three.js scene
 const scene = new THREE.Scene();
@@ -292,10 +293,11 @@ async function initializeGame() {
   // Up before the first fetch, so the boot paints the scrim, not a blank page
   startGate.showLoading();
 
-  // A deep link from the editor's "Test in game" (?puzzle=<id>) fetches its
-  // puzzle alongside the manifest instead of after it. It is entered only if
-  // the manifest lists it; startPuzzle reports a failed load.
-  const requestedPuzzle = new URLSearchParams(window.location.search).get('puzzle');
+  // A deep link — the editor's Play (?puzzle=<id>&from=editor,
+  // core/editorLink) or a plain ?puzzle=<id> — fetches its puzzle alongside
+  // the manifest instead of after it. It is entered only if the manifest
+  // lists it; startPuzzle reports a failed load.
+  const { puzzleId: requestedPuzzle, fromEditor } = playRequest(window.location.search);
   const requestedLoad = requestedPuzzle ? PuzzleLoader.load(requestedPuzzle) : null;
   if (requestedLoad) requestedLoad.catch(() => {});
 
@@ -304,14 +306,18 @@ async function initializeGame() {
 
   // Create menus
   mainMenu = new MainMenu(puzzles, startPuzzle, ProgressManager);
-  pauseMenu = new PauseMenu(resumeGame, exitToMenu, nextPuzzle);
+  // Launched from the editor: its pause menu leads back there, on the level
+  // the editor played
+  const onBackToEditor = fromEditor ? () => backToEditor(requestedPuzzle) : null;
+  pauseMenu = new PauseMenu(resumeGame, exitToMenu, nextPuzzle, onBackToEditor);
 
   // Register states
   stateMachine.registerState('MENU', new MenuState(gameState, mainMenu));
   stateMachine.registerState('PLAYING', new PlayingState(gameState));
   stateMachine.registerState('PAUSED', new PausedState(gameState, pauseMenu));
 
-  // Deep link from the editor's "Test in game": ?puzzle=<id> jumps straight in.
+  // Deep link (the editor's Play): ?puzzle=<id> jumps straight in, at the
+  // puzzle's player spawn, the start gate up (audio needs a gesture).
   // Checked (and awaited) first so the menu never flashes while a puzzle loads.
   if (requestedPuzzle && puzzles.some((p) => p.id === requestedPuzzle)) {
     await startPuzzle(requestedPuzzle, requestedLoad);

@@ -4,10 +4,10 @@
  * Compact action bar under the sidebar title:
  *  - Undo / Redo buttons (reflect UndoManager.canUndo/canRedo)
  *  - A live save-status indicator driven by EditorApp's autosave flow
- *  - "Test in game" deep link and a keyboard-shortcut help popover
+ *  - Play (the level in the game: EditorApp.play) and a shortcut help popover
  *
  * The toolbar owns no editing state; EditorApp calls setStatus() and
- * refresh() to keep it in sync, and supplies the undo/redo/test callbacks.
+ * refresh() to keep it in sync, and supplies the undo/redo/play/look callbacks.
  */
 
 const SHORTCUTS = [
@@ -24,6 +24,7 @@ const SHORTCUTS = [
   ['Delete / Backspace', 'Delete the entity, or the floor region on an empty cell'],
   ['Escape', 'Deselect / cancel'],
   ['V', 'Game look / schematic look'],
+  ['Cmd/Ctrl + Enter', 'Play the level in the game (saves first)'],
   ['Drag / Shift-drag / wheel', 'Orbit / pan / zoom the camera'],
   ['Cmd/Ctrl + Z', 'Undo'],
   ['Cmd/Ctrl + Shift + Z', 'Redo'],
@@ -32,7 +33,7 @@ const SHORTCUTS = [
 export default class EditorToolbar {
   /**
    * @param {HTMLElement} container - #toolbar-panel
-   * @param {object} handlers - { onUndo, onRedo, canUndo, canRedo, onTest }
+   * @param {object} handlers - { onUndo, onRedo, canUndo, canRedo, onPlay, onToggleLook }
    */
   constructor(container, handlers) {
     this._container = container;
@@ -56,10 +57,14 @@ export default class EditorToolbar {
     const spacer = document.createElement('div');
     spacer.className = 'toolbar-spacer';
 
-    this._testBtn = this._iconBtn('▶', 'Test this puzzle in the game (new tab)', () => {
-      if (this._handlers.onTest) this._handlers.onTest();
-    });
-    this._testBtn.classList.add('toolbar-test');
+    this._testBtn = this._iconBtn(
+      '▶',
+      'Play this level in the game, from its player spawn (Cmd/Ctrl+Enter)',
+      () => {
+        if (this._handlers.onPlay) this._handlers.onPlay();
+      }
+    );
+    this._testBtn.classList.add('toolbar-test', 'toolbar-play');
 
     this._lookBtn = this._iconBtn('◐', 'Game look / schematic look (V)', () => {
       if (this._handlers.onToggleLook) this._handlers.onToggleLook();

@@ -5,11 +5,19 @@ import Sound from 'core/Sound';
 import Menu from 'ui/Menu';
 
 class PauseMenu extends Menu {
-  constructor(onContinue, onExit, onNextPuzzle) {
+  /**
+   * @param {Function} onContinue
+   * @param {Function} onExit
+   * @param {Function} onNextPuzzle
+   * @param {?Function} [onBackToEditor] - given when the editor's Play
+   *   launched this game (core/editorLink): the menu offers "Back to Editor"
+   */
+  constructor(onContinue, onExit, onNextPuzzle, onBackToEditor = null) {
     super('pause-menu');
     this.onContinue = onContinue;
     this.onExit = onExit;
     this.onNextPuzzle = onNextPuzzle;
+    this.onBackToEditor = onBackToEditor;
     this.soundButton = null;
     // Sound toggled by its key (P, Share) while paused: the entry follows
     Sound.onChange(() => this._labelSound());
@@ -67,6 +75,15 @@ class PauseMenu extends Menu {
         }
       });
       buttonContainer.appendChild(nextButton);
+    }
+
+    // Launched by the editor's Play: straight back to it, on the same level
+    if (this.onBackToEditor) {
+      const editorButton = document.createElement('button');
+      editorButton.className = 'menu-button';
+      editorButton.textContent = 'Back to Editor';
+      editorButton.addEventListener('click', () => this.onBackToEditor());
+      buttonContainer.appendChild(editorButton);
     }
 
     // Invert look: the right stick and the mouse look down when pushed up

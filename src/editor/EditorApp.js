@@ -39,6 +39,8 @@ import {
 import { importPuzzle } from 'editor/io/importPuzzle';
 import { loadLook, saveLook } from 'editor/io/lookPreference';
 import SongAudition from 'editor/audio/SongAudition';
+import { serializePuzzle } from 'editor/model/serialization';
+import { playUrl, editorRequest, PLAY_WINDOW_NAME, BACK_TO_EDITOR_MESSAGE } from 'core/editorLink';
 import { availableElevations } from 'editor/util/elevations';
 import { ELEVATION_HEIGHT } from 'core/constants';
 
@@ -53,6 +55,8 @@ const PLACE_KEYS = {
   r: 'ramp',
   l: 'waystone',
 };
+// Where a same-tab Play leaves the undo history for the editor's return
+const HISTORY_KEY = 'resound-editor-history';
 // A click whose pointer moved more than this many pixels since mousedown is a
 // drag (camera rotate/pan), not a selection.
 const CLICK_DRAG_PX = 4;
@@ -167,7 +171,7 @@ export default class EditorApp {
       onRedo: () => this._redo(),
       canUndo: () => this.undoManager.canUndo(),
       canRedo: () => this.undoManager.canRedo(),
-      onTest: () => this._testInGame(),
+      onPlay: () => this.play(),
       onToggleLook: () => this.toggleLook(),
     });
     this.puzzlePicker = new PuzzlePicker(
@@ -271,6 +275,8 @@ export default class EditorApp {
     // this._setupDrag();
     this._setupKeyboard();
     this._setupRenderInvalidation();
+    this._onMessage = (event) => this._onBackFromGame(event);
+    window.addEventListener('message', this._onMessage);
     this._requestFrame(); // initial render
     window.addEventListener('resize', () => this._onResize());
   }
@@ -543,6 +549,12 @@ export default class EditorApp {
   }
 
   async _restoreSession() {
+    // Opened on a level (the game's Back to Editor): that level, from disk
+    const requested = editorRequest(window.location.search);
+    if (requested && (await this._openRequestedPuzzle(requested))) {
+      this._restoreHistory();
+      return;
+    }
     const restored = loadSession();
     if (!restored) return;
 
@@ -560,6 +572,7 @@ export default class EditorApp {
           this._applyRestoredModel(importPuzzle(json).model);
           await this.puzzlePicker.refresh(id);
           this.toolbar.setStatus('saved');
+          this._restoreHistory();
           return;
         }
       } catch (err) {
@@ -569,6 +582,27 @@ export default class EditorApp {
     // Not on disk: a snapshot of a not-yet-saved puzzle.
     this._puzzleCommitted = false;
     this._applyRestoredModel(restored);
+  }
+
+  /** Open a level named in the editor's URL; false if the repo doesn't list it. */
+  async _openRequestedPuzzle(id) {
+    try {
+      const puzzles = await listRepoPuzzles();
+      if (!puzzles.some((p) => p.id === id)) return false;
+      const json = await loadRepoPuzzle(id);
+      this._puzzleCommitted = true;
+      this._applyRestoredModel(importPuzzle(json).model);
+      await this.puzzlePicker.refresh(id);
+      this.toolbar.setStatus('saved');
+      // A reload restores the session as usual
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      return true;
+    } catch (err) {
+      console.warn(`Couldn't open "${id}":`, err);
+      return false;
+    }
   }
 
   /**
@@ -788,14 +822,95 @@ export default class EditorApp {
     this.gameLook.setSelected(id, this.undoManager);
   }
 
-  /** Open the current puzzle in the game (new tab) via the ?puzzle= deep link. */
-  _testInGame() {
+  // --- Play: the level in the game -----------------------------------------
+
+  /**
+   * Save the level and open the game on it, at its player spawn (the menu
+   * skipped, the start gate kept: core/editorLink). In the one game tab the
+   * editor reuses (a second Play reloads it, no pile of tabs) — or, with no
+   * user gesture to open a tab (a controller press) or a blocked popup, in
+   * this tab, the undo history kept for the way back (the game's pause menu:
+   * "Back to Editor").
+   * @param {{sameTab?: boolean}} [options]
+   * @returns {Promise<boolean>} whether the game was opened
+   */
+  async play({ sameTab = false } = {}) {
     const { id } = this.undoManager.getMetadata();
-    if (!id || !this._puzzleCommitted) {
-      this.toolbar.setStatus('unnamed');
+    if (!id) {
+      this._showToast('Name the puzzle to play it — its name gives it the file the game loads');
+      this.metadataPanel.expand();
+      return false;
+    }
+    if (!this.undoManager.getPlayerSpawn()) {
+      this._showToast('Place the player spawn first (P) — the game starts you there');
+      return false;
+    }
+    // The game reads the file: the last edit lands first (a puzzle never
+    // written yet is written now)
+    if (!this._puzzleCommitted && this._autoSaveTimer === null) this._autoSave();
+    await this._settleAutoSave();
+    if (!this._puzzleCommitted) {
+      this._showToast("Couldn't save the puzzle, so the game can't load it — see the save status");
+      return false;
+    }
+    const url = playUrl(id);
+    const activated = !navigator.userActivation || navigator.userActivation.isActive;
+    if (!sameTab && activated) {
+      const tab = window.open(url, PLAY_WINDOW_NAME);
+      if (tab) {
+        this._showToast('Playing in the game tab — pause there for Back to Editor', 'success');
+        return true;
+      }
+    }
+    this._leaveForGame(url);
+    return true;
+  }
+
+  /** The game replaces the editor in this tab: keep the undo history for the return. */
+  _leaveForGame(url) {
+    try {
+      sessionStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify({
+          model: JSON.stringify(serializePuzzle(this.undoManager)),
+          history: this.undoManager.exportHistory(),
+        })
+      );
+    } catch {
+      // Too big or blocked: the level is saved; only undo history is lost
+    }
+    saveSession(this.undoManager);
+    window.location.assign(url);
+  }
+
+  /**
+   * Back from a same-tab Play: the undo history comes back if the level is
+   * the one left (same file, unchanged).
+   */
+  _restoreHistory() {
+    let stored = null;
+    try {
+      stored = JSON.parse(sessionStorage.getItem(HISTORY_KEY) || 'null');
+      sessionStorage.removeItem(HISTORY_KEY);
+    } catch {
       return;
     }
-    window.open(`/?puzzle=${encodeURIComponent(id)}`, '_blank', 'noopener');
+    if (!stored || !stored.history) return;
+    if (stored.model !== JSON.stringify(serializePuzzle(this.undoManager))) return;
+    this.undoManager.importHistory(stored.history);
+    this.toolbar.refresh();
+  }
+
+  /** A game tab this editor opened went "Back to Editor": show its level. */
+  _onBackFromGame(event) {
+    if (event.origin !== window.location.origin) return;
+    const { data } = event;
+    if (!data || data.type !== BACK_TO_EDITOR_MESSAGE) return;
+    const { id } = this.undoManager.getMetadata();
+    if (data.puzzleId && data.puzzleId !== id && this.puzzlePicker.hasLevel(data.puzzleId)) {
+      this.puzzlePicker.open(data.puzzleId);
+    }
+    this._showToast('Back from the game', 'success');
   }
 
   // --- Git controls (dev-only; see ui/GitPanel.js + io/gitControls.js) ---
@@ -1466,6 +1581,13 @@ export default class EditorApp {
         return;
       }
 
+      // Cmd/Ctrl+Enter plays the level in the game (from any field too).
+      if ((e.metaKey || e.ctrlKey) && key === 'Enter') {
+        e.preventDefault();
+        this.play();
+        return;
+      }
+
       // Escape cancels the active mode (works even from a focused field).
       if (key === 'Escape') {
         this.floorRegionPanel.cancelPlacing();
@@ -1609,6 +1731,7 @@ export default class EditorApp {
   dispose() {
     if (this._frameId) cancelAnimationFrame(this._frameId);
     document.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('message', this._onMessage);
     if (this._invalidateRender) {
       this.controls.removeEventListener?.('change', this._invalidateRender);
       document.removeEventListener('keydown', this._invalidateOnKey);
