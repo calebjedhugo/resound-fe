@@ -23,6 +23,7 @@
     { "id": "playtest-r4-legit", "name": "playtest-r4-legit", "difficulty": 1 },
     { "id": "teleport", "name": "teleport", "difficulty": 1 },
     { "id": "colour-gallery", "name": "Colour Gallery (dev)", "difficulty": 1 },
-    { "id": "colour-harmony", "name": "Colour Harmony (dev)", "difficulty": 1 }
+    { "id": "colour-harmony", "name": "Colour Harmony (dev)", "difficulty": 1 },
+    { "id": "middle-c", "name": "middle-c", "difficulty": 1 }
   ]
 }

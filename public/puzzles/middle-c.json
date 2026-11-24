@@ -1,0 +1,34 @@
+{
+  "id": "middle-c",
+  "name": "middle-c",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": { "x": 1, "y": 0, "z": 1 },
+  "floors": [],
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": 3, "y": 0, "z": 12 },
+      "data": { "song": [{ "pitch": "C4", "length": "1/1" }], "interval": 8, "audibleRange": 15 }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 12, "y": 0, "z": 7 },
+      "song": [{ "pitch": "C4", "length": "1/1" }],
+      "id": "gate-1",
+      "facing": "north",
+      "link": { "puzzleId": "middle-c", "gateId": "gate-2" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 2, "y": 0, "z": 7 },
+      "song": [{ "pitch": "C4", "length": "1/1" }],
+      "id": "gate-2",
+      "facing": "north",
+      "link": { "puzzleId": "middle-c", "gateId": "gate-1" }
+    }
+  ]
+}
