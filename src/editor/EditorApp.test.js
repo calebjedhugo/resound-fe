@@ -1839,6 +1839,7 @@ describe('EditorApp writes each edit to its own puzzle', () => {
 
     it("the camera glides down to the player's eye at the spawn, with the game's heading and lens", async () => {
       const { home } = await startPlay();
+      fromGame({ type: 'resound:preview-waiting' });
 
       runFrames(500);
       const halfway = cameraAt();
@@ -1862,6 +1863,7 @@ describe('EditorApp writes each edit to its own puzzle', () => {
 
     it('a frame that comes late (the game loading on the same thread) pauses the glide, never jumps it', async () => {
       await startPlay();
+      fromGame({ type: 'resound:preview-waiting' });
       runFrames(208);
       const before = app.camera.position.y;
       clock += 300; // one frame 300 ms late
@@ -1875,6 +1877,31 @@ describe('EditorApp writes each edit to its own puzzle', () => {
       expect(app.preview.landed).toBe(false); // the glide still has its full second
       runFrames(400);
       expect(app.preview.landed).toBe(true);
+    });
+
+    it("the glide waits for the game's code to load, so the load never pauses it", async () => {
+      const { home } = await startPlay();
+      runFrames(400);
+      // Not moved, no sidebar slide, no ring for a usual load
+      expect(cameraAt().position).toEqual(home.position);
+      expect(document.getElementById('editor-sidebar').style.transform).toBe('');
+      expect(document.querySelector('.play-loading').hidden).toBe(true);
+
+      fromGame({ type: 'resound:preview-waiting' });
+      runFrames(500);
+      expect(cameraAt().position.y).toBeLessThan(home.position.y);
+      runFrames(600);
+      expect(app.preview.landed).toBe(true);
+    });
+
+    it('a game whose code is slow to load: a ring after a moment, and the glide goes anyway after 2 s', async () => {
+      const { home } = await startPlay();
+      runFrames(700);
+      expect(document.querySelector('.play-loading').hidden).toBe(false);
+      expect(cameraAt().position).toEqual(home.position);
+
+      runFrames(1400);
+      expect(cameraAt().position.y).toBeLessThan(home.position.y);
     });
 
     it('the game builds its world only once the camera has landed (holding still)', async () => {

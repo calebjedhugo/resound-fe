@@ -178,7 +178,11 @@ edits show up in the game on a manual reload.
 - **The game** loads unseen in a same-origin iframe over everything
   (`.play-frame`, `allow="autoplay; gamepad"`, `/?puzzle=<id>&from=editor`).
   Same origin = the SAME main thread, so the protocol (`core/playLink`)
-  keeps the game's heavy work off the glide: WAITING (game listening) →
+  keeps the game's heavy work off the glide: the glide (and the sidebar
+  slide) START only on WAITING — the game's code has loaded by then, and
+  loading it mid-glide paused it (ruled 2026-11-23: wait, glide smooth;
+  ring after 0.5 s, glide goes anyway after `CODE_WAIT_MS` = 2 s; measured:
+  glide starts ~0.3 s after Play, longest frame 18 ms). WAITING (game listening) →
   LANDED (editor: camera still at the eye; carries the editor's sky clock,
   `environmentClock`) → the game builds and draws behind its VEILED start
   gate (world held, gate unseen, pad off) → READY (its first frame is

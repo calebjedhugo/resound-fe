@@ -62,6 +62,12 @@ const CHROME_SHARE = 0.4;
 const ACROSS = 0.15;
 // The most a glide moves on in one frame (two frames' worth at 60 Hz)
 const MAX_STEP_MS = 34;
+// The glide starts once the game's code has loaded (it says WAITING): its
+// loading shares this thread and would pause a glide already under way.
+// Past this long without word, the glide goes anyway.
+export const CODE_WAIT_MS = 2000;
+// A hold this long shows the loading ring (a usual load, ~0.3 s, doesn't)
+const HOLD_RING_MS = 500;
 // A game that hasn't said READY this long after the camera landed isn't coming
 const READY_TIMEOUT_MS = 20000;
 
@@ -146,6 +152,7 @@ export default class PlayPreview {
     this._to = this._spawn;
     this._glideMs = GLIDE_MS;
     this._glideStart = null;
+    this._holdSince = null;
     this._landed = false;
     this._gameWaiting = false;
     this._landedSent = false;
@@ -204,6 +211,15 @@ export default class PlayPreview {
   // ---- Entering -----------------------------------------------------------
 
   _enterFrame(now) {
+    // Hold still until the game's code has loaded (see CODE_WAIT_MS)
+    if (!this._gameWaiting && this._glideStart === null) {
+      if (this._holdSince === null) this._holdSince = now;
+      const held = now - this._holdSince;
+      if (held < CODE_WAIT_MS) {
+        if (this._loading) this._loading.hidden = held < HOLD_RING_MS;
+        return { draw: true, more: true };
+      }
+    }
     const t = this._glided(now) / this._glideMs;
     const across = this._glideMs === GLIDE_MS ? ACROSS : 0;
     this._apply(poseAt(this._from, this._to, t, across));
