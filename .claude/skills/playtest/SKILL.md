@@ -23,11 +23,11 @@ code knowledge for diagnosis afterward.
 ### 1. Ensure the dev server is running
 
 ```bash
-curl -sf http://localhost:5173/ >/dev/null && echo up || echo down
+curl -sf http://localhost:5182/ >/dev/null && echo up || echo down
 ```
 
-If down: run `npm start` in the project root with `run_in_background: true`,
-then poll the same curl until `up`.
+If down: `scripts/dev-server.sh start` (the ONE dev server — see the
+`dev-server` skill; never start a second one).
 
 ### 2. Read the briefing sources (both, fully)
 

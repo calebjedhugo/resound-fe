@@ -85,3 +85,24 @@ it('is remembered on the next visit', async () => {
 
   expect(invertButton().textContent).toBe('Invert Look: On');
 });
+
+describe('the editor entry', () => {
+  const button = (label) =>
+    [...document.querySelectorAll('#pause-menu button, .menu button')].find(
+      (b) => b.textContent === label
+    );
+
+  it('is absent unless the game can go to the editor', () => {
+    expect(button('Back to Editor')).toBeUndefined();
+    expect(button('Editor')).toBeUndefined();
+  });
+
+  it('reads "Editor" in a dev build (the mode switch) and leads there', () => {
+    menu.hide();
+    const onEditor = jest.fn();
+    menu = new PauseMenu(null, null, null, onEditor, 'Editor');
+    menu.show();
+    [...menu.element.querySelectorAll('button')].find((b) => b.textContent === 'Editor').click();
+    expect(onEditor).toHaveBeenCalled();
+  });
+});

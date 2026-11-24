@@ -177,6 +177,7 @@ export default class EditorApp {
       canRedo: () => this.undoManager.canRedo(),
       onPlay: () => this.play(),
       onToggleLook: () => this.toggleLook(),
+      onGame: () => this.openGame(),
     });
     this.puzzlePicker = new PuzzlePicker(
       document.getElementById('puzzle-panel'),
@@ -839,7 +840,8 @@ export default class EditorApp {
       {
         label: this._look === 'game' ? 'Schematic look' : 'Game look',
         action: () => this.toggleLook(),
-      }
+      },
+      { label: 'Game mode (main menu)', action: () => this.openGame() }
     );
     const container = document.getElementById('editor-viewport');
     const x = Math.max(0, container.clientWidth / 2 - 90);
@@ -1077,6 +1079,18 @@ export default class EditorApp {
    * back to this view with everything as it was.
    * @returns {Promise<boolean>} whether the game was started
    */
+  /**
+   * Game mode (the dev app's switch): the last edit lands, then the game's
+   * own page loads in this window — its main menu, every level. The game's
+   * menus lead back here (dev builds).
+   * @param {Location} [loc]
+   */
+  async openGame(loc = window.location) {
+    if (this.preview && this.preview.active) return;
+    await this._settleAutoSave();
+    loc.assign('/');
+  }
+
   async play() {
     if (this.preview && this.preview.active) return false;
     const { id } = this.undoManager.getMetadata();

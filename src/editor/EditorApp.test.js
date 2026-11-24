@@ -1407,6 +1407,23 @@ describe('EditorApp wiring', () => {
       expect(items).toEqual(expect.arrayContaining(['Open puzzle…', 'Undo', 'Redo']));
     });
 
+    it('Game mode (Options menu or toolbar) lands the last edit, then loads the game', async () => {
+      tap('options');
+      expect(
+        [...document.querySelectorAll('.context-menu-item')].map((b) => b.textContent)
+      ).toContain('Game mode (main menu)');
+      tap('circle');
+
+      const settle = jest.spyOn(app, '_settleAutoSave');
+      const loc = { assign: jest.fn() };
+      await app.openGame(loc);
+      expect(settle).toHaveBeenCalled();
+      expect(loc.assign).toHaveBeenCalledWith('/');
+
+      const toolbarGame = document.querySelector('.toolbar-game');
+      expect(toolbarGame.textContent).toBe('Game');
+    });
+
     it('Triangle opens the song under the cursor; there the pad writes notes, and Circle closes it', () => {
       const id = app.undoManager.addEntity('creature', 7, 0, 7, {
         song: [{ pitch: 'C4', length: '1/4' }],

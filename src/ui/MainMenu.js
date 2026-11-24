@@ -1,8 +1,15 @@
 import Menu from 'ui/Menu';
 
 class MainMenu extends Menu {
-  constructor(puzzles, onSelectPuzzle, progressManager) {
+  /**
+   * @param {Array} puzzles
+   * @param {Function} onSelectPuzzle
+   * @param {object} progressManager
+   * @param {?Function} [onEditor] - dev builds: an "Editor" entry (editor mode)
+   */
+  constructor(puzzles, onSelectPuzzle, progressManager, onEditor = null) {
     super('main-menu');
+    this.onEditor = onEditor;
     this.puzzles = puzzles;
     this.onSelectPuzzle = onSelectPuzzle;
     this.progressManager = progressManager;
@@ -65,6 +72,15 @@ class MainMenu extends Menu {
     });
 
     this.element.appendChild(puzzleContainer);
+
+    // Dev builds: back to the level editor (the dev app's mode switch)
+    if (this.onEditor) {
+      const editorButton = document.createElement('button');
+      editorButton.className = 'menu-button';
+      editorButton.textContent = 'Editor';
+      editorButton.addEventListener('click', () => this.onEditor());
+      this.element.appendChild(editorButton);
+    }
   }
 
   createPuzzleItem(puzzle) {

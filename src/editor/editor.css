@@ -123,6 +123,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
 .world-issue { padding: 2px 0; }
 .world-issue-one-way { color: #ffaa44; }
 .world-issue-dangling { color: #ff4444; }
+.toolbar-game { width: auto; padding: 0 8px; font-size: 12px; }
 .toolbar-look.active { color: #cfd8ea; border-color: #5a6a8a; }
 .pad-legend { position: fixed; top: 12px; right: 12px; z-index: 300; padding: 8px 10px; background: rgba(10, 16, 30, 0.86); border: 1px solid #2a3a5a; border-radius: 6px; font-size: 12px; color: #cfd8ea; pointer-events: none; max-width: 330px; }
 .pad-legend-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8899aa; margin-bottom: 4px; }

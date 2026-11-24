@@ -46,7 +46,7 @@ Describe any animation you catch: what moved/changed color, where, roughly
 how long.
 
 ## Mission
-Game: http://localhost:5173/ — Editor: http://localhost:5173/editor.html
+Game: http://localhost:5182/ — Editor: http://localhost:5182/editor.html
 (the editor autosaves once a puzzle is named).
 
 {{FOCUS_MISSION}} <!-- 4-8 concrete numbered steps exercising the focus:

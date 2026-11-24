@@ -10,14 +10,23 @@ class PauseMenu extends Menu {
    * @param {Function} onExit
    * @param {Function} onNextPuzzle
    * @param {?Function} [onBackToEditor] - given when the editor's Play
-   *   launched this game (core/playLink): the menu offers "Back to Editor"
+   *   launched this game (core/playLink), or in a dev build (editor mode):
+   *   the menu offers it as `editorLabel`
+   * @param {string} [editorLabel]
    */
-  constructor(onContinue, onExit, onNextPuzzle, onBackToEditor = null) {
+  constructor(
+    onContinue,
+    onExit,
+    onNextPuzzle,
+    onBackToEditor = null,
+    editorLabel = 'Back to Editor'
+  ) {
     super('pause-menu');
     this.onContinue = onContinue;
     this.onExit = onExit;
     this.onNextPuzzle = onNextPuzzle;
     this.onBackToEditor = onBackToEditor;
+    this.editorLabel = editorLabel;
     this.soundButton = null;
     // Sound toggled by its key (P, Share) while paused: the entry follows
     Sound.onChange(() => this._labelSound());
@@ -81,7 +90,7 @@ class PauseMenu extends Menu {
     if (this.onBackToEditor) {
       const editorButton = document.createElement('button');
       editorButton.className = 'menu-button';
-      editorButton.textContent = 'Back to Editor';
+      editorButton.textContent = this.editorLabel;
       editorButton.addEventListener('click', () => this.onBackToEditor());
       buttonContainer.appendChild(editorButton);
     }

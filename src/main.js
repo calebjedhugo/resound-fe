@@ -49,6 +49,7 @@ import { audioContextManager } from 'resound-sound';
 import {
   playRequest,
   backToEditor,
+  editorUrl,
   editorFrame,
   tellEditor,
   isFromEditor,
@@ -441,11 +442,31 @@ async function initializeGame() {
   const puzzles = await PuzzleLoader.loadPuzzleList();
 
   // Create menus
-  mainMenu = new MainMenu(puzzles, startPuzzle, ProgressManager);
+  // Dev builds switch between the game and the level editor (the dev app):
+  // the main menu and the pause menu lead to the editor, on the level played
+  const devEditor = import.meta.env.DEV && !fromEditor;
+  mainMenu = new MainMenu(
+    puzzles,
+    startPuzzle,
+    ProgressManager,
+    devEditor ? () => window.location.assign(editorUrl()) : null
+  );
   // Launched from the editor: its pause menu leads back there, on the level
   // the editor played
-  const onBackToEditor = fromEditor ? leaveForEditor : null;
-  pauseMenu = new PauseMenu(resumeGame, exitToMenu, nextPuzzle, onBackToEditor);
+  let onBackToEditor = fromEditor ? leaveForEditor : null;
+  if (devEditor) {
+    onBackToEditor = () =>
+      window.location.assign(
+        editorUrl(gameState.currentPuzzle ? gameState.currentPuzzle.id : null)
+      );
+  }
+  pauseMenu = new PauseMenu(
+    resumeGame,
+    exitToMenu,
+    nextPuzzle,
+    onBackToEditor,
+    devEditor ? 'Editor' : 'Back to Editor'
+  );
 
   // Register states
   stateMachine.registerState('MENU', new MenuState(gameState, mainMenu));

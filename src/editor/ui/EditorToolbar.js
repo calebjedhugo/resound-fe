@@ -53,7 +53,7 @@ const SHORTCUTS = [
 export default class EditorToolbar {
   /**
    * @param {HTMLElement} container - #toolbar-panel
-   * @param {object} handlers - { onUndo, onRedo, canUndo, canRedo, onPlay, onToggleLook }
+   * @param {object} handlers - { onUndo, onRedo, canUndo, canRedo, onPlay, onToggleLook, onGame }
    */
   constructor(container, handlers) {
     this._container = container;
@@ -91,6 +91,11 @@ export default class EditorToolbar {
     });
     this._lookBtn.classList.add('toolbar-look');
 
+    this._gameBtn = this._iconBtn('Game', 'Game mode: the game itself, from its main menu', () => {
+      if (this._handlers.onGame) this._handlers.onGame();
+    });
+    this._gameBtn.classList.add('toolbar-game');
+
     this._helpBtn = this._iconBtn('?', 'Keyboard and controller shortcuts', () =>
       this._toggleHelp()
     );
@@ -100,6 +105,7 @@ export default class EditorToolbar {
     row.appendChild(spacer);
     row.appendChild(this._lookBtn);
     row.appendChild(this._testBtn);
+    row.appendChild(this._gameBtn);
     row.appendChild(this._helpBtn);
     wrapper.appendChild(row);
 

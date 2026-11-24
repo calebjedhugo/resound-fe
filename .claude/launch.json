@@ -3,10 +3,7 @@
   "configurations": [
     {
       "name": "resound-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["start"],
-      "port": 5173,
-      "autoPort": true
+      "url": "http://localhost:5182"
     }
   ]
 }
