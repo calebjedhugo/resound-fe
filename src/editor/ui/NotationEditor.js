@@ -32,12 +32,14 @@
 
 import { NotationRenderer } from 'resound-notation';
 import SongModel from 'editor/model/SongModel';
-import RhythmPalette, { DURATIONS } from 'editor/ui/RhythmPalette';
+import RhythmPalette from 'editor/ui/RhythmPalette';
 import { createNoteFromClick } from 'editor/ui/staffCoords';
 import { inferClef } from 'resound-notation/lib/clefInference';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const GRAND_STAFF_VOICES = ['treble', 'bass'];
+// A staff group's middle line, in its own coordinates (its lines run 10..90)
+const STAFF_MIDDLE_Y = 50;
 
 // ── Dotted-duration normalization ─────────────────────────────────────
 // SongModel represents a dotted value as a numerator-3 fraction (e.g. a
@@ -139,6 +141,7 @@ export default class NotationEditor {
     this._engravedWidth = 0; // the staff's width when it was last engraved
     this._resized = false; // its width changed since then
     this._resizeObserver = null;
+    this._revealPending = false; // scroll the cursor into sight on the next overlay
 
     this._isGrandStaff = staffGroups.length > 0 && staffGroups.some((g) => g.type === 'brace');
 
@@ -242,7 +245,9 @@ export default class NotationEditor {
     this._container.innerHTML = '';
 
     const paletteContainer = document.createElement('div');
-    this._palette = new RhythmPalette(paletteContainer, () => {});
+    // A button clicked hands the keys back to the staff (here and below):
+    // left on the button, they reached nothing
+    this._palette = new RhythmPalette(paletteContainer, () => this.focus());
     this._container.appendChild(paletteContainer);
 
     this._staffEl = document.createElement('div');
@@ -271,12 +276,18 @@ export default class NotationEditor {
     playBtn.className = 'editor-btn';
     playBtn.textContent = 'Play';
     playBtn.type = 'button';
-    playBtn.onclick = () => this.play();
+    playBtn.onclick = () => {
+      this.play();
+      this.focus();
+    };
     const stopBtn = document.createElement('button');
     stopBtn.className = 'editor-btn';
     stopBtn.textContent = 'Stop';
     stopBtn.type = 'button';
-    stopBtn.onclick = () => this.stop();
+    stopBtn.onclick = () => {
+      this.stop();
+      this.focus();
+    };
     controls.appendChild(playBtn);
     controls.appendChild(stopBtn);
     this._container.appendChild(controls);
@@ -289,15 +300,78 @@ export default class NotationEditor {
     clearBtn.className = 'editor-btn';
     clearBtn.type = 'button';
     clearBtn.textContent = 'Clear';
-    clearBtn.onclick = () => this.clear();
+    clearBtn.onclick = () => {
+      this.clear();
+      this.focus();
+    };
     editControls.appendChild(clearBtn);
     this._container.appendChild(editControls);
 
     const hint = document.createElement('div');
     hint.className = 'song-edit-hint';
-    hint.textContent =
-      'Click staff to add · click a note to select · Del removes · +/− transpose · . dot · # ♭ n accidental · r rest · ←/→ move';
+    hint.textContent = [
+      'Click staff to add',
+      this._polyphonic ? '⇧-click adds to the chord' : null,
+      'click a note to select',
+      '2–7 note (whole … 32nd)',
+      'r rest',
+      '←/→ move',
+      '+/− transpose',
+      '. dot',
+      '# b n accidental',
+      'Del removes',
+      this._isGrandStaff ? 'Enter / ⇧Enter other staff' : null,
+      'Space play/stop',
+      '⌘Z undo',
+    ]
+      .filter(Boolean)
+      .join(' · ');
     this._container.appendChild(hint);
+  }
+
+  /**
+   * Give the staff the keyboard — without scrolling to it: focusing a staff
+   * taller than the modal scrolled the duration palette out of sight. A
+   * move or an edit scrolls the cursor itself into view.
+   */
+  focus() {
+    if (this._staffEl && document.activeElement !== this._staffEl) {
+      this._staffEl.focus({ preventScroll: true });
+    }
+  }
+
+  /** Whether this is a grand staff (two staves, braced). */
+  get isGrandStaff() {
+    return this._isGrandStaff;
+  }
+
+  /** Which staff of a grand staff is being edited (0 treble, 1 bass; else 0). */
+  get activeVoiceIndex() {
+    return this._activeVoiceIndex;
+  }
+
+  /** The selected note/chord of the active staff, canonical form, or null. */
+  get selectedNote() {
+    const model = this._activeModel();
+    const entry = model._selectedIndex === null ? null : model._notes[model._selectedIndex];
+    return entry ? JSON.parse(JSON.stringify(normalizeOut(entry))) : null;
+  }
+
+  /**
+   * Show `song` (an undo / redo restored it), keeping each staff's cursor
+   * and selection where they were as far as the notes still reach.
+   */
+  setSong(song) {
+    const kept = this._voiceModels.map((m) => [m._cursorPosition, m._selectedIndex]);
+    this._voiceModels.forEach((m) => m.fromSongArray([]));
+    this._loadSong(song || []);
+    this._voiceModels.forEach((m, i) => {
+      const [cursor, selected] = kept[i];
+      m._cursorPosition = Math.min(cursor, m._notes.length);
+      m._selectedIndex = selected !== null && selected < m._notes.length ? selected : null;
+    });
+    this._revision += 1;
+    this._renderStaff();
   }
 
   /** Remove every note from the active voice. */
@@ -390,7 +464,8 @@ export default class NotationEditor {
 
   /**
    * The note/chord/rest elements of a voice, in document order, each with its
-   * staff-local X. Document order matches the model's flat note order (the
+   * staff-local X and the staff group (system) it sits in — a long song
+   * wraps onto several systems, one group per voice each. Document order matches the model's flat note order (the
    * editor emits no tuplets or markers), so this indexes rests correctly —
    * which the renderer's playback metrics deliberately do not.
    */
@@ -398,7 +473,7 @@ export default class NotationEditor {
     const entries = [];
     svg.querySelectorAll(`[data-voice-id="${voiceId}"]`).forEach((group) => {
       group.querySelectorAll('.note, .rest').forEach((el) => {
-        entries.push({ el, x: this._elX(el) });
+        entries.push({ el, x: this._elX(el), group });
       });
     });
     return entries;
@@ -457,8 +532,9 @@ export default class NotationEditor {
       entries[model._selectedIndex].el.classList.add('note-selected');
     }
 
-    // Edit cursor: a vertical line at the insertion point in the active voice.
-    const group = svg.querySelector(`[data-voice-id="${activeId}"]`);
+    // Edit cursor: a vertical line at the insertion point in the active voice,
+    // on the system (line of music) the insertion point is on.
+    const group = this._cursorGroup(svg, entries, model._cursorPosition, activeId);
     if (group) {
       const cursorX = this._cursorX(entries, model._cursorPosition);
       const cursor = document.createElementNS(SVG_NS, 'line');
@@ -474,6 +550,27 @@ export default class NotationEditor {
       this._cursorLine = cursor;
     }
     this._shownView = this._viewKey();
+    if (this._revealPending) this._revealCursor(entries, model._selectedIndex);
+  }
+
+  /** The staff group (system) of the active voice the cursor is drawn on. */
+  _cursorGroup(svg, entries, cursorPosition, voiceId) {
+    if (entries[cursorPosition]) return entries[cursorPosition].group;
+    if (entries.length) return entries[entries.length - 1].group; // past the final note
+    return svg.querySelector(`[data-voice-id="${voiceId}"]`);
+  }
+
+  /**
+   * Scroll the edit cursor (else the selected note) into sight after the
+   * user moved or edited: a long song wraps onto systems below the modal's
+   * fold. The cursor spans its whole staff, so the staff comes into view.
+   */
+  _revealCursor(entries, selectedIndex) {
+    this._revealPending = false;
+    const target = this._cursorLine || (entries[selectedIndex] && entries[selectedIndex].el);
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
   }
 
   /**
@@ -521,13 +618,21 @@ export default class NotationEditor {
     // Clicks on a note are handled by the per-note select handler.
     if (e.target.closest('[data-note-index]')) return;
 
+    // The system (line of music) clicked: of the active voice's staff
+    // groups, the one whose middle line is nearest the click.
     const activeId = this._activeVoiceId();
-    const group = svg.querySelector(`[data-voice-id="${activeId}"]`);
-    if (!group) return;
-    const localY = this._clickToStaffY(e, svg, group);
+    let localY = null;
+    svg.querySelectorAll(`[data-voice-id="${activeId}"]`).forEach((group) => {
+      const y = this._clickToStaffY(e, svg, group);
+      if (y === null) return;
+      if (localY === null || Math.abs(y - STAFF_MIDDLE_Y) < Math.abs(localY - STAFF_MIDDLE_Y)) {
+        localY = y;
+      }
+    });
     if (localY === null) return;
 
     const model = this._activeModel();
+    this._revealPending = true;
     const note = createNoteFromClick(localY, this._palette.activeLength, this._activeClef());
 
     if (e.shiftKey && model._selectedIndex !== null && this._polyphonic) {
@@ -541,8 +646,37 @@ export default class NotationEditor {
     this._renderStaff();
   }
 
+  /**
+   * The cursor sits just after the selected note — where entering a note
+   * leaves it (the new note selected for ↑/↓, the next one going after it).
+   */
+  _isEntering(model) {
+    return model._selectedIndex !== null && model._cursorPosition === model._selectedIndex + 1;
+  }
+
+  /**
+   * Enter an entry (a note, else a rest) of `length` at the cursor, select
+   * it and leave the cursor after it, so the next entry follows it.
+   */
+  _enter(model, pitch, length) {
+    if (model._cursorPosition >= model._notes.length) {
+      if (pitch) model.appendNote(pitch, length);
+      else model.appendRest(length);
+    } else {
+      if (pitch) model.insertNote(pitch, length);
+      else model.insertRest(length);
+      model.advanceCursor();
+    }
+    model._selectedIndex = model._cursorPosition - 1;
+    this._emitChange();
+  }
+
   _handleKeyDown(e) {
+    // Shortcuts of the browser / OS and the modal's (⌘Z) are not the staff's:
+    // Cmd+R must not also enter a rest, Cmd+B a flat.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     const model = this._activeModel();
+    this._revealPending = true;
     switch (e.key) {
       case 'ArrowLeft':
         e.preventDefault();
@@ -554,6 +688,11 @@ export default class NotationEditor {
         break;
       case 'ArrowRight':
         e.preventDefault();
+        if (this._isEntering(model) && model._cursorPosition < model._notes.length) {
+          // Just after the selected note: the next note is the one at the cursor
+          model._selectedIndex = model._cursorPosition;
+          break;
+        }
         model.moveCursor('right');
         model._selectedIndex =
           model._cursorPosition < model._notes.length ? model._cursorPosition : null;
@@ -582,9 +721,15 @@ export default class NotationEditor {
         e.preventDefault();
         let removed = false;
         if (model._selectedIndex !== null) {
-          model.removeNote(model._selectedIndex);
+          const index = model._selectedIndex;
+          const entering = this._isEntering(model);
+          model.removeNote(index);
           if (model._notes.length === 0) {
             model._selectedIndex = null;
+          } else if (entering) {
+            // The note just entered: take it back, as a backspace would
+            model._cursorPosition = index;
+            model._selectedIndex = index > 0 ? index - 1 : 0;
           } else if (model._selectedIndex >= model._notes.length) {
             model._selectedIndex = model._notes.length - 1;
           }
@@ -617,18 +762,15 @@ export default class NotationEditor {
           this._emitChange();
         }
         break;
-      case 'r': {
-        const restLength = this._palette.activeLength;
-        if (model._cursorPosition >= model._notes.length) {
-          model.appendRest(restLength);
-          model._selectedIndex = model._notes.length - 1;
-        } else {
-          model.insertRest(restLength);
-          model._selectedIndex = model._cursorPosition;
-        }
-        this._emitChange();
+      case 'r':
+        this._enter(model, null, this._palette.activeLength);
         break;
-      }
+      case ' ':
+        // Play / stop, as in notation programs (and the controller's △)
+        e.preventDefault();
+        if (this._playing) this.stop();
+        else this.play();
+        break;
       case 'Enter':
         if (this._isGrandStaff) {
           e.preventDefault();
@@ -638,18 +780,10 @@ export default class NotationEditor {
         }
         break;
       default: {
-        const dur = DURATIONS.find((d) => d.key === e.key);
-        if (dur) {
-          const pitch = this._selectedPitch(model);
-          if (model._cursorPosition >= model._notes.length) {
-            model.appendNote(pitch, dur.length);
-            model._selectedIndex = model._notes.length - 1;
-          } else {
-            model.insertNote(pitch, dur.length);
-            model._selectedIndex = model._cursorPosition;
-          }
-          this._emitChange();
-        }
+        // A duration key enters a note of it and makes it the chosen
+        // duration (the palette's, which ✕ and r use), as its button does
+        const length = this._palette.handleKeyPress(e.key);
+        if (length) this._enter(model, this._entryPitch(model), length);
         break;
       }
     }
@@ -657,11 +791,22 @@ export default class NotationEditor {
     this._requestRender();
   }
 
-  _selectedPitch(model) {
-    if (model._selectedIndex === null) return 'C4';
-    const selected = model._notes[model._selectedIndex];
-    if (Array.isArray(selected)) return selected[0].pitch || 'C4';
-    return selected.pitch || 'C4';
+  /**
+   * The pitch a new note takes: the selected note's, else that of the last
+   * note before the cursor (skipping rests), else C4.
+   */
+  _entryPitch(model) {
+    const pitchOf = (entry) => (Array.isArray(entry) ? entry[0].pitch : entry && entry.pitch);
+    if (model._selectedIndex !== null) {
+      const selected = pitchOf(model._notes[model._selectedIndex]);
+      if (selected) return selected;
+    }
+    const from = Math.min(model._cursorPosition, model._notes.length) - 1;
+    for (let i = from; i >= 0; i -= 1) {
+      const pitch = pitchOf(model._notes[i]);
+      if (pitch) return pitch;
+    }
+    return 'C4';
   }
 
   // ── Playback ───────────────────────────────────────────────────────

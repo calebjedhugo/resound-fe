@@ -24,9 +24,13 @@ const PAD_KEYS = {
   delete: 'Delete', // remove the selected note
   dot: '.', // dot / undot it
   rest: 'r', // a rest of the chosen duration at the cursor
-  voice: 'Enter', // grand staff: the other staff
 };
-const ACCIDENTALS = ['#', 'b', 'n'];
+// Options steps the selected note's accidental: none -> sharp -> flat -> natural
+const NEXT_ACCIDENTAL = { '': '#', '#': 'b', b: 'n' };
+const accidentalOf = (pitch) => {
+  const m = /^[A-G]([#b]?)\d+$/.exec(pitch || '');
+  return m ? m[1] : '';
+};
 
 export default class SongEditorModal {
   /**
@@ -47,6 +51,11 @@ export default class SongEditorModal {
     this._isOpen = false;
     this._entityId = null;
     this._player = null; // lazily-created audio player for editor playback
+    // Undo / redo steps this opening of the modal recorded (its notes and
+    // clef): ⌘Z inside the modal walks back only through these, never into
+    // the level edits behind it (it could undo the entity's own creation)
+    this._undoSteps = 0;
+    this._redoSteps = 0;
 
     // Bound handlers for cleanup
     this._handleKeyDown = this._onKeyDown.bind(this);
@@ -68,6 +77,8 @@ export default class SongEditorModal {
 
     this._entityId = entityId;
     this._isOpen = true;
+    this._undoSteps = 0;
+    this._redoSteps = 0;
 
     // Determine entity type info
     const typeName = entity.type.charAt(0).toUpperCase() + entity.type.slice(1);
@@ -149,19 +160,23 @@ export default class SongEditorModal {
         newData.clef = val;
         delete newData.staffGroups;
       }
-      this._undoManager.updateEntity(entityId, { data: newData });
+      this._recordEdit(() => this._undoManager.updateEntity(entityId, { data: newData }));
 
       // Recreate editor if mode changed (grand staff <-> single staff)
       if (wasGrandStaff !== isNowGrandStaff) {
         this._notationEditor.dispose();
         const updatedEntity = this._undoManager.getEntity(entityId);
         this._notationEditor = this._createEditor(bodyEl, updatedEntity, metadata, isPolyphonic);
-        const staffEl = bodyEl.querySelector('.notation-staff');
-        if (staffEl) staffEl.focus();
       } else if (!isNowGrandStaff) {
         this._notationEditor.setClef(val === 'auto' ? null : val);
       }
+      // The keys go back to the staff, as after any other control
+      this._notationEditor.focus();
     };
+    this._clefSelect = clefSelect;
+    this._bodyEl = bodyEl;
+    this._metadata = metadata;
+    this._isPolyphonic = isPolyphonic;
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'song-modal-close';
@@ -205,11 +220,8 @@ export default class SongEditorModal {
     // Create NotationEditor inside the body
     this._notationEditor = this._createEditor(bodyEl, entity, metadata, isPolyphonic);
 
-    // Focus the staff element
-    const staffEl = bodyEl.querySelector('.notation-staff');
-    if (staffEl) {
-      staffEl.focus();
-    }
+    // The staff has the keyboard (the palette above it stays in sight)
+    this._notationEditor.focus();
   }
 
   /**
@@ -233,9 +245,65 @@ export default class SongEditorModal {
       onChange: (song) => {
         const ent = this._undoManager.getEntity(entityId);
         if (!ent) return;
-        this._undoManager.updateEntity(entityId, { data: { ...ent.data, song } });
+        this._recordEdit(() =>
+          this._undoManager.updateEntity(entityId, { data: { ...ent.data, song } })
+        );
       },
     });
+  }
+
+  /** Make one model edit, counted as this opening's own undo step. */
+  _recordEdit(edit) {
+    edit();
+    this._undoSteps += 1;
+    this._redoSteps = 0; // a new edit drops the redo history, as the manager does
+  }
+
+  /**
+   * ⌘Z / ⇧⌘Z (Ctrl on other systems) inside the modal: undo / redo the
+   * song's edits made since it opened, and show the result.
+   * @param {boolean} redo
+   * @returns {boolean} whether a step was taken
+   */
+  undo(redo = false) {
+    if (!this._isOpen) return false;
+    const manager = this._undoManager;
+    if (redo ? !this._redoSteps || !manager.canRedo() : !this._undoSteps || !manager.canUndo()) {
+      return false;
+    }
+    if (redo) {
+      manager.redo();
+      this._redoSteps -= 1;
+      this._undoSteps += 1;
+    } else {
+      manager.undo();
+      this._undoSteps -= 1;
+      this._redoSteps += 1;
+    }
+    this._showEntity();
+    return true;
+  }
+
+  /** Bring the clef selector and the staff in line with the entity's data. */
+  _showEntity() {
+    const entity = this._undoManager.getEntity(this._entityId);
+    if (!entity) return;
+    const { clef = null, staffGroups = [], song = [] } = entity.data;
+    const grand = staffGroups.some((g) => g.type === 'brace');
+    this._clefSelect.value = grand ? 'grand-staff' : clef || 'auto';
+    if (grand !== this._notationEditor.isGrandStaff) {
+      this._notationEditor.dispose();
+      this._notationEditor = this._createEditor(
+        this._bodyEl,
+        entity,
+        this._metadata,
+        this._isPolyphonic
+      );
+    } else {
+      if (!grand) this._notationEditor.setClef(clef);
+      this._notationEditor.setSong(song);
+    }
+    this._notationEditor.focus();
   }
 
   /**
@@ -324,9 +392,14 @@ export default class SongEditorModal {
   padAction(action) {
     if (!this._isOpen || !this._notationEditor) return;
     const staff = this._backdropEl.querySelector('.notation-staff');
-    const pressKey = (key) => {
-      if (staff) staff.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    const pressKey = (key, mods = {}) => {
+      if (staff) staff.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...mods }));
     };
+    if (action === 'voice') {
+      // Share flips between the staves (Enter alone only ever goes down)
+      pressKey('Enter', { shiftKey: this._notationEditor.activeVoiceIndex > 0 });
+      return;
+    }
     if (PAD_KEYS[action]) {
       pressKey(PAD_KEYS[action]);
       return;
@@ -349,10 +422,15 @@ export default class SongEditorModal {
         if (rhythm[next]) rhythm[next].click();
         break;
       }
-      case 'accidental':
-        this._padAccidental = ((this._padAccidental ?? -1) + 1) % ACCIDENTALS.length;
-        pressKey(ACCIDENTALS[this._padAccidental]);
+      case 'accidental': {
+        // The next after the selected note's own (a chord: its first note's)
+        const note = this._notationEditor.selectedNote;
+        if (!note) break;
+        const pitch = Array.isArray(note) ? note[0].pitch : note.pitch;
+        const current = accidentalOf(pitch);
+        pressKey(NEXT_ACCIDENTAL[current] || '#');
         break;
+      }
       case 'play':
         if (this._notationEditor.isPlaying) this._notationEditor.stop();
         else this._notationEditor.play();
@@ -363,7 +441,7 @@ export default class SongEditorModal {
       default:
         break;
     }
-    if (staff && document.activeElement !== staff) staff.focus();
+    this._notationEditor?.focus();
   }
 
   _onKeyDown(e) {
@@ -371,6 +449,15 @@ export default class SongEditorModal {
       e.preventDefault();
       e.stopPropagation();
       this.close();
+      return;
+    }
+    // Undo / redo the song's edits (the staff leaves ⌘ keys alone). Not
+    // while a field of the modal has the keys: the clef dropdown's own.
+    const key = e.key.toLowerCase();
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (key === 'z' || (key === 'y' && e.ctrlKey))) {
+      if (e.target && e.target.tagName === 'SELECT') return;
+      e.preventDefault();
+      this.undo(key === 'y' || e.shiftKey);
     }
   }
 

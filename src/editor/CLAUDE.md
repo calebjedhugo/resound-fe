@@ -17,6 +17,16 @@ Files (`ui/` + `model/`):
   (`_drawSelection`), any other key draws nothing. A staff resize re-engraves
   through the same path: the editor owns the ResizeObserver; the renderer's
   is OFF (`observeContainer: false` — it re-engraved without the overlay).
+  Entry: a note/rest entered at the cursor is selected and the cursor goes
+  AFTER it (mid-song too), so the next entry follows; a duration key also
+  sets the palette's duration. A long song wraps onto systems (one staff
+  group per voice each): the cursor is drawn on its note's system, a click
+  maps by the nearest system, a move scrolls the selection into view.
+  Cmd/Ctrl/Alt keys are left alone; Space plays/stops.
+- **Undo in the modal**: ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y) in `SongEditorModal`
+  walk back only through the steps recorded since it opened (never into the
+  level behind it), then re-show the entity (`NotationEditor.setSong`, or a
+  rebuilt editor when the grand staff came or went).
 - **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
 - **RhythmPalette.js** — duration selector (renders note icons via `resound-notation/components/Note`).
 - **staffCoords.js** — reverse pitch mapping (click Y → pitch) via `resound-notation/lib/notePositions`.
@@ -243,7 +253,8 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 - **Song editor** (`SongEditorModal.padAction`, each the staff's own key):
   ←/→ edit cursor, ↑/↓ selected note's pitch, ✕ insert a note of the chosen
   duration, □ delete, L1/R1 longer/shorter duration, △ play/stop, L2 dot,
-  R2 rest, Options sharp→flat→natural, Share other staff, ○ close.
+  R2 rest, Options steps the SELECTED note's own accidental (none→♯→♭→♮),
+  Share flips staves (both ways), ○ close.
 - **Menus** (ContextMenu): d-pad ↑/↓, ✕ choose, ○ close.
 - Caveats: a pad press is no user activation: a Play from the pad starts
   the game's audio only if the browser allows it (the editor page was

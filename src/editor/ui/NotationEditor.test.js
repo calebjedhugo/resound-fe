@@ -380,3 +380,173 @@ describe('NotationEditor keyboard rendering', () => {
     editor.stop();
   });
 });
+
+describe('NotationEditor note entry', () => {
+  const C4 = { pitch: 'C4', length: '1/4' };
+  const E4 = { pitch: 'E4', length: '1/4' };
+  const G4 = { pitch: 'G4', length: '1/4' };
+  const nextFrame = () => jest.advanceTimersByTime(16);
+  const pitches = (song) => song.map((n) => n.pitch || 'rest');
+
+  it('entering notes mid-song puts each after the one before, as at the end', () => {
+    const { editor, changes } = makeEditor({ song: [C4, E4, G4] });
+    keydown(editor, 'ArrowRight'); // on E4
+    keydown(editor, '4'); // a quarter at the cursor (E4's pitch) ...
+    keydown(editor, '+'); // ... raised: F4
+    keydown(editor, '4'); // the next one goes after it, not before
+    keydown(editor, '+');
+    keydown(editor, '+'); // F#4 -> G4
+    keydown(editor, 'r'); // and a rest after that
+    expect(pitches(changes.at(-1))).toEqual(['C4', 'F4', 'G4', 'rest', 'E4', 'G4']);
+  });
+
+  it('right from a note just entered selects the next note, without skipping it', () => {
+    const { editor } = makeEditor({ song: [C4, E4, G4] });
+    keydown(editor, 'ArrowRight'); // on E4
+    keydown(editor, '4'); // entered before E4; E4 is next
+    keydown(editor, 'ArrowRight');
+    expect(editor.selectedNote).toMatchObject({ pitch: 'E4' });
+  });
+
+  it('Delete on a note just entered takes it back, as a backspace', () => {
+    const { editor, changes } = makeEditor({ song: [C4, E4, G4] });
+    keydown(editor, 'ArrowRight');
+    keydown(editor, '4');
+    keydown(editor, '+'); // F4, entered between C4 and E4
+    keydown(editor, 'Delete');
+    expect(pitches(changes.at(-1))).toEqual(['C4', 'E4', 'G4']);
+    expect(editor.selectedNote).toMatchObject({ pitch: 'C4' }); // back after C4 ...
+    keydown(editor, '4'); // ... so the next entry goes where F4 was
+    expect(pitches(changes.at(-1))).toEqual(['C4', 'C4', 'E4', 'G4']);
+  });
+
+  it('a duration key also makes that the chosen duration, for rests and the palette', () => {
+    const { editor, container, changes } = makeEditor({ song: [C4] });
+    keydown(editor, 'ArrowRight'); // past C4
+    keydown(editor, '5'); // an eighth note
+    keydown(editor, 'r'); // so an eighth rest too
+    expect(changes.at(-1).slice(1)).toEqual([{ pitch: 'C4', length: '1/8' }, { length: '1/8' }]);
+    expect(container.querySelector('.rhythm-btn.active').dataset.length).toBe('1/8');
+  });
+
+  it('a new note with nothing (or a rest) selected takes the pitch of the note before', () => {
+    const { editor, changes } = makeEditor({ song: [C4, E4, G4] });
+    ['ArrowRight', 'ArrowRight', 'ArrowRight'].forEach((k) => keydown(editor, k)); // at the end
+    keydown(editor, 'r'); // a rest, selected
+    keydown(editor, '4');
+    expect(changes.at(-1).at(-1)).toEqual({ pitch: 'G4', length: '1/4' });
+  });
+
+  it('leaves Cmd / Ctrl / Alt shortcuts to the browser and the modal', () => {
+    const { editor, changes } = makeEditor({ song: [C4] });
+    keydown(editor, 'ArrowLeft'); // C4 selected
+    keydown(editor, 'r', { metaKey: true }); // Cmd+R reloads; no rest
+    keydown(editor, 'b', { ctrlKey: true });
+    keydown(editor, '4', { altKey: true });
+    expect(changes).toHaveLength(0);
+  });
+
+  it('Space plays and stops', () => {
+    const player = { play: jest.fn(), stop: jest.fn() };
+    const { editor } = makeEditor({ song: [C4], player });
+    keydown(editor, ' ');
+    expect(editor.isPlaying).toBe(true);
+    expect(player.play).toHaveBeenCalled();
+    keydown(editor, ' ');
+    expect(editor.isPlaying).toBe(false);
+  });
+
+  it('a palette, transport or Clear button hands the keyboard back to the staff', () => {
+    const { editor, container } = makeEditor({ song: [C4] });
+    const buttons = [
+      container.querySelectorAll('.rhythm-btn')[4],
+      ...container.querySelectorAll('.playback-controls button, .song-edit-controls button'),
+    ];
+    buttons.forEach((button) => {
+      button.focus();
+      button.click();
+      expect(document.activeElement).toBe(editor._staffEl);
+    });
+  });
+
+  it('the hint lists the duration keys, and the grand staff its staff switch', () => {
+    const single = makeEditor({ song: [C4] }).container.querySelector('.song-edit-hint');
+    expect(single.textContent).toContain('2–7');
+    expect(single.textContent).not.toContain('other staff');
+    const grand = makeEditor({
+      staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+    }).container.querySelector('.song-edit-hint');
+    expect(grand.textContent).toContain('other staff');
+  });
+
+  it('setSong shows a restored song, keeping the cursor where the notes still reach', () => {
+    const { editor } = makeEditor({ song: [C4, E4, G4] });
+    keydown(editor, 'ArrowRight'); // on E4
+    editor.setSong([C4, { pitch: 'F4', length: '1/4' }]);
+    expect(editor.selectedNote).toMatchObject({ pitch: 'F4' });
+    expect(editor._staffEl.querySelectorAll('[data-voice-id="v0"] .note')).toHaveLength(2);
+    editor.setSong([]);
+    expect(editor.selectedNote).toBeNull();
+  });
+
+  describe('a song long enough to wrap onto several systems', () => {
+    const song = Array.from({ length: 40 }, () => ({ ...C4 }));
+
+    beforeEach(() => {
+      jest.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function width() {
+        return this.classList.contains('notation-staff') ? 800 : 0;
+      });
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      delete Element.prototype.scrollIntoView;
+    });
+
+    const systems = (editor) => [...editor._staffEl.querySelectorAll('svg [data-voice-id="v0"]')];
+
+    it('draws the edit cursor on the system of the note it is at', () => {
+      const { editor } = makeEditor({ song });
+      expect(systems(editor).length).toBeGreaterThan(2);
+      for (let i = 0; i < 30; i += 1) keydown(editor, 'ArrowRight');
+      nextFrame();
+      const svg = editor._staffEl.querySelector('svg');
+      const selectedSystem = svg.querySelector('.note-selected').closest('[data-voice-id]');
+      expect(selectedSystem).not.toBe(systems(editor)[0]);
+      expect(svg.querySelector('.cursor-line').parentNode).toBe(selectedSystem);
+    });
+
+    it('scrolls the edit cursor (its whole staff) into sight after a move', () => {
+      const scrolled = [];
+      Element.prototype.scrollIntoView = function scrollIntoView() {
+        scrolled.push(this);
+      };
+      const { editor } = makeEditor({ song });
+      for (let i = 0; i < 30; i += 1) keydown(editor, 'ArrowRight');
+      nextFrame();
+      const cursor = editor._staffEl.querySelector('.cursor-line');
+      expect(scrolled.at(-1)).toBe(cursor);
+      expect(cursor.parentNode).toBe(
+        editor._staffEl.querySelector('.note-selected').closest('[data-voice-id]')
+      );
+    });
+
+    it('places a click by the system clicked, not the first one', () => {
+      const { editor, changes } = makeEditor({ song });
+      const svg = editor._staffEl.querySelector('svg');
+      const height = 2000;
+      svg.getBoundingClientRect = () => ({ top: 0, left: 0, width: 800, height });
+      Object.defineProperty(svg, 'viewBox', {
+        value: { baseVal: { x: 0, y: 0, width: 800, height } },
+        configurable: true,
+      });
+      const second = systems(editor)[1];
+      const [, offsetY] = second.getAttribute('transform').match(/,\s*([-\d.]+)/);
+      // The middle line of the second system (staff-local 50): B4 in treble
+      svg.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, clientX: 400, clientY: Number(offsetY) + 50 })
+      );
+      expect(changes.at(-1).at(-1)).toEqual({ pitch: 'B4', length: '1/4' });
+    });
+  });
+});

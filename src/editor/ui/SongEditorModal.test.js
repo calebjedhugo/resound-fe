@@ -817,4 +817,144 @@ describe('SongEditorModal', () => {
       expect(body.className).toBe('song-modal-body');
     });
   });
+
+  // -- undo inside the modal ---------------------------------------------------
+
+  describe('undo inside the modal', () => {
+    const C4 = { pitch: 'C4', length: '1/4' };
+    const press = (key, extra = {}) =>
+      env.root
+        .querySelector('.notation-staff')
+        .dispatchEvent(
+          new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra })
+        );
+    const notesShown = () =>
+      env.root.querySelectorAll('.notation-staff svg [data-voice-id="v0"] .note').length;
+
+    function openCreature(song = [C4]) {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, { song });
+      modal.open(id);
+      return id;
+    }
+
+    it('Cmd+Z undoes the last note and Shift+Cmd+Z redoes it, on the staff too', () => {
+      const id = openCreature();
+      press('ArrowRight');
+      press('4');
+      press('4');
+      expect(env.undoManager.getEntity(id).data.song).toHaveLength(3);
+
+      press('z', { metaKey: true });
+      expect(env.undoManager.getEntity(id).data.song).toHaveLength(2);
+      jest.advanceTimersByTime(16);
+      expect(notesShown()).toBe(2);
+
+      press('z', { metaKey: true, shiftKey: true });
+      expect(env.undoManager.getEntity(id).data.song).toHaveLength(3);
+      expect(notesShown()).toBe(3);
+
+      press('z', { ctrlKey: true }); // Ctrl too
+      expect(env.undoManager.getEntity(id).data.song).toHaveLength(2);
+      press('y', { ctrlKey: true }); // and Ctrl+Y redoes
+      expect(env.undoManager.getEntity(id).data.song).toHaveLength(3);
+    });
+
+    it('never undoes past what was done since it opened (the entity stays)', () => {
+      const id = openCreature();
+      press('ArrowRight');
+      press('4');
+      for (let i = 0; i < 5; i += 1) press('z', { metaKey: true });
+      expect(env.undoManager.getEntity(id)).toBeTruthy();
+      expect(env.undoManager.getEntity(id).data.song).toEqual([C4]);
+      expect(modal.isOpen).toBe(true);
+    });
+
+    it('a new edit drops what could be redone', () => {
+      const id = openCreature();
+      press('ArrowRight');
+      press('4');
+      press('z', { metaKey: true });
+      press('5'); // an eighth instead
+      press('z', { metaKey: true, shiftKey: true }); // nothing to redo
+      expect(env.undoManager.getEntity(id).data.song).toEqual([C4, { pitch: 'C4', length: '1/8' }]);
+    });
+
+    it('undoes a switch to the grand staff, dropdown and staff alike', () => {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, { song: [C4] });
+      modal.open(id);
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'grand-staff';
+      select.onchange();
+      expect(env.root.querySelector('[data-voice-id="bass"]')).toBeTruthy();
+
+      press('z', { metaKey: true });
+      expect(select.value).toBe('auto');
+      expect(env.undoManager.getEntity(id).data.staffGroups).toBeUndefined();
+      expect(env.root.querySelector('[data-voice-id="bass"]')).toBeNull();
+      expect(document.activeElement).toBe(env.root.querySelector('.notation-staff'));
+    });
+
+    it('a clef change gives the keyboard back to the staff', () => {
+      openCreature();
+      const select = env.root.querySelector('.clef-selector');
+      select.focus();
+      select.value = 'bass';
+      select.onchange();
+      expect(document.activeElement).toBe(env.root.querySelector('.notation-staff'));
+    });
+  });
+
+  // -- the controller ----------------------------------------------------------
+
+  describe('controller actions', () => {
+    function open(type, data) {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity(type, 5, 0, 3, data);
+      modal.open(id);
+      return id;
+    }
+
+    it("Options steps the selected note's own accidental: sharp, flat, natural", () => {
+      const id = open('creature', {
+        song: [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'Eb4', length: '1/4' },
+        ],
+      });
+      const pitches = () => env.undoManager.getEntity(id).data.song.map((n) => n.pitch);
+      modal.padAction('accidental'); // nothing to step yet: no note selected
+      expect(pitches()).toEqual(['C4', 'Eb4']);
+
+      modal.padAction('left'); // on C4
+      modal.padAction('right'); // on Eb4: flat -> natural
+      modal.padAction('accidental');
+      expect(pitches()).toEqual(['C4', 'E4']);
+
+      modal.padAction('left'); // on C4, which has none: sharp first
+      modal.padAction('accidental');
+      expect(pitches()).toEqual(['C#4', 'E4']);
+      modal.padAction('accidental');
+      expect(pitches()).toEqual(['Cb4', 'E4']);
+      modal.padAction('accidental');
+      expect(pitches()).toEqual(['C4', 'E4']);
+    });
+
+    it('Share flips between the two staves of a grand staff, both ways', () => {
+      open('gate', {
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+        song: { voices: [] },
+      });
+      const voice = () =>
+        env.root.querySelector('.cursor-line').closest('[data-voice-id]').dataset.voiceId;
+      expect(voice()).toBe('treble');
+      modal.padAction('voice');
+      jest.advanceTimersByTime(16);
+      expect(voice()).toBe('bass');
+      modal.padAction('voice');
+      jest.advanceTimersByTime(16);
+      expect(voice()).toBe('treble');
+    });
+  });
 });
