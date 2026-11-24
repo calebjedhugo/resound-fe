@@ -47,7 +47,7 @@ describe('NotationEditor', () => {
 
   it('a duration key enters a REST of it at the end and reports it through onChange', () => {
     const { editor, changes } = makeEditor({ song: [{ pitch: 'C4', length: '1/4' }] });
-    keydown(editor, '5'); // eighth
+    keydown(editor, '4'); // eighth
     expect(changes.length).toBe(1);
     expect(changes[0]).toEqual([{ pitch: 'C4', length: '1/4' }, { length: '1/8' }]);
   });
@@ -386,8 +386,8 @@ describe('NotationEditor note entry', () => {
     const { editor, changes } = makeEditor({ song: [C4, E4, G4], timeSignature: null });
     keydown(editor, 'ArrowLeft');
     keydown(editor, 'ArrowLeft'); // on E4: entries go in before it
-    keydown(editor, '4');
-    keydown(editor, '5'); // the next one goes after the first, not before
+    keydown(editor, '5');
+    keydown(editor, '4'); // the next one goes after the first, not before
     expect(changes.at(-1)).toEqual([C4, { length: '1/4' }, { length: '1/8' }, E4, G4]);
   });
 
@@ -408,19 +408,19 @@ describe('NotationEditor note entry', () => {
     keydown(editor, 'Delete');
     expect(changes.at(-1)).toEqual([C4, E4, G4]);
     expect(editor.selectedNote).toMatchObject({ pitch: 'C4' }); // back after C4 ...
-    keydown(editor, '5'); // ... so the next entry goes where the rest was
+    keydown(editor, '4'); // ... so the next entry goes where the rest was
     expect(changes.at(-1)).toEqual([C4, { length: '1/8' }, E4, G4]);
   });
 
   it('a duration key also makes that the chosen duration, for r and the palette', () => {
     const { editor, container, changes } = makeEditor({ song: [C4] });
-    keydown(editor, '5'); // an eighth rest
+    keydown(editor, '4'); // an eighth rest
     keydown(editor, 'r'); // so an eighth rest again
     expect(changes.at(-1).slice(1)).toEqual([{ length: '1/8' }, { length: '1/8' }]);
     expect(container.querySelector('.rhythm-btn.active').dataset.length).toBe('1/8');
   });
 
-  it('never puts a pitch in on its own: entry is always a rest first', () => {
+  it('never puts a pitch in on its own: duration keys and r enter rests', () => {
     const { editor, changes } = makeEditor({ song: [C4, E4, G4], timeSignature: null });
     ['2', '3', '4', '5', '6', '7', 'r'].forEach((k) => keydown(editor, k));
     expect(changes.at(-1)).toHaveLength(10);
@@ -430,19 +430,52 @@ describe('NotationEditor note entry', () => {
         .slice(3)
         .every((entry) => !entry.pitch)
     ).toBe(true);
+  });
+
+  it('✕ / Enter with nothing at the cursor enters a NOTE at the pitch cursor (no rest first, no warning)', () => {
     const empty = makeEditor();
-    keydown(empty.editor, 'Enter'); // nothing at the cursor: ✕ enters the rest
-    expect(empty.changes.at(-1)).toHaveLength(1);
-    expect(empty.changes.at(-1)[0].pitch).toBeUndefined();
-    keydown(empty.editor, 'Enter'); // and ✕ again puts the pitch on it
-    expect(empty.changes.at(-1)[0].pitch).toBeTruthy();
+    expect(empty.editor.pitchCursor).toBe('B4'); // an empty treble staff: its middle line
+    keydown(empty.editor, 'ArrowUp'); // C5
+    keydown(empty.editor, 'Enter');
+    expect(empty.changes.at(-1)).toEqual([{ pitch: 'C5', length: '1/4' }]);
+    expect(empty.editor.status).toBe('');
+    keydown(empty.editor, 'Enter'); // on its own pitch: it comes off, the rest stays
+    expect(empty.changes.at(-1)).toEqual([{ length: '1/4' }]);
+  });
+
+  it('the new note is the chosen duration, in the key, and must fit in the measure', () => {
+    const { editor, changes } = makeEditor({ keySignature: 'D', timeSignature: [2, 4] });
+    editor.palette.handleKeyPress('7'); // a whole note: more than a 2/4 measure
+    editor.cross();
+    expect(changes).toHaveLength(0);
+    expect(editor.status).toMatch(/No room: that note needs 4 beats; 2 beats left/);
+    editor.palette.handleKeyPress('6'); // a half
+    editor.movePitchCursor(-3); // B4 down to the F line ... in D, F♯
+    editor.cross();
+    expect(changes.at(-1)).toEqual([{ pitch: 'F#4', length: '1/2' }]);
+  });
+
+  it('with nothing at the cursor, the accidental, □, the dot and the tie quietly do nothing', () => {
+    const { editor, changes } = makeEditor();
+    keydown(editor, 'ArrowUp', { shiftKey: true });
+    keydown(editor, 'Delete');
+    keydown(editor, '.');
+    keydown(editor, 't');
+    keydown(editor, '#');
+    editor.stepNoteDuration(1);
+    editor.palette.chooseMode('dot');
+    editor.cross();
+    editor.palette.chooseMode('tie');
+    editor.cross();
+    expect(changes).toHaveLength(0);
+    expect(editor.status).toBe('');
   });
 
   it('leaves Cmd / Ctrl / Alt shortcuts to the browser and the modal', () => {
     const { editor, changes } = makeEditor({ song: [C4] });
     keydown(editor, 'r', { metaKey: true }); // Cmd+R reloads; no rest
     keydown(editor, 'b', { ctrlKey: true });
-    keydown(editor, '4', { altKey: true });
+    keydown(editor, '5', { altKey: true });
     expect(changes).toHaveLength(0);
   });
 
@@ -617,11 +650,11 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
 
   it('refuses a rest that will not fit in what is left of the measure, saying why', () => {
     const { editor, changes } = makeEditor({ song: [C4, C4, C4] }); // 4/4: one beat left
-    keydown(editor, '3'); // a half
+    keydown(editor, '6'); // a half
     expect(changes).toHaveLength(0);
     expect(editor.status).toBe('No room: that rest needs 2 beats; 1 beat left in this measure');
-    keydown(editor, '4'); // a quarter fits ...
-    keydown(editor, '3'); // ... and a full measure starts a new one with room
+    keydown(editor, '5'); // a quarter fits ...
+    keydown(editor, '6'); // ... and a full measure starts a new one with room
     expect(last(changes).slice(3)).toEqual([{ length: '1/4' }, { length: '1/2' }]);
     expect(editor.status).toBe('');
   });
@@ -630,9 +663,9 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
     const { editor, changes } = makeEditor({ song: [{ pitch: 'C4', length: '1/2' }, C4, C4] });
     keydown(editor, 'ArrowLeft');
     keydown(editor, 'ArrowLeft'); // before the second note: 2 beats used
-    keydown(editor, '2');
+    keydown(editor, '7');
     expect(changes).toHaveLength(0);
-    keydown(editor, '3');
+    keydown(editor, '6');
     expect(last(changes)).toHaveLength(4);
   });
 
@@ -676,22 +709,30 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
       song: [{ pitch: 'C4', length: '1/2', dotted: 2 }],
     });
     // 3.5 of 4 beats used: an eighth fits after it, a quarter starts a new measure
-    keydown(editor, '5');
+    keydown(editor, '4');
     expect(last(changes)).toEqual([{ pitch: 'C4', length: '1/2', dotted: 2 }, { length: '1/8' }]);
     keydown(editor, 'ArrowLeft');
     keydown(editor, 'ArrowLeft'); // on the note (the first press only moves the cursor before the rest)
-    editor.stepNoteDuration(1); // a double-dotted quarter
+    editor.stepNoteDuration(-1); // a double-dotted quarter (the palette's way: shorter is left)
     expect(last(changes)[0]).toEqual({ pitch: 'C4', length: '1/4', dotted: 2 });
     nextFrame();
     expect(editor._staffEl.querySelectorAll('.augmentation-dot')).toHaveLength(2);
   });
 
-  it('L1 / R1 step the palette through the note values to the dot and the tie, and change nothing else', () => {
+  it('L1 / R1 step the palette shortest → longest, on to the dot and the tie, and change nothing else', () => {
     const { editor, changes } = makeEditor({ song: [C4] });
-    expect(editor.palette.step(1)).toBe(true); // 8th
-    editor.palette.step(1);
-    editor.palette.step(1); // 32nd
+    expect(editor.palette.step(-1)).toBe(true); // 8th
+    editor.palette.step(-1);
+    editor.palette.step(-1); // 32nd
     expect(editor.palette.activeLength).toBe('1/32');
+    expect(editor.palette.step(-1)).toBe(false); // the first card
+    editor.palette.step(1);
+    expect(editor.palette.activeLength).toBe('1/16');
+    editor.palette.step(1);
+    editor.palette.step(1);
+    editor.palette.step(1);
+    editor.palette.step(1); // the whole note
+    expect(editor.palette.activeLength).toBe('1/1');
     editor.palette.step(1);
     expect(editor.palette.dotSelected).toBe(true);
     editor.palette.step(1);
@@ -702,8 +743,17 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
     expect(editor.palette.dotSelected).toBe(true);
     editor.palette.step(-1);
     expect(editor.palette.dotSelected).toBe(false);
-    expect(editor.palette.activeLength).toBe('1/32');
+    expect(editor.palette.activeLength).toBe('1/1');
     expect(changes).toHaveLength(0);
+  });
+
+  it('the duration keys run as MuseScore’s: 2 = 32nd … 5 = quarter … 7 = whole', () => {
+    const { editor, container } = makeEditor({ timeSignature: null });
+    const chosen = ['2', '3', '4', '5', '6', '7'].map((k) => {
+      keydown(editor, k);
+      return container.querySelector('.rhythm-btn.active').dataset.length;
+    });
+    expect(chosen).toEqual(['1/32', '1/16', '1/8', '1/4', '1/2', '1/1']);
   });
 
   describe('the tie card (the designer: “toggling a tie is the same as a dot”)', () => {
@@ -794,7 +844,7 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
       editor.moveCursor(-1);
       editor.toggleTie();
       editor.toggleDot();
-      editor.stepNoteDuration(1);
+      editor.stepNoteDuration(-1);
       expect(last(changes)).toEqual([
         { pitch: 'C4', length: '1/8', dotted: true, tie: 'start' },
         { pitch: 'C4', length: '1/4', tie: 'stop' },
@@ -806,12 +856,12 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
     const { editor, changes } = makeEditor({
       song: [{ pitch: 'C4', length: '1/4', dotted: true }],
     });
-    editor.stepNoteDuration(1);
-    expect(last(changes)).toEqual([{ pitch: 'C4', length: '1/8', dotted: true }]);
     editor.stepNoteDuration(-1);
-    editor.stepNoteDuration(-1); // a dotted half: fits
+    expect(last(changes)).toEqual([{ pitch: 'C4', length: '1/8', dotted: true }]);
+    editor.stepNoteDuration(1);
+    editor.stepNoteDuration(1); // a dotted half: fits
     expect(last(changes)).toEqual([{ pitch: 'C4', length: '1/2', dotted: true }]);
-    expect(editor.stepNoteDuration(-1)).toBe(false); // a dotted whole: no
+    expect(editor.stepNoteDuration(1)).toBe(false); // a dotted whole: no
     expect(editor.status).toMatch(/No room/);
   });
 
@@ -906,13 +956,14 @@ describe('RhythmPalette icons', () => {
   it('each note value shows its notehead (the glyph defs travel with every icon)', () => {
     const { container } = makeEditor();
     const buttons = [...container.querySelectorAll('.rhythm-btn[data-length]')];
+    // Shortest to longest, as the duration keys run (then the dot and the tie)
     expect(buttons.map((b) => b.dataset.length)).toEqual([
-      '1/1',
-      '1/2',
-      '1/4',
-      '1/8',
-      '1/16',
       '1/32',
+      '1/16',
+      '1/8',
+      '1/4',
+      '1/2',
+      '1/1',
     ]);
     buttons.forEach((button) => {
       const svg = button.querySelector('svg');
@@ -922,9 +973,10 @@ describe('RhythmPalette icons', () => {
       expect(svg.querySelector(`defs [id="${id}"]`)).toBeTruthy(); // resolves in its own svg
     });
     const flags = buttons.map((b) => b.querySelector('use.note-flag'));
-    expect(flags.slice(0, 3).every((f) => f === null)).toBe(true);
-    flags.slice(3).forEach((flag, i) => {
-      const svg = buttons[i + 3].querySelector('svg');
+    // 32nd, 16th, 8th flagged; quarter, half, whole not
+    expect(flags.slice(3).every((f) => f === null)).toBe(true);
+    flags.slice(0, 3).forEach((flag, i) => {
+      const svg = buttons[i].querySelector('svg');
       expect(svg.querySelector(`defs [id="${flag.getAttribute('href').slice(1)}"]`)).toBeTruthy();
     });
     expect(container.querySelector('.rhythm-dot')).toBeTruthy();

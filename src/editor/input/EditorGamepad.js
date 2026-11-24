@@ -80,7 +80,7 @@ const PAN_SHARE_PER_S = 0.9; // of the camera's distance, a second
 export const EDITOR_MAPPING = {
   viewport: [
     ['dpad', 'Move the cursor (hold to repeat)'],
-    ['lstick', 'Pan the camera'],
+    ['lstick', 'Pan the camera (the cursor rides at its centre)'],
     ['rstick', 'Orbit the camera'],
     ['r3', 'Zoom in (hold: keep going)'],
     ['l3', 'Zoom out (hold: keep going)'],
@@ -129,29 +129,29 @@ export const EDITOR_MAPPING = {
     ['updown', 'Move the pitch cursor (lines and spaces)'],
     [
       'cross',
-      'Pitch on / off at the pitch cursor (dot chosen: dot, double, none; tie chosen: tie / untie)',
+      'Pitch on / off at the pitch cursor (nothing there: a note; dot chosen: dot, double, none; tie chosen: tie / untie)',
     ],
     ['square', 'Note → rest; rest → gone'],
-    ['l1/r1', 'Palette: longer / shorter (… dot, tie)'],
+    ['l1/r1', 'Palette: shorter / longer (32nd … whole, dot, tie)'],
     ['triangle', 'Play / stop (the creature lights)'],
     ['l2', 'Hold: accidental, note duration'],
     ['r2', 'Hold: a rest, note duration'],
     ['l3/r3', 'Undo / redo'],
-    ['options', 'Clef, Clear… (the popover)'],
+    ['options', 'Clef, copy a gate’s song, Clear… (the popover)'],
     ['share', 'Other staff (grand staff)'],
     ['circle', 'Close'],
   ],
   'song+l2': [
     ['updown', 'Accidental of the note there: ♯ / ♭'],
-    ['l1/r1', 'The note: longer / shorter'],
+    ['l1/r1', 'The note: shorter / longer'],
   ],
   'song+r2': [
     ['cross', 'A rest of the chosen duration (if it fits)'],
-    ['l1/r1', 'The note: longer / shorter'],
+    ['l1/r1', 'The note: shorter / longer'],
   ],
   'song-options': [
     ['updown', 'Move between controls'],
-    ['leftright', 'Change the value shown (clef)'],
+    ['leftright', 'Change the value shown (clef, the gate to copy from)'],
     ['cross', 'Choose'],
     ['circle', 'Back to the staff'],
     ['options', 'Back to the staff'],
@@ -168,8 +168,8 @@ const SONG_ACTIONS = {
   down: 'pitchDown',
   cross: 'cross',
   square: 'erase',
-  l1: 'longer',
-  r1: 'shorter',
+  l1: 'palettePrev',
+  r1: 'paletteNext',
   triangle: 'play',
   l3: 'undo',
   r3: 'redo',
@@ -177,8 +177,8 @@ const SONG_ACTIONS = {
   share: 'voice',
   circle: 'close',
 };
-const SONG_ACTIONS_L2 = { up: 'sharpen', down: 'flatten', l1: 'noteLonger', r1: 'noteShorter' };
-const SONG_ACTIONS_R2 = { cross: 'rest', l1: 'noteLonger', r1: 'noteShorter' };
+const SONG_ACTIONS_L2 = { up: 'sharpen', down: 'flatten', l1: 'noteShorter', r1: 'noteLonger' };
+const SONG_ACTIONS_R2 = { cross: 'rest', l1: 'noteShorter', r1: 'noteLonger' };
 
 const dominant = (x, y) => {
   if (Math.abs(x) >= Math.abs(y)) return x > 0 ? 'right' : 'left';

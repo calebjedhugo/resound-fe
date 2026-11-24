@@ -17,9 +17,13 @@ Files (`ui/` + `model/`):
   (`_drawSelection`), any other key draws nothing. A staff resize re-engraves
   through the same path: the editor owns the ResizeObserver; the renderer's
   is OFF (`observeContainer: false` — it re-engraved without the overlay).
-  **Entry is REST FIRST (designer's rulings 2026-11-24)**: a rest of the
-  palette's duration goes in at the edit cursor (`insertRest`: ✕ / Enter
-  with nothing at the cursor, R2+✕, a duration key 2–7, r) ONLY if it fits in what is left of its measure
+  **Entry (designer's rulings 2026-11-24)**: ✕ / Enter with NOTHING at the
+  edit cursor (an empty song) enters a NOTE at the pitch cursor
+  (`insertNote`, the palette's duration; no rest first, and no "nothing at
+  the cursor" message any more: □, the accidental, the dot and the tie
+  quietly do nothing there). A rest of the palette's duration goes in with
+  `insertRest` (R2+✕, a duration key 2–7, r). Either goes in ONLY if it
+  fits in what is left of its measure
   (`_roomAt`, barred as SongModel bars; a full measure starts a new one;
   refusals say why in the status line). The PITCH CURSOR (a staff line /
   space, ↑/↓; cyan ring + name + dashed ledger guides) then puts pitches on
@@ -42,7 +46,13 @@ Files (`ui/` + `model/`):
   other end was re-pitched, removed or separated goes. The model keeps
   dots in the fraction (one dot numerator 3, '3/8'; two numerator 7,
   '7/16': `splitLength`/`joinLength`); stored songs are canonical
-  `{length, dotted: true | 2}`. **No pitch ever goes in on the editor's own initiative**
+  `{length, dotted: true | 2}`. **Every pitch put on SOUNDS** (`_sound` →
+  the player's `sound(pitch, seconds)`: that pitch alone, ALWAYS a quarter
+  note at the level's tempo, in the modal's creature voice, the entity
+  lit for it): a new note, a rest made a note, a chord tone, a creature's
+  moved note, a click, an accidental. Never a pitch taken off, an undo /
+  redo, or a load (those don't go through the edit methods).
+  **No pitch ever goes in on the editor's own initiative**
   (no default notes/pitches; new entities' songs are `[]`). The edit cursor
   OPENS AT THE END (on the last entry); an entry goes in at the cursor and
   the cursor goes AFTER it (mid-song too); a CLICK puts a note at the
@@ -64,13 +74,18 @@ Files (`ui/` + `model/`):
   level behind it), then re-show the entity (`NotationEditor.setSong`, or a
   rebuilt editor when the grand staff came or went).
 - **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
-- **RhythmPalette.js** — whole … 32nd, then the DOT (chosen, ✕ steps the
+- **RhythmPalette.js** — 32nd … whole (shortest to longest, MuseScore's
+  order, ruled 2026-11-24: keys 2 = 32nd, 3 = 16th, 4 = 8th, 5 = quarter,
+  6 = half, 7 = whole), then the DOT (chosen, ✕ steps the
   dots) and the TIE (chosen, ✕ ties; `tieSelected`, `chooseMode`); with
   either chosen the last note value stays the entry duration, shown `kept`. Icons are
   `resound-notation/components/Note` notes, but the library draws glyphs as
   `<use>` of per-SVG `<defs>` that only `render()` writes, so the palette
   copies the defs from one hidden render into every icon (`glyphDefs`) —
-  without them the icons were bare stems (2026-11-24).
+  without them the icons were bare stems (2026-11-24). The palette's bar
+  (`.rhythm-palette-bar`) is `position: sticky` at the top of the modal's
+  scrolling body, so it stays in sight while a long song scrolls (the
+  body's `scroll-padding-top` keeps a revealed cursor clear of it).
 - **The game reads ties and dots as they SOUND** (`core/noteBeats`,
   `core/SongMatcher`): a tied pair is one held note to a gate, a double
   dot x1.75 — see DESIGN.md "Matching".
@@ -81,8 +96,22 @@ Files (`ui/` + `model/`):
 - **SongEditorModal.js** — modal wrapper: header (title, ×), body (palette +
   staff), always-visible footer (Play/Stop/Clear, hint + status, Options,
   Done). **Options** (footer button / the pad's Options) toggles a popover
-  with the clef dropdown and Clear, walked by the pad with `PadFocus`
-  (context `song-options`). Leaving the grand staff opens a dialog — keep
+  with the clef dropdown, **Copy song from** and Clear, walked by the pad
+  with `PadFocus` (context `song-options`). Copy song from
+  (`songSources`, `copySongFrom`) lists the level's OTHER gates that have
+  a song (by gate id, "(grand staff)", and the first four pitches) and
+  copies the chosen one's song in place of this one's: both staves +
+  `staffGroups`, or the one staff + its clef (time/key are the level's).
+  Over a song with notes it asks first (`.song-copy-dialog`, Replace /
+  Cancel, Cancel focused). One undo step; the editor is rebuilt (cursor at
+  the end). A creature target takes ONE line (grand staff merged, each
+  chord's TOP note, ties re-joined: `repairTies`). Linked partners are not
+  touched (as any song edit; the validator flags a drifted pair).
+  However the modal closes (Done, ×, Esc / ○, backdrop) it calls
+  `onClose`: `EditorApp` puts the camera (position, orientation, lens,
+  orbit target) and cursor back as they were before `_frameAboveEditor`
+  moved them (`_captureView` / `_restoreViewBeforeSong`; a song opened over
+  another keeps the first's). Leaving the grand staff opens a dialog — keep
   the treble or the bass staff — and merges both staves onto it
   (`mergeVoices`; one undo step). Constructs the editor
   (`import NotationEditor from 'editor/ui/NotationEditor'`), persists `onChange` through
@@ -337,7 +366,7 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 | Input | Viewport | + L2 held | + R2 held |
 |---|---|---|---|
 | D-pad | cursor (repeats; anywhere) | ↑/↓ storey (any, -9..9; below 0 = subfloors); ←/→ undo/redo | move the entity (brings its floor) |
-| Left stick | pan camera | | |
+| Left stick | pan camera; the cursor rides on the cell at the view's middle (`viewCentreCell`: the sight line through the orbit target meets the active storey; any cell, any storey) | | |
 | Right stick | orbit camera (inverted, both axes) | | |
 | R3 / L3 | zoom in / out (a step; held, keeps going) | centre camera on cursor / reset camera | |
 | Cross | no floor: build it (held + moved: a range, built on release); bare floor: place chosen type; entity: select / its menu | — | — |
@@ -358,15 +387,17 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 - **Song editor** (`SongEditorModal.padAction`; `SONG_ACTIONS` +
   `SONG_ACTIONS_L2/_R2`, the NotationEditor's own methods; ruled
   2026-11-24): ←/→ edit cursor, ↑/↓ pitch cursor, ✕ pitch on/off at the
-  pitch cursor (nothing at the edit cursor: ✕ enters the rest; the palette's dot chosen: the dots, none → one → two →
+  pitch cursor (nothing at the edit cursor: ✕ enters a NOTE there; the palette's dot chosen: the dots, none → one → two →
   none; its tie chosen: tie / untie the note under the pitch cursor), R2+✕
   a rest of the chosen duration (if it fits; the designer asked for R2+✕ =
   tie, but it stays insert-rest by their earlier ruling — the tie card is
   the way), □ note → rest → gone, L2+↑/↓ accidental of the
-  note under the pitch cursor, L1/R1 the PALETTE only (whole … 32nd, dot, tie),
-  L2+L1 / R2+R1 the note at the cursor longer / shorter, L3 undo, R3 redo,
-  △ play/stop, Share other staff, Options the popover (clef, Clear; d-pad
-  walks, ←/→ steps the clef, ✕ commits, ○/Options back), ○ close. L2 / R2
+  note under the pitch cursor, L1/R1 the PALETTE only, a card left / right
+  (32nd … whole, dot, tie: R1 is longer), L2+L1 / R2+R1 the note at the
+  cursor shorter / longer (the palette's way), L3 undo, R3 redo,
+  △ play/stop, Share other staff, Options the popover (clef, copy a gate's
+  song, Clear; d-pad walks, ←/→ steps a dropdown, ✕ commits, ○/Options
+  back), ○ close. L2 / R2
   alone do nothing; the legend shows `song+l2` / `song+r2` while held.
 - **Menus** (ContextMenu): d-pad ↑/↓, ✕ choose, ○ close.
 - Caveats: a pad press is no user activation: a Play from the pad starts

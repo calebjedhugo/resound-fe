@@ -1,15 +1,18 @@
 /**
  * RhythmPalette
  *
- * Row of duration buttons above the staff — whole … 32nd, then the DOT and
- * the TIE — each note showing its note drawn by the notation system, so the
+ * Row of duration buttons above the staff — 32nd … whole (shortest to
+ * longest, as the duration keys run: MuseScore's order, ruled 2026-11-24),
+ * then the DOT and the TIE — each showing its note drawn by the notation
+ * system, so the
  * palette stays visually in sync with the engraving. A note value is the
  * duration a rest is entered at; the dot, chosen, makes ✕ step the dots of
  * the entry at the edit cursor (none → one → two → none); the tie, chosen,
  * makes ✕ tie / untie the note under the pitch cursor (the designer,
  * 2026-11-24: "toggling a tie is the same as a dot"). With either chosen
  * the last note value stays the entry duration, marked `kept`. Chosen by
- * click, by L1/R1 (`step`) or a duration key (2 = whole … 7 = 32nd).
+ * click, by L1/R1 (`step`: the card to the left / right) or a duration key
+ * (2 = 32nd, 3 = 16th, 4 = 8th, 5 = quarter, 6 = half, 7 = whole).
  *
  * The icons are `components/Note` notes. Since resound-notation draws every
  * SMuFL glyph as a `<use>` of a per-SVG `<defs>` (which only the renderer's
@@ -23,13 +26,14 @@ import { createNote } from 'resound-notation/components/Note';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+// Shortest to longest, the palette's order and the keys' (MuseScore's)
 const DURATIONS = [
-  { key: '2', length: '1/1', name: 'Whole' },
-  { key: '3', length: '1/2', name: 'Half' },
-  { key: '4', length: '1/4', name: 'Quarter' },
-  { key: '5', length: '1/8', name: 'Eighth' },
-  { key: '6', length: '1/16', name: '16th' },
-  { key: '7', length: '1/32', name: '32nd' },
+  { key: '2', length: '1/32', name: '32nd' },
+  { key: '3', length: '1/16', name: '16th' },
+  { key: '4', length: '1/8', name: 'Eighth' },
+  { key: '5', length: '1/4', name: 'Quarter' },
+  { key: '6', length: '1/2', name: 'Half' },
+  { key: '7', length: '1/1', name: 'Whole' },
 ];
 
 export { DURATIONS };
@@ -221,7 +225,8 @@ export default class RhythmPalette {
   }
 
   /**
-   * L1 (-1) / R1 (+1): the next card along whole … 32nd, dot, tie.
+   * L1 (-1) / R1 (+1): the card to the left / right along 32nd … whole,
+   * dot, tie (so R1 is a longer value, L1 a shorter one).
    * @returns {boolean} whether the choice moved
    */
   step(dir) {

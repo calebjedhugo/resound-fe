@@ -9,15 +9,18 @@
  * commands — which it overlays on the rendered SVG using the stable
  * `data-voice-id` / `data-note-index` hooks the renderer stamps on its output.
  *
- * Entry is REST FIRST (the designer's rulings, 2026-11-24): a rest of the
- * chosen duration goes in at the edit cursor — only if it fits in what is
- * left of its measure — and pitches are then put on and taken off it at the
- * PITCH CURSOR (a staff line or space, moved up/down): on a rest a pitch
- * makes it a note, on a note's own pitch it comes off (the last one leaves
- * the rest), anywhere else it joins the chord (a creature's song holds one
- * note: there the note moves). No pitch ever goes in on the editor's own
- * initiative. The edit cursor opens at the END of the song. Each action is
- * a public method (cross, insertRest, erase, stepAccidental, ...) that the
+ * Entry (the designer's rulings, 2026-11-24): pitches are put on and taken
+ * off the entry at the edit cursor at the PITCH CURSOR (a staff line or
+ * space, moved up/down): on a rest a pitch makes it a note, on a note's own
+ * pitch it comes off (the last one leaves the rest), anywhere else it joins
+ * the chord (a creature's song holds one note: there the note moves). With
+ * NOTHING at the edit cursor (an empty song), ✕ enters a NOTE at the pitch
+ * cursor, of the chosen duration; a rest of it goes in with R2+✕ / r / a
+ * duration key. Either must fit in what is left of its measure. No pitch
+ * ever goes in on the editor's own initiative. Every pitch put on sounds
+ * (a quarter note at the tempo, the player's `sound`), never an undo, redo
+ * or load. The edit cursor opens at the END of the song. Each action is a
+ * public method (cross, insertRest, erase, stepAccidental, ...) that the
  * keyboard and the controller (SongEditorModal.padAction) both call.
  *
  * Keyboard input renders at most once per animation frame, and only what
@@ -161,7 +164,7 @@ function setTie(note, from, on) {
  * re-pitched either end (or put an entry between) leaves no half-tie
  * behind. In place, over the model's entries.
  */
-function repairTies(entries) {
+export function repairTies(entries) {
   const joined = new Set(); // `${index}|${pitch}`: entry index ties on to index + 1
   entries.forEach((entry, i) => {
     if (isRestEntry(entry)) return;
@@ -215,8 +218,10 @@ export default class NotationEditor {
     this._tempo = tempo;
     // Optional audio player, e.g. a resound-sound Instrument. The notation
     // library stays audio-free; the consumer injects sound. Interface:
-    // `play({ data, tempo, basis })` and `stop()`. Playback still animates the
-    // visual cursor (via the renderer) even when no player is supplied.
+    // `play({ data, tempo, basis })`, `stop()` and (optional) `sound(pitch,
+    // seconds)`: one pitch put on the staff, heard on its own. Playback still
+    // animates the visual cursor (via the renderer) even when no player is
+    // supplied.
     this._player = player;
     this._playing = false;
     this._rafId = null;
@@ -369,6 +374,9 @@ export default class NotationEditor {
     this._container.innerHTML = '';
 
     const paletteContainer = document.createElement('div');
+    // Pinned to the top of the scrolling body (editor.css), so the values,
+    // dot and tie stay in sight while a long song scrolls under them
+    paletteContainer.className = 'rhythm-palette-bar';
     // A button clicked hands the keys back to the staff (here and below):
     // left on the button, they reached nothing
     this._palette = new RhythmPalette(paletteContainer, () => this.focus());
@@ -431,9 +439,9 @@ export default class NotationEditor {
     const hint = document.createElement('div');
     hint.className = 'song-edit-hint';
     hint.textContent = [
-      '2–7 or r: a rest (whole … 32nd)',
+      '2–7 or r: a rest (32nd … whole)',
       '↑/↓ pitch cursor',
-      'Enter: the pitch on / off',
+      'Enter: the pitch on / off (nothing there: a note)',
       '⇧↑/⇧↓ accidental',
       '←/→ move',
       '. dot (twice: double dot)',
@@ -560,14 +568,29 @@ export default class NotationEditor {
     return done;
   }
 
-  /** The index of the entry at the edit cursor (the selected one), or null. */
+  /**
+   * The index of the entry at the edit cursor (the selected one), or null:
+   * nothing there, and an action on it quietly does nothing (✕ enters a
+   * note instead: cross).
+   */
   _target(model) {
     const i = model._selectedIndex;
-    if (i === null || i >= model._notes.length) {
-      this._status('Nothing at the cursor: press ✕ to enter a rest');
-      return null;
-    }
+    if (i === null || i >= model._notes.length) return null;
     return i;
+  }
+
+  /**
+   * A pitch just went on the staff: hear it alone, a quarter note at the
+   * tempo, in the player's voice (SongEditorModal: the creature voice).
+   * Only edits call this — never an undo, a redo or a load.
+   */
+  _sound(pitch) {
+    if (!pitch || !this._player || typeof this._player.sound !== 'function') return;
+    try {
+      this._player.sound(pitch, 60 / (this._tempo || 120));
+    } catch {
+      // Audio is optional; a player failure must not break the editor.
+    }
   }
 
   /** A measure's length as a share of a whole note (Infinity: unmetered). */
@@ -624,6 +647,7 @@ export default class NotationEditor {
     }
     model._selectedIndex = model._cursorPosition - 1;
     this._emitChange();
+    this._sound(pitch);
   }
 
   /**
@@ -646,15 +670,30 @@ export default class NotationEditor {
    * the pitch at the pitch cursor goes on (a rest becomes that note; a note
    * gains it as a chord tone — a creature's single note moves there) or,
    * already there, comes off (the last pitch off leaves a rest). With
-   * nothing at the cursor, ✕ enters a rest of the chosen duration there.
+   * nothing at the cursor, ✕ enters a NOTE at the pitch cursor, of the
+   * chosen duration (if it fits in the measure) — never a refusal for want
+   * of a rest. The dot or the tie with nothing there do nothing.
    */
   cross() {
     if (this._palette.dotSelected) return this.toggleDot();
     if (this._palette.tieSelected) return this.toggleTie();
     const model = this._activeModel();
     const i = model._selectedIndex;
-    if (i === null || i >= model._notes.length) return this.insertRest();
+    if (i === null || i >= model._notes.length) return this.insertNote();
     return this._act((m) => this._togglePitch(m, this.pitchCursor));
+  }
+
+  /**
+   * A note at the pitch cursor (in the key), of the chosen duration (default
+   * the palette's), at the edit cursor — refused, saying why, when it won't
+   * fit in what is left of the measure. It sounds.
+   */
+  insertNote(length = this._palette.activeLength) {
+    return this._act((model) => {
+      if (!this._fits(model, model._cursorPosition, length, 'that note')) return false;
+      this._enter(model, keyPitch(this.pitchCursor, this._keySignature), length);
+      return true;
+    });
   }
 
   _togglePitch(model, position) {
@@ -666,6 +705,7 @@ export default class NotationEditor {
     if (isRestEntry(entry)) {
       model._notes[i] = { pitch, ...entry };
       this._emitChange();
+      this._sound(pitch);
       return true;
     }
     const members = membersOf(entry);
@@ -692,6 +732,9 @@ export default class NotationEditor {
       );
     }
     this._emitChange();
+    // A pitch went on (a chord tone, a creature's moved note); one taken off
+    // is silent
+    if (at < 0) this._sound(pitch);
     return true;
   }
 
@@ -762,8 +805,9 @@ export default class NotationEditor {
   }
 
   /**
-   * L2+L1 / R2+R1: the entry at the cursor a value longer (-1) or shorter
-   * (+1) — the palette's direction — keeping its dots; longer must fit.
+   * L2+L1 / R2+R1: the entry at the cursor a value shorter (-1) or longer
+   * (+1) — the palette's direction (32nd … whole) — keeping its dots;
+   * longer must fit.
    */
   stepNoteDuration(step) {
     return this._act((model) => {
@@ -773,11 +817,11 @@ export default class NotationEditor {
       const at = DURATIONS.findIndex((d) => d.length === base);
       const next = DURATIONS[at + step];
       if (at < 0 || !next) {
-        this._status(step < 0 ? 'Already the longest value' : 'Already the shortest value');
+        this._status(step > 0 ? 'Already the longest value' : 'Already the shortest value');
         return false;
       }
       const newLength = joinLength(next.length, dots);
-      if (step < 0 && !this._fits(model, i, newLength, 'the longer value')) return false;
+      if (step > 0 && !this._fits(model, i, newLength, 'the longer value')) return false;
       model.setDuration(i, newLength);
       this._emitChange();
       return true;
@@ -843,6 +887,7 @@ export default class NotationEditor {
       }
       note.pitch = pitch;
       this._emitChange();
+      this._sound(pitch);
       return true;
     });
   }
@@ -859,6 +904,7 @@ export default class NotationEditor {
       if (note) note.pitch = withAccidental(note.pitch, accidental);
       else model.setAccidental(i, accidental);
       this._emitChange();
+      if (note) this._sound(note.pitch);
       return true;
     });
   }
@@ -1342,7 +1388,7 @@ export default class NotationEditor {
         break;
       default: {
         // A duration key makes that the chosen duration and enters a rest
-        // of it (rest first: the pitch goes on with Enter / ✕)
+        // of it (2 = 32nd … 7 = whole; the pitch goes on with Enter / ✕)
         const length = this._palette.handleKeyPress(e.key);
         if (length) this.insertRest(length);
         break;

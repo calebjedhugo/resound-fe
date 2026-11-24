@@ -15,18 +15,61 @@
  * Layout: header (title, ×), body (palette + staff), and an always-visible
  * footer holding Play / Stop / Clear, the hint and status line, Options and
  * Done. Options opens a popover with what the controller can't otherwise
- * reach — the clef and Clear — walked with the pad (input/PadFocus) when it
- * opened from the pad's Options. Leaving the grand staff asks which staff
- * to keep (a dialog) and merges BOTH staves' notes onto it as chords
- * (model/mergeVoices): nothing is dropped.
+ * reach — the clef, a copy of another gate's song, and Clear — walked with
+ * the pad (input/PadFocus) when it opened from the pad's Options. Leaving
+ * the grand staff asks which staff to keep (a dialog) and merges BOTH
+ * staves' notes onto it as chords (model/mergeVoices): nothing is dropped.
+ * Copying a gate's song over a song with notes asks first (a dialog); the
+ * copy is one undo step.
+ *
+ * A pitch put on the staff sounds alone (a quarter note, the same creature
+ * voice; the player's `sound`). However the modal closes (Done, ×, Esc /
+ * ○, a click outside) it reports `onClose`, so the viewport can go back to
+ * where it was before the modal framed the entity.
  */
-import NotationEditor from 'editor/ui/NotationEditor';
+import NotationEditor, { repairTies } from 'editor/ui/NotationEditor';
 import PadFocus from 'editor/input/PadFocus';
-import mergeVoices from 'editor/model/mergeVoices';
+import mergeVoices, { midiOf } from 'editor/model/mergeVoices';
 import { Sequencer } from 'resound-sound';
 import { createEditorVoice } from 'editor/audio/SongAudition';
 
 const isGrand = (data) => (data.staffGroups || []).some((g) => g.type === 'brace');
+
+/** Whether a song holds any entry (flat notes, or a grand staff's voices). */
+function hasNotes(song) {
+  if (Array.isArray(song)) return song.length > 0;
+  return Boolean(song && Array.isArray(song.voices) && song.voices.some((v) => v.notes?.length));
+}
+
+/** A song's first few pitches, for the copy picker ('C4 E4+G4 A4 …'). */
+function songPreview(song, count = 4) {
+  const notes = Array.isArray(song) ? song : song?.voices?.[0]?.notes ?? [];
+  const named = notes
+    .filter((e) => Array.isArray(e) || e.pitch)
+    .map((e) => (Array.isArray(e) ? e.map((n) => n.pitch).join('+') : e.pitch))
+    .map((p) => p.replace(/#/g, '\u266f').replace(/([A-G])b/g, '$1\u266d'));
+  if (named.length === 0) return 'rests only';
+  return named.slice(0, count).join(' ') + (named.length > count ? ' …' : '');
+}
+
+const gateNumber = (gate) => Number(/(\d+)$/.exec(gate.data.gateId || '')?.[1] ?? Infinity);
+
+/**
+ * One staff, one note at a time, from a song (a creature's song holds one
+ * note per entry): a grand staff's staves merged (mergeVoices), each chord's
+ * TOP note kept (the tune), ties re-joined between what is left.
+ */
+function singleLine(song) {
+  const flat = Array.isArray(song)
+    ? song
+    : mergeVoices((song?.voices ?? []).map((v) => v.notes || []));
+  const line = flat.map((e) => {
+    if (!Array.isArray(e)) return { ...e };
+    return { ...e.reduce((a, b) => (midiOf(b.pitch) > midiOf(a.pitch) ? b : a)) };
+  });
+  repairTies(line);
+  return line;
+}
 
 // The pad's actions while a popover / dialog of the modal has the focus
 const PANEL_MOVES = { pitchUp: -1, sharpen: -1, pitchDown: 1, flatten: 1 };
@@ -40,12 +83,28 @@ export default class SongEditorModal {
    * @param {(entityId:number, pitch:string, seconds:number) => void} [options.onNote]
    *   a played note began (the song editor's Play)
    * @param {(entityId:number) => void} [options.onStop] - playback stopped
+   * @param {(entityId:number) => void} [options.onClose] - the modal closed
+   *   (any way: Done, ×, Esc / ○, a click outside)
+   * @param {(id:string) => ?object} [options.createVoice] - the creature
+   *   voice it plays in (startNote / stopAll; default SongAudition's
+   *   createEditorVoice, null without Web Audio)
    */
-  constructor(rootContainer, undoManager, { onNote = () => {}, onStop = () => {} } = {}) {
+  constructor(
+    rootContainer,
+    undoManager,
+    {
+      onNote = () => {},
+      onStop = () => {},
+      onClose = () => {},
+      createVoice = createEditorVoice,
+    } = {}
+  ) {
     this._rootContainer = rootContainer;
     this._undoManager = undoManager;
     this._onNote = onNote;
     this._onStop = onStop;
+    this._onClose = onClose;
+    this._createVoice = createVoice;
     this._backdropEl = null;
     this._notationEditor = null;
     this._isOpen = false;
@@ -157,6 +216,7 @@ export default class SongEditorModal {
 
     this._buildOptionsPopover(modalEl, entity, isPolyphonic);
     this._buildStaffDialog(modalEl);
+    this._buildCopyDialog(modalEl);
 
     this._backdropEl.appendChild(modalEl);
 
@@ -184,7 +244,7 @@ export default class SongEditorModal {
     this._notationEditor.focus();
   }
 
-  /** The Options popover: the clef and Clear (hidden until Options). */
+  /** The Options popover: the clef, a gate's song to copy, and Clear (hidden until Options). */
   _buildOptionsPopover(modalEl, entity, isPolyphonic) {
     const popover = document.createElement('div');
     popover.className = 'song-options-popover';
@@ -211,6 +271,8 @@ export default class SongEditorModal {
     clefSelect.onchange = () => this._changeClef(clefSelect.value);
     clefLabel.appendChild(clefSelect);
     popover.appendChild(clefLabel);
+
+    popover.appendChild(this._buildCopyPicker(entity));
 
     const clearBtn = document.createElement('button');
     clearBtn.className = 'editor-btn song-options-clear';
@@ -260,6 +322,149 @@ export default class SongEditorModal {
     dialog.appendChild(buttons);
     modalEl.appendChild(dialog);
     this._dialogEl = dialog;
+  }
+
+  /**
+   * "Copy song from": the gates of this level that have a song (not the
+   * entity being edited), by gate id and their first few notes. Choosing one
+   * copies its song here (copySongFrom), asking first over a song with notes.
+   */
+  _buildCopyPicker(entity) {
+    const label = document.createElement('label');
+    label.className = 'song-options-row';
+    label.textContent = 'Copy song from ';
+    const select = document.createElement('select');
+    select.className = 'prop-select song-copy-select';
+    const sources = this.songSources(entity.id);
+    const prompt = document.createElement('option');
+    prompt.value = '';
+    prompt.textContent = sources.length ? 'Choose a gate…' : 'No other gate has a song';
+    select.appendChild(prompt);
+    sources.forEach(({ id, label: text }) => {
+      const option = document.createElement('option');
+      option.value = String(id);
+      option.textContent = text;
+      select.appendChild(option);
+    });
+    select.disabled = sources.length === 0;
+    select.onchange = () => {
+      const sourceId = Number(select.value);
+      select.value = '';
+      if (select.dataset) delete select.dataset.padCommitted;
+      this.closePanel();
+      if (!sourceId) return;
+      const target = this._undoManager.getEntity(this._entityId);
+      if (target && hasNotes(target.data.song)) {
+        this._askCopy(sourceId);
+      } else {
+        this.copySongFrom(sourceId);
+      }
+    };
+    label.appendChild(select);
+    this._copySelect = select;
+    return label;
+  }
+
+  /**
+   * The gates of this level whose songs could be copied into `entityId`:
+   * every gate with notes but that entity, in gate-id order.
+   * @param {number} entityId
+   * @returns {{id: number, label: string}[]}
+   */
+  songSources(entityId) {
+    return this._undoManager
+      .getEntities()
+      .filter((e) => e.type === 'gate' && e.id !== entityId && hasNotes(e.data.song))
+      .sort((a, b) => gateNumber(a) - gateNumber(b) || a.id - b.id)
+      .map((gate) => {
+        const name = gate.data.gateId || `gate at (${gate.x}, ${gate.y}, ${gate.z})`;
+        const grand = isGrand(gate.data) ? ' (grand staff)' : '';
+        return { id: gate.id, label: `${name}${grand} — ${songPreview(gate.data.song)}` };
+      });
+  }
+
+  /** Copying over a song with notes: asks (Replace / Cancel). */
+  _buildCopyDialog(modalEl) {
+    const dialog = document.createElement('div');
+    dialog.className = 'song-copy-dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.hidden = true;
+    const text = document.createElement('p');
+    dialog.appendChild(text);
+    const buttons = document.createElement('div');
+    buttons.className = 'song-staff-dialog-buttons';
+    [
+      ['replace', 'Replace this song'],
+      ['cancel', 'Cancel'],
+    ].forEach(([what, label]) => {
+      const btn = document.createElement('button');
+      btn.className = 'editor-btn';
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.dataset.copy = what;
+      btn.onclick = () => {
+        const sourceId = this._copyPending;
+        this._copyPending = null;
+        this.closePanel();
+        if (what === 'replace' && sourceId) this.copySongFrom(sourceId);
+      };
+      buttons.appendChild(btn);
+    });
+    dialog.appendChild(buttons);
+    modalEl.appendChild(dialog);
+    this._copyDialogEl = dialog;
+    this._copyTextEl = text;
+  }
+
+  _askCopy(sourceId) {
+    const source = this._undoManager.getEntity(sourceId);
+    if (!source) return;
+    this._copyPending = sourceId;
+    const name = source.data.gateId || 'that gate';
+    const target = this._undoManager.getEntity(this._entityId);
+    const reduced =
+      target && target.type === 'creature'
+        ? ' A creature sings one note at a time: each chord gives its top note.'
+        : '';
+    this._copyTextEl.textContent =
+      `Replace this song with ${name}’s? Its notes and staff come here, in place of ` +
+      `these (⌘Z / L3 undoes it).${reduced}`;
+    this._openPanel(this._copyDialogEl, '[data-copy="cancel"]');
+  }
+
+  /**
+   * Copy a gate's song into the entity being edited, replacing its song: both
+   * staves and the grand-staff setting, or the one staff and its clef (time
+   * and key are the level's, so they need nothing). A creature, which sings
+   * one note at a time, takes one line: the staves merged, each chord's top
+   * note. One undo step; the staff shows it with the cursor at the end.
+   * @param {number} sourceId - the gate's entity id
+   * @returns {boolean} whether it copied
+   */
+  copySongFrom(sourceId) {
+    if (!this._isOpen) return false;
+    const source = this._undoManager.getEntity(sourceId);
+    const target = this._undoManager.getEntity(this._entityId);
+    if (!source || !target || sourceId === this._entityId || !hasNotes(source.data.song)) {
+      return false;
+    }
+    const copy = JSON.parse(JSON.stringify(source.data));
+    const newData = { ...target.data };
+    delete newData.clef;
+    delete newData.staffGroups;
+    if (target.type === 'creature') {
+      newData.song = singleLine(copy.song);
+      if (!isGrand(copy) && copy.clef) newData.clef = copy.clef;
+    } else {
+      newData.song = copy.song;
+      if (copy.clef) newData.clef = copy.clef;
+      if (copy.staffGroups && copy.staffGroups.length) newData.staffGroups = copy.staffGroups;
+    }
+    this._recordEdit(() => this._undoManager.updateEntity(this._entityId, { data: newData }));
+    this._clefSelect.value = this._clefValue(newData);
+    this._rebuildEditor();
+    this._notationEditor.focus();
+    return true;
   }
 
   _clefValue(data) {
@@ -459,13 +664,18 @@ export default class SongEditorModal {
    */
   _ensurePlayer() {
     if (this._player) return this._player;
-    const voice = createEditorVoice('song-editor');
+    const voice = this._createVoice('song-editor');
     if (!voice) return null;
     // The editor talks to the wrapper only. A stop puts the entity out
-    // (onStop).
+    // (onStop). `sound`: one pitch just put on the staff, alone (a quarter
+    // note at the tempo, NotationEditor._sound), lighting the entity for it.
     this._player = {
       voice,
       play: (args) => this._playVoices(voice, args),
+      sound: (pitch, seconds) => {
+        voice.startNote(pitch, seconds * 1000);
+        if (this._entityId !== null) this._onNote(this._entityId, pitch, seconds);
+      },
       stop: () => {
         if (this._sequencer) this._sequencer.stop();
         this._sequencer = null;
@@ -522,7 +732,10 @@ export default class SongEditorModal {
       this._backdropEl = null;
     }
 
+    const closedId = this._entityId;
     this._entityId = null;
+    this._copyPending = null;
+    this._onClose(closedId);
 
     // Return focus to viewport
     const viewport = document.getElementById('editor-viewport');
@@ -539,12 +752,13 @@ export default class SongEditorModal {
    * A controller's song-editing action (editor/input/EditorGamepad
    * SONG_ACTIONS): left / right (edit cursor), pitchUp / pitchDown (pitch
    * cursor), sharpen / flatten (L2 + up/down: the note under the pitch
-   * cursor's accidental), cross (the pitch on / off — or, the dot chosen,
+   * cursor's accidental), cross (the pitch on / off; nothing at the edit
+   * cursor: a note there — or, the dot chosen,
    * the dots: none → one → two → none; the tie chosen, the note under the
    * pitch cursor tied / untied), rest (R2 + ✕: a rest of the chosen
-   * duration), erase (□: note → rest → gone), longer / shorter (L1/R1: the
-   * palette, whole … 32nd, dot, tie), noteLonger /
-   * noteShorter (L2+L1 / R2+R1: the note at the cursor), play, voice (the
+   * duration), erase (□: note → rest → gone), palettePrev / paletteNext
+   * (L1/R1: the palette's card to the left / right, 32nd … whole, dot, tie),
+   * noteShorter / noteLonger (L2+L1 / R2+R1: the note at the cursor), play, voice (the
    * other staff), undo / redo (L3 / R3), options (the popover), close.
    * While the popover or dialog is open, the pad walks it instead.
    * @param {string} action
@@ -578,14 +792,14 @@ export default class SongEditorModal {
       case 'erase':
         editor.erase();
         break;
-      case 'longer':
-      case 'shorter':
-        // The palette runs whole -> 32nd, dot, tie: a shorter value is further along
-        editor.palette.step(action === 'shorter' ? 1 : -1);
+      case 'palettePrev':
+      case 'paletteNext':
+        // The palette runs 32nd -> whole, dot, tie: a longer value is further along
+        editor.palette.step(action === 'paletteNext' ? 1 : -1);
         break;
       case 'noteLonger':
       case 'noteShorter':
-        editor.stepNoteDuration(action === 'noteShorter' ? 1 : -1);
+        editor.stepNoteDuration(action === 'noteLonger' ? 1 : -1);
         break;
       case 'play':
         editor.togglePlay();

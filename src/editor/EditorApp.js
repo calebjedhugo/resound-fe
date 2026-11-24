@@ -47,7 +47,7 @@ import EditorGamepad from 'editor/input/EditorGamepad';
 import PadFocus from 'editor/input/PadFocus';
 import PadLegend from 'editor/ui/PadLegend';
 import { orbit, zoom, pan, glideToward } from 'editor/viewport/cameraMoves';
-import { gridToWorld, levelBounds, levelCenterCell } from 'editor/viewport/gridUtils';
+import { gridToWorld, levelBounds, levelCenterCell, snapToGrid } from 'editor/viewport/gridUtils';
 
 // Entity types that carry a song (Edit Song menu item, dbl-click to edit).
 const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
@@ -136,7 +136,13 @@ export default class EditorApp {
     this.songEditorModal = new SongEditorModal(
       document.getElementById('editor-root'),
       this.undoManager,
-      { onNote: previewNote, onStop: previewStop }
+      {
+        onNote: previewNote,
+        onStop: previewStop,
+        // However it closes, the view goes back to where it was before the
+        // modal framed the entity
+        onClose: () => this._restoreViewBeforeSong(),
+      }
     );
     this.audition = new SongAudition({ onNote: previewNote, onStop: previewStop });
     this.contextMenu = new ContextMenu(document.getElementById('editor-viewport'));
@@ -949,7 +955,12 @@ export default class EditorApp {
     this._requestFrame();
   }
 
-  /** The left stick: slide the view, in shares of the camera's distance. */
+  /**
+   * The left stick: slide the view, in shares of the camera's distance. The
+   * cursor rides along on the cell at the middle of the view (the cell the
+   * line of sight through the orbit centre meets at the active storey), so
+   * what ✕ does is what the view is centred on — anywhere, any storey.
+   */
   panCamera(rightShare, forwardShare) {
     const { position } = this.camera;
     const { target } = this.controls;
@@ -961,7 +972,34 @@ export default class EditorApp {
     this._glideTo = null;
     pan(this.camera, this.controls, rightShare * distance, forwardShare * distance);
     this.controls.update();
+    const cell = this.viewCentreCell();
+    const at = this.editorScene.getHoveredGrid();
+    if (cell.x !== at.x || cell.z !== at.z) this.editorScene.setCursor(cell);
     this._requestFrame();
+  }
+
+  /**
+   * The cell at the middle of the view: where the line from the camera
+   * through the orbit centre crosses the active storey's floor height (the
+   * orbit centre's own cell when that line never reaches it).
+   * @returns {{x: number, z: number}}
+   */
+  viewCentreCell() {
+    const { position } = this.camera;
+    const { target } = this.controls;
+    const floorY = this.editorScene.activeElevation * ELEVATION_HEIGHT;
+    let { x, z } = target;
+    const dy = target.y - position.y;
+    if (Math.abs(dy) > 1e-6) {
+      const t = (floorY - position.y) / dy;
+      // Ahead of the camera and not off toward the horizon (the orbit never
+      // tilts that flat; a storey above the camera is never reached)
+      if (t > 0 && t < 20) {
+        x = position.x + (target.x - position.x) * t;
+        z = position.z + (target.z - position.z) * t;
+      }
+    }
+    return snapToGrid(x, z);
   }
 
   // --- Songs: the song editor and quick audition --------------------------
@@ -973,8 +1011,48 @@ export default class EditorApp {
    */
   openSongEditor(entityId) {
     this.audition.stop();
+    // The view (and cursor) before the modal framed the entity, put back
+    // when it closes; a second song opened over the first keeps the first's
+    const before = this.songEditorModal.isOpen ? this._viewBeforeSong : this._captureView();
     this.songEditorModal.open(entityId);
+    this._viewBeforeSong = before;
     this._frameAboveEditor(entityId);
+  }
+
+  /** The camera (position, orientation, lens, orbit centre) and the cursor now. */
+  _captureView() {
+    const { camera, controls } = this;
+    return {
+      position: camera.position.clone(),
+      quaternion: camera.quaternion && camera.quaternion.clone ? camera.quaternion.clone() : null,
+      fov: camera.fov,
+      zoom: camera.zoom,
+      target: controls.target.clone(),
+      cursor: this.editorScene.getHoveredGrid(),
+      elevation: this.editorScene.activeElevation,
+    };
+  }
+
+  /** The song editor closed: the view and the cursor back as they were when it opened. */
+  _restoreViewBeforeSong() {
+    const view = this._viewBeforeSong;
+    this._viewBeforeSong = null;
+    if (!view) return;
+    const { camera, controls } = this;
+    this._glideTo = null;
+    camera.position.copy(view.position);
+    if (view.quaternion && camera.quaternion) camera.quaternion.copy(view.quaternion);
+    controls.target.copy(view.target);
+    if (view.fov !== undefined && camera.fov !== view.fov) {
+      camera.fov = view.fov;
+      camera.zoom = view.zoom;
+      if (camera.updateProjectionMatrix) camera.updateProjectionMatrix();
+    }
+    if (this.editorScene.activeElevation === view.elevation) {
+      this.editorScene.setCursor(view.cursor);
+    }
+    controls.update();
+    this._requestFrame();
   }
 
   /**

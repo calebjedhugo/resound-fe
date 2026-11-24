@@ -179,6 +179,7 @@ jest.mock('editor/io/sessionPersistence', () => ({
 /* eslint-disable import/first -- these imports must stay BELOW the mock consts:
    the jest.mock factories above reference them when the first import loads */
 import EditorApp from 'editor/EditorApp';
+import { ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
 import { loadSession } from 'editor/io/sessionPersistence';
 import { deserializePuzzle } from 'editor/model/serialization';
 import { createLink } from 'editor/io/portalLinks';
@@ -1207,6 +1208,41 @@ describe('EditorApp wiring', () => {
       expect(app.gameLook.silence).toHaveBeenCalledWith(id);
     });
 
+    it('closing the song editor (Done, Esc, ○) puts the camera and cursor back where they were', () => {
+      const xyz = ({ x, y, z }) => [x, y, z];
+      const id = app.undoManager.addEntity('gate', 7, 0, 7, { song: [] });
+      app.camera.position.set(12, 40, 52);
+      app.controls.target.set(12, 0, 22);
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 3, z: -5 });
+      const closes = [
+        () => document.querySelector('.song-done-btn').click(),
+        () =>
+          document
+            .querySelector('.song-modal-backdrop')
+            .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+        () => app.songEditorModal.padAction('close'),
+      ];
+      closes.forEach((close) => {
+        app.openSongEditor(id);
+        // Whatever moved the view while it was open (its framing of the gate)
+        app.camera.position.set(400, 90, -300);
+        app.controls.target.set(400, 0, -330);
+        app.editorScene.setCursor.mockClear();
+        close();
+        expect(app.songEditorModal.isOpen).toBe(false);
+        expect(xyz(app.camera.position)).toEqual([12, 40, 52]);
+        expect(xyz(app.controls.target)).toEqual([12, 0, 22]);
+        expect(app.editorScene.setCursor).toHaveBeenCalledWith({ x: 3, z: -5 });
+      });
+      // A second song opened over the first: closing goes back to before the first
+      app.openSongEditor(id);
+      app.camera.position.set(400, 90, -300);
+      const other = app.undoManager.addEntity('gate', 8, 0, 7, { song: [] });
+      app.openSongEditor(other);
+      app.songEditorModal.close();
+      expect(xyz(app.camera.position)).toEqual([12, 40, 52]);
+    });
+
     it('says why when there is no song under the cursor', () => {
       press('a');
       expect(document.querySelector('.viewport-toast').textContent).toMatch(/creature or gate/);
@@ -1283,18 +1319,46 @@ describe('EditorApp wiring', () => {
       letGo('right');
     });
 
-    it('the left stick pans the camera and never moves the cursor', () => {
+    it('the left stick pans the camera, the cursor riding on the cell at the middle of the view', () => {
       const pan = jest.spyOn(app, 'panCamera');
-      const move = app.editorScene.moveCursor;
+      const { setCursor } = app.editorScene;
       pad.axes[0] = 1; // pushed right
       poll();
       jest.advanceTimersByTime(16);
       poll();
       expect(pan).toHaveBeenCalled();
       expect(pan.mock.calls.at(-1)[0]).toBeGreaterThan(0);
-      expect(move).not.toHaveBeenCalled();
+      // The orbit centre sits on the storey-0 floor: its cell is the middle's
+      const { target } = app.controls;
+      expect(setCursor).toHaveBeenLastCalledWith({
+        x: Math.floor(target.x / WORLD_SCALE),
+        z: Math.floor(target.z / WORLD_SCALE),
+      });
       pad.axes[0] = 0;
       poll();
+    });
+
+    it('the middle of the view is found anywhere: negative cells, any storey', () => {
+      app.controls.target.set(-41, 0, -63);
+      app.camera.position.set(-41, 40, -33); // looking down toward -z
+      app.editorScene.activeElevation = 0;
+      expect(app.viewCentreCell()).toEqual({
+        x: Math.floor(-41 / WORLD_SCALE),
+        z: Math.floor(-63 / WORLD_SCALE),
+      });
+      // Storey 4: the line of sight meets its floor nearer the camera
+      app.editorScene.activeElevation = 4;
+      const floorY = 4 * ELEVATION_HEIGHT;
+      const t = (floorY - 40) / (0 - 40);
+      expect(app.viewCentreCell()).toEqual({
+        x: Math.floor(-41 / WORLD_SCALE),
+        z: Math.floor((-33 + (-63 + 33) * t) / WORLD_SCALE),
+      });
+      // A subfloor (storey -9): further along the same line
+      app.editorScene.activeElevation = -9;
+      const deep = (-9 * ELEVATION_HEIGHT - 40) / -40;
+      expect(app.viewCentreCell().z).toBe(Math.floor((-33 + (-63 + 33) * deep) / WORLD_SCALE));
+      app.editorScene.activeElevation = 0;
     });
 
     it('the right stick orbits inverted on both axes', () => {

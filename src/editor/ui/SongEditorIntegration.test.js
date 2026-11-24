@@ -438,7 +438,8 @@ describe('Song Editor Integration', () => {
       modal = new SongEditorModal(env.root, env.undoManager);
       const id = env.undoManager.addEntity('gate', 5, 0, 3, { song: [] });
       modal.open(id);
-      ['pitchUp', 'pitchDown', 'left', 'right', 'longer', 'shorter', 'cross', 'erase'].forEach(
+      // (✕ on nothing enters a note: the user's own act, so not among these)
+      ['pitchUp', 'pitchDown', 'left', 'right', 'palettePrev', 'paletteNext', 'erase'].forEach(
         (action) => modal.padAction(action)
       );
       env.root.querySelectorAll('.rhythm-btn').forEach((b) => b.click());
