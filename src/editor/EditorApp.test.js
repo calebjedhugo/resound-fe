@@ -99,8 +99,9 @@ jest.mock('editor/viewport/EditorScene', () =>
     moveCursor: jest.fn(),
     recenterCursor: jest.fn(),
     cellToContainerXY: jest.fn(() => ({ x: 0, y: 0 })),
-    setFloorDraft: jest.fn(),
-    clearFloorDraft: jest.fn(),
+    setFloorRange: jest.fn(),
+    clearFloorRange: jest.fn(),
+    setCursor: jest.fn(),
     activeElevation: 0,
     _groundPlane: null,
     _scene: { add: jest.fn(), remove: jest.fn() },
@@ -149,6 +150,11 @@ jest.mock('editor/viewport/EntityDragger', () =>
   }))
 );
 
+// The schematic look's floor tiles (instanced boxes: no WebGL here)
+jest.mock('editor/viewport/TileSlabs', () =>
+  jest.fn(() => ({ sync: jest.fn(), setVisible: jest.fn(), dispose: jest.fn() }))
+);
+
 jest.mock('editor/viewport/GhostPreview', () =>
   jest.fn(() => ({
     setEntityType: jest.fn(),
@@ -189,7 +195,6 @@ function setupEditorDOM() {
         <div id="world-panel"></div>
         <div id="git-panel"></div>
         <div id="elevation-panel"></div>
-        <div id="floor-panel"></div>
         <div id="entity-toolbar"></div>
         <div id="property-panel"></div>
         <div id="metadata-panel"></div>
@@ -836,7 +841,7 @@ describe('EditorApp wiring', () => {
     });
   });
 
-  describe('layer navigation (Option+Arrow)', () => {
+  describe('storeys (Option+Arrow)', () => {
     const optionPress = (key, shift = false) =>
       document.dispatchEvent(
         new KeyboardEvent('keydown', {
@@ -848,37 +853,27 @@ describe('EditorApp wiring', () => {
         })
       );
 
-    // Give the puzzle a second storey (elevation 1) so there's a layer to reach.
-    function addUpperStorey() {
-      app.undoManager.addFloor(1, 0, 0, 20, 20);
-      app.elevationSelector.refresh();
-    }
-
-    it('Option+Up/Down moves between existing storeys', () => {
-      addUpperStorey();
+    it('Option+Up/Down steps the storey, built on or not, never below the ground', () => {
       expect(app.editorScene.activeElevation).toBe(0);
       optionPress('ArrowUp');
+      optionPress('ArrowUp');
+      expect(app.editorScene.activeElevation).toBe(2);
+      optionPress('ArrowDown');
       expect(app.editorScene.activeElevation).toBe(1);
       optionPress('ArrowDown');
+      optionPress('ArrowDown');
       expect(app.editorScene.activeElevation).toBe(0);
+      expect(app.undoManager.getTiles()).toEqual([]); // stepping builds nothing
     });
 
-    it('Option+Up from a single-storey puzzle arms draft-floor mode on the empty layer', () => {
-      optionPress('ArrowUp');
-      expect(app.editorScene.activeElevation).toBe(1);
-      expect(app._floorDraft).not.toBeNull();
-    });
-
-    it('Shift+Option+Up moves the entity up a layer and follows it', () => {
-      addUpperStorey();
+    it('Shift+Option+Up carries the entity up a storey and follows it', () => {
       const id = app.undoManager.addEntity('wall', 7, 0, 7, {}); // cursor (7,7), elev 0
       optionPress('ArrowUp', true);
       expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 7, 7, 1);
       expect(app.editorScene.activeElevation).toBe(1); // active layer follows
     });
 
-    it('refuses a layer move onto an occupied cell', () => {
-      addUpperStorey();
+    it('refuses a carry onto an occupied cell', () => {
       app.undoManager.addEntity('wall', 7, 0, 7, {}); // the mover
       app.undoManager.addEntity('wall', 7, 1, 7, {}); // blocks the target layer
       optionPress('ArrowUp', true);
@@ -886,182 +881,136 @@ describe('EditorApp wiring', () => {
     });
   });
 
-  describe('draft-floor creation (Option+Arrow into an empty layer)', () => {
-    const press = (key, opts = {}) =>
+  // ✕ / Enter on a cell with no floor builds it: a tap one tile, held and
+  // moved a rectangle, built when let go (one undo step)
+  describe('building floor', () => {
+    const key = (type, k, opts = {}) =>
       document.dispatchEvent(
-        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts })
+        new KeyboardEvent(type, { key: k, bubbles: true, cancelable: true, ...opts })
       );
-    const optionUp = () => press('ArrowUp', { altKey: true });
-    const optionDown = () => press('ArrowDown', { altKey: true });
+    const cursorAt = (x, z) => app.editorScene.getHoveredGrid.mockReturnValue({ x, z });
 
-    it('arms draft-floor mode, anchored at the cursor, without creating anything', () => {
-      optionUp(); // E0 → empty E1
-      expect(app.editorScene.activeElevation).toBe(1);
-      expect(app._floorDraft).toEqual({ anchor: { x: 7, z: 7 }, elevation: 1 });
-      expect(app.editorScene.setFloorDraft).toHaveBeenCalled();
-      expect(app.undoManager.getFloors()).toHaveLength(0);
+    it('a new puzzle has no floor and no walls at all', () => {
+      expect(app.undoManager.getTiles()).toEqual([]);
+      expect(app.undoManager.getEntities()).toEqual([]);
     });
 
-    it('creates a floor from the anchor→cursor rectangle on Enter', () => {
-      optionUp();
-      press('Enter'); // cursor (7,7) == anchor → 1×1 floor at E1
-      expect(app.undoManager.getFloors()).toContainEqual({
-        elevation: 1,
-        x1: 7,
-        z1: 7,
-        x2: 7,
-        z2: 7,
-      });
-      expect(app._floorDraft).toBeNull();
+    it('Enter on a cell with no floor builds its tile when let go', () => {
+      key('keydown', 'Enter');
+      expect(app.editorScene.setFloorRange).toHaveBeenCalledWith({ x: 7, z: 7 }, 0);
+      expect(app.undoManager.getTiles()).toEqual([]); // not yet: still held
+      key('keyup', 'Enter');
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: 0, z: 7 }]);
+      expect(app.editorScene.clearFloorRange).toHaveBeenCalled();
+      expect(document.querySelector('.context-menu')).toBeNull();
     });
 
-    it('climbs through empty layers, skipping them and retargeting the draft', () => {
-      optionUp(); // empty E1
-      optionUp(); // empty E2 — E1 skipped
-      expect(app.editorScene.activeElevation).toBe(2);
-      expect(app._floorDraft.elevation).toBe(2);
-      expect(app.undoManager.getFloors()).toHaveLength(0);
+    it('held while the cursor moves, it builds the rectangle, as ONE undo step', () => {
+      app.undoManager.addTiles([{ x: 8, y: 0, z: 6 }]); // already built: kept
+      key('keydown', 'Enter');
+      key('keydown', 'Enter', { repeat: true }); // the held key repeating
+      cursorAt(9, 5); // the arrows took the cursor here
+      key('keyup', 'Enter');
+      const tiles = app.undoManager.getTiles();
+      expect(tiles).toHaveLength(3 * 3);
+      expect(tiles).toContainEqual({ x: 9, y: 0, z: 5 });
+      app._undo();
+      expect(app.undoManager.getTiles()).toEqual([{ x: 8, y: 0, z: 6 }]);
     });
 
-    it('cancels the draft on Escape without creating a floor', () => {
-      optionUp();
-      press('Escape');
-      expect(app._floorDraft).toBeNull();
-      expect(app.editorScene.clearFloorDraft).toHaveBeenCalled();
-      expect(app.undoManager.getFloors()).toHaveLength(0);
+    it('builds on the active storey', () => {
+      app.editorScene.activeElevation = 2;
+      key('keydown', 'Enter');
+      key('keyup', 'Enter');
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: 2, z: 7 }]);
     });
 
-    it('navigates normally (no draft) onto a layer that already has a floor', () => {
-      app.undoManager.addFloor(1, 0, 0, 5, 5);
-      app.elevationSelector.refresh();
-      optionUp(); // E0 → E1 (has a floor)
-      expect(app.editorScene.activeElevation).toBe(1);
-      expect(app._floorDraft).toBeNull();
+    it('Escape calls a held range off, building nothing', () => {
+      key('keydown', 'Enter');
+      key('keydown', 'Escape');
+      key('keyup', 'Enter');
+      expect(app.undoManager.getTiles()).toEqual([]);
     });
 
-    it('drops out of draft mode when descending to the ground', () => {
-      optionUp(); // empty E1, draft armed
-      optionDown(); // back to E0
-      expect(app.editorScene.activeElevation).toBe(0);
-      expect(app._floorDraft).toBeNull();
+    it('on built floor, Enter places the chosen type as before (and builds nothing)', () => {
+      app.undoManager.addTiles([{ x: 7, y: 0, z: 7 }]);
+      app.entityToolbar.cycle(1); // the player spawn
+      app.entityToolbar.cycle(1); // the creature
+      key('keydown', 'Enter');
+      key('keyup', 'Enter');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('creature', 7, 7, 0);
+      expect(app.undoManager.getTiles()).toHaveLength(1);
+    });
+
+    it('a click on a cell with no floor builds it; a click on floor only selects', () => {
+      const container = document.getElementById('editor-viewport');
+      app.editorScene.gridFromEvent.mockReturnValue({ x: -3, z: 4 });
+      container.click();
+      expect(app.undoManager.getTiles()).toEqual([{ x: -3, y: 0, z: 4 }]);
+      container.click(); // now floor: nothing more is built
+      expect(app.undoManager.getTiles()).toHaveLength(1);
+    });
+
+    it('the cursor goes anywhere: no grid edge, negative cells too', () => {
+      cursorAt(-12, 40);
+      key('keydown', 'Enter');
+      key('keyup', 'Enter');
+      expect(app.undoManager.hasTile(-12, 0, 40)).toBe(true);
+    });
+
+    it('the F key no longer does anything', () => {
+      key('keydown', 'f');
+      expect(app.editorScene.setFloorRange).not.toHaveBeenCalled();
+      expect(app.undoManager.canUndo()).toBe(false);
     });
   });
 
-  // The `f` key arms a floor draft at the current elevation — same size-with-
-  // arrows / Enter-to-commit flow as climbing onto an empty layer, but reachable
-  // even on a storey that already carries a floor elsewhere.
-  describe('floor draft via the F key', () => {
-    const press = (key, opts = {}) =>
-      document.dispatchEvent(
-        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts })
-      );
-
-    it('does nothing on the ground (floors sit above E0)', () => {
-      app.editorScene.activeElevation = 0;
-      press('f');
-      expect(app._floorDraft).toBeNull();
-      expect(app.editorScene.setFloorDraft).not.toHaveBeenCalled();
-    });
-
-    it('arms a draft anchored at the cursor on an empty upper cell', () => {
-      app.editorScene.activeElevation = 1;
-      press('f');
-      expect(app._floorDraft).toEqual({ anchor: { x: 7, z: 7 }, elevation: 1 });
-      expect(app.editorScene.setFloorDraft).toHaveBeenCalled();
-      expect(app.undoManager.getFloors()).toHaveLength(0);
-    });
-
-    it('refuses when the cursor cell already carries a floor', () => {
-      app.undoManager.addFloor(1, 7, 7, 7, 7); // under the cursor (7,7)
-      app.editorScene.activeElevation = 1;
-      press('f');
-      expect(app._floorDraft).toBeNull();
-    });
-
-    it('starts a SECOND region on a storey that already has a floor elsewhere', () => {
-      app.undoManager.addFloor(1, 0, 0, 2, 2); // a floor NOT under the cursor
-      app.editorScene.activeElevation = 1;
-      press('f');
-      expect(app._floorDraft).toEqual({ anchor: { x: 7, z: 7 }, elevation: 1 });
-    });
-
-    it('commits the drafted region on Enter (F → Enter creates a floor)', () => {
-      app.editorScene.activeElevation = 1;
-      press('f');
-      press('Enter'); // cursor (7,7) == anchor → 1×1 floor at E1
-      expect(app.undoManager.getFloors()).toContainEqual({
-        elevation: 1,
-        x1: 7,
-        z1: 7,
-        x2: 7,
-        z2: 7,
-      });
-      expect(app._floorDraft).toBeNull();
-    });
-
-    it('capital F works too, and is ignored while typing in a field', () => {
-      app.editorScene.activeElevation = 1;
-      press('F');
-      expect(app._floorDraft).not.toBeNull();
-
-      app._exitFloorDraft();
-      const input = document.createElement('input');
-      document.body.appendChild(input);
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));
-      expect(app._floorDraft).toBeNull();
-      input.remove();
-    });
-  });
-
-  // Delete on an otherwise-empty cell removes the WHOLE floor region under the
-  // cursor (floors are rectangles — no per-tile holes), guarded so an elevated
-  // entity is never left floating.
-  describe('Delete removes a floor region', () => {
+  // □ / Delete: the entity first, then (bare floor) the floor tile under it
+  describe('Delete removes the entity, then its floor', () => {
     const press = (key) =>
       document.dispatchEvent(
         new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
       );
 
-    it('removes the region the cursor sits in when the cell is empty', () => {
-      app.undoManager.addFloor(1, 5, 5, 9, 9); // covers the cursor (7,7)
-      app.editorScene.activeElevation = 1;
+    it('on bare floor, deletes that one tile', () => {
+      app.undoManager.addTiles([
+        { x: 7, y: 0, z: 7 },
+        { x: 8, y: 0, z: 7 },
+      ]);
       press('Delete');
-      expect(app.undoManager.getFloors()).toHaveLength(0);
+      expect(app.undoManager.getTiles()).toEqual([{ x: 8, y: 0, z: 7 }]);
     });
 
-    it('refuses while an entity rests anywhere on the region', () => {
-      app.undoManager.addFloor(1, 5, 5, 9, 9);
-      app.undoManager.addEntity('creature', 5, 1, 5, {}); // on the region, not the cursor cell
-      app.editorScene.activeElevation = 1;
-      const toast = jest.spyOn(app, '_showToast');
-      press('Delete'); // cursor (7,7) holds no entity → falls through to floor delete
-      expect(app.undoManager.getFloors()).toHaveLength(1);
-      expect(toast).toHaveBeenCalled();
-    });
-
-    it('deletes the entity first when one is under the cursor, keeping the floor', async () => {
-      app.undoManager.addFloor(1, 7, 7, 7, 7);
-      const id = app.undoManager.addEntity('wall', 7, 1, 7, {}); // on the cursor cell
-      app.editorScene.activeElevation = 1;
+    it('twice on an entity: the entity, then its floor', async () => {
+      app.undoManager.addTiles([{ x: 7, y: 0, z: 7 }]);
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
+      // The mocked placer only records: remove it from the model as the real one does
+      app.entityPlacer.removeEntityById.mockImplementation((eid) =>
+        app.undoManager.removeEntity(eid)
+      );
       press('Delete');
       await Promise.resolve();
       await Promise.resolve();
-      expect(app.entityPlacer.removeEntityById).toHaveBeenCalledWith(id);
-      expect(app.undoManager.getFloors()).toHaveLength(1); // floor untouched this press
+      expect(app.undoManager.getEntity(id)).toBeUndefined();
+      expect(app.undoManager.hasTile(7, 0, 7)).toBe(true); // the floor stays this press
+
+      press('Delete');
+      expect(app.undoManager.hasTile(7, 0, 7)).toBe(false);
     });
 
-    it('is a no-op on the ground where there is no floor data', () => {
-      app.editorScene.activeElevation = 0;
+    it('only the active storey: the floor below an upper tile stays', () => {
+      app.undoManager.addTiles([
+        { x: 7, y: 0, z: 7 },
+        { x: 7, y: 1, z: 7 },
+      ]);
+      app.editorScene.activeElevation = 1;
+      press('Delete');
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: 0, z: 7 }]);
+    });
+
+    it('is a no-op where nothing is built', () => {
       expect(() => press('Delete')).not.toThrow();
-      expect(app.undoManager.getFloors()).toHaveLength(0);
-    });
-
-    it('removes only the region at the active elevation when regions stack', () => {
-      app.undoManager.addFloor(1, 5, 5, 9, 9); // E1 under the cursor
-      app.undoManager.addFloor(2, 5, 5, 9, 9); // E2 stacked on top
-      app.editorScene.activeElevation = 2;
-      press('Delete');
-      expect(app.undoManager.getFloors()).toEqual([{ elevation: 1, x1: 5, z1: 5, x2: 9, z2: 9 }]);
+      expect(app.undoManager.canUndo()).toBe(false);
     });
   });
 
@@ -1364,7 +1313,8 @@ describe('EditorApp wiring', () => {
       expect(zoomSpy).not.toHaveBeenCalled();
     });
 
-    it('L1 / R1 choose what to place, and Cross places it at the cursor', () => {
+    it('L1 / R1 choose what to place, and Cross places it at the cursor (on built floor)', () => {
+      app.undoManager.addTiles([{ x: 7, y: 0, z: 7 }]);
       tap('r1');
       expect(app.entityToolbar.activeTool).toBe('player');
       tap('r1');
@@ -1431,13 +1381,36 @@ describe('EditorApp wiring', () => {
       letGo('l2');
     });
 
-    it('L2 held: d-pad up climbs a storey (an empty one starts a floor, Cross commits it)', () => {
+    it('L2 held: d-pad up climbs a storey; there Cross builds floor', () => {
       hold('l2');
       tap('up');
       letGo('l2');
-      expect(app.editorScene.setFloorDraft).toHaveBeenCalled();
+      expect(app.editorScene.activeElevation).toBe(1);
       tap('cross');
-      expect(app.undoManager.getFloors()).toHaveLength(1);
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: 1, z: 7 }]);
+    });
+
+    it('Cross on a cell with no floor builds it; held and moved, a range, let go as one step', () => {
+      hold('cross');
+      expect(app.undoManager.getTiles()).toEqual([]);
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 5, z: 8 });
+      letGo('cross');
+      expect(app.undoManager.getTiles()).toHaveLength(3 * 2);
+      expect(app.undoManager.hasTile(5, 0, 8)).toBe(true);
+      hold('l2');
+      tap('left'); // undo
+      letGo('l2');
+      expect(app.undoManager.getTiles()).toEqual([]);
+    });
+
+    it('Square deletes the entity, and again the floor under it; L2 + Square does nothing now', async () => {
+      app.undoManager.addTiles([{ x: 7, y: 0, z: 7 }]);
+      hold('l2');
+      tap('square');
+      letGo('l2');
+      expect(app.undoManager.hasTile(7, 0, 7)).toBe(true);
+      tap('square');
+      expect(app.undoManager.hasTile(7, 0, 7)).toBe(false);
     });
 
     it('Share switches the look', () => {
@@ -2489,8 +2462,11 @@ describe('EditorApp per-input work', () => {
     expect(app.renderer.render).toHaveBeenCalledTimes(1);
     expect(hud.firstChild).toBe(textNode);
 
-    press('ArrowUp', { altKey: true }); // onto the empty E1: draft-floor mode
+    press('ArrowUp', { altKey: true }); // onto the empty E1
     flushFrames();
-    expect(hud.textContent).toContain('Draft floor E1');
+    expect(hud.textContent).toContain('E1 · no floor');
+    press('Enter'); // held: building floor there
+    flushFrames();
+    expect(hud.textContent).toContain('Building floor E1');
   });
 });

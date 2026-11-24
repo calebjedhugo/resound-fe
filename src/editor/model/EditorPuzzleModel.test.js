@@ -79,26 +79,37 @@ describe('EditorPuzzleModel', () => {
     });
   });
 
-  describe('getFloorElevation', () => {
-    it('returns 0 for cells with no floor regions', () => {
-      expect(model.getFloorElevation(5, 5)).toBe(0);
+  describe('floor tiles', () => {
+    it('starts with no floor at all (a new room is built by hand)', () => {
+      expect(model.getTiles()).toEqual([]);
+      expect(model.hasTile(0, 0, 0)).toBe(false);
     });
 
-    it('returns the floor elevation for a covered cell', () => {
-      model.addFloor(2, 0, 0, 10, 10);
-
-      expect(model.getFloorElevation(5, 5)).toBe(2);
+    it('builds tiles anywhere, negative cells too, each once', () => {
+      expect(
+        model.addTiles([
+          { x: -3, y: 0, z: 2 },
+          { x: 4, y: 1, z: -1 },
+        ])
+      ).toBe(2);
+      expect(model.addTiles([{ x: -3, y: 0, z: 2 }])).toBe(0);
+      expect(model.hasTile(-3, 0, 2)).toBe(true);
+      expect(model.hasTile(4, 1, -1)).toBe(true);
+      expect(model.hasTile(4, 0, -1)).toBe(false); // storeys are separate
+      expect(model.getTiles()).toEqual([
+        { x: -3, y: 0, z: 2 },
+        { x: 4, y: 1, z: -1 },
+      ]);
     });
 
-    it('returns highest elevation when floor regions overlap', () => {
-      model.addFloor(1, 0, 0, 10, 10);
-      model.addFloor(3, 3, 3, 7, 7);
-
-      // Cell (5, 5) is covered by both floors; highest is 3
-      expect(model.getFloorElevation(5, 5)).toBe(3);
-
-      // Cell (1, 1) is only covered by the first floor; elevation is 1
-      expect(model.getFloorElevation(1, 1)).toBe(1);
+    it('removes one tile', () => {
+      model.addTiles([
+        { x: 1, y: 0, z: 1 },
+        { x: 2, y: 0, z: 1 },
+      ]);
+      expect(model.removeTile(1, 0, 1)).toBe(true);
+      expect(model.removeTile(1, 0, 1)).toBe(false);
+      expect(model.getTiles()).toEqual([{ x: 2, y: 0, z: 1 }]);
     });
   });
 
@@ -116,48 +127,6 @@ describe('EditorPuzzleModel', () => {
     });
   });
 
-  describe('addFloor / removeFloor', () => {
-    it('correctly manages the floors array', () => {
-      const idx0 = model.addFloor(1, 0, 0, 5, 5);
-      const idx1 = model.addFloor(2, 6, 6, 10, 10);
-
-      expect(model.getFloors().length).toBe(2);
-      expect(model.getFloors()[idx0]).toEqual({
-        elevation: 1,
-        x1: 0,
-        z1: 0,
-        x2: 5,
-        z2: 5,
-      });
-      expect(model.getFloors()[idx1]).toEqual({
-        elevation: 2,
-        x1: 6,
-        z1: 6,
-        x2: 10,
-        z2: 10,
-      });
-
-      model.removeFloor(idx0);
-
-      expect(model.getFloors().length).toBe(1);
-      expect(model.getFloors()[0]).toEqual({
-        elevation: 2,
-        x1: 6,
-        z1: 6,
-        x2: 10,
-        z2: 10,
-      });
-    });
-
-    it('removeFloor with invalid index is a no-op', () => {
-      model.addFloor(1, 0, 0, 5, 5);
-
-      expect(() => model.removeFloor(-1)).not.toThrow();
-      expect(() => model.removeFloor(99)).not.toThrow();
-      expect(model.getFloors().length).toBe(1);
-    });
-  });
-
   describe('setMetadata / getMetadata', () => {
     it('merges partial fields without overwriting unrelated fields', () => {
       model.setMetadata({ name: 'Test Puzzle', tempo: 90 });
@@ -167,7 +136,6 @@ describe('EditorPuzzleModel', () => {
       expect(meta.tempo).toBe(90);
       // Unrelated defaults remain intact
       expect(meta.difficulty).toBe(1);
-      expect(meta.gridSize).toBe(15);
     });
 
     it('has correct default metadata values', () => {
@@ -178,7 +146,6 @@ describe('EditorPuzzleModel', () => {
         name: '',
         difficulty: 1,
         tempo: 120,
-        gridSize: 15,
         keySignature: 'C',
         timeSignature: [4, 4],
         teaches: null,

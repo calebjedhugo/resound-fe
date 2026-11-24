@@ -2032,12 +2032,12 @@ class PortalManager {
   /** True if the cell one step from the partner gate along `v` is not open floor. */
   // eslint-disable-next-line class-methods-use-this
   _exitBlocked(area, partnerGate, v) {
-    // Outside the grid = the perimeter, always blocked
-    if (partnerGate.gridPosition) {
+    // Off the level (an older level's perimeter, or past a tile-built
+    // level's floor) is always blocked
+    if (partnerGate.gridPosition && area.elevationGrid) {
       const gx = partnerGate.gridPosition.x + v.x;
       const gz = partnerGate.gridPosition.z + v.z;
-      const gridSize = (area.puzzle && area.puzzle.gridSize) || Infinity;
-      if (gx < 0 || gx >= gridSize || gz < 0 || gz >= gridSize) return true;
+      if (!area.elevationGrid.inBounds(gx, gz)) return true;
     }
     const cx = partnerGate.position.x + v.x * WORLD_SCALE;
     const cz = partnerGate.position.z + v.z * WORLD_SCALE;

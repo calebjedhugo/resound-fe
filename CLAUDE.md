@@ -74,7 +74,7 @@ AudioContexts and two instrument registries.
 - The notation editor is local code on top of published `resound-notation` — see `src/editor/CLAUDE.md`
 - **The viewport draws the game's look** (`editor/viewport/GameLookLayer`,
   default; V toggles the schematic primitives): built with the game's own
-  builders (Floor, `Wall.buildBatch`/`perimeterPositions`, Ramp,
+  builders (Floor, `Wall.buildBatch`, Ramp,
   `Gate.buildClosedMesh`, NotationDisplay, CreatureLook, createSky) — a look
   change goes in the game modules, never a fork. A previewed song (song
   editor Play, A) lights its creature as in game
@@ -327,8 +327,13 @@ instead of "fixing" it.
   beside one face jams both sides). Tempo blends near mismatched doors; ONE
   world clock persists across crossings — a crossing swaps areas, never
   rebuilds. See DESIGN.md "Gate links".
+- **Floor = tiles** (2026-11-24, `core/floorTiles`, schema "Floor tiles"):
+  a level with `tiles` is walkable exactly there (`ElevationGrid.fromTiles`,
+  sparse, negative cells; no perimeter walls; the floor's edge is a cliff);
+  one without is the older full `gridSize` grid + `floors` + perimeter.
+  Bounds checks go through `ElevationGrid.inBounds`, never `gridSize`
 - **Walk-under**: elevated floors are platforms with walkable space beneath.
-  `ElevationGrid.levels[z][x]` lists a cell's walkable levels; movers pass a
+  `ElevationGrid.getLevelsAt(x, z)` lists a cell's walkable levels; movers pass a
   `priorLevel` to `getFloorY`/`getEffectiveElevation`/`canTraverse` to stay on
   their own layer. Change layers only via ramps. `motion.js` and the test
   harness's movement integrator (`testUtils.js`) must stay in sync.

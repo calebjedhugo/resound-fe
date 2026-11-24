@@ -19,10 +19,12 @@ describe('Session Persistence', () => {
       name: 'Session Test Puzzle',
       difficulty: 3,
       tempo: 140,
-      gridSize: 20,
     });
     model.setPlayerSpawn(5, 1, 10);
-    model.addFloor(1, 0, 0, 10, 10);
+    model.addTiles([
+      { x: 0, y: 1, z: 0 },
+      { x: -1, y: 0, z: 2 },
+    ]);
     model.addEntity('creature', 3, 1, 5, {
       song: [{ pitch: 'C4', length: '1/4' }],
       interval: 4,
@@ -42,7 +44,7 @@ describe('Session Persistence', () => {
     expect(restored).not.toBeNull();
     expect(restored.getMetadata()).toEqual(model.getMetadata());
     expect(restored.getPlayerSpawn()).toEqual(model.getPlayerSpawn());
-    expect(restored.getFloors()).toEqual(model.getFloors());
+    expect(restored.getTiles()).toEqual(model.getTiles());
 
     const originalEntities = model.getEntities();
     const restoredEntities = restored.getEntities();

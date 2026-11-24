@@ -128,18 +128,6 @@ export default class MetadataPanel {
       { min: 20, max: 400, step: 1 }
     );
 
-    // Grid Size
-    this._addField(
-      content,
-      'number',
-      'Grid Size',
-      meta.gridSize,
-      (val) => {
-        this._undoManager.setMetadata({ gridSize: Number(val) });
-      },
-      { min: 1, max: 100, step: 1 }
-    );
-
     // Key Signature
     this._addSelect(content, 'Key Signature', KEY_SIGNATURE_OPTIONS, meta.keySignature, (val) => {
       if (isValidKeySignature(val)) this._undoManager.setMetadata({ keySignature: val });

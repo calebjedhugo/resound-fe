@@ -185,11 +185,50 @@ edits show up in the game on a manual reload.
   localStorage snapshot only for a not-yet-saved puzzle (no id / not in the
   manifest).
 
+## The floor: tiles the designer builds (2026-11-24)
+
+- **The model's floor is TILES** (`EditorPuzzleModel` `addTiles` /
+  `removeTile` / `hasTile` / `getTiles`, cells `{x, y, z}`, y = storey;
+  `core/floorTiles`): no implicit ground, no grid, no perimeter. A new
+  puzzle has no floor and no walls. Saved as `tiles` rectangles
+  (`packTiles`), no `gridSize`/`floors`; an older file opens as tiles over
+  its grid + regions + perimeter ring, its perimeter walls as ordinary walls
+  (`serialization.deserializePuzzle`), and saves in the new shape.
+- **The cursor goes anywhere** (`EditorScene`: no clamp, negative cells;
+  the drawn grid follows the cursor, the click plane is huge). The camera
+  frames the built level (`gridUtils.levelBounds` / `levelCenterCell`; the
+  origin when empty) on open and on L2+L3.
+- **✕ / Enter on a cell with no floor at the active storey builds it**
+  (`EditorApp._startFloorRangeAtCursor`): held, the cursor moving, the
+  gold rectangle from the press to the cursor previews (`EditorScene`
+  `setFloorRange`); let go (`padConfirmEnd`, Enter keyup) builds every cell
+  of it that has none in ONE `addTiles` (one undo step). Esc, a storey
+  change, a load, window blur or the pad leaving call it off. A click on a
+  cell with no floor builds its tile too (a click on floor only selects).
+  On bare floor ✕ / Enter place the chosen type, on an entity select /
+  open its menu, as before.
+- **Anything placed brings its floor** (`EntityPlacer._withFloor`):
+  placing, moving (Shift+arrows, the property panel's X/Z), carrying to
+  another storey or placing the spawn on a cell with no tile builds it in
+  the SAME undo step (`UndoManager.batch`: several mutations, one step, one
+  change).
+- **□ / Delete**: the entity, else the spawn, else that floor tile. So twice
+  on an entity: the entity, then its floor.
+- **Storeys**: Option+↑/↓ (L2 + d-pad ↑/↓) go to any storey 0..`MAX_STOREY`
+  (9; `ui/ElevationSelector`, always shown as "Storey"), built on or not.
+  The floor-draft tool, F, L2+□, the "empty storey starts a floor" step,
+  the Options menu's "Start a floor here" and the sidebar's Floor Regions
+  panel are GONE; F and L2+□ do nothing now.
+- The schematic look draws the tiles as coloured slabs per storey
+  (`viewport/TileSlabs`, one InstancedMesh); the game look builds the
+  game's `Floor` from them. The validator errors on an entity or spawn with
+  no tile under it, warns on a ramp whose high end leads onto no tile.
+
 ## The viewport's look (2026-11-23)
 
 - **Game look (default)** — `viewport/GameLookLayer.js` draws the level with
-  the GAME'S OWN builders: `createSky`, `Floor`, `Wall.buildBatch` +
-  `Wall.perimeterPositions` (shared with `PuzzleLoader`), `Ramp`,
+  the GAME'S OWN builders: `createSky`, `Floor` (from the tiles),
+  `Wall.buildBatch` (the walls placed; no perimeter), `Ramp`,
   `Gate.buildClosedMesh` + `NotationDisplay` (the staff), the waystone and
   fountain mesh builders, and a `CreatureLook` per creature (the soap bubble;
   animated). Never fork a shader or write a shared material here; a look
@@ -276,8 +315,9 @@ edits show up in the game on a manual reload.
 
 ## Controller (2026-11-23; `input/EditorGamepad.js`)
 
-Reuses the game's pad reading (`core/Gamepad` `findPad`/`readStick`/
-`DEAD_ZONE`), `core/InputDevice` (device in hand) and the glyphs
+Cross is read on its release too (`EditorGamepad._letGo` →
+`padConfirmEnd`), for the floor range. Reuses the game's pad reading
+(`core/Gamepad` `findPad`/`readStick`/`DEAD_ZONE`), `core/InputDevice` (device in hand) and the glyphs
 (`core/inputGlyphs` `buttonGlyph`, `ui/glyphCanvas`; new `pill`/`dpad`
 kinds). Buttons mostly press the editor's OWN keys (synthetic keydowns on
 document, `fromGamepad`), so pad and keyboard can't drift; polled per frame
@@ -288,17 +328,17 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 
 | Input | Viewport | + L2 held | + R2 held |
 |---|---|---|---|
-| D-pad | cursor (repeats) | ↑/↓ storey (empty starts a floor); ←/→ undo/redo | move the entity |
+| D-pad | cursor (repeats; anywhere) | ↑/↓ storey (any, 0..9); ←/→ undo/redo | move the entity (brings its floor) |
 | Left stick | pan camera | | |
 | Right stick | orbit camera (inverted, both axes) | | |
 | R3 / L3 | zoom in / out (a step; held, keeps going) | centre camera on cursor / reset camera | |
-| Cross | place chosen type / select / its menu; commits a floor draft | — | — |
-| Square | delete under cursor | start a floor here (F) | — |
+| Cross | no floor: build it (held + moved: a range, built on release); bare floor: place chosen type; entity: select / its menu | — | — |
+| Square | delete the entity, else the floor tile under the cursor | — (freed) | — |
 | Triangle | song editor | play/stop the song (A) | — |
 | Circle | back (Esc) | | |
-| L1 / R1 | palette prev / next | | carry entity down / up a storey |
+| L1 / R1 | palette prev / next | | carry entity down / up a storey (brings its floor) |
 | L2 + R2 + d-pad ↑/↓ | carry entity a storey | | |
-| Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, floor, Undo, Redo, look | | |
+| Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, Undo, Redo, look | | |
 | Share | game ↔ schematic look | | |
 | Touchpad | sidebar focus (`PadFocus`) | | |
 

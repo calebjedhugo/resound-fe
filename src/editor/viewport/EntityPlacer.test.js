@@ -54,6 +54,43 @@ describe('EntityPlacer', () => {
     expect(entity.z).toBe(5);
   });
 
+  describe('anything placed brings its floor tile, in the same undo step', () => {
+    it('placing on a cell with no floor builds the tile; one undo takes both', () => {
+      const id = placer.placeEntity('creature', -2, 5, 1);
+      expect(undoManager.hasTile(-2, 1, 5)).toBe(true);
+      undoManager.undo();
+      expect(undoManager.getEntity(id)).toBeUndefined();
+      expect(undoManager.getTiles()).toEqual([]);
+      expect(undoManager.canUndo()).toBe(false);
+    });
+
+    it('placing on built floor adds no tile', () => {
+      undoManager.addTiles([{ x: 1, y: 0, z: 1 }]);
+      placer.placeEntity('wall', 1, 1, 0);
+      expect(undoManager.getTiles()).toHaveLength(1);
+      undoManager.undo(); // the wall only
+      expect(undoManager.hasTile(1, 0, 1)).toBe(true);
+    });
+
+    it('a move (or a carry to another storey) onto no floor builds it there', () => {
+      const id = placer.placeEntity('gate', 0, 0, 0);
+      placer.setEntityPosition(id, 4, 0, 2);
+      expect(undoManager.hasTile(4, 2, 0)).toBe(true);
+      undoManager.undo();
+      expect(undoManager.getEntity(id)).toMatchObject({ x: 0, y: 0, z: 0 });
+      expect(undoManager.hasTile(4, 2, 0)).toBe(false);
+      expect(undoManager.hasTile(0, 0, 0)).toBe(true); // its first cell keeps its floor
+    });
+
+    it('the player spawn brings its floor too', () => {
+      placer.placeEntity('player', 6, 6, 0);
+      expect(undoManager.hasTile(6, 0, 6)).toBe(true);
+      undoManager.undo();
+      expect(undoManager.getPlayerSpawn()).toBeNull();
+      expect(undoManager.getTiles()).toEqual([]);
+    });
+  });
+
   it('places a player spawn by calling setPlayerSpawn with correct coordinates', () => {
     const gridX = 4;
     const gridZ = 7;

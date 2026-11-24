@@ -16,8 +16,10 @@
  * `fromGamepad`, as the game's Gamepad does), so the controller and the
  * keyboard can't drift apart: the d-pad is the arrows, R2 held is Shift
  * (carry the entity), L2 held reaches the Option layer (storeys) and undo /
- * redo. The full mapping is EDITOR_MAPPING below, the legend
- * (editor/ui/PadLegend) and src/editor/CLAUDE.md.
+ * redo. Cross is held as well as pressed: on a cell with no floor it builds
+ * floor, a range from where it went down to where it is let go. The full
+ * mapping is EDITOR_MAPPING below, the legend (editor/ui/PadLegend) and
+ * src/editor/CLAUDE.md.
  *
  * Polled once an animation frame while a pad is connected (no pad, no
  * frames). The keyboard and mouse are untouched.
@@ -82,8 +84,8 @@ export const EDITOR_MAPPING = {
     ['rstick', 'Orbit the camera'],
     ['r3', 'Zoom in (hold: keep going)'],
     ['l3', 'Zoom out (hold: keep going)'],
-    ['cross', 'Place the chosen type · select · its menu'],
-    ['square', 'Delete what is under the cursor'],
+    ['cross', 'No floor: build it (hold + move: a range) · else place · select · menu'],
+    ['square', 'Delete the entity under the cursor, else its floor'],
     ['triangle', "Edit the creature's / gate's song"],
     ['circle', 'Back: cancel, deselect'],
     ['l1/r1', 'Choose what to place'],
@@ -94,12 +96,11 @@ export const EDITOR_MAPPING = {
     ['touchpad', 'The sidebar panels'],
   ],
   'viewport+l2': [
-    ['updown', 'Storey up / down'],
+    ['updown', 'Storey up / down (✕ builds floor there)'],
     ['leftright', 'Undo / redo'],
     ['r3', 'Centre the camera on the cursor'],
     ['l3', 'Reset the camera'],
     ['triangle', 'Play / stop the song (it lights)'],
-    ['square', 'Start a floor here (then ✕ commits)'],
     ['r2', '+ R2 and d-pad up/down: carry a storey'],
   ],
   'viewport+r2': [
@@ -276,6 +277,7 @@ export default class EditorGamepad {
         this._press(NAMES[i]);
       } else if (!pressed && this._down[i]) {
         this._down[i] = false;
+        this._letGo(NAMES[i]);
       } else if (pressed && DPAD.includes(NAMES[i]) && now >= this._repeatAt[i]) {
         this._repeatAt[i] = now + REPEAT_EVERY_MS;
         this._press(NAMES[i]);
@@ -309,6 +311,8 @@ export default class EditorGamepad {
   }
 
   _release() {
+    // A Cross held as the pad goes: the floor range it was building is off
+    if (this._down[BUTTONS.cross] && this._app.cancelFloorRange) this._app.cancelFloorRange();
     this._down = [];
     this._stickDir = null;
     this._lastPoll = null;
@@ -338,6 +342,11 @@ export default class EditorGamepad {
   }
 
   // ---- Buttons ------------------------------------------------------------
+
+  /** A button let go: Cross ends the floor range it was building. */
+  _letGo(button) {
+    if (button === 'cross' && this._app.padConfirmEnd) this._app.padConfirmEnd();
+  }
 
   _press(button) {
     if (!button) return;
@@ -415,7 +424,7 @@ export default class EditorGamepad {
         if (!l2) app.padConfirm();
         break;
       case 'square':
-        app.pressKey(l2 ? 'f' : 'Delete');
+        if (!l2) app.pressKey('Delete');
         break;
       case 'triangle':
         if (l2) app.padAudition();

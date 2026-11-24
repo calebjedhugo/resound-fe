@@ -83,43 +83,117 @@ class Floor extends Entity {
    * The whole floor of an area as ONE mesh: the ground (elevation 0,
    * implicit everywhere), each raised storey as a slab, and a pale line
    * along every cliff edge (a storey edge nothing walkable continues past).
-   * @param {number} gridSize
+   * A level built from floor tiles (`options.tiles`, core/floorTiles) has
+   * no implicit ground: every tile, ground storey included, is a slab, and
+   * its cliff lines run along every edge of the built floor.
+   * @param {number} gridSize - an older level's grid (ignored with tiles)
    * @param {object[]} [floors] - raised storeys ({elevation, x1, z1, x2, z2})
    * @param {object} [options]
    * @param {AreaLight} [options.light] - the area's creature light
+   * @param {?{x: number, y: number, z: number}[]} [options.tiles] - the
+   *   level's floor tiles (grid cells, y the storey), or null/absent for an
+   *   older level's full grid
    * @param {ElevationGrid} [options.elevationGrid] - its walkable levels
-   *   (built from `floors` when not given)
+   *   (built from `floors` / `tiles` when not given)
    * @param {object[]} [options.ramps] - its ramps ({x, y, z, direction},
    *   grid units): a ramp's ends are no cliff
    * @param {object[]} [options.walls] - its walls ({x, y, z}, grid units):
    *   a wall standing on a storey's level beside it is no cliff either
    */
-  constructor(gridSize, floors = [], { light, elevationGrid, ramps = [], walls = [] } = {}) {
+  constructor(
+    gridSize,
+    floors = [],
+    { light, tiles = null, elevationGrid, ramps = [], walls = [] } = {}
+  ) {
     // Center of the grid's true footprint: cell CENTERS run
     // 0..(gridSize-1)*WORLD_SCALE, so the footprint spans -1.5 to
     // gridSize*3 - 1.5. (Centering on gridSize/2 left a half-cell bare
     // strip along the north/west edges — a black wedge at every edge-row
-    // doorway, and a sliver of void along north/west walls.)
-    const center = ((gridSize - 1) / 2) * WORLD_SCALE;
-    super('floor', { x: center, y: 0, z: center });
+    // doorway, and a sliver of void along north/west walls.) Tiles: the
+    // centre of their footprint.
+    const center = tiles ? Floor._tilesCenter(tiles) : ((gridSize - 1) / 2) * WORLD_SCALE;
+    super('floor', tiles ? center : { x: center, y: 0, z: center });
     this.gridSize = gridSize;
     this.floors = floors;
+    this.tiles = tiles;
     let grid = elevationGrid;
     if (!grid) {
-      grid = new ElevationGrid(gridSize);
-      grid.applyFloors(floors);
+      grid = tiles ? ElevationGrid.fromTiles(tiles) : new ElevationGrid(gridSize);
+      if (!tiles) grid.applyFloors(floors);
     }
     const builder = new FloorGeometryBuilder();
-    this._addGround(builder);
-    for (const floor of floors) this._addSlab(builder, floor);
-    this._addCliffEdges(builder, grid, ramps, walls);
+    if (tiles) {
+      for (const tile of tiles) this._addTile(builder, grid, tile);
+      this._addCliffEdges(builder, grid, ramps, walls, tiles);
+    } else {
+      this._addGround(builder);
+      for (const floor of floors) this._addSlab(builder, floor);
+      this._addCliffEdges(builder, grid, ramps, walls, null);
+    }
     this.mesh = new THREE.Mesh(builder.build(), createFloorMaterial(light));
+    // Nothing built yet (a new tile-built level): nothing to draw
+    this.mesh.visible = builder.positions.length > 0;
+  }
+
+  static _tilesCenter(tiles) {
+    if (tiles.length === 0) return { x: 0, y: 0, z: 0 };
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const t of tiles) {
+      minX = Math.min(minX, t.x);
+      maxX = Math.max(maxX, t.x);
+      minZ = Math.min(minZ, t.z);
+      maxZ = Math.max(maxZ, t.z);
+    }
+    return { x: ((minX + maxX) / 2) * WORLD_SCALE, y: 0, z: ((minZ + maxZ) / 2) * WORLD_SCALE };
   }
 
   _addGround(builder) {
     const lo = -WORLD_SCALE / 2;
     const hi = this.gridSize * WORLD_SCALE - WORLD_SCALE / 2;
     builder.quad([lo, 0, lo], [hi, 0, lo], [hi, 0, hi], [lo, 0, hi], [0, 1, 0]);
+  }
+
+  /**
+   * One floor tile: a slab cell whose top sits at its storey's walk height,
+   * with a side face only where no tile of the same storey continues (the
+   * faces between neighbours are inside the floor).
+   */
+  _addTile(builder, grid, tile) {
+    const half = WORLD_SCALE / 2;
+    const top = tile.y * ELEVATION_HEIGHT;
+    const bottom = top - SLAB_THICKNESS;
+    const cx = tile.x * WORLD_SCALE;
+    const cz = tile.z * WORLD_SCALE;
+    const x0 = cx - half;
+    const x1 = cx + half;
+    const z0 = cz - half;
+    const z1 = cz + half;
+    builder.quad([x0, top, z0], [x1, top, z0], [x1, top, z1], [x0, top, z1], [0, 1, 0]);
+    builder.quad(
+      [x0, bottom, z0],
+      [x1, bottom, z0],
+      [x1, bottom, z1],
+      [x0, bottom, z1],
+      [0, -1, 0]
+    );
+    for (const side of SIDES) {
+      if (!grid.hasLevel(tile.x + side.dx, tile.z + side.dz, tile.y)) {
+        const ox = cx + side.dx * half;
+        const oz = cz + side.dz * half;
+        const rx = side.dz * half;
+        const rz = -side.dx * half;
+        builder.quad(
+          [ox - rx, top, oz - rz],
+          [ox + rx, top, oz + rz],
+          [ox + rx, bottom, oz + rz],
+          [ox - rx, bottom, oz - rz],
+          [side.dx, 0, side.dz]
+        );
+      }
+    }
   }
 
   /** A raised storey: a slab whose TOP surface sits at the walk height. */
@@ -140,9 +214,11 @@ class Floor extends Entity {
    * Trace every cliff edge: each side of a raised cell whose neighbour
    * lacks that level, unless the neighbour is a ramp arriving there (its
    * high end at this level, or its low end), holds a wall standing on that
-   * level, or is off the grid (the perimeter wall stands there).
+   * level, or is off the grid (the perimeter wall stands there). With
+   * tiles, every tile's storey counts (the ground's edge too), and nothing
+   * is off the grid: the built floor's edge is a cliff.
    */
-  _addCliffEdges(builder, grid, ramps, walls) {
+  _addCliffEdges(builder, grid, ramps, walls, tiles) {
     const rampAt = new Map(ramps.map((r) => [`${r.x},${r.z}`, r]));
     const wallAt = new Set(walls.map((w) => `${w.x},${w.z},${w.y}`));
     const rampJoins = (x, z, toward, level) => {
@@ -153,26 +229,32 @@ class Floor extends Entity {
       const lowEnd = up.dx === -toward.dx && up.dz === -toward.dz;
       return (highEnd && ramp.y + 1 === level) || (lowEnd && ramp.y === level);
     };
+    const edgesOf = (x, z, level) => {
+      for (const side of SIDES) {
+        const nx = x + side.dx;
+        const nz = z + side.dz;
+        const onGrid =
+          Boolean(tiles) || (nx >= 0 && nz >= 0 && nx < this.gridSize && nz < this.gridSize);
+        // From the neighbour, this cell lies the opposite way
+        const back = { dx: -side.dx, dz: -side.dz };
+        if (
+          onGrid &&
+          !grid.hasLevel(nx, nz, level) &&
+          !wallAt.has(`${nx},${nz},${level}`) &&
+          !rampJoins(nx, nz, back, level)
+        ) {
+          this._addEdgeLine(builder, x, z, side, level * ELEVATION_HEIGHT);
+        }
+      }
+    };
+    if (tiles) {
+      for (const tile of tiles) edgesOf(tile.x, tile.z, tile.y);
+      return;
+    }
     for (let z = 0; z < this.gridSize; z += 1) {
       for (let x = 0; x < this.gridSize; x += 1) {
         for (const level of grid.getLevelsAt(x, z)) {
-          if (level > 0) {
-            for (const side of SIDES) {
-              const nx = x + side.dx;
-              const nz = z + side.dz;
-              const onGrid = nx >= 0 && nz >= 0 && nx < this.gridSize && nz < this.gridSize;
-              // From the neighbour, this cell lies the opposite way
-              const back = { dx: -side.dx, dz: -side.dz };
-              if (
-                onGrid &&
-                !grid.hasLevel(nx, nz, level) &&
-                !wallAt.has(`${nx},${nz},${level}`) &&
-                !rampJoins(nx, nz, back, level)
-              ) {
-                this._addEdgeLine(builder, x, z, side, level * ELEVATION_HEIGHT);
-              }
-            }
-          }
+          if (level > 0) edgesOf(x, z, level);
         }
       }
     }

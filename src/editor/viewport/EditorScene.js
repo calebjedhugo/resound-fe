@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
-import { snapToGrid, gridToWorld } from 'editor/viewport/gridUtils';
+import { snapToGrid, gridToWorld, levelCenterCell } from 'editor/viewport/gridUtils';
 import { createOutlineBox, createOutlineMaterial } from 'editor/viewport/outlineBox';
 
 // Lift the cursor highlight above the floor slab (0.2 thick, centred on the
@@ -10,12 +10,16 @@ const CURSOR_LIFT = 0.15;
 // z-fight the game look's floor (its top is exactly at the storey height)
 const GRID_LIFT = 0.03;
 const CURSOR_COLOR = 0x44ff88;
+// The drawn grid: this many cells across, centred near the cursor (it
+// follows the cursor, a cell at a time, so the level has no edge)
+const GRID_CELLS = 80;
+// The raycast plane is this wide: clicks land anywhere in view
+const PICK_PLANE_SIZE = 20000;
 
 export default class EditorScene {
   constructor(scene, model) {
     this._scene = scene;
     this._model = model;
-    this._gridSize = model.getMetadata().gridSize;
     this._hoverMesh = null;
     this._activeElevation = 0;
     this._raycaster = new THREE.Raycaster();
@@ -24,21 +28,22 @@ export default class EditorScene {
     this._gridHelper = null;
     // A cell is ALWAYS selected (the cursor). It is driven ONLY by the arrow
     // keys and by clicking a tile — never by mouse hover. The highlight mesh
-    // renders at the cursor every frame.
+    // renders at the cursor every frame. There is no grid edge: the floor is
+    // only what the designer builds, anywhere (negative cells too).
     this._cursorCell = this._centerCell();
-    // Draft-floor mode: { anchor: {x,z}, elevation } while sizing a new floor
-    // region with the keyboard; null otherwise.
-    this._floorDraft = null;
+    // The floor range being built while ✕ / Enter is held: { anchor: {x,z},
+    // elevation } (a rectangle from the anchor to the cursor); else null
+    this._floorRange = null;
 
     this._createGrid();
     this._createAxes();
     this._createHoverMesh();
-    this._createFloorDraftMesh();
+    this._createFloorRangeMesh();
   }
 
+  /** The middle of what is built (the origin cell in an empty level). */
   _centerCell() {
-    const c = Math.floor(this._gridSize / 2);
-    return { x: c, z: c };
+    return levelCenterCell(this._model);
   }
 
   get activeElevation() {
@@ -52,19 +57,17 @@ export default class EditorScene {
   }
 
   _createGrid() {
-    const size = this._gridSize * WORLD_SCALE;
-
-    // Grid helper
-    this._gridHelper = new THREE.GridHelper(size, this._gridSize, 0x4f8bc7, 0x285c88);
-    this._gridHelper.position.set(size / 2, 0, size / 2);
+    const size = GRID_CELLS * WORLD_SCALE;
+    // Grid helper: lines on cell edges, moved under the cursor (_positionGrid)
+    this._gridHelper = new THREE.GridHelper(size, GRID_CELLS, 0x4f8bc7, 0x285c88);
     this._scene.add(this._gridHelper);
 
-    // Base floor plane (for raycasting)
-    const planeGeo = new THREE.PlaneGeometry(size, size);
+    // The plane clicks land on (for raycasting), wide enough to reach the
+    // horizon, at the active storey
+    const planeGeo = new THREE.PlaneGeometry(PICK_PLANE_SIZE, PICK_PLANE_SIZE);
     const planeMat = new THREE.MeshBasicMaterial({ visible: false });
     this._groundPlane = new THREE.Mesh(planeGeo, planeMat);
     this._groundPlane.rotation.x = -Math.PI / 2;
-    this._groundPlane.position.set(size / 2, 0, size / 2);
     this._scene.add(this._groundPlane);
 
     this._positionGrid();
@@ -74,40 +77,6 @@ export default class EditorScene {
     // Axis indicator (small colored lines at origin)
     const axisHelper = new THREE.AxesHelper(WORLD_SCALE * 2);
     this._scene.add(axisHelper);
-  }
-
-  /**
-   * Re-read the model's gridSize and redraw the grid + raycast plane. The grid
-   * is built once at construction from whatever model was current then; loading
-   * a different puzzle or editing the Grid Size field swaps the model without
-   * touching the scene, so callers must invoke this to keep the drawn grid in
-   * sync (otherwise entities render at cells beyond the stale grid).
-   */
-  syncGridSize() {
-    const next = this._model.getMetadata().gridSize;
-    if (next === this._gridSize && this._gridHelper && this._groundPlane) return false;
-    this._gridSize = next;
-    // Keep the cursor inside the (possibly smaller) grid.
-    this._cursorCell = {
-      x: Math.min(this._cursorCell.x, next - 1),
-      z: Math.min(this._cursorCell.z, next - 1),
-    };
-
-    if (this._gridHelper) {
-      this._scene.remove(this._gridHelper);
-      this._gridHelper.geometry.dispose();
-      this._gridHelper.material.dispose();
-      this._gridHelper = null;
-    }
-    if (this._groundPlane) {
-      this._scene.remove(this._groundPlane);
-      this._groundPlane.geometry.dispose();
-      this._groundPlane.material.dispose();
-      this._groundPlane = null;
-    }
-
-    this._createGrid();
-    return true;
   }
 
   _createHoverMesh() {
@@ -144,9 +113,9 @@ export default class EditorScene {
     if (this._cursorFrame) this._cursorFrame.position.set(world.x, elevY + CURSOR_LIFT, world.z);
   }
 
-  _createFloorDraftMesh() {
-    // A unit plane scaled to the draft rectangle each frame. Gold = "pending
-    // floor, not yet committed" (distinct from the green cursor and tan floors).
+  _createFloorRangeMesh() {
+    // A unit plane scaled to the range rectangle each frame. Gold = "floor
+    // about to be built" (distinct from the green cursor).
     const geo = new THREE.PlaneGeometry(1, 1);
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffcc44,
@@ -155,26 +124,26 @@ export default class EditorScene {
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    this._floorDraftMesh = new THREE.Mesh(geo, mat);
-    this._floorDraftMesh.rotation.x = -Math.PI / 2;
-    this._floorDraftMesh.visible = false;
-    this._scene.add(this._floorDraftMesh);
+    this._floorRangeMesh = new THREE.Mesh(geo, mat);
+    this._floorRangeMesh.rotation.x = -Math.PI / 2;
+    this._floorRangeMesh.visible = false;
+    this._scene.add(this._floorRangeMesh);
   }
 
-  /** Arm the draft-floor highlight: a rectangle from `anchor` to the cursor. */
-  setFloorDraft(anchor, elevation) {
-    this._floorDraft = { anchor: { x: anchor.x, z: anchor.z }, elevation };
-    this._positionFloorDraft();
+  /** Show the floor range being built: a rectangle from `anchor` to the cursor. */
+  setFloorRange(anchor, elevation) {
+    this._floorRange = { anchor: { x: anchor.x, z: anchor.z }, elevation };
+    this._positionFloorRange();
   }
 
-  clearFloorDraft() {
-    this._floorDraft = null;
-    if (this._floorDraftMesh) this._floorDraftMesh.visible = false;
+  clearFloorRange() {
+    this._floorRange = null;
+    if (this._floorRangeMesh) this._floorRangeMesh.visible = false;
   }
 
-  _positionFloorDraft() {
-    if (!this._floorDraft || !this._floorDraftMesh) return;
-    const { anchor, elevation } = this._floorDraft;
+  _positionFloorRange() {
+    if (!this._floorRange || !this._floorRangeMesh) return;
+    const { anchor, elevation } = this._floorRange;
     const c = this._cursorCell;
     const x1 = Math.min(anchor.x, c.x);
     const x2 = Math.max(anchor.x, c.x);
@@ -185,23 +154,31 @@ export default class EditorScene {
     const cx = (x1 + (x2 - x1 + 1) / 2) * WORLD_SCALE;
     const cz = (z1 + (z2 - z1 + 1) / 2) * WORLD_SCALE;
     const y = elevation * ELEVATION_HEIGHT + CURSOR_LIFT;
-    this._floorDraftMesh.scale.set(width, depth, 1);
-    this._floorDraftMesh.position.set(cx, y, cz);
-    this._floorDraftMesh.visible = true;
+    this._floorRangeMesh.scale.set(width, depth, 1);
+    this._floorRangeMesh.position.set(cx, y, cz);
+    this._floorRangeMesh.visible = true;
   }
 
-  /** Pin the grid + raycast plane to the active storey's height. */
+  /**
+   * Pin the grid + raycast plane to the active storey's height, the grid
+   * under the cursor (on a cell edge, so its lines stay on cell edges).
+   */
   _positionGrid() {
     const y = this._activeElevation * ELEVATION_HEIGHT;
-    if (this._gridHelper) this._gridHelper.position.y = y + GRID_LIFT;
-    if (this._groundPlane) this._groundPlane.position.y = y;
+    if (this._gridHelper) {
+      const step = 8; // re-centre every few cells, not every move
+      const gx = Math.round(this._cursorCell.x / step) * step * WORLD_SCALE;
+      const gz = Math.round(this._cursorCell.z / step) * step * WORLD_SCALE;
+      this._gridHelper.position.set(gx, y + GRID_LIFT, gz);
+    }
+    if (this._groundPlane) this._groundPlane.position.set(0, y, 0);
   }
 
   update() {
-    // Keep the cursor highlight (and any draft-floor rectangle) pinned to the
-    // cursor every frame.
+    // Keep the cursor highlight (and any floor range being built) pinned to
+    // the cursor every frame.
     this._positionCursorMesh();
-    this._positionFloorDraft();
+    this._positionFloorRange();
   }
 
   /** The currently selected cell — always a valid { x, z } (never null). */
@@ -209,20 +186,23 @@ export default class EditorScene {
     return { ...this._cursorCell };
   }
 
-  /** Move the cursor by a grid delta, clamped to the grid bounds. */
+  /** Move the cursor by a grid delta (anywhere: the level has no edge). */
   moveCursor(dx, dz) {
-    const max = this._gridSize - 1;
-    this._cursorCell = {
-      x: Math.max(0, Math.min(max, this._cursorCell.x + dx)),
-      z: Math.max(0, Math.min(max, this._cursorCell.z + dz)),
-    };
+    this._cursorCell = { x: this._cursorCell.x + dx, z: this._cursorCell.z + dz };
     this._positionCursorMesh();
+    this._positionGrid();
   }
 
-  /** Reset the cursor to the middle of the grid (e.g. on loading a puzzle). */
-  recenterCursor() {
-    this._cursorCell = this._centerCell();
+  /** Put the cursor on a cell. */
+  setCursor(cell) {
+    this._cursorCell = { x: cell.x, z: cell.z };
     this._positionCursorMesh();
+    this._positionGrid();
+  }
+
+  /** Reset the cursor to the middle of what is built (e.g. on loading a puzzle). */
+  recenterCursor() {
+    this.setCursor(this._centerCell());
   }
 
   /**
@@ -245,8 +225,8 @@ export default class EditorScene {
    * Resolve the grid cell under a specific mouse event, and move the cursor to
    * it. Clicks use this rather than trusting the last mousemove: synthetic
    * clicks (and click-after-scroll) can land on a cell the pointer never
-   * "moved" over. Returns null for a click outside the grid (so callers can
-   * refuse the action) without disturbing the persistent cursor.
+   * "moved" over. Returns null for a click that hits no ground (the sky)
+   * without disturbing the persistent cursor.
    */
   gridFromEvent(event, camera) {
     const container = document.getElementById('editor-viewport');
@@ -256,11 +236,8 @@ export default class EditorScene {
     this._raycaster.setFromCamera(this._mouse, camera);
     const hits = this._raycaster.intersectObject(this._groundPlane);
     if (hits.length === 0) return null;
-    const grid = snapToGrid(hits[0].point.x, hits[0].point.z, this._gridSize);
-    if (grid) {
-      this._cursorCell = grid;
-      this._positionCursorMesh();
-    }
+    const grid = snapToGrid(hits[0].point.x, hits[0].point.z);
+    this.setCursor(grid);
     return grid;
   }
 }

@@ -20,8 +20,8 @@ const MUTATION_METHODS = [
   'setMetadata',
   'setPlayerSpawn',
   'clearPlayerSpawn',
-  'addFloor',
-  'removeFloor',
+  'addTiles',
+  'removeTile',
   'addEntity',
   'updateEntity',
   'removeEntity',
@@ -30,11 +30,11 @@ const MUTATION_METHODS = [
 const READ_METHODS = [
   'getMetadata',
   'getPlayerSpawn',
-  'getFloors',
+  'getTiles',
+  'hasTile',
   'getEntities',
   'getEntity',
   'getEntitiesAt',
-  'getFloorElevation',
 ];
 
 export default class UndoManager {
@@ -48,15 +48,49 @@ export default class UndoManager {
       this[method] = (...args) => this._model[method](...args);
     }
 
+    // While batch() runs: the one snapshot it took (its mutations record
+    // no step of their own, and fire no change until it ends)
+    this._batch = null;
+
     for (const method of MUTATION_METHODS) {
       this[method] = (...args) => {
-        this._undoStack.push(this._saveState());
-        if (this._undoStack.length > MAX_UNDO_STEPS) this._undoStack.shift();
-        this._redoStack.length = 0;
+        if (this._batch) {
+          this._batch.changed = true;
+          return this._model[method](...args);
+        }
+        this._pushUndo(this._saveState());
         const result = this._model[method](...args);
         this._emitChange();
         return result;
       };
+    }
+  }
+
+  _pushUndo(snapshot) {
+    this._undoStack.push(snapshot);
+    if (this._undoStack.length > MAX_UNDO_STEPS) this._undoStack.shift();
+    this._redoStack.length = 0;
+  }
+
+  /**
+   * Run several mutations as ONE undo step (an entity placed with the floor
+   * tile it brings). One change fires at the end, if anything changed;
+   * nested batches join the outer one.
+   * @param {() => any} fn
+   * @returns {any} what fn returns
+   */
+  batch(fn) {
+    if (this._batch) return fn();
+    const batch = { before: this._saveState(), changed: false };
+    this._batch = batch;
+    try {
+      return fn();
+    } finally {
+      this._batch = null;
+      if (batch.changed) {
+        this._pushUndo(batch.before);
+        this._emitChange();
+      }
     }
   }
 
@@ -103,7 +137,7 @@ export default class UndoManager {
     return {
       metadata: { ...this._model._metadata },
       playerSpawn: this._model._playerSpawn ? { ...this._model._playerSpawn } : null,
-      floors: this._model._floors.map((f) => ({ ...f })),
+      tiles: new Set(this._model._tiles),
       entities: this._model._entities.map((e) => ({
         ...e,
         data: { ...e.data },
@@ -122,7 +156,8 @@ export default class UndoManager {
   replaceModel(source) {
     this._model._metadata = { ...source.getMetadata() };
     this._model._playerSpawn = source.getPlayerSpawn();
-    this._model._floors = source.getFloors();
+    this._model._tiles = new Set();
+    this._model.addTiles(source.getTiles());
     this._model._entities = source.getEntities();
     this._model._nextEntityId = Math.max(...source.getEntities().map((e) => e.id), 0) + 1;
   }
@@ -130,7 +165,7 @@ export default class UndoManager {
   _restoreState(snapshot) {
     this._model._metadata = { ...snapshot.metadata };
     this._model._playerSpawn = snapshot.playerSpawn ? { ...snapshot.playerSpawn } : null;
-    this._model._floors = snapshot.floors.map((f) => ({ ...f }));
+    this._model._tiles = new Set(snapshot.tiles);
     this._model._entities = snapshot.entities.map((e) => ({
       ...e,
       data: { ...e.data },

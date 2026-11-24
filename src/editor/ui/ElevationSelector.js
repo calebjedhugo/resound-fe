@@ -1,16 +1,15 @@
 /**
  * ElevationSelector
  *
- * Switches the active storey among the elevations that actually exist:
- * {0 (implicit ground)} plus every elevation that has a floor region.
- *
- * - Hidden entirely while the puzzle is single-storey (only ground), since
- *   there is nothing to switch between.
- * - The +/- buttons step through existing storeys only, so you can never
- *   select an elevation that does not exist. (Creating a new upper storey is
- *   done from the Floor Regions panel, which owns the new-region elevation.)
+ * The active storey: the one the cursor, the grid and every placement are
+ * on. Any storey from the ground (0) to MAX_STOREY can be chosen, built on
+ * or not — ✕ / Enter on a cell with no floor at the active storey builds
+ * it (EditorApp). The sidebar shows it with − / +; Option+↑/↓ (the pad's
+ * L2 + d-pad ↑/↓) steps it too.
  */
-import { availableElevations } from 'editor/util/elevations';
+
+// Highest storey the editor goes to (guards a runaway Option+Up hold)
+export const MAX_STOREY = 9;
 
 export default class ElevationSelector {
   constructor(container, editorScene, undoManager) {
@@ -25,60 +24,37 @@ export default class ElevationSelector {
     return this._value;
   }
 
-  /**
-   * Set the active storey to an existing elevation and re-render. Used when
-   * keyboard layer navigation lands on (or creates) a real storey, to keep the
-   * sidebar control in sync with editorScene.activeElevation.
-   */
+  /** Make `elevation` the active storey (clamped) and re-render. */
   syncTo(elevation) {
-    this._value = elevation;
+    this._value = Math.max(0, Math.min(MAX_STOREY, elevation));
     this.refresh();
   }
 
   /**
-   * Step the active storey by `delta` among the storeys that exist, clamped.
-   * Used by the keyboard layer-navigation shortcut (Option+Up/Down). Returns
-   * true if the active storey actually changed.
+   * Step the active storey by `delta`, within the ground and MAX_STOREY.
+   * Returns true if the active storey actually changed.
    */
   step(delta) {
-    const available = availableElevations(this._undoManager.getFloors());
-    const index = available.indexOf(this._value);
-    const next = index + delta;
-    if (next < 0 || next >= available.length) return false;
-    this._value = available[next];
-    this.refresh();
+    const next = this._value + delta;
+    if (next < 0 || next > MAX_STOREY) return false;
+    this.syncTo(next);
     return true;
   }
 
-  /** Recompute available storeys, clamp the active one, and re-render. */
+  /** Put the active storey on the scene and re-render. */
   refresh() {
-    const available = availableElevations(this._undoManager.getFloors());
-
-    // Clamp the active elevation to an existing storey.
-    if (!available.includes(this._value)) {
-      this._value = available.includes(0) ? 0 : available[0];
-    }
     this._editorScene.activeElevation = this._value;
-
-    this._container.innerHTML = '';
-
-    // Single-storey puzzle: no control at all.
-    if (available.length <= 1) return;
-
-    this._available = available;
     this._render();
   }
 
   _render() {
     this._container.innerHTML = '';
-    const available = this._available;
-    const index = available.indexOf(this._value);
 
     const wrapper = document.createElement('div');
     wrapper.className = 'panel-section';
 
     const label = document.createElement('label');
-    label.textContent = 'Active Elevation';
+    label.textContent = 'Storey';
     label.className = 'panel-label';
     wrapper.appendChild(label);
 
@@ -88,8 +64,8 @@ export default class ElevationSelector {
     const downBtn = document.createElement('button');
     downBtn.textContent = '-';
     downBtn.className = 'elevation-btn';
-    downBtn.disabled = index <= 0;
-    downBtn.onclick = () => this._step(-1);
+    downBtn.disabled = this._value <= 0;
+    downBtn.onclick = () => this.step(-1);
 
     const display = document.createElement('span');
     display.className = 'elevation-display';
@@ -98,23 +74,13 @@ export default class ElevationSelector {
     const upBtn = document.createElement('button');
     upBtn.textContent = '+';
     upBtn.className = 'elevation-btn';
-    upBtn.disabled = index >= available.length - 1;
-    upBtn.onclick = () => this._step(1);
+    upBtn.disabled = this._value >= MAX_STOREY;
+    upBtn.onclick = () => this.step(1);
 
     controls.appendChild(downBtn);
     controls.appendChild(display);
     controls.appendChild(upBtn);
     wrapper.appendChild(controls);
     this._container.appendChild(wrapper);
-  }
-
-  _step(delta) {
-    const available = this._available;
-    const index = available.indexOf(this._value);
-    const next = index + delta;
-    if (next < 0 || next >= available.length) return;
-    this._value = available[next];
-    this._editorScene.activeElevation = this._value;
-    this._render(); // re-render in place to update the display + button states
   }
 }

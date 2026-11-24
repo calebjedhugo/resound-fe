@@ -70,17 +70,38 @@ export default class EntityPlacer {
     if (type === 'gate' && !isValidGateId(entityData.gateId)) {
       entityData.gateId = nextGateId(usedGateIds(this._undoManager.getEntities()));
     }
-    const id = this._undoManager.addEntity(type, gridX, elevation, gridZ, entityData);
+    // Anything placed brings its floor tile: one undo step for both
+    const id = this._withFloor(gridX, elevation, gridZ, () =>
+      this._undoManager.addEntity(type, gridX, elevation, gridZ, entityData)
+    );
     this._createMesh(id, type, gridX, gridZ, elevation, entityData);
     return id;
   }
 
   /**
+   * Run a placement or move onto cell (x, y, z) as ONE undo step, building
+   * the floor tile there first when the cell has none (the floor is only
+   * what the designer builds; nothing stands on air).
+   */
+  _withFloor(x, y, z, fn) {
+    const um = this._undoManager;
+    if (!um.hasTile || um.hasTile(x, y, z)) return fn();
+    const run = () => {
+      um.addTiles([{ x, y, z }]);
+      return fn();
+    };
+    return um.batch ? um.batch(run) : run();
+  }
+
+  /**
    * Move an already-placed entity to a new grid cell, updating both the model
-   * and its existing mesh (so selection highlighting survives the move).
+   * and its existing mesh (so selection highlighting survives the move). A
+   * cell with no floor gets its tile in the same undo step.
    */
   setEntityPosition(id, gridX, gridZ, elevation) {
-    this._undoManager.updateEntity(id, { x: gridX, y: elevation, z: gridZ });
+    this._withFloor(gridX, elevation, gridZ, () =>
+      this._undoManager.updateEntity(id, { x: gridX, y: elevation, z: gridZ })
+    );
     const mesh = this._entityMeshes.get(id);
     if (!mesh) return;
     const world = gridToWorld(gridX, gridZ);
@@ -108,7 +129,9 @@ export default class EntityPlacer {
   }
 
   _placePlayerSpawn(gridX, gridZ, elevation) {
-    this._undoManager.setPlayerSpawn(gridX, elevation, gridZ);
+    this._withFloor(gridX, elevation, gridZ, () =>
+      this._undoManager.setPlayerSpawn(gridX, elevation, gridZ)
+    );
     this._createPlayerSpawnMesh(gridX, gridZ, elevation);
     return null; // No entity id for player spawn
   }

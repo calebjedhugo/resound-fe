@@ -403,8 +403,7 @@ class DeployManager {
     const z = position.z - Math.cos(yaw) * DEPLOY_DISTANCE;
 
     const grid = area.elevationGrid.worldToGrid(x, z);
-    const { gridSize } = area.elevationGrid;
-    if (grid.x < 0 || grid.x >= gridSize || grid.z < 0 || grid.z >= gridSize) {
+    if (!area.elevationGrid.inBounds(grid.x, grid.z)) {
       return { x, y: 0, z, valid: false };
     }
     const level = area.elevationGrid.nearestLevel(grid.x, grid.z, elevation);

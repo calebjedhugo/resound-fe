@@ -161,8 +161,8 @@ export function lineOfSight(area, from, to) {
       if (tCross > 0 && tCross < 1) {
         const cx = toCell(from.x + dx * tCross);
         const cz = toCell(from.z + dz * tCross);
-        const onGrid = cx >= 0 && cz >= 0 && cx < grid.gridSize && cz < grid.gridSize;
-        if (onGrid && grid.hasLevel(cx, cz, level) && !grid.getRamp(cx, cz)) return false;
+        if (grid.inBounds(cx, cz) && grid.hasLevel(cx, cz, level) && !grid.getRamp(cx, cz))
+          return false;
       }
     }
   }

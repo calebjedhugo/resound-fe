@@ -138,26 +138,46 @@ describe('UndoManager', () => {
     });
   });
 
-  describe('addFloor participates in undo', () => {
-    it('removes the floor on undo', () => {
-      undoManager.addFloor(2, 0, 0, 10, 10);
-
+  describe('floor tiles participate in undo', () => {
+    it('a range of tiles built in one call is one step', () => {
+      undoManager.addTiles([
+        { x: 0, y: 0, z: 0 },
+        { x: 1, y: 0, z: 0 },
+      ]);
       undoManager.undo();
+      expect(undoManager.getTiles()).toEqual([]);
+      undoManager.redo();
+      expect(undoManager.getTiles()).toHaveLength(2);
+    });
 
-      expect(undoManager.getFloors()).toEqual([]);
+    it('a removed tile comes back on undo', () => {
+      undoManager.addTiles([{ x: 2, y: 1, z: -2 }]);
+      undoManager.removeTile(2, 1, -2);
+      expect(undoManager.hasTile(2, 1, -2)).toBe(false);
+      undoManager.undo();
+      expect(undoManager.hasTile(2, 1, -2)).toBe(true);
     });
   });
 
-  describe('removeFloor participates in undo', () => {
-    it('restores the removed floor on undo', () => {
-      undoManager.addFloor(2, 0, 0, 10, 10);
-
-      undoManager.removeFloor(0);
-      expect(undoManager.getFloors()).toEqual([]);
-
+  describe('batch', () => {
+    it('records its mutations as ONE undo step, firing one change', () => {
+      const onChange = jest.fn();
+      undoManager.setOnChange(onChange);
+      const id = undoManager.batch(() => {
+        undoManager.addTiles([{ x: 3, y: 0, z: 3 }]);
+        return undoManager.addEntity('wall', 3, 0, 3, {});
+      });
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(undoManager.getEntity(id)).toBeDefined();
       undoManager.undo();
-      expect(undoManager.getFloors().length).toBe(1);
-      expect(undoManager.getFloors()[0]).toEqual({ elevation: 2, x1: 0, z1: 0, x2: 10, z2: 10 });
+      expect(undoManager.getEntity(id)).toBeUndefined();
+      expect(undoManager.getTiles()).toEqual([]);
+      expect(undoManager.canUndo()).toBe(false);
+    });
+
+    it('records nothing when nothing changed', () => {
+      undoManager.batch(() => {});
+      expect(undoManager.canUndo()).toBe(false);
     });
   });
 
@@ -205,16 +225,16 @@ describe('UndoManager', () => {
     it('delegates all read methods to the underlying model', () => {
       undoManager.setMetadata({ name: 'Test' });
       undoManager.setPlayerSpawn(1, 2, 3);
-      undoManager.addFloor(1, 0, 0, 10, 10);
+      undoManager.addTiles([{ x: 5, y: 0, z: 5 }]);
       const id = undoManager.addEntity('creature', 5, 0, 5, { song: ['C4'] });
 
       expect(undoManager.getMetadata().name).toBe('Test');
       expect(undoManager.getPlayerSpawn()).toEqual({ x: 1, y: 2, z: 3 });
-      expect(undoManager.getFloors().length).toBe(1);
+      expect(undoManager.getTiles()).toEqual([{ x: 5, y: 0, z: 5 }]);
       expect(undoManager.getEntities().length).toBe(1);
       expect(undoManager.getEntity(id).type).toBe('creature');
       expect(undoManager.getEntitiesAt(5, 0, 5).length).toBe(1);
-      expect(undoManager.getFloorElevation(5, 5)).toBe(1);
+      expect(undoManager.hasTile(5, 0, 5)).toBe(true);
     });
   });
 

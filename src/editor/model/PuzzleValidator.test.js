@@ -6,12 +6,15 @@
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
 import { validatePuzzle } from 'editor/model/PuzzleValidator';
+import { cellsOfRects } from 'core/floorTiles';
 
 describe('PuzzleValidator', () => {
   let model;
 
   beforeEach(() => {
     model = new EditorPuzzleModel();
+    // A built 15x15 room at the ground storey (cells 0..14)
+    model.addTiles(cellsOfRects([{ elevation: 0, x1: 0, z1: 0, x2: 14, z2: 14 }]));
   });
 
   // -- Error tests --
@@ -23,22 +26,31 @@ describe('PuzzleValidator', () => {
       expect(errors.some((e) => /player spawn/i.test(e))).toBe(true);
     });
 
-    it('reports error when entity is outside grid bounds (x >= gridSize)', () => {
+    it('reports error when an entity stands where no floor was built (anywhere: no grid)', () => {
       model.setPlayerSpawn(5, 0, 5);
       model.addEntity('wall', 15, 0, 5, {});
+      model.addEntity('creature', -1, 0, 5, { song: [{ pitch: 'C4', length: '1/4' }] });
 
       const { errors } = validatePuzzle(model);
 
-      expect(errors.some((e) => /outside grid/i.test(e) || /bounds/i.test(e))).toBe(true);
+      expect(errors.filter((e) => /has no floor under it/.test(e))).toHaveLength(2);
+      expect(errors.some((e) => /bounds/i.test(e))).toBe(false);
     });
 
-    it('reports error when entity is outside grid bounds (x < 0)', () => {
+    it('accepts entities on floor built at negative cells', () => {
+      model.addTiles([{ x: -6, y: 0, z: -3 }]);
       model.setPlayerSpawn(5, 0, 5);
-      model.addEntity('wall', -1, 0, 5, {});
+      model.addEntity('wall', -6, 0, -3, {});
+
+      expect(validatePuzzle(model).errors.some((e) => /floor/.test(e))).toBe(false);
+    });
+
+    it('reports error when the player spawn has no floor under it', () => {
+      model.setPlayerSpawn(30, 0, 30);
 
       const { errors } = validatePuzzle(model);
 
-      expect(errors.some((e) => /outside grid/i.test(e) || /bounds/i.test(e))).toBe(true);
+      expect(errors.some((e) => /spawn/i.test(e) && /no floor/.test(e))).toBe(true);
     });
 
     it('reports error when entity is at elevation with no floor region', () => {
@@ -229,36 +241,35 @@ describe('PuzzleValidator', () => {
       expect(warnings.some((w) => /exact song/.test(w))).toBe(false);
     });
 
-    it('warns when ramp has no floor region at upper elevation', () => {
+    it('warns when a ramp leads onto no floor one storey up', () => {
       model.setPlayerSpawn(5, 0, 5);
-      // Ramp at y=0, upper elevation is y+1=1. No floor at elevation 1 covers (5, 5).
+      // Ramp at y=0 rising north: its high end is (5, 4) at elevation 1
       model.addEntity('ramp', 5, 0, 5, { direction: 'north' });
 
       const { warnings } = validatePuzzle(model);
 
-      expect(warnings.some((w) => /ramp/i.test(w) && /upper/i.test(w))).toBe(true);
+      expect(warnings.some((w) => /ramp/i.test(w) && /\(5, 4\)/.test(w))).toBe(true);
     });
 
-    it('does not warn when ramp at y=0 has floor at upper elevation', () => {
-      model.setPlayerSpawn(5, 0, 5);
-      model.addFloor(1, 4, 4, 6, 6); // floor at elevation 1 covers cell (5, 5)
+    it('does not warn when the ramp leads onto floor one storey up', () => {
+      model.setPlayerSpawn(5, 0, 6);
+      model.addTiles([{ x: 5, y: 1, z: 4 }]);
       model.addEntity('ramp', 5, 0, 5, { direction: 'north' });
 
       const { warnings } = validatePuzzle(model);
 
-      expect(warnings.some((w) => /ramp/i.test(w) && /upper/i.test(w))).toBe(false);
+      expect(warnings.some((w) => /ramp/i.test(w))).toBe(false);
     });
 
-    it('warns when ramp has no floor region at lower elevation (y > 0)', () => {
+    it('a ramp above the ground needs floor under it too (an error, like any entity)', () => {
       model.setPlayerSpawn(5, 0, 5);
-      // Ramp at y=2, lower elevation is y=2. Need floor at elevation 2 covering (5, 5).
-      // Add floor at elevation 3 for upper, but no floor at elevation 2.
-      model.addFloor(3, 4, 4, 6, 6); // upper floor exists
+      model.addTiles([{ x: 5, y: 3, z: 4 }]); // the high end exists
       model.addEntity('ramp', 5, 2, 5, { direction: 'north' });
 
-      const { warnings } = validatePuzzle(model);
+      const { errors, warnings } = validatePuzzle(model);
 
-      expect(warnings.some((w) => /ramp/i.test(w) && /lower/i.test(w))).toBe(true);
+      expect(errors.some((e) => /ramp/.test(e) && /no floor/.test(e))).toBe(true);
+      expect(warnings.some((w) => /ramp/i.test(w))).toBe(false);
     });
 
     it('warns when a gate target uses a pitch no creature sings', () => {

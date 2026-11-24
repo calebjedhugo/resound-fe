@@ -1,0 +1,24 @@
+{
+  "id": "floor-tiles-basic",
+  "name": "Floor Tiles - Basic",
+  "difficulty": 1,
+  "tempo": 120,
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "tiles": [
+    { "elevation": 0, "x1": -2, "z1": -2, "x2": 2, "z2": 2 },
+    { "elevation": 1, "x1": 0, "z1": -5, "x2": 0, "z2": -4 }
+  ],
+  "entities": [
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -2 } },
+    {
+      "type": "ramp",
+      "position": { "x": 0, "y": 0, "z": -3 },
+      "direction": "north"
+    },
+    {
+      "type": "creature",
+      "position": { "x": 1, "y": 0, "z": 1 },
+      "data": { "song": [{ "pitch": "C4", "length": "1/4" }], "interval": 8, "audibleRange": 10 }
+    }
+  ]
+}

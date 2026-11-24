@@ -6,9 +6,8 @@
  * ramps with their crawling chevrons, pale waystones, the dark fountain
  * basin, and every creature as its soap-bubble / ball-lightning look.
  *
- * It builds with the GAME'S OWN builders (Floor, Wall.buildBatch and
- * Wall.perimeterPositions, Ramp, Gate.buildClosedMesh, Fountain's and
- * Waystone's mesh builders, NotationDisplay, CreatureLook, createSky), so the
+ * It builds with the GAME'S OWN builders (Floor, Wall.buildBatch, Ramp,
+ * Gate.buildClosedMesh, Fountain's and Waystone's mesh builders, NotationDisplay, CreatureLook, createSky), so the
  * editor cannot drift from the game; it never forks a shader or touches a
  * shared material. Nothing here simulates: no listener, instrument, clock or
  * gameState is involved. A creature lights only while the editor previews
@@ -125,15 +124,14 @@ export default class GameLookLayer {
   /**
    * Bring the drawn level in line with the model (every edit, undo, load).
    * Only what changed is built again: the floor and walls when the grid,
-   * floors, walls or ramps change; an entity when its look-relevant data
+   * tiles, walls or ramps change; an entity when its look-relevant data
    * does; a creature keeps its look (and any light) when it only moves.
    * @param {object} model - the UndoManager / EditorPuzzleModel
    */
   sync(model) {
     const metadata = model.getMetadata();
     const entities = model.getEntities();
-    const floors = model.getFloors();
-    this._syncStatic(metadata.gridSize, floors, entities);
+    this._syncStatic(model.getTiles(), entities);
 
     const seen = new Set();
     for (const entity of entities) {
@@ -266,7 +264,7 @@ export default class GameLookLayer {
 
   // ---- Floor & walls -----------------------------------------------------
 
-  _syncStatic(gridSize, floors, entities) {
+  _syncStatic(tiles, entities) {
     const walls = [];
     const ramps = [];
     for (const e of entities) {
@@ -275,24 +273,24 @@ export default class GameLookLayer {
         ramps.push({ x: e.x, y: e.y, z: e.z, direction: (e.data && e.data.direction) || 'north' });
       }
     }
-    const key = JSON.stringify([gridSize, floors, walls, ramps]);
+    const key = JSON.stringify([tiles, walls, ramps]);
     if (key === this._staticKey) return;
     this._staticKey = key;
     this._clearStatic();
 
-    // The whole floor as the game builds it (Floor: ground, slabs, cliff lines)
-    this._floor = new Floor(gridSize, floors, { light: this.light, ramps, walls });
+    // The whole floor as the game builds it (Floor: the built tiles as
+    // slabs, their cliff lines)
+    this._floor = new Floor(0, [], { light: this.light, tiles, ramps, walls });
     this.root.add(this._floor.mesh);
 
-    // Every wall, the perimeter's included, as ONE instanced batch
-    const positions = [
-      ...Wall.perimeterPositions(gridSize),
-      ...walls.map((w) => ({
-        x: w.x * WORLD_SCALE,
-        y: w.y * ELEVATION_HEIGHT,
-        z: w.z * WORLD_SCALE,
-      })),
-    ];
+    // Every wall as ONE instanced batch (only the walls placed: the level
+    // has no perimeter)
+    if (walls.length === 0) return;
+    const positions = walls.map((w) => ({
+      x: w.x * WORLD_SCALE,
+      y: w.y * ELEVATION_HEIGHT,
+      z: w.z * WORLD_SCALE,
+    }));
     this._wallMaterial = Wall.createBatchMaterial(this.light);
     this._walls = Wall.buildBatch(positions, this._wallMaterial);
     this.root.add(this._walls);

@@ -83,10 +83,13 @@ describe('Puzzle Serialization', () => {
         name: 'Round Trip',
         difficulty: 2,
         tempo: 100,
-        gridSize: 20,
       });
       original.setPlayerSpawn(5, 1, 10);
-      original.addFloor(1, 0, 0, 10, 10);
+      original.addTiles([
+        { x: 0, y: 1, z: 0 },
+        { x: 1, y: 1, z: 0 },
+        { x: -4, y: 0, z: -2 },
+      ]);
       original.addEntity('creature', 3, 1, 5, {
         song: [{ pitch: 'C4', length: '1/4' }],
         interval: 4,
@@ -108,7 +111,7 @@ describe('Puzzle Serialization', () => {
 
       expect(restored.getMetadata()).toEqual(original.getMetadata());
       expect(restored.getPlayerSpawn()).toEqual(original.getPlayerSpawn());
-      expect(restored.getFloors()).toEqual(original.getFloors());
+      expect(restored.getTiles()).toEqual(original.getTiles());
 
       const originalEntities = original.getEntities();
       const restoredEntities = restored.getEntities();
@@ -133,10 +136,18 @@ describe('Puzzle Serialization', () => {
         name: 'Structure Test',
         difficulty: 3,
         tempo: 140,
-        gridSize: 20,
       });
       model.setPlayerSpawn(7, 0, 13);
-      model.addFloor(1, 0, 0, 10, 10);
+      // A 3x2 room at E0 and one raised tile: packed into rectangles
+      model.addTiles([
+        { x: 0, y: 0, z: 0 },
+        { x: 1, y: 0, z: 0 },
+        { x: 2, y: 0, z: 0 },
+        { x: 0, y: 0, z: 1 },
+        { x: 1, y: 0, z: 1 },
+        { x: 2, y: 0, z: 1 },
+        { x: 5, y: 1, z: -3 },
+      ]);
       model.addEntity('creature', 5, 0, 5, {
         song: [{ pitch: 'C4', length: '1/4' }],
         interval: 4,
@@ -148,10 +159,14 @@ describe('Puzzle Serialization', () => {
       expect(json.id).toBe('test-structure');
       expect(json.name).toBe('Structure Test');
       expect(json.difficulty).toBe(3);
-      expect(json.gridSize).toBe(20);
+      expect(json).not.toHaveProperty('gridSize');
+      expect(json).not.toHaveProperty('floors');
       expect(json.tempo).toBe(140);
       expect(json.playerStart).toEqual({ x: 7, y: 0, z: 13 });
-      expect(json.floors).toEqual([{ elevation: 1, x1: 0, z1: 0, x2: 10, z2: 10 }]);
+      expect(json.tiles).toEqual([
+        { elevation: 0, x1: 0, z1: 0, x2: 2, z2: 1 },
+        { elevation: 1, x1: 5, z1: -3, x2: 5, z2: -3 },
+      ]);
       expect(Array.isArray(json.entities)).toBe(true);
       expect(json.entities.length).toBe(1);
     });
@@ -380,6 +395,38 @@ describe('Puzzle Serialization', () => {
   });
 
   describe('deserialization', () => {
+    it('reads a tile-built file as exactly its tiles: negative cells, no perimeter walls', () => {
+      const model = deserializePuzzle({
+        id: 'tiles',
+        name: 'Tiles',
+        difficulty: 1,
+        tempo: 120,
+        playerStart: { x: -2, y: 0, z: -1 },
+        tiles: [
+          { elevation: 0, x1: -2, z1: -1, x2: 0, z2: 0 },
+          { elevation: 1, x1: 4, z1: 4, x2: 4, z2: 5 },
+        ],
+        entities: [{ type: 'wall', position: { x: 0, y: 0, z: 0 } }],
+      });
+      expect(model.getTiles()).toHaveLength(6 + 2);
+      expect(model.hasTile(-2, 0, -1)).toBe(true);
+      expect(model.hasTile(4, 1, 5)).toBe(true);
+      expect(model.getEntities()).toHaveLength(1);
+      // ...and writes back the same rectangles
+      expect(serializePuzzle(model).tiles).toEqual([
+        { elevation: 0, x1: -2, z1: -1, x2: 0, z2: 0 },
+        { elevation: 1, x1: 4, z1: 4, x2: 4, z2: 5 },
+      ]);
+    });
+
+    it('an older file saves in the new shape: tiles, its perimeter as walls, no gridSize', () => {
+      const json = serializePuzzle(deserializePuzzle(PRE_ELEVATION_JSON));
+      expect(json).not.toHaveProperty('gridSize');
+      expect(json).not.toHaveProperty('floors');
+      expect(json.tiles).toEqual([{ elevation: 0, x1: -1, z1: -1, x2: 15, z2: 15 }]);
+      expect(json.entities.filter((e) => e.type === 'wall')).toHaveLength(64);
+    });
+
     it('deserializes elevation-demo.json correctly', () => {
       const model = deserializePuzzle(ELEVATION_DEMO_JSON);
 
@@ -388,25 +435,31 @@ describe('Puzzle Serialization', () => {
       expect(meta.id).toBe('elevation-demo');
       expect(meta.name).toBe('Elevated Harmony');
       expect(meta.difficulty).toBe(2);
-      expect(meta.gridSize).toBe(15);
       expect(meta.tempo).toBe(120);
 
       // Verify player spawn
       expect(model.getPlayerSpawn()).toEqual({ x: 7, y: 0, z: 13 });
 
-      // Verify floors
-      const floors = model.getFloors();
-      expect(floors.length).toBe(1);
-      expect(floors[0]).toEqual({ elevation: 1, x1: 3, z1: 3, x2: 11, z2: 7 });
+      // An older file (no tiles): its whole grid at E0 (and the ring its
+      // perimeter walls stand on, -1..15), plus the raised region at E1
+      const tiles = model.getTiles();
+      expect(tiles.filter((t) => t.y === 0)).toHaveLength(17 * 17);
+      expect(tiles.filter((t) => t.y === 1)).toHaveLength(9 * 5);
+      expect(model.hasTile(-1, 0, -1)).toBe(true);
+      expect(model.hasTile(15, 0, 15)).toBe(true);
+      expect(model.hasTile(3, 1, 3) && model.hasTile(11, 1, 7)).toBe(true);
+      expect(model.hasTile(12, 1, 7)).toBe(false);
 
-      // Verify entity count and types
+      // Verify entity count and types: the file's 8, then its perimeter
+      // walls as ordinary walls (4 x 15 + 4 corners)
       const entities = model.getEntities();
-      expect(entities.length).toBe(8);
+      expect(entities.length).toBe(8 + 64);
 
       const types = entities.map((e) => e.type);
       expect(types.filter((t) => t === 'creature').length).toBe(1);
       expect(types.filter((t) => t === 'ramp').length).toBe(1);
-      expect(types.filter((t) => t === 'wall').length).toBe(4);
+      expect(types.filter((t) => t === 'wall').length).toBe(4 + 64);
+      expect(entities.some((e) => e.type === 'wall' && e.x === -1 && e.z === 7)).toBe(true);
       expect(types.filter((t) => t === 'gate').length).toBe(1);
       expect(types.filter((t) => t === 'fountain').length).toBe(1);
 
@@ -449,14 +502,14 @@ describe('Puzzle Serialization', () => {
       expect(meta.id).toBe('pre-elevation');
       expect(meta.name).toBe('Simple Song');
 
-      // Verify floors defaults to empty array
-      expect(model.getFloors()).toEqual([]);
+      // The whole 15x15 grid is floor (plus the perimeter ring)
+      expect(model.getTiles()).toHaveLength(17 * 17);
 
       // Verify player spawn
       expect(model.getPlayerSpawn()).toEqual({ x: 7, y: 0, z: 13 });
 
-      // Verify entities
-      const entities = model.getEntities();
+      // Verify entities (the perimeter walls aside)
+      const entities = model.getEntities().filter((e) => e.type !== 'wall');
       expect(entities.length).toBe(2);
 
       const creature = entities.find((e) => e.type === 'creature');
@@ -477,7 +530,7 @@ describe('Puzzle Serialization', () => {
         id: 'waystone-import',
         name: 'Waystone Import',
         difficulty: 1,
-        gridSize: 15,
+        tiles: [{ elevation: 0, x1: 6, z1: 12, x2: 6, z2: 12 }],
         tempo: 120,
         playerStart: { x: 0, y: 0, z: 0 },
         entities: [{ type: 'waystone', position: { x: 6, y: 0, z: 12 } }],
@@ -506,7 +559,7 @@ describe('Puzzle Serialization', () => {
         id: 'old-cleanser',
         name: 'Old Cleanser',
         difficulty: 1,
-        gridSize: 15,
+        tiles: [],
         tempo: 120,
         playerStart: { x: 0, y: 0, z: 0 },
         entities: [{ type: 'cleanser', position: { x: 6, y: 0, z: 12 } }],
@@ -533,7 +586,7 @@ describe('Puzzle Serialization', () => {
       const model = deserializePuzzle(minimalJson);
 
       expect(model.getMetadata().teaches).toBeNull();
-      expect(model.getFloors()).toEqual([]);
+      expect(model.getTiles()).toHaveLength(17 * 17); // an older file: its whole grid
     });
 
     it('deserializes keySignature and timeSignature', () => {
@@ -698,7 +751,7 @@ describe('Puzzle Serialization', () => {
         id: 'legacy',
         name: 'Legacy',
         difficulty: 1,
-        gridSize: 10,
+        tiles: [],
         tempo: 120,
         playerStart: { x: 0, y: 0, z: 0 },
         entities: [

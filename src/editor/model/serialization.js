@@ -12,8 +12,14 @@
  *    - Gate/Fountain: song at entity root
  *    - Ramp: direction at entity root
  *    - Wall: position only
+ *  - The floor is `tiles` (core/floorTiles): written packed into rectangles,
+ *    no `gridSize`, no `floors`. An older file (no `tiles`) opens as tiles
+ *    over its whole grid, its raised floors and its perimeter ring, plus its
+ *    perimeter walls as ordinary walls: it saves in the new shape and plays
+ *    the same
  */
 import EditorPuzzleModel from 'editor/model/EditorPuzzleModel';
+import { packTiles, cellsOfRects, legacyCells, legacyPerimeterCells } from 'core/floorTiles';
 import { isValidKeySignature } from 'resound-notation/lib/keySignatures';
 import { GATE_FACINGS, isValidGateId, nextGateId, usedGateIds } from 'editor/util/gateIds';
 
@@ -25,14 +31,12 @@ import { GATE_FACINGS, isValidGateId, nextGateId, usedGateIds } from 'editor/uti
 export function serializePuzzle(model) {
   const metadata = model.getMetadata();
   const playerSpawn = model.getPlayerSpawn();
-  const floors = model.getFloors();
   const entities = model.getEntities();
 
   const json = {
     id: metadata.id,
     name: metadata.name,
     difficulty: metadata.difficulty,
-    gridSize: metadata.gridSize,
     tempo: metadata.tempo,
   };
 
@@ -50,13 +54,8 @@ export function serializePuzzle(model) {
     ? { x: playerSpawn.x, y: playerSpawn.y, z: playerSpawn.z }
     : { x: 0, y: 0, z: 0 };
 
-  json.floors = floors.map((f) => ({
-    elevation: f.elevation,
-    x1: f.x1,
-    z1: f.z1,
-    x2: f.x2,
-    z2: f.z2,
-  }));
+  // The built floor, packed into rectangles per storey
+  json.tiles = packTiles(model.getTiles());
 
   json.entities = entities.map((entity) => serializeEntity(entity));
 
@@ -174,7 +173,6 @@ export function deserializePuzzle(json) {
     name: json.name,
     difficulty: json.difficulty,
     tempo: json.tempo,
-    gridSize: json.gridSize,
     keySignature,
     timeSignature,
     teaches: Array.isArray(json.teaches) ? json.teaches : null,
@@ -185,16 +183,26 @@ export function deserializePuzzle(json) {
     model.setPlayerSpawn(json.playerStart.x, json.playerStart.y, json.playerStart.z);
   }
 
-  // Floors (optional, defaults to empty)
-  const floors = json.floors || [];
-  for (const floor of floors) {
-    model.addFloor(floor.elevation, floor.x1, floor.z1, floor.x2, floor.z2);
+  // The floor: its tiles, or (an older file) its whole grid, raised floors
+  // and the ring its perimeter walls stand on
+  const legacy = !Array.isArray(json.tiles) && Number.isInteger(json.gridSize);
+  if (Array.isArray(json.tiles)) {
+    model.addTiles(cellsOfRects(json.tiles));
+  } else if (legacy) {
+    model.addTiles(legacyCells(json.gridSize, json.floors));
   }
 
   // Entities
   const entities = json.entities || [];
   for (const entity of entities) {
     deserializeEntity(model, entity);
+  }
+
+  // ...and an older file's perimeter walls, now walls like any other
+  if (legacy) {
+    for (const cell of legacyPerimeterCells(json.gridSize)) {
+      model.addEntity('wall', cell.x, cell.y, cell.z, {});
+    }
   }
 
   assignMissingGateIds(model);

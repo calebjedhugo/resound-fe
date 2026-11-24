@@ -10,8 +10,8 @@ import EntityDragger from 'editor/viewport/EntityDragger';
 import GhostPreview from 'editor/viewport/GhostPreview';
 import RangeIndicator from 'editor/viewport/RangeIndicator';
 import GameLookLayer from 'editor/viewport/GameLookLayer';
-import ElevationSelector from 'editor/ui/ElevationSelector';
-import FloorRegionPanel from 'editor/ui/FloorRegionPanel';
+import ElevationSelector, { MAX_STOREY } from 'editor/ui/ElevationSelector';
+import TileSlabs from 'editor/viewport/TileSlabs';
 import EntityToolbar from 'editor/ui/EntityToolbar';
 import PropertyPanel from 'editor/ui/PropertyPanel';
 import MetadataPanel from 'editor/ui/MetadataPanel';
@@ -41,14 +41,13 @@ import { loadLook, saveLook } from 'editor/io/lookPreference';
 import SongAudition from 'editor/audio/SongAudition';
 import { editorRequest } from 'core/playLink';
 import PlayPreview from 'editor/play/PlayPreview';
-import { availableElevations } from 'editor/util/elevations';
 import { ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
 import InputDevice from 'core/InputDevice';
 import EditorGamepad from 'editor/input/EditorGamepad';
 import PadFocus from 'editor/input/PadFocus';
 import PadLegend from 'editor/ui/PadLegend';
 import { orbit, zoom, pan, glideToward } from 'editor/viewport/cameraMoves';
-import { gridToWorld } from 'editor/viewport/gridUtils';
+import { gridToWorld, levelBounds, levelCenterCell } from 'editor/viewport/gridUtils';
 
 // Entity types that carry a song (Edit Song menu item, dbl-click to edit).
 const SONG_ENTITY_TYPES = ['creature', 'gate', 'fountain'];
@@ -79,7 +78,9 @@ export default class EditorApp {
     // reverted puzzle edits (git stash pop) instead of doing a model undo.
     // Any model mutation clears it (see the setOnChange hook).
     this._pendingUnrevert = false;
-    this._floorDraft = null; // { anchor: {x,z}, elevation } while sizing a new floor
+    // The floor range being built while ✕ / Enter is held on a cell with no
+    // floor: { anchor: {x,z}, elevation }; else null (confirmDown/confirmUp)
+    this._floorRange = null;
     this._validationTimer = null;
     this._autoSaveTimer = null;
     this._repoSaves = new Set(); // autosave writes still in flight
@@ -108,13 +109,8 @@ export default class EditorApp {
       this.editorScene,
       this.undoManager
     );
-    this.floorRegionPanel = new FloorRegionPanel(
-      document.getElementById('floor-panel'),
-      this.undoManager,
-      this.editorScene,
-      () => this.elevationSelector.refresh(),
-      (message, kind) => this._showToast(message, kind)
-    );
+    // The floor tiles in the schematic look (the game look draws its own)
+    this.tileSlabs = new TileSlabs(this.scene);
     this.entityPlacer = new EntityPlacer(this.scene, this.undoManager);
     // The level as the game draws it (the default look), or the coloured
     // schematic primitives: V / the toolbar's look button, remembered
@@ -236,7 +232,7 @@ export default class EditorApp {
         this._pendingUnrevert = false;
         this.gitPanel.clearNote();
       }
-      this._syncGridToScene();
+      this.tileSlabs.sync(this.undoManager.getTiles());
       this._syncGameLook();
       this._refreshRangeIndicator();
       this._requestFrame();
@@ -330,8 +326,10 @@ export default class EditorApp {
   _updateHud() {
     if (!this._hudEl) return;
     const grid = this.editorScene.getHoveredGrid();
+    const storey = this.editorScene.activeElevation;
+    const bare = grid && !this.undoManager.hasTile(grid.x, storey, grid.z);
     const cellText = grid
-      ? `Cell (${grid.x}, ${grid.z}) · E${this.editorScene.activeElevation}`
+      ? `Cell (${grid.x}, ${grid.z}) · E${storey}${bare ? ' · no floor (✕ / Enter builds it)' : ''}`
       : '';
     const tool = this.entityToolbar ? this.entityToolbar.activeTool : null;
     const toolText = tool
@@ -339,8 +337,8 @@ export default class EditorApp {
       : '';
     const pickText =
       this._linkPickSourceId !== null ? 'Teleport: click another gate to link (Esc cancels)' : '';
-    const draftText = this._floorDraft
-      ? `Draft floor E${this._floorDraft.elevation} — arrows size it, Enter creates, Esc cancels`
+    const draftText = this._floorRange
+      ? `Building floor E${this._floorRange.elevation} — move to size it, let go to build, Esc cancels`
       : '';
     const text = [pickText, draftText, toolText, cellText].filter(Boolean).join(' · ');
     // Runs every frame (a camera fling is ~60): rewriting the same text would
@@ -619,20 +617,6 @@ export default class EditorApp {
   }
 
   /**
-   * Redraw the viewport grid to match the model's current gridSize. Fires on
-   * model load (replaceModel bypasses the mutation hook) and on any mutation
-   * (covers a live Grid Size edit). The rebuild replaces the raycast plane, so
-   * the dragger's cached reference must be re-pointed when it happens.
-   */
-  _syncGridToScene() {
-    if (!this.editorScene) return;
-    const rebuilt = this.editorScene.syncGridSize();
-    if (rebuilt && this.entityDragger) {
-      this.entityDragger.groundPlane = this.editorScene._groundPlane;
-    }
-  }
-
-  /**
    * Show the audible-range / absorb-reach spheres for the selected creature (and
    * nothing otherwise). Called on selection changes and on every mutation, so
    * the spheres track the creature as it moves or its Audible Range is edited.
@@ -656,14 +640,15 @@ export default class EditorApp {
     this._flushAutoSave();
     this._modelGeneration += 1;
     this.undoManager.replaceModel(importedModel);
-    this._syncGridToScene();
     this.editorScene.recenterCursor();
     this.entityPlacer.rebuildFromModel();
-    this.floorRegionPanel.refresh();
-    this.elevationSelector.refresh();
+    this.tileSlabs.sync(this.undoManager.getTiles());
+    this._cancelFloorRange();
+    this.elevationSelector.syncTo(0);
     this.metadataPanel.refresh();
     this.selectionManager.deselect();
     this._syncGameLook();
+    this.resetCamera();
     if (this.toolbar) this.toolbar.refresh();
     const { id, name } = importedModel.getMetadata();
     if (this.puzzlePicker && !this._puzzleCommitted) {
@@ -709,7 +694,7 @@ export default class EditorApp {
   }
 
   _afterUndoRedo() {
-    this.floorRegionPanel.refresh();
+    this.tileSlabs.sync(this.undoManager.getTiles());
     this.elevationSelector.refresh();
     this.metadataPanel.refresh();
     this.entityPlacer.rebuildFromModel();
@@ -775,14 +760,13 @@ export default class EditorApp {
   }
 
   /**
-   * Cross: commit a floor draft; on an empty cell place the chosen type; on
-   * an entity select it, and on the selected one open its menu.
+   * Cross pressed (the pad): on a cell with no floor at the active storey,
+   * start building floor there (held and moved: a range; let go builds it);
+   * else on an empty cell place the chosen type; on an entity select it,
+   * and on the selected one open its menu.
    */
   padConfirm() {
-    if (this._floorDraft) {
-      this._commitFloorDraft();
-      return;
-    }
+    if (this._startFloorRangeAtCursor()) return;
     const cell = this.editorScene.getHoveredGrid();
     const entityId = this._entityIdAtCell(cell);
     const tool = this.entityToolbar.activeTool;
@@ -797,6 +781,16 @@ export default class EditorApp {
     }
     if (this.selectionManager.selectedId === entityId) this._openContextMenuAtCursor();
     else this._selectAndShow(entityId);
+  }
+
+  /** Cross let go (the pad): a floor range being built is built. */
+  padConfirmEnd() {
+    this._commitFloorRange();
+  }
+
+  /** The pad went with Cross held: the floor range is called off. */
+  cancelFloorRange() {
+    this._cancelFloorRange();
   }
 
   /** Triangle: the song editor for what is under the cursor (else the selection). */
@@ -836,7 +830,6 @@ export default class EditorApp {
       { label: 'Properties (sidebar)', action: () => this.togglePanelFocus(true) },
       { label: 'Open puzzle…', action: () => this.openPuzzlePicker() },
       { label: 'World map', action: () => this.worldOverview.open() },
-      { label: 'Start a floor here', action: () => this._startFloorAtCursor() },
       { label: 'Undo', action: () => this._undo(), disabled: !this.undoManager.canUndo() },
       { label: 'Redo', action: () => this._redo(), disabled: !this.undoManager.canRedo() },
       {
@@ -908,12 +901,25 @@ export default class EditorApp {
 
   /** L2 + L3: the camera back to where it starts, over the whole level. */
   resetCamera() {
-    const center = (this.undoManager.getMetadata().gridSize * WORLD_SCALE) / 2;
+    const { x, z } = this._levelCenterWorld();
     this._glideTo = null;
-    this.controls.target.set(center, 0, center);
-    this.camera.position.set(center + 30, 40, center + 30);
+    this.controls.target.set(x, 0, z);
+    this.camera.position.set(x + 30, 40, z + 30);
     this.controls.update();
     this._requestFrame();
+  }
+
+  /** The middle of what is built, in editor world units (x, z). */
+  _levelCenterWorld() {
+    const box = levelBounds(this.undoManager);
+    if (!box) {
+      const cell = levelCenterCell(this.undoManager);
+      return gridToWorld(cell.x, cell.z);
+    }
+    return {
+      x: ((box.x1 + box.x2 + 1) / 2) * WORLD_SCALE,
+      z: ((box.z1 + box.z2 + 1) / 2) * WORLD_SCALE,
+    };
   }
 
   /** Right stick: orbit (radians round, radians of tilt). */
@@ -1047,7 +1053,7 @@ export default class EditorApp {
     const game = this._look === 'game';
     this.gameLook.visible = game;
     this.entityPlacer.setLook(this._look);
-    this.floorRegionPanel.setSlabsVisible(!game);
+    this.tileSlabs.setVisible(!game);
     const viewport = document.getElementById('editor-viewport');
     if (viewport) viewport.classList.toggle('look-game', game);
     if (this.toolbar && this.toolbar.setLook) this.toolbar.setLook(this._look);
@@ -1286,16 +1292,16 @@ export default class EditorApp {
     const container = document.getElementById('editor-viewport');
     const aspect = container.clientWidth / container.clientHeight;
     this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
-    // Isometric-ish angle looking at grid center
-    const gridCenter = (this.model.getMetadata().gridSize * 3) / 2;
-    this.camera.position.set(gridCenter + 30, 40, gridCenter + 30);
-    this.camera.lookAt(gridCenter, 0, gridCenter);
+    // Isometric-ish angle looking at the level's middle (a new level: the origin)
+    const { x, z } = this._levelCenterWorld();
+    this.camera.position.set(x + 30, 40, z + 30);
+    this.camera.lookAt(x, 0, z);
   }
 
   _setupControls() {
-    const gridCenter = (this.model.getMetadata().gridSize * 3) / 2;
+    const { x, z } = this._levelCenterWorld();
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(gridCenter, 0, gridCenter);
+    this.controls.target.set(x, 0, z);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.1;
     this.controls.update();
@@ -1344,14 +1350,17 @@ export default class EditorApp {
       const grid = this.editorScene.gridFromEvent(e, this.camera);
       if (!grid) return;
 
-      // Floor-region placement is an explicit mode that still consumes clicks.
-      if (this.floorRegionPanel.handleGridClick(grid.x, grid.z)) {
+      // A click on a cell with no floor (at the active storey) builds its
+      // tile, as ✕ / Enter does
+      if (this._cellIsBare(grid)) {
+        this.undoManager.addTiles([{ x: grid.x, y: this.editorScene.activeElevation, z: grid.z }]);
+        this.selectionManager.deselect();
         return;
       }
 
-      // A plain click only SELECTS the tile: the cursor is now on it. Select
-      // any entity there so the property panel reflects it. Entity PLACEMENT is
-      // keyboard-only now (letter keys) — a click never creates anything.
+      // Otherwise a plain click only SELECTS the tile: the cursor is now on
+      // it. Select any entity there so the property panel reflects it. Entity
+      // PLACEMENT is keyboard/pad only (letter keys, ✕ / Enter).
       const entityId = this._entityIdAtCell(grid);
       if (entityId !== null) this.selectionManager.select(entityId);
       else this.selectionManager.deselect();
@@ -1511,15 +1520,14 @@ export default class EditorApp {
   /**
    * Shift+Arrow: move the entity (or player spawn) on the cursor cell by one
    * cell in the arrow direction. The cursor follows so you can keep nudging.
-   * Refused if the target is off-grid or already occupied.
+   * Refused if the target is occupied. A target with no floor gets its tile
+   * built in the same step (EntityPlacer: anything placed brings its floor).
    */
   _moveEntityAtCursor(delta) {
     const cell = this.editorScene.getHoveredGrid();
     const elevation = this.editorScene.activeElevation;
     const tx = cell.x + delta.dx;
     const tz = cell.z + delta.dz;
-    const { gridSize } = this.undoManager.getMetadata();
-    if (tx < 0 || tz < 0 || tx >= gridSize || tz >= gridSize) return;
 
     const entityId = this._entityIdAtCell(cell);
     if (entityId !== null) {
@@ -1547,18 +1555,17 @@ export default class EditorApp {
   }
 
   /**
-   * Shift+Option+Up/Down: move the entity (or player spawn) on the cursor cell
-   * to the next storey up/down, and follow it there (the active elevation
-   * switches so it stays under the cursor). Refused if there is no storey that
-   * way or the target cell is occupied.
+   * Shift+Option+Up/Down: carry the entity (or player spawn) on the cursor
+   * cell a storey up/down, and follow it there (the active storey switches
+   * so it stays under the cursor). A cell with no floor there gets its tile
+   * in the same step. Refused past the ground / the top storey or onto an
+   * occupied cell.
    */
   _moveEntityLayer(dir) {
     const cell = this.editorScene.getHoveredGrid();
     const current = this.editorScene.activeElevation;
-    const available = availableElevations(this.undoManager.getFloors());
-    const targetIdx = available.indexOf(current) + dir;
-    if (targetIdx < 0 || targetIdx >= available.length) return; // no storey that way
-    const targetElev = available[targetIdx];
+    const targetElev = current + dir;
+    if (targetElev < 0 || targetElev > MAX_STOREY) return; // no storey that way
 
     const entityId = this._entityIdAtCell(cell); // at the current elevation
     if (entityId !== null) {
@@ -1585,74 +1592,81 @@ export default class EditorApp {
   }
 
   // Highest storey the keyboard may climb to (guards a runaway Option+Up hold).
-  static get MAX_DRAFT_STOREY() {
-    return 9;
+  static get MAX_STOREY() {
+    return MAX_STOREY;
   }
 
   /**
-   * Option+Up/Down: move the active storey by one. Landing on a storey that
-   * already has a floor (or the ground, E0) navigates there normally. Landing
-   * on an EMPTY upper layer arms "draft-floor" mode — a highlighted rectangle
-   * you size with the arrows and commit with Enter. Climbing further through
-   * empty layers just retargets the draft, so you can skip layers.
+   * Option+Up/Down: the active storey up / down by one, built on or not
+   * (✕ / Enter on a cell with no floor there builds it). A floor range being
+   * built is called off.
    */
   _navigateLayer(dir) {
     const target = this.editorScene.activeElevation + dir;
-    if (target < 0 || target > EditorApp.MAX_DRAFT_STOREY) return;
-
-    const floors = this.undoManager.getFloors();
-    const targetHasFloor = target === 0 || floors.some((f) => f.elevation === target);
-
-    this.editorScene.activeElevation = target; // repositions the grid + cursor
-    if (targetHasFloor) {
-      this._exitFloorDraft();
-      this.elevationSelector.syncTo(target);
-    } else {
-      this._enterOrAdvanceFloorDraft(target);
-    }
+    if (target < 0 || target > MAX_STOREY) return;
+    this._cancelFloorRange();
+    this.elevationSelector.syncTo(target);
     this._requestFrame();
   }
 
-  /** Arm (or retarget) the draft-floor rectangle, anchored at the cursor. */
-  _enterOrAdvanceFloorDraft(elevation) {
-    if (!this._floorDraft) {
-      const cursor = this.editorScene.getHoveredGrid();
-      this._floorDraft = { anchor: { x: cursor.x, z: cursor.z }, elevation };
-    } else {
-      this._floorDraft.elevation = elevation;
-    }
-    this.editorScene.setFloorDraft(this._floorDraft.anchor, elevation);
+  // --- Building floor (✕ / Enter on a cell with no floor) ------------------
+
+  /** Nothing stands on the cell at the active storey and it has no floor. */
+  _cellIsBare(cell) {
+    const y = this.editorScene.activeElevation;
+    if (this.undoManager.hasTile(cell.x, y, cell.z)) return false;
+    if (this._entityIdAtCell(cell) !== null) return false;
+    const spawn = this.undoManager.getPlayerSpawn();
+    return !(spawn && spawn.x === cell.x && spawn.y === y && spawn.z === cell.z);
   }
 
-  /** Enter in draft mode: create the floor from the anchor→cursor rectangle. */
-  _commitFloorDraft() {
-    const { elevation, anchor } = this._floorDraft;
+  /**
+   * ✕ / Enter pressed on a cell with no floor: start building floor there —
+   * a rectangle from this cell to wherever the cursor is when it is let go
+   * (shown while held). True if it started (the press is used up).
+   */
+  _startFloorRangeAtCursor() {
+    if (this._floorRange) return true; // already holding one (a key repeat)
+    const cell = this.editorScene.getHoveredGrid();
+    if (!this._cellIsBare(cell)) return false;
+    const elevation = this.editorScene.activeElevation;
+    this._floorRange = { anchor: { x: cell.x, z: cell.z }, elevation };
+    this.editorScene.setFloorRange(this._floorRange.anchor, elevation);
+    this._requestFrame();
+    return true;
+  }
+
+  /**
+   * ✕ / Enter let go: build floor on every cell of the range that has none,
+   * as ONE undo step.
+   */
+  _commitFloorRange() {
+    const range = this._floorRange;
+    if (!range) return;
+    this._cancelFloorRange();
     const cursor = this.editorScene.getHoveredGrid();
-    const x1 = Math.min(anchor.x, cursor.x);
-    const z1 = Math.min(anchor.z, cursor.z);
-    const x2 = Math.max(anchor.x, cursor.x);
-    const z2 = Math.max(anchor.z, cursor.z);
-    // Drafting only happens on empty layers, so overlap is not expected — guard
-    // anyway (a blocked action deserves a toast).
-    const overlap = this.undoManager
-      .getFloors()
-      .some(
-        (f) => f.elevation === elevation && x1 <= f.x2 && x2 >= f.x1 && z1 <= f.z2 && z2 >= f.z1
-      );
-    if (overlap) {
-      this._showToast('Overlaps an existing floor — floors can’t stack');
-      return;
+    const cells = [];
+    const x1 = Math.min(range.anchor.x, cursor.x);
+    const x2 = Math.max(range.anchor.x, cursor.x);
+    const z1 = Math.min(range.anchor.z, cursor.z);
+    const z2 = Math.max(range.anchor.z, cursor.z);
+    for (let z = z1; z <= z2; z += 1) {
+      for (let x = x1; x <= x2; x += 1) {
+        if (!this.undoManager.hasTile(x, range.elevation, z)) {
+          cells.push({ x, y: range.elevation, z });
+        }
+      }
     }
-    this.undoManager.addFloor(elevation, x1, z1, x2, z2);
-    this.floorRegionPanel.refresh(); // rebuild floor meshes + sidebar list
-    this.elevationSelector.syncTo(elevation); // this storey now exists
-    this._exitFloorDraft();
+    if (cells.length > 0) this.undoManager.addTiles(cells);
+    this._requestFrame();
   }
 
-  _exitFloorDraft() {
-    if (!this._floorDraft) return;
-    this._floorDraft = null;
-    this.editorScene.clearFloorDraft();
+  /** Call off a floor range being built (Esc, a storey change, a load). */
+  _cancelFloorRange() {
+    if (!this._floorRange) return;
+    this._floorRange = null;
+    this.editorScene.clearFloorRange();
+    this._requestFrame();
   }
 
   /** Letter key: place an entity of `type` at the cursor cell (refuse if full). */
@@ -1668,7 +1682,11 @@ export default class EditorApp {
     // No toast: the placed entity is visible.
   }
 
-  /** Delete/Backspace: remove whatever occupies the cursor cell. */
+  /**
+   * Delete / □: remove whatever occupies the cursor cell — the entity, else
+   * the player spawn, else the floor tile itself. So twice on an entity
+   * takes the entity, then its floor.
+   */
   _deleteAtCursor() {
     const cell = this.editorScene.getHoveredGrid();
     const elevation = this.editorScene.activeElevation;
@@ -1683,80 +1701,10 @@ export default class EditorApp {
       this.entityPlacer.clearPlayerSpawn(); // the marker disappears — no toast needed
       return;
     }
-    // Nothing occupies the cell: fall through to removing the floor region here.
-    this._deleteFloorAtCursor(cell, elevation);
-  }
-
-  /**
-   * Delete on an otherwise-empty cell: remove the WHOLE floor region the cursor
-   * sits in at the active elevation (floors are rectangles — no per-tile holes).
-   * Refuses while any entity rests on the region, so an elevated creature/gate
-   * never gets orphaned in mid-air.
-   */
-  _deleteFloorAtCursor(cell, elevation) {
-    const floors = this.undoManager.getFloors();
-    const index = floors.findIndex(
-      (f) =>
-        f.elevation === elevation &&
-        cell.x >= f.x1 &&
-        cell.x <= f.x2 &&
-        cell.z >= f.z1 &&
-        cell.z <= f.z2
-    );
-    if (index === -1) return; // no floor here (e.g. the implicit ground)
-    if (this._floorHasEntities(floors[index])) {
-      this._showToast('Clear entities off the floor first');
-      return;
+    if (this.undoManager.hasTile(cell.x, elevation, cell.z)) {
+      this.undoManager.removeTile(cell.x, elevation, cell.z);
+      this._requestFrame();
     }
-    this.undoManager.removeFloor(index);
-    this.floorRegionPanel.refresh(); // rebuild floor meshes + sidebar list
-    this._requestFrame();
-  }
-
-  /** True when any entity rests ON the given floor region (its own elevation). */
-  _floorHasEntities(floor) {
-    return this.undoManager
-      .getEntities()
-      .some(
-        (e) =>
-          e.y === floor.elevation &&
-          e.x >= floor.x1 &&
-          e.x <= floor.x2 &&
-          e.z >= floor.z1 &&
-          e.z <= floor.z2
-      );
-  }
-
-  /**
-   * `f`: arm a floor draft at the active elevation (then arrows size it, Enter
-   * commits — the same flow as climbing onto an empty layer). Only above the
-   * ground and only on a cell that doesn't already carry a floor, so it can
-   * start a SECOND region on a storey that already has one (which climbing to
-   * an occupied layer can't reach).
-   */
-  _startFloorAtCursor() {
-    const elevation = this.editorScene.activeElevation;
-    if (elevation < 1) {
-      this._showToast('Floors sit above the ground');
-      return;
-    }
-    const cell = this.editorScene.getHoveredGrid();
-    const onFloor = this.undoManager
-      .getFloors()
-      .some(
-        (f) =>
-          f.elevation === elevation &&
-          cell.x >= f.x1 &&
-          cell.x <= f.x2 &&
-          cell.z >= f.z1 &&
-          cell.z <= f.z2
-      );
-    if (onFloor) {
-      this._showToast('There’s already a floor here');
-      return;
-    }
-    this._enterOrAdvanceFloorDraft(elevation);
-    this._requestFrame();
   }
 
   /** True when the key event targets a text field — never hijack typing. */
@@ -1792,14 +1740,12 @@ export default class EditorApp {
         this.controls.enabled = false; // Disable orbit while dragging
       }
 
-      const { gridSize } = this.undoManager.getMetadata();
-      this.entityDragger.updateDrag(mouseX, mouseY, gridSize, this.editorScene.activeElevation);
+      this.entityDragger.updateDrag(mouseX, mouseY, undefined, this.editorScene.activeElevation);
     });
 
     const endDrag = () => {
       if (this.entityDragger.isDragging) {
-        const { gridSize } = this.undoManager.getMetadata();
-        this.entityDragger.endDrag(gridSize, this.editorScene.activeElevation);
+        this.entityDragger.endDrag(undefined, this.editorScene.activeElevation);
         this.controls.enabled = true; // Re-enable orbit
         // Refresh property panel with updated position
         if (this.selectionManager.selectedId !== null) {
@@ -1851,11 +1797,10 @@ export default class EditorApp {
 
       // Escape cancels the active mode (works even from a focused field).
       if (key === 'Escape') {
-        this.floorRegionPanel.cancelPlacing();
         this.entityToolbar.deselect();
         this._cancelLinkPick('Teleport cancelled');
         this.selectionManager.deselect();
-        this._exitFloorDraft();
+        this._cancelFloorRange();
         return;
       }
 
@@ -1891,8 +1836,10 @@ export default class EditorApp {
         }
         case 'Enter':
           e.preventDefault();
-          if (this._floorDraft) this._commitFloorDraft();
-          else if (
+          // Held on a cell with no floor: builds floor (a range, sized with
+          // the arrows, built on keyup). A repeat of a held Enter does nothing
+          if (e.repeat || this._startFloorRangeAtCursor()) return;
+          if (
             this.entityToolbar.activeTool &&
             this._entityIdAtCell(this.editorScene.getHoveredGrid()) === null
           ) {
@@ -1905,11 +1852,6 @@ export default class EditorApp {
         case 'Backspace':
           e.preventDefault();
           this._deleteAtCursor();
-          return;
-        case 'f':
-        case 'F':
-          e.preventDefault();
-          this._startFloorAtCursor();
           return;
         case 'v':
         case 'V':
@@ -1932,6 +1874,14 @@ export default class EditorApp {
       }
     };
     document.addEventListener('keydown', this._onKeyDown);
+    // Enter let go: a floor range being built is built (wherever focus is)
+    this._onKeyUp = (e) => {
+      if (e.key === 'Enter') this._commitFloorRange();
+    };
+    document.addEventListener('keyup', this._onKeyUp);
+    // Focus leaving the window loses the keyup: call the range off
+    this._onBlur = () => this._cancelFloorRange();
+    window.addEventListener('blur', this._onBlur);
   }
 
   /**
@@ -2022,6 +1972,8 @@ export default class EditorApp {
     if (this._frameId) cancelAnimationFrame(this._frameId);
     if (this.preview) this.preview.dispose();
     document.removeEventListener('keydown', this._onKeyDown);
+    document.removeEventListener('keyup', this._onKeyUp);
+    window.removeEventListener('blur', this._onBlur);
     if (this.gamepad) this.gamepad.stop();
     if (this._stopDeviceWatch) this._stopDeviceWatch();
     if (this.padLegend) this.padLegend.dispose();
@@ -2041,6 +1993,7 @@ export default class EditorApp {
     this.worldOverview.dispose();
     this.contextMenu.dispose();
     this.ghostPreview.dispose();
+    this.tileSlabs.dispose();
     this.gameLook.dispose();
     this.controls.dispose();
     this.renderer.dispose();

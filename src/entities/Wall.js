@@ -54,10 +54,10 @@ class Wall extends Entity {
 }
 
 /**
- * Where an area's perimeter walls stand (world units): a ring just OUTSIDE
- * the grid, rows/columns -1 and gridSize, corners included. Designers never
- * place border walls (DESIGN.md "World / editor"); the game and the editor's
- * game look both build them from here.
+ * Where an OLDER level's perimeter walls stand (world units; a level with
+ * no `tiles`): a ring just OUTSIDE the grid, rows/columns -1 and gridSize,
+ * corners included (DESIGN.md "World / editor"). A tile-built level has
+ * only the walls its designer placed.
  * @param {number} gridSize
  * @returns {{x:number, y:number, z:number}[]}
  */

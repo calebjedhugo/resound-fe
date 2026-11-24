@@ -435,7 +435,7 @@ class AbsorbManager {
    */
   _cellTakes(area, gx, gz, level, whole) {
     const grid = area.elevationGrid;
-    if (gx < 0 || gz < 0 || gx >= grid.gridSize || gz >= grid.gridSize) return false;
+    if (!grid.inBounds(gx, gz)) return false;
     if (!grid.hasLevel(gx, gz, level)) return false;
     if (whole && grid.getRamp(gx, gz)) return false;
     const cellX = gx * WORLD_SCALE;

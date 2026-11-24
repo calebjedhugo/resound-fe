@@ -10,6 +10,7 @@ import Area from 'core/Area';
 import AudioPrewarm from 'core/AudioPrewarm';
 import WorldMemory from 'core/WorldMemory';
 import ElevationGrid from 'core/ElevationGrid';
+import { tileCellsOf } from 'core/floorTiles';
 import runInIdleSlices from 'core/idleSlices';
 import { spawnEye } from 'core/playerView';
 import NotationDisplay from 'ui/NotationDisplay';
@@ -67,7 +68,21 @@ class PuzzleLoader {
     if (!puzzleData.id) throw new Error('Puzzle missing id');
     if (!puzzleData.name) throw new Error('Puzzle missing name');
     if (!puzzleData.difficulty) throw new Error('Puzzle missing difficulty');
-    if (!puzzleData.gridSize) throw new Error('Puzzle missing gridSize');
+    // A level built from floor tiles has no grid; an older one is its grid
+    if (puzzleData.tiles !== undefined) {
+      const rects = puzzleData.tiles;
+      const valid =
+        Array.isArray(rects) &&
+        rects.every(
+          (r) =>
+            r &&
+            ['x1', 'z1', 'x2', 'z2'].every((k) => Number.isInteger(r[k])) &&
+            Number.isInteger(r.elevation ?? 0)
+        );
+      if (!valid) throw new Error('Puzzle tiles must be an array of {elevation, x1, z1, x2, z2}');
+    } else if (!puzzleData.gridSize) {
+      throw new Error('Puzzle missing gridSize');
+    }
     if (!puzzleData.playerStart) throw new Error('Puzzle missing playerStart');
     if (!Array.isArray(puzzleData.entities)) throw new Error('Puzzle entities must be an array');
     if (
@@ -116,9 +131,16 @@ class PuzzleLoader {
     const area = new Area(puzzleData);
     const { entityManager } = area;
 
-    // Build elevation grid
-    const elevationGrid = new ElevationGrid(puzzleData.gridSize);
-    elevationGrid.applyFloors(puzzleData.floors || []);
+    // Build elevation grid: exactly the floor tiles the designer built, or
+    // (an older level, no `tiles`) the whole grid plus its raised floors
+    const tiles = tileCellsOf(puzzleData);
+    let elevationGrid;
+    if (tiles) {
+      elevationGrid = ElevationGrid.fromTiles(tiles);
+    } else {
+      elevationGrid = new ElevationGrid(puzzleData.gridSize);
+      elevationGrid.applyFloors(puzzleData.floors || []);
+    }
     area.elevationGrid = elevationGrid;
 
     // The whole floor (ground, raised storeys, their cliff edges) is one
@@ -129,8 +151,9 @@ class PuzzleLoader {
       .filter((e) => e.type === 'ramp')
       .map((e) => ({ ...e.position, direction: e.direction || 'north' }));
     const walls = puzzleData.entities.filter((e) => e.type === 'wall').map((e) => e.position);
-    const floor = new Floor(puzzleData.gridSize, puzzleData.floors || [], {
+    const floor = new Floor(puzzleData.gridSize, tiles ? [] : puzzleData.floors || [], {
       light: area.light,
+      tiles,
       elevationGrid,
       ramps,
       walls,
@@ -151,8 +174,12 @@ class PuzzleLoader {
       wallPositions.push(position);
     };
 
-    for (const position of this.perimeterWallPositions(puzzleData.gridSize)) {
-      addWall(position);
+    // An older level is walled in just outside its grid; a tile-built one
+    // has only the walls its designer placed (its floor's edge stops you)
+    if (!tiles) {
+      for (const position of this.perimeterWallPositions(puzzleData.gridSize)) {
+        addWall(position);
+      }
     }
 
     // Create entities

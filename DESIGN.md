@@ -826,11 +826,25 @@ Rulings (designer, 2026-11-22):
 
 ## World / editor (settled)
 
-- **Ground floor (elevation 0) is implicit everywhere.** Floor regions exist
-  for raised storeys (E1+) only and may not overlap at the same elevation.
-  The editor rejects E0 regions with an explanatory toast.
-- **Perimeter walls auto-generate OUTSIDE the grid** (rows/cols −1 and
-  gridSize). Designers never place border walls; every grid cell is playable.
+- **The designer builds every floor tile and wall** (ruled 2026-11-24,
+  replacing the implicit ground and perimeter): a new room has no floor and
+  no walls; the editor's cursor goes anywhere (negative cells too). ✕ /
+  Enter on a cell with no floor at the active storey builds it (held and
+  moved: the rectangle from where it went down, previewed, built on
+  release as ONE undo step); on bare floor it places the chosen type; on an
+  entity it selects / opens its menu. Anything placed or moved (or carried
+  to another storey) onto a cell with no floor brings its tile, in the same
+  undo step. □ / Delete takes the entity, then (again) the floor under it.
+  The old floor-draft tool (F, L2+□, "an empty storey starts a floor") is
+  gone. In the game the **edge of built floor stops a mover like a storey's
+  cliff edge** (no tile = no walkable level: `canTraverse` blocks it, a
+  pale cliff line marks it). Files: `tiles` (`puzzles/schema.md` "Floor
+  tiles").
+- **Older levels (no `tiles`) still play as they did**: elevation 0 over
+  the whole `gridSize` square, raised `floors` regions (E1+) on top, and
+  perimeter walls auto-generated OUTSIDE the grid (rows/cols −1 and
+  gridSize). The editor opens one as tiles + those perimeter walls as
+  ordinary walls, and saves it in the new shape.
 - **Elevated floors are raised platforms you can walk UNDER** (2026-07-05).
   A cell under an E1 slab is walkable at BOTH level 0 (beneath) and level 1
   (on top); `ElevationGrid.levels[z][x]` tracks the set, and movers carry
@@ -1232,8 +1246,6 @@ rulings, in the designer's words where it matters:
 
 ## Deferred features (wanted, not yet built)
 
-- **Shapeable ground floor**: letting designers cut holes/shape E0 like other
-  elevations (requires a void/unwalkable cell concept in the game).
 - **Open world**: `awakening` is the seed — after the controls are learned it
   should open into an explorable world rather than a puzzle list.
 

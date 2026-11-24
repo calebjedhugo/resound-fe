@@ -81,11 +81,11 @@ describe('importPuzzle', () => {
     expect(meta.id).toBe('test-001');
     expect(meta.name).toBe('First Steps');
     expect(meta.difficulty).toBe(1);
-    expect(meta.gridSize).toBe(15);
     expect(meta.tempo).toBe(120);
 
     expect(model.getPlayerSpawn()).toEqual({ x: 10, y: 0, z: 13 });
-    expect(model.getEntities().length).toBe(2);
+    // Its 2 entities, then its perimeter walls (an older file: 4 x 15 + 4)
+    expect(model.getEntities().length).toBe(2 + 64);
 
     expect(Array.isArray(errors)).toBe(true);
     expect(Array.isArray(warnings)).toBe(true);
@@ -101,32 +101,31 @@ describe('importPuzzle', () => {
 
     expect(model.getPlayerSpawn()).toEqual({ x: 7, y: 0, z: 13 });
 
-    const floors = model.getFloors();
-    expect(floors.length).toBe(1);
-    expect(floors[0]).toEqual({ elevation: 1, x1: 3, z1: 3, x2: 11, z2: 7 });
+    // The raised region's cells are tiles at E1
+    expect(model.getTiles().filter((t) => t.y === 1)).toHaveLength(9 * 5);
 
-    const entities = model.getEntities();
+    const entities = model.getEntities().filter((e) => !(e.type === 'wall' && e.y === 0));
     expect(entities.length).toBe(8);
 
+    // Only its one wall off the raised region (2, 1, 3) stands on no floor
+    expect(errors.filter((e) => /no floor/.test(e))).toEqual([
+      expect.stringMatching(/wall .* at \(2, 3\) E1/),
+    ]);
     expect(Array.isArray(errors)).toBe(true);
     expect(Array.isArray(warnings)).toBe(true);
   });
 
-  it('imported model entity count matches source JSON entity count', () => {
+  it('imported model keeps every entity of the source file (plus an older file perimeter walls)', () => {
     const { model: model1 } = importPuzzle(TEST_001_JSON);
-    expect(model1.getEntities().length).toBe(TEST_001_JSON.entities.length);
+    expect(model1.getEntities().length).toBe(TEST_001_JSON.entities.length + 64);
 
-    const { model: model2 } = importPuzzle(ELEVATION_DEMO_JSON);
-    expect(model2.getEntities().length).toBe(ELEVATION_DEMO_JSON.entities.length);
-  });
-
-  it('imported model floor count matches source JSON floors array length (or 0 if absent)', () => {
-    // test-001 has no floors array
-    const { model: model1 } = importPuzzle(TEST_001_JSON);
-    expect(model1.getFloors().length).toBe(0);
-
-    // elevation-demo has 1 floor
-    const { model: model2 } = importPuzzle(ELEVATION_DEMO_JSON);
-    expect(model2.getFloors().length).toBe(ELEVATION_DEMO_JSON.floors.length);
+    const tileBuilt = {
+      ...TEST_001_JSON,
+      gridSize: undefined,
+      tiles: [{ elevation: 0, x1: 0, z1: 0, x2: 14, z2: 14 }],
+    };
+    const { model: model2 } = importPuzzle(tileBuilt);
+    expect(model2.getEntities().length).toBe(TEST_001_JSON.entities.length);
+    expect(model2.getTiles()).toHaveLength(15 * 15);
   });
 });

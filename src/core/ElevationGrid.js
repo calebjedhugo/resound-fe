@@ -1,8 +1,20 @@
 import { WORLD_SCALE } from 'core/constants';
+import { tileKey } from 'core/floorTiles';
+
+const NO_LEVELS = Object.freeze([]);
+const cellKey = (x, z) => `${x},${z}`;
 
 class ElevationGrid {
+  /**
+   * An older level's grid: elevation 0 over the whole `gridSize` square,
+   * raised `floors` added with applyFloors. For a level built from floor
+   * tiles (core/floorTiles) use ElevationGrid.fromTiles: walkable only
+   * where a tile is, anywhere, negative cells too.
+   * @param {number} gridSize
+   */
   constructor(gridSize) {
     this.gridSize = gridSize;
+    this.sparse = false;
     // Walkable LEVELS per cell. Ground (0) is implicit everywhere, so a cell
     // under an E1 floor is [0, 1]: walkable both underneath and on top.
     this.levels = Array.from({ length: gridSize }, () =>
@@ -11,11 +23,46 @@ class ElevationGrid {
     this.ramps = Array.from({ length: gridSize }, () => new Array(gridSize).fill(null));
   }
 
+  /**
+   * A grid walkable exactly where the floor tiles are ({x, y, z}, y the
+   * storey): no implicit ground. A cell with no tile has no level, so a
+   * mover can't step onto it — the edge of the built floor stops you as a
+   * storey's cliff edge does (canTraverse).
+   * @param {{x: number, y: number, z: number}[]} cells
+   * @returns {ElevationGrid}
+   */
+  static fromTiles(cells) {
+    const grid = Object.create(ElevationGrid.prototype);
+    grid.gridSize = 0;
+    grid.sparse = true;
+    grid._cells = new Map(); // "x,z" -> sorted levels
+    grid._ramps = new Map(); // "x,z" -> ramp
+    grid._tiles = new Set(); // "x,y,z"
+    for (const cell of cells) grid._addLevel(cell.x, cell.z, cell.y);
+    return grid;
+  }
+
+  _addLevel(x, z, level) {
+    const key = cellKey(x, z);
+    let levels = this._cells.get(key);
+    if (!levels) {
+      levels = [];
+      this._cells.set(key, levels);
+    }
+    if (!levels.includes(level)) {
+      levels.push(level);
+      levels.sort((a, b) => a - b);
+      this._tiles.add(tileKey(x, level, z));
+    }
+  }
+
   applyFloors(floors) {
     for (const floor of floors) {
       for (let z = floor.z1; z <= floor.z2; z += 1) {
         for (let x = floor.x1; x <= floor.x2; x += 1) {
-          if (!this.levels[z][x].includes(floor.elevation)) {
+          if (this.sparse) {
+            this._addLevel(x, z, floor.elevation);
+          } else if (!this.levels[z][x].includes(floor.elevation)) {
             this.levels[z][x].push(floor.elevation);
             this.levels[z][x].sort((a, b) => a - b);
           }
@@ -25,24 +72,44 @@ class ElevationGrid {
   }
 
   registerRamp(gridX, gridZ, ramp) {
-    this.ramps[gridZ][gridX] = ramp;
+    if (this.sparse) this._ramps.set(cellKey(gridX, gridZ), ramp);
+    else if (this.inBounds(gridX, gridZ)) this.ramps[gridZ][gridX] = ramp;
   }
 
-  /** All walkable levels at a cell (ground floor is implicit everywhere). */
+  /**
+   * Whether a cell is part of the level at all: inside an older level's
+   * grid square, or (built from tiles) carrying a tile at some storey.
+   */
+  inBounds(gridX, gridZ) {
+    if (this.sparse) return this._cells.has(cellKey(gridX, gridZ));
+    return gridX >= 0 && gridX < this.gridSize && gridZ >= 0 && gridZ < this.gridSize;
+  }
+
+  /**
+   * All walkable levels at a cell (an older level's ground is implicit
+   * everywhere; a tile-built level's cell has only its tiles' storeys, none
+   * off the built floor).
+   */
   getLevelsAt(gridX, gridZ) {
-    if (gridX < 0 || gridX >= this.gridSize || gridZ < 0 || gridZ >= this.gridSize) {
-      return [0];
-    }
+    if (this.sparse) return this._cells.get(cellKey(gridX, gridZ)) || NO_LEVELS;
+    if (!this.inBounds(gridX, gridZ)) return [0];
     return this.levels[gridZ][gridX];
   }
 
   hasLevel(gridX, gridZ, level) {
+    if (this.sparse) return this._tiles.has(tileKey(gridX, level, gridZ));
     return this.getLevelsAt(gridX, gridZ).includes(level);
   }
 
-  /** The walkable level at a cell closest to a reference level (ties: lower). */
+  /**
+   * The walkable level at a cell closest to a reference level (ties: lower).
+   * A cell with no floor at all answers the reference (rounded), else 0.
+   */
   nearestLevel(gridX, gridZ, reference) {
     const levels = this.getLevelsAt(gridX, gridZ);
+    if (levels.length === 0) {
+      return Number.isFinite(reference) ? Math.round(reference) : 0;
+    }
     if (reference === undefined || reference === Infinity) {
       return levels[levels.length - 1];
     }
@@ -56,9 +123,8 @@ class ElevationGrid {
   }
 
   getRamp(gridX, gridZ) {
-    if (gridX < 0 || gridX >= this.gridSize || gridZ < 0 || gridZ >= this.gridSize) {
-      return null;
-    }
+    if (this.sparse) return this._ramps.get(cellKey(gridX, gridZ)) || null;
+    if (!this.inBounds(gridX, gridZ)) return null;
     return this.ramps[gridZ][gridX];
   }
 

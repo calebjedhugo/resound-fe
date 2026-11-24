@@ -10,6 +10,7 @@ import GameLookLayer from 'editor/viewport/GameLookLayer';
 import Wall from 'entities/Wall';
 import { RAMP_MATERIAL } from 'entities/EntityLook';
 import { messiaenColour } from 'core/messiaenColour';
+import { cellsOfRects } from 'core/floorTiles';
 
 const E_WHOLE = [{ pitch: 'E4', length: '1/1' }];
 const G_HALF = [{ pitch: 'G4', length: '1/2' }];
@@ -33,7 +34,9 @@ const wallBatches = () => drawn().filter((n) => n.isInstancedMesh);
 
 beforeEach(() => {
   const model = new EditorPuzzleModel();
-  model.setMetadata({ gridSize: 6, tempo: 120 });
+  model.setMetadata({ tempo: 120 });
+  // A built 6x6 room (cells 0..5) at the ground storey
+  model.addTiles(cellsOfRects([{ elevation: 0, x1: 0, z1: 0, x2: 5, z2: 5 }]));
   undo = new UndoManager(model);
   scene = new THREE.Scene();
   layer = new GameLookLayer(scene);
@@ -42,7 +45,7 @@ beforeEach(() => {
 afterEach(() => layer.dispose());
 
 describe('Drawing the level as the game does', () => {
-  it('draws every wall, the perimeter ring included, as ONE batch with the game wall material', () => {
+  it('draws every wall placed (there is no perimeter) as ONE batch with the game wall material', () => {
     undo.addEntity('wall', 2, 0, 2, {});
     undo.addEntity('wall', 3, 0, 2, {});
     layer.sync(undo);
@@ -50,7 +53,27 @@ describe('Drawing the level as the game does', () => {
     const batches = wallBatches();
     expect(batches).toHaveLength(1);
     expect(batches[0].geometry).toBe(Wall.GEOMETRY);
-    expect(batches[0].count).toBe(Wall.perimeterPositions(6).length + 2);
+    expect(batches[0].count).toBe(2);
+  });
+
+  it('draws the floor only where it is built, and again when a tile comes or goes', () => {
+    const floorMesh = () => drawn().find((n) => n.geometry && n.geometry.attributes?.aEdge);
+    layer.sync(undo);
+    const first = floorMesh();
+    expect(first.visible).toBe(true);
+    // 36 tiles: a top and a bottom each, side faces only round the room's edge
+    const triangles = first.geometry.attributes.position.array.length / 9;
+    expect(triangles).toBe(36 * 4 + 24 * 2 + 24 * 4);
+
+    undo.removeTile(0, 0, 0);
+    layer.sync(undo);
+    expect(floorMesh()).not.toBe(first);
+
+    // Nothing built: nothing drawn, no walls either
+    const empty = new UndoManager(new EditorPuzzleModel());
+    layer.sync(empty);
+    expect(floorMesh().visible).toBe(false);
+    expect(wallBatches()).toHaveLength(0);
   });
 
   it('builds one creature look per creature, floating over its cell in game coordinates', () => {
@@ -167,6 +190,7 @@ describe('Editor cues over the dark look', () => {
       song: [],
       link: { puzzleId: 'b', gateId: 'gate-1' },
     });
+    undo.addEntity('wall', 3, 0, 2, {});
     undo.setPlayerSpawn(1, 0, 1);
     layer.sync(undo);
     layer.setSelected(gate, undo);

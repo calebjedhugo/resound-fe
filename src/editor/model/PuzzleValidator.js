@@ -34,15 +34,13 @@ function songPitches(song) {
   return pitches;
 }
 
-/**
- * Check whether any floor region covers the given cell at the given elevation.
- * Returns true if a floor region with that exact elevation includes (x, z).
- */
-function hasFloorAt(floors, x, z, elevation) {
-  return floors.some(
-    (f) => f.elevation === elevation && x >= f.x1 && x <= f.x2 && z >= f.z1 && z <= f.z2
-  );
-}
+// A ramp's high end leads onto the cell this way (its `direction`)
+const RAMP_UP = {
+  north: { dx: 0, dz: -1 },
+  east: { dx: 1, dz: 0 },
+  south: { dx: 0, dz: 1 },
+  west: { dx: -1, dz: 0 },
+};
 
 /**
  * Validate a puzzle model.
@@ -52,29 +50,25 @@ function hasFloorAt(floors, x, z, elevation) {
 export function validatePuzzle(model) {
   const errors = [];
   const warnings = [];
-  const { gridSize } = model.getMetadata();
   const entities = model.getEntities();
-  const floors = model.getFloors();
+  const hasFloorAt = (x, z, y) => model.hasTile(x, y, z);
 
   // --- Errors ---
 
-  // 1. No player spawn
-  if (!model.getPlayerSpawn()) {
+  // 1. No player spawn, or one with no floor under it
+  const spawn = model.getPlayerSpawn();
+  if (!spawn) {
     errors.push('No player spawn defined');
+  } else if (!hasFloorAt(spawn.x, spawn.z, spawn.y)) {
+    errors.push(`Player spawn at (${spawn.x}, ${spawn.z}) E${spawn.y} has no floor under it`);
   }
 
   for (const entity of entities) {
-    // 2. Entity outside grid bounds
-    if (entity.x < 0 || entity.x >= gridSize || entity.z < 0 || entity.z >= gridSize) {
+    // 2. Every entity stands on a floor tile (the editor builds one under
+    // anything placed; the floor is only what the designer built)
+    if (!hasFloorAt(entity.x, entity.z, entity.y)) {
       errors.push(
-        `Entity (${entity.type} id=${entity.id}) is outside grid bounds at (${entity.x}, ${entity.z})`
-      );
-    }
-
-    // 3. Entity elevation doesn't match any floor region (y > 0)
-    if (entity.y > 0 && !hasFloorAt(floors, entity.x, entity.z, entity.y)) {
-      errors.push(
-        `Entity (${entity.type} id=${entity.id}) at elevation ${entity.y} has no floor region at (${entity.x}, ${entity.z})`
+        `Entity (${entity.type} id=${entity.id}) at (${entity.x}, ${entity.z}) E${entity.y} has no floor under it`
       );
     }
 
@@ -279,20 +273,16 @@ export function validatePuzzle(model) {
     }
   }
 
-  // 4-5. Ramp floor checks
+  // 4. Ramp checks: its high end must lead onto floor one storey up (its
+  // own cell's floor is checked with every entity's)
   for (const ramp of ramps) {
     const upperElevation = ramp.y + 1;
-    // 4. No floor at upper elevation
-    if (!hasFloorAt(floors, ramp.x, ramp.z, upperElevation)) {
+    const up = RAMP_UP[ramp.data && ramp.data.direction] || RAMP_UP.north;
+    const hx = ramp.x + up.dx;
+    const hz = ramp.z + up.dz;
+    if (!hasFloorAt(hx, hz, upperElevation)) {
       warnings.push(
-        `Ramp (id=${ramp.id}) at (${ramp.x}, ${ramp.z}) has no floor at upper elevation ${upperElevation}`
-      );
-    }
-
-    // 5. No floor at lower elevation (y > 0 only; y=0 is base floor)
-    if (ramp.y > 0 && !hasFloorAt(floors, ramp.x, ramp.z, ramp.y)) {
-      warnings.push(
-        `Ramp (id=${ramp.id}) at (${ramp.x}, ${ramp.z}) has no floor at lower elevation ${ramp.y}`
+        `Ramp (id=${ramp.id}) at (${ramp.x}, ${ramp.z}) leads onto (${hx}, ${hz}), which has no floor at elevation ${upperElevation}`
       );
     }
   }

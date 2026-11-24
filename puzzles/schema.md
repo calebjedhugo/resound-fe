@@ -9,7 +9,8 @@ This document defines the structure for Resound puzzle files.
   "id": "string",                    // Unique puzzle identifier (e.g., "test-001")
   "name": "string",                  // Display name (e.g., "First Steps")
   "difficulty": number,              // 1 (Easy), 2 (Medium), 3 (Hard)
-  "gridSize": number,                // Grid dimension (typically 15-64)
+  "gridSize": number,                // OLDER levels only (no `tiles`): grid dimension. A
+                                     // tile-built level has no grid and no gridSize
   "tempo": number,                   // BPM (typically 120)
   "clapDisplacement": "string",      // RETIRED 2026-11-23 (clapping removed): ignored if present,
                                      // never written by the editor
@@ -29,7 +30,14 @@ This document defines the structure for Resound puzzle files.
     "y": number,                     // Elevation level (integer, 0 = ground)
     "z": number                      // Grid Z
   },
-  "floors": [                        // OPTIONAL: Elevated floor regions
+  "tiles": [                         // The level's floor: EXACTLY these cells (see
+    {                                //   "Floor tiles"). The editor always writes it.
+      "elevation": number,           // Storey (integer, 0 = ground)
+      "x1": number, "z1": number,    // Min corner (grid cells; negative allowed)
+      "x2": number, "z2": number     // Max corner (inclusive)
+    }
+  ],
+  "floors": [                        // OLDER levels only (no `tiles`): elevated regions
     {
       "elevation": number,           // Elevation level (integer, 1+)
       "x1": number,                  // Grid X of min corner
@@ -101,9 +109,44 @@ something" affordance. It was the CLEANSER until 2026-11-23 (it emptied the
 tape); it cleans nothing now. Files that say `"type": "cleanser"` (the POC
 levels, older saves) load as a waystone; the editor saves `"waystone"`.
 
+## Floor tiles (since 2026-11-24)
+
+A level with a `tiles` array has exactly the floor the designer built: no
+implicit ground, no grid, no perimeter walls. Each entry is an inclusive
+rectangle of built cells at one storey (`x1=4, x2=6` covers cells 4, 5, 6),
+anywhere — negative cells included. The editor keeps the floor as single
+cells and packs them into rectangles on save (row runs, stacked runs
+merged; deterministic), so a built room is one line. Rectangles may
+overlap (a cell counts once).
+
+- **Walls** are only the `wall` entities the designer placed.
+- **Storeys are independent**: a cell may carry tiles at several storeys
+  (you walk under the upper one), or an upper tile with nothing beneath.
+- **The edge of built floor stops a mover** the way a storey's cliff edge
+  does: a cell with no tile at your storey has no walkable level there.
+- Every entity and the player spawn must stand on a tile at its own
+  `position.y` (the editor builds one under anything placed; the validator
+  errors otherwise). A ramp's high end should lead onto a tile one storey up
+  (a warning).
+- `gridSize` and `floors` are not written (and ignored if present).
+
+```json
+"tiles": [
+  { "elevation": 0, "x1": -2, "z1": -2, "x2": 2, "z2": 2 },
+  { "elevation": 1, "x1": 0, "z1": -5, "x2": 0, "z2": -4 }
+]
+```
+
+**Older levels (no `tiles`)** load as they always have: elevation 0 over the
+whole `gridSize` square, the `floors` regions below on top, and perimeter
+walls generated just outside the grid (rows/columns -1 and `gridSize`). The
+editor opens such a level as tiles (the grid, its regions, the perimeter
+ring) plus those perimeter walls as ordinary walls, and saves it in the new
+shape — it plays the same.
+
 ## Elevation System
 
-### Floors
+### Floors (older levels only)
 
 The `floors` field defines rectangular regions at non-zero elevations. The base floor (elevation 0) covers the entire grid implicitly.
 
@@ -119,7 +162,7 @@ Regions are inclusive on both ends: `x1=4, x2=6` covers grid cells 4, 5, and 6.
 
 **Overlap rule:** When multiple floor regions cover the same cell, the highest elevation wins.
 
-**Backward compatibility:** Omitting `floors` (or providing an empty array) means the entire grid is elevation 0. All existing puzzles work unchanged.
+**Backward compatibility:** Omitting `floors` (or providing an empty array) means the entire grid is elevation 0. A level with `tiles` ignores `floors`.
 
 ### Entity Position `y` Field
 
@@ -147,12 +190,12 @@ The `direction` field indicates which edge is the **high end**:
 **Connectivity rules:**
 - Low end connects to floor at the ramp's elevation level
 - High end connects to floor at elevation level + 1
-- Puzzle designers must ensure matching floor regions exist adjacent to each ramp end
+- Puzzle designers must ensure matching floor (tiles, or an older level's regions) exists adjacent to each ramp end
 
 **Movement rules:**
 - Players and creatures can traverse ramps to change elevation
 - Movement between different elevation levels is blocked without a ramp
-- Elevation boundaries act as implicit walls
+- Elevation boundaries act as implicit walls, and so does the edge of a tile-built level's floor
 
 ## Gate Links (Portals)
 
