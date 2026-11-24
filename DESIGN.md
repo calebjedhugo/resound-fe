@@ -799,6 +799,13 @@ Rulings (designer, 2026-11-22):
   exactly where the editor was. The editor plays from a
   controller too ("make it easy to use with the PlayStation controller"):
   `src/editor/CLAUDE.md` has the mapping.
+  Preview rulings (2026-11-23): the game keeps its own render resolution
+  inside the editor ("frame rate is more important"), so it reads a little
+  softer after the cross-fade; a controller Play skips the start gate when
+  the browser already allows sound; the glide waits for the game's code to
+  load so it runs smooth; mouse-look turning toward the pointer on the
+  first move, and the creatures' unsynced wobble at the cross-fade, are
+  fine as they are.
 
 ## Gate links / portals (ruled 2026-07-06)
 
