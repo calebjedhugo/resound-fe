@@ -45,6 +45,24 @@ describe('PuzzleValidator', () => {
       expect(validatePuzzle(model).errors.some((e) => /floor/.test(e))).toBe(false);
     });
 
+    it('accepts a subfloor: the spawn and entities on tiles below the ground, a ramp up out of it', () => {
+      model.addTiles([
+        { x: 20, y: -1, z: 0 },
+        { x: 21, y: -1, z: 0 },
+      ]);
+      model.setPlayerSpawn(20, -1, 0);
+      // Rising east from E-1 at (21, 0) onto the ground floor... which is not
+      // built at (22, 0): only that warning
+      model.addEntity('ramp', 21, -1, 0, { direction: 'east' });
+      let { errors, warnings } = validatePuzzle(model);
+      expect(errors.some((e) => /floor/.test(e))).toBe(false);
+      expect(warnings.some((w) => /\(22, 0\).*elevation 0/.test(w))).toBe(true);
+
+      model.addTiles([{ x: 22, y: 0, z: 0 }]);
+      ({ errors, warnings } = validatePuzzle(model));
+      expect(warnings.some((w) => /ramp/i.test(w))).toBe(false);
+    });
+
     it('reports error when the player spawn has no floor under it', () => {
       model.setPlayerSpawn(30, 0, 30);
 

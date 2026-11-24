@@ -419,6 +419,27 @@ describe('Puzzle Serialization', () => {
       ]);
     });
 
+    it('subfloors (storeys below the ground) round-trip with everything on them', () => {
+      const model = new EditorPuzzleModel();
+      model.setMetadata({ id: 'pit', name: 'Pit' });
+      model.setPlayerSpawn(0, -2, 0);
+      model.addTiles([
+        { x: 0, y: -2, z: 0 },
+        { x: 1, y: -2, z: 0 },
+        { x: 0, y: -1, z: 3 },
+      ]);
+      model.addEntity('ramp', 1, -2, 0, { direction: 'east' });
+      const json = serializePuzzle(model);
+      expect(json.tiles).toEqual([
+        { elevation: -2, x1: 0, z1: 0, x2: 1, z2: 0 },
+        { elevation: -1, x1: 0, z1: 3, x2: 0, z2: 3 },
+      ]);
+      expect(json.playerStart).toEqual({ x: 0, y: -2, z: 0 });
+      const back = deserializePuzzle(json);
+      expect(back.getTiles()).toEqual(model.getTiles());
+      expect(back.getEntities()[0]).toMatchObject({ type: 'ramp', y: -2 });
+    });
+
     it('an older file saves in the new shape: tiles, its perimeter as walls, no gridSize', () => {
       const json = serializePuzzle(deserializePuzzle(PRE_ELEVATION_JSON));
       expect(json).not.toHaveProperty('gridSize');

@@ -329,7 +329,9 @@ instead of "fixing" it.
   rebuilds. See DESIGN.md "Gate links".
 - **Floor = tiles** (2026-11-24, `core/floorTiles`, schema "Floor tiles"):
   a level with `tiles` is walkable exactly there (`ElevationGrid.fromTiles`,
-  sparse, negative cells; no perimeter walls; the floor's edge is a cliff);
+  sparse, negative cells AND negative storeys = subfloors; no perimeter
+  walls; the floor's edge is a cliff, its geometry `Floor`
+  `buildTileGeometry`, uniform at every storey);
   one without is the older full `gridSize` grid + `floors` + perimeter.
   Bounds checks go through `ElevationGrid.inBounds`, never `gridSize`
 - **Walk-under**: elevated floors are platforms with walkable space beneath.

@@ -236,15 +236,18 @@ class WebGLRenderTarget {
 
 class Color {
   constructor(color = 0xffffff) {
-    this.value = color;
+    this.setHex(color);
   }
 
   set(color) {
-    this.value = color;
+    this.setHex(color);
   }
 
   copy(color) {
     this.value = color.value;
+    this.r = color.r;
+    this.g = color.g;
+    this.b = color.b;
     return this;
   }
 
@@ -254,6 +257,34 @@ class Color {
 
   setHex(hex) {
     this.value = hex;
+    if (typeof hex === 'number') {
+      this.r = ((hex >> 16) & 255) / 255; // eslint-disable-line no-bitwise
+      this.g = ((hex >> 8) & 255) / 255; // eslint-disable-line no-bitwise
+      this.b = (hex & 255) / 255; // eslint-disable-line no-bitwise
+    }
+    return this;
+  }
+
+  // As three's (hue wrapped into 0..1)
+  setHSL(h, s, l) {
+    const hue = ((h % 1) + 1) % 1;
+    const q = l <= 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const channel = (t0) => {
+      let t = t0;
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * 6 * (2 / 3 - t);
+      return p;
+    };
+    this.r = channel(hue + 1 / 3);
+    this.g = channel(hue);
+    this.b = channel(hue - 1 / 3);
+    this.value =
+      (Math.round(this.r * 255) << 16) | (Math.round(this.g * 255) << 8) | Math.round(this.b * 255); // eslint-disable-line no-bitwise
+    return this;
   }
 }
 

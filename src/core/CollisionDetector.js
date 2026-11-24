@@ -58,8 +58,9 @@ class CollisionDetector {
       if (rampY !== null) return rampY / ELEVATION_HEIGHT;
     }
     // Derive the layer from the position's actual height, not the cell's top
-    // floor — an entity UNDER an elevated slab is on the ground layer
-    return Math.max(0, Math.floor((position.y + 0.001) / ELEVATION_HEIGHT));
+    // floor — an entity UNDER an elevated slab is on the ground layer. A
+    // subfloor (a storey below the ground) is a negative level, like any other
+    return Math.floor((position.y + 0.001) / ELEVATION_HEIGHT);
   }
 
   /**

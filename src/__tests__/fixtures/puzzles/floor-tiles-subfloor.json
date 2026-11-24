@@ -1,0 +1,21 @@
+{
+  "id": "floor-tiles-subfloor",
+  "name": "Floor Tiles - Subfloor",
+  "difficulty": 1,
+  "tempo": 120,
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "tiles": [
+    { "elevation": -1, "x1": 3, "z1": -1, "x2": 6, "z2": 1 },
+    { "elevation": 0, "x1": -2, "z1": -2, "x2": 2, "z2": 2 },
+    { "elevation": 0, "x1": 5, "z1": 1, "x2": 5, "z2": 1 }
+  ],
+  "entities": [
+    { "type": "ramp", "position": { "x": 3, "y": -1, "z": 0 }, "direction": "west" },
+    { "type": "wall", "position": { "x": 6, "y": -1, "z": 1 } },
+    {
+      "type": "creature",
+      "position": { "x": 5, "y": -1, "z": -1 },
+      "data": { "song": [{ "pitch": "C4", "length": "1/4" }], "interval": 8, "audibleRange": 10 }
+    }
+  ]
+}

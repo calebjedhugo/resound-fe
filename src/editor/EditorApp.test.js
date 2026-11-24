@@ -853,17 +853,45 @@ describe('EditorApp wiring', () => {
         })
       );
 
-    it('Option+Up/Down steps the storey, built on or not, never below the ground', () => {
+    it('Option+Up/Down steps the storey, built on or not, below the ground too', () => {
       expect(app.editorScene.activeElevation).toBe(0);
       optionPress('ArrowUp');
       optionPress('ArrowUp');
       expect(app.editorScene.activeElevation).toBe(2);
       optionPress('ArrowDown');
-      expect(app.editorScene.activeElevation).toBe(1);
       optionPress('ArrowDown');
       optionPress('ArrowDown');
-      expect(app.editorScene.activeElevation).toBe(0);
+      expect(app.editorScene.activeElevation).toBe(-1); // a subfloor
       expect(app.undoManager.getTiles()).toEqual([]); // stepping builds nothing
+    });
+
+    it('stops at the deepest subfloor and the top storey (-9 .. 9)', () => {
+      for (let i = 0; i < 12; i += 1) optionPress('ArrowDown');
+      expect(app.editorScene.activeElevation).toBe(-9);
+      expect(app.elevationSelector.value).toBe(-9);
+      for (let i = 0; i < 25; i += 1) optionPress('ArrowUp');
+      expect(app.editorScene.activeElevation).toBe(9);
+    });
+
+    it('builds floor on a subfloor, and carries an entity down onto it (its tile comes too)', () => {
+      optionPress('ArrowDown');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: -1, z: 7 }]);
+
+      optionPress('ArrowUp');
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
+      optionPress('ArrowDown', true);
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 7, 7, -1);
+      expect(app.editorScene.activeElevation).toBe(-1);
+    });
+
+    it('the sidebar control steps below the ground too', () => {
+      const down = () => document.querySelectorAll('#elevation-panel .elevation-btn')[0];
+      down().click();
+      down().click();
+      expect(app.editorScene.activeElevation).toBe(-2);
+      expect(document.querySelector('#elevation-panel .elevation-display').textContent).toBe('-2');
     });
 
     it('Shift+Option+Up carries the entity up a storey and follows it', () => {

@@ -2,14 +2,16 @@
  * ElevationSelector
  *
  * The active storey: the one the cursor, the grid and every placement are
- * on. Any storey from the ground (0) to MAX_STOREY can be chosen, built on
- * or not — ✕ / Enter on a cell with no floor at the active storey builds
+ * on. Any storey from MIN_STOREY (subfloors, below the ground) to MAX_STOREY
+ * can be chosen, built on or not — ✕ / Enter on a cell with no floor at the active storey builds
  * it (EditorApp). The sidebar shows it with − / +; Option+↑/↓ (the pad's
  * L2 + d-pad ↑/↓) steps it too.
  */
 
-// Highest storey the editor goes to (guards a runaway Option+Up hold)
+// Highest storey the editor goes to (guards a runaway Option+Up hold), and
+// the deepest subfloor (storeys below the ground, ruled 2026-11-24)
 export const MAX_STOREY = 9;
+export const MIN_STOREY = -MAX_STOREY;
 
 export default class ElevationSelector {
   constructor(container, editorScene, undoManager) {
@@ -26,17 +28,17 @@ export default class ElevationSelector {
 
   /** Make `elevation` the active storey (clamped) and re-render. */
   syncTo(elevation) {
-    this._value = Math.max(0, Math.min(MAX_STOREY, elevation));
+    this._value = Math.max(MIN_STOREY, Math.min(MAX_STOREY, elevation));
     this.refresh();
   }
 
   /**
-   * Step the active storey by `delta`, within the ground and MAX_STOREY.
+   * Step the active storey by `delta`, within MIN_STOREY and MAX_STOREY.
    * Returns true if the active storey actually changed.
    */
   step(delta) {
     const next = this._value + delta;
-    if (next < 0 || next > MAX_STOREY) return false;
+    if (next < MIN_STOREY || next > MAX_STOREY) return false;
     this.syncTo(next);
     return true;
   }
@@ -64,7 +66,7 @@ export default class ElevationSelector {
     const downBtn = document.createElement('button');
     downBtn.textContent = '-';
     downBtn.className = 'elevation-btn';
-    downBtn.disabled = this._value <= 0;
+    downBtn.disabled = this._value <= MIN_STOREY;
     downBtn.onclick = () => this.step(-1);
 
     const display = document.createElement('span');

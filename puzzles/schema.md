@@ -32,7 +32,7 @@ This document defines the structure for Resound puzzle files.
   },
   "tiles": [                         // The level's floor: EXACTLY these cells (see
     {                                //   "Floor tiles"). The editor always writes it.
-      "elevation": number,           // Storey (integer, 0 = ground)
+      "elevation": number,           // Storey (integer, 0 = ground; negative = a subfloor)
       "x1": number, "z1": number,    // Min corner (grid cells; negative allowed)
       "x2": number, "z2": number     // Max corner (inclusive)
     }
@@ -122,6 +122,13 @@ overlap (a cell counts once).
 - **Walls** are only the `wall` entities the designer placed.
 - **Storeys are independent**: a cell may carry tiles at several storeys
   (you walk under the upper one), or an upper tile with nothing beneath.
+- **Subfloors**: a storey may be NEGATIVE — below the ground (the editor
+  goes from -9 to 9). Everything works there as on any storey: entity
+  `position.y`, `playerStart.y` and a ramp's lower storey may be negative
+  (a ramp at `y: -1` joins -1 to 0).
+- **Every exposed tile edge looks the same** at every storey: the slab's
+  thickness and a pale edge line wherever its side meets empty space or a
+  lower / higher floor (not where a ramp arrives or a wall stands).
 - **The edge of built floor stops a mover** the way a storey's cliff edge
   does: a cell with no tile at your storey has no walkable level there.
 - Every entity and the player spawn must stand on a tile at its own
@@ -168,7 +175,7 @@ Regions are inclusive on both ends: `x1=4, x2=6` covers grid cells 4, 5, and 6.
 
 The `y` field in entity positions represents **elevation level** (integer), not world-space Y. PuzzleLoader converts it to world-space: `worldY = y * ELEVATION_HEIGHT` (where `ELEVATION_HEIGHT = 3.0`).
 
-All existing puzzles use `y: 0`, which works unchanged.
+All existing puzzles use `y: 0`, which works unchanged. A tile-built level may use negative levels (subfloors).
 
 ### Player Start `y` Field
 

@@ -840,6 +840,17 @@ Rulings (designer, 2026-11-22):
   cliff edge** (no tile = no walkable level: `canTraverse` blocks it, a
   pale cliff line marks it). Files: `tiles` (`puzzles/schema.md` "Floor
   tiles").
+- **Floor edges look the same at every storey** (ruled 2026-11-24): an
+  exposed tile side — over empty space or beside a lower / higher floor —
+  always shows the slab's thickness and the pale edge line, ground,
+  raised storeys and subfloors alike (one geometry builder, Floor
+  `buildTileGeometry`, for the game, the editor's game look and its
+  schematic slabs).
+- **Subfloors** (ruled 2026-11-24): storeys below the ground (negative,
+  down to -9 in the editor) work like any other — ramps, walls, creatures,
+  the spawn, the pole's sight (the floor above a subfloor blocks the sight
+  down into it; open air doesn't). A subfloor's top is the ground's shade
+  (the floor shader lightens only storeys above 0).
 - **Older levels (no `tiles`) still play as they did**: elevation 0 over
   the whole `gridSize` square, raised `floors` regions (E1+) on top, and
   perimeter walls auto-generated OUTSIDE the grid (rows/cols −1 and

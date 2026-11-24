@@ -214,15 +214,23 @@ edits show up in the game on a manual reload.
   change).
 - **□ / Delete**: the entity, else the spawn, else that floor tile. So twice
   on an entity: the entity, then its floor.
-- **Storeys**: Option+↑/↓ (L2 + d-pad ↑/↓) go to any storey 0..`MAX_STOREY`
-  (9; `ui/ElevationSelector`, always shown as "Storey"), built on or not.
+- **Storeys**: Option+↑/↓ (L2 + d-pad ↑/↓) go to any storey from
+  `MIN_STOREY` to `MAX_STOREY` (-9..9; `ui/ElevationSelector`, always shown
+  as "Storey"), built on or not. Negative storeys are SUBFLOORS (ruled
+  2026-11-24): below the ground, working like any storey in the editor, the
+  file and the game.
   The floor-draft tool, F, L2+□, the "empty storey starts a floor" step,
   the Options menu's "Start a floor here" and the sidebar's Floor Regions
   panel are GONE; F and L2+□ do nothing now.
-- The schematic look draws the tiles as coloured slabs per storey
-  (`viewport/TileSlabs`, one InstancedMesh); the game look builds the
-  game's `Floor` from them. The validator errors on an entity or spawn with
-  no tile under it, warns on a ramp whose high end leads onto no tile.
+- **Floor edges are uniform** (ruled 2026-11-24): every tile is a slab of
+  `Floor.SLAB_THICKNESS` with its top at its storey, a side face and pale
+  edge line wherever its side is exposed (empty space or a lower / higher
+  floor), the same at every storey. ONE geometry builder,
+  `entities/Floor` `buildTileGeometry`, draws the game's floor (and so the
+  game look's) and the schematic look's slabs (`viewport/TileSlabs`: that
+  geometry, flat colour per storey, edge lines pale).
+- The validator errors on an entity or spawn with no tile under it, warns
+  on a ramp whose high end leads onto no tile.
 
 ## The viewport's look (2026-11-23)
 
@@ -328,7 +336,7 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 
 | Input | Viewport | + L2 held | + R2 held |
 |---|---|---|---|
-| D-pad | cursor (repeats; anywhere) | ↑/↓ storey (any, 0..9); ←/→ undo/redo | move the entity (brings its floor) |
+| D-pad | cursor (repeats; anywhere) | ↑/↓ storey (any, -9..9; below 0 = subfloors); ←/→ undo/redo | move the entity (brings its floor) |
 | Left stick | pan camera | | |
 | Right stick | orbit camera (inverted, both axes) | | |
 | R3 / L3 | zoom in / out (a step; held, keeps going) | centre camera on cursor / reset camera | |

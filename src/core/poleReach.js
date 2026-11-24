@@ -152,11 +152,13 @@ export function lineOfSight(area, from, to) {
   }
 
   // Storey slabs: wherever the sight crosses a storey's height, over a cell
-  // with that storey (not a ramp's: a ramp joins it, it is no floor)
+  // with that storey (not a ramp's: a ramp joins it, it is no floor) — the
+  // ground's and the subfloors' too: a sight down into a storey below the
+  // ground passes the floor above it
   if (Math.abs(dy) > 1e-9) {
     const lowLevel = Math.ceil(Math.min(from.y, to.y) / ELEVATION_HEIGHT);
     const highLevel = Math.floor(Math.max(from.y, to.y) / ELEVATION_HEIGHT);
-    for (let level = Math.max(1, lowLevel); level <= highLevel; level += 1) {
+    for (let level = lowLevel; level <= highLevel; level += 1) {
       const tCross = (level * ELEVATION_HEIGHT - from.y) / dy;
       if (tCross > 0 && tCross < 1) {
         const cx = toCell(from.x + dx * tCross);

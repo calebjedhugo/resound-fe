@@ -10,7 +10,7 @@ import EntityDragger from 'editor/viewport/EntityDragger';
 import GhostPreview from 'editor/viewport/GhostPreview';
 import RangeIndicator from 'editor/viewport/RangeIndicator';
 import GameLookLayer from 'editor/viewport/GameLookLayer';
-import ElevationSelector, { MAX_STOREY } from 'editor/ui/ElevationSelector';
+import ElevationSelector, { MAX_STOREY, MIN_STOREY } from 'editor/ui/ElevationSelector';
 import TileSlabs from 'editor/viewport/TileSlabs';
 import EntityToolbar from 'editor/ui/EntityToolbar';
 import PropertyPanel from 'editor/ui/PropertyPanel';
@@ -232,7 +232,7 @@ export default class EditorApp {
         this._pendingUnrevert = false;
         this.gitPanel.clearNote();
       }
-      this.tileSlabs.sync(this.undoManager.getTiles());
+      this._syncTileSlabs();
       this._syncGameLook();
       this._refreshRangeIndicator();
       this._requestFrame();
@@ -642,7 +642,7 @@ export default class EditorApp {
     this.undoManager.replaceModel(importedModel);
     this.editorScene.recenterCursor();
     this.entityPlacer.rebuildFromModel();
-    this.tileSlabs.sync(this.undoManager.getTiles());
+    this._syncTileSlabs();
     this._cancelFloorRange();
     this.elevationSelector.syncTo(0);
     this.metadataPanel.refresh();
@@ -681,6 +681,19 @@ export default class EditorApp {
     if (nameInput) nameInput.focus();
   }
 
+  /** The schematic look's floor slabs follow the tiles (and the walls and ramps closing an edge). */
+  _syncTileSlabs() {
+    const walls = [];
+    const ramps = [];
+    for (const e of this.undoManager.getEntities()) {
+      if (e.type === 'wall') walls.push({ x: e.x, y: e.y, z: e.z });
+      else if (e.type === 'ramp') {
+        ramps.push({ x: e.x, y: e.y, z: e.z, direction: (e.data && e.data.direction) || 'north' });
+      }
+    }
+    this.tileSlabs.sync(this.undoManager.getTiles(), { walls, ramps });
+  }
+
   /** Undo + refresh all UI that mirrors the model. */
   _undo() {
     this.undoManager.undo();
@@ -694,7 +707,7 @@ export default class EditorApp {
   }
 
   _afterUndoRedo() {
-    this.tileSlabs.sync(this.undoManager.getTiles());
+    this._syncTileSlabs();
     this.elevationSelector.refresh();
     this.metadataPanel.refresh();
     this.entityPlacer.rebuildFromModel();
@@ -1558,14 +1571,14 @@ export default class EditorApp {
    * Shift+Option+Up/Down: carry the entity (or player spawn) on the cursor
    * cell a storey up/down, and follow it there (the active storey switches
    * so it stays under the cursor). A cell with no floor there gets its tile
-   * in the same step. Refused past the ground / the top storey or onto an
-   * occupied cell.
+   * in the same step. Refused past the deepest subfloor / the top storey or
+   * onto an occupied cell.
    */
   _moveEntityLayer(dir) {
     const cell = this.editorScene.getHoveredGrid();
     const current = this.editorScene.activeElevation;
     const targetElev = current + dir;
-    if (targetElev < 0 || targetElev > MAX_STOREY) return; // no storey that way
+    if (targetElev < MIN_STOREY || targetElev > MAX_STOREY) return; // no storey that way
 
     const entityId = this._entityIdAtCell(cell); // at the current elevation
     if (entityId !== null) {
@@ -1597,13 +1610,14 @@ export default class EditorApp {
   }
 
   /**
-   * Option+Up/Down: the active storey up / down by one, built on or not
+   * Option+Up/Down: the active storey up / down by one (below the ground
+   * too: subfloors, down to MIN_STOREY), built on or not
    * (✕ / Enter on a cell with no floor there builds it). A floor range being
    * built is called off.
    */
   _navigateLayer(dir) {
     const target = this.editorScene.activeElevation + dir;
-    if (target < 0 || target > MAX_STOREY) return;
+    if (target < MIN_STOREY || target > MAX_STOREY) return;
     this._cancelFloorRange();
     this.elevationSelector.syncTo(target);
     this._requestFrame();

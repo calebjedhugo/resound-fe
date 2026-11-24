@@ -78,6 +78,141 @@ class FloorGeometryBuilder {
   }
 }
 
+/**
+ * One floor tile: a slab cell whose top sits at its storey's walk height,
+ * with a side face only where no tile of the same storey continues (the
+ * faces between neighbours are inside the floor).
+ */
+function addTile(builder, grid, tile) {
+  const half = WORLD_SCALE / 2;
+  const top = tile.y * ELEVATION_HEIGHT;
+  const bottom = top - SLAB_THICKNESS;
+  const cx = tile.x * WORLD_SCALE;
+  const cz = tile.z * WORLD_SCALE;
+  const x0 = cx - half;
+  const x1 = cx + half;
+  const z0 = cz - half;
+  const z1 = cz + half;
+  builder.quad([x0, top, z0], [x1, top, z0], [x1, top, z1], [x0, top, z1], [0, 1, 0]);
+  builder.quad([x0, bottom, z0], [x1, bottom, z0], [x1, bottom, z1], [x0, bottom, z1], [0, -1, 0]);
+  for (const side of SIDES) {
+    if (!grid.hasLevel(tile.x + side.dx, tile.z + side.dz, tile.y)) {
+      const ox = cx + side.dx * half;
+      const oz = cz + side.dz * half;
+      const rx = side.dz * half;
+      const rz = -side.dx * half;
+      builder.quad(
+        [ox - rx, top, oz - rz],
+        [ox + rx, top, oz + rz],
+        [ox + rx, bottom, oz + rz],
+        [ox - rx, bottom, oz - rz],
+        [side.dx, 0, side.dz]
+      );
+    }
+  }
+}
+
+/**
+ * Trace every cliff edge: each side of a raised cell whose neighbour
+ * lacks that level, unless the neighbour is a ramp arriving there (its
+ * high end at this level, or its low end), holds a wall standing on that
+ * level, or is off the grid (the perimeter wall stands there). With
+ * tiles, every tile's storey counts (the ground's edge too), and nothing
+ * is off the grid: the built floor's edge is a cliff.
+ */
+function addCliffEdges(builder, grid, ramps, walls, tiles, gridSize = 0) {
+  const rampAt = new Map(ramps.map((r) => [`${r.x},${r.z}`, r]));
+  const wallAt = new Set(walls.map((w) => `${w.x},${w.z},${w.y}`));
+  const rampJoins = (x, z, toward, level) => {
+    const ramp = rampAt.get(`${x},${z}`);
+    if (!ramp) return false;
+    const up = RAMP_UP[ramp.direction] || RAMP_UP.north;
+    const highEnd = up.dx === toward.dx && up.dz === toward.dz;
+    const lowEnd = up.dx === -toward.dx && up.dz === -toward.dz;
+    return (highEnd && ramp.y + 1 === level) || (lowEnd && ramp.y === level);
+  };
+  const edgesOf = (x, z, level) => {
+    for (const side of SIDES) {
+      const nx = x + side.dx;
+      const nz = z + side.dz;
+      const onGrid = Boolean(tiles) || (nx >= 0 && nz >= 0 && nx < gridSize && nz < gridSize);
+      // From the neighbour, this cell lies the opposite way
+      const back = { dx: -side.dx, dz: -side.dz };
+      if (
+        onGrid &&
+        !grid.hasLevel(nx, nz, level) &&
+        !wallAt.has(`${nx},${nz},${level}`) &&
+        !rampJoins(nx, nz, back, level)
+      ) {
+        addEdgeLine(builder, x, z, side, level * ELEVATION_HEIGHT);
+      }
+    }
+  };
+  if (tiles) {
+    for (const tile of tiles) edgesOf(tile.x, tile.z, tile.y);
+    return;
+  }
+  for (let z = 0; z < gridSize; z += 1) {
+    for (let x = 0; x < gridSize; x += 1) {
+      for (const level of grid.getLevelsAt(x, z)) {
+        if (level > 0) edgesOf(x, z, level);
+      }
+    }
+  }
+}
+
+/** The line along one side of a raised cell: across its top, down its face. */
+function addEdgeLine(builder, x, z, side, top) {
+  const half = WORLD_SCALE / 2;
+  const cx = x * WORLD_SCALE;
+  const cz = z * WORLD_SCALE;
+  // The side's outer line, and the run along it
+  const ox = cx + side.dx * half;
+  const oz = cz + side.dz * half;
+  const rx = side.dz * half; // along the edge: right = (dz, -dx) scaled
+  const rz = -side.dx * half;
+  const ix = ox - side.dx * EDGE_WIDTH; // inner line of the top strip
+  const iz = oz - side.dz * EDGE_WIDTH;
+  const y = top + EDGE_LIFT;
+  builder.quad(
+    [ox - rx, y, oz - rz],
+    [ox + rx, y, oz + rz],
+    [ix + rx, y, iz + rz],
+    [ix - rx, y, iz - rz],
+    [0, 1, 0],
+    1
+  );
+  const fx = ox + side.dx * EDGE_LIFT;
+  const fz = oz + side.dz * EDGE_LIFT;
+  builder.quad(
+    [fx - rx, top, fz - rz],
+    [fx + rx, top, fz + rz],
+    [fx + rx, top - EDGE_DROP, fz + rz],
+    [fx - rx, top - EDGE_DROP, fz - rz],
+    [side.dx, 0, side.dz],
+    1
+  );
+}
+/**
+ * The geometry of a tile-built floor (core/floorTiles): every tile a slab of
+ * SLAB_THICKNESS with its top at its storey's walk height, a side face
+ * wherever no tile of the same storey continues (empty space, or a lower or
+ * higher floor beside it), and the pale cliff line along each such side —
+ * the same at every storey, ground and subfloors included. The game's Floor
+ * and the editor's schematic slabs (editor/viewport/TileSlabs) both build
+ * from here.
+ * @param {{x: number, y: number, z: number}[]} tiles
+ * @param {object} [options] - elevationGrid, ramps, walls (as Floor's)
+ * @returns {THREE.BufferGeometry}
+ */
+export function buildTileGeometry(tiles, { elevationGrid, ramps = [], walls = [] } = {}) {
+  const grid = elevationGrid || ElevationGrid.fromTiles(tiles);
+  const builder = new FloorGeometryBuilder();
+  for (const tile of tiles) addTile(builder, grid, tile);
+  addCliffEdges(builder, grid, ramps, walls, tiles);
+  return builder.build();
+}
+
 class Floor extends Entity {
   /**
    * The whole floor of an area as ONE mesh: the ground (elevation 0,
@@ -121,18 +256,19 @@ class Floor extends Entity {
       grid = tiles ? ElevationGrid.fromTiles(tiles) : new ElevationGrid(gridSize);
       if (!tiles) grid.applyFloors(floors);
     }
-    const builder = new FloorGeometryBuilder();
+    let geometry;
     if (tiles) {
-      for (const tile of tiles) this._addTile(builder, grid, tile);
-      this._addCliffEdges(builder, grid, ramps, walls, tiles);
+      geometry = buildTileGeometry(tiles, { elevationGrid: grid, ramps, walls });
     } else {
+      const builder = new FloorGeometryBuilder();
       this._addGround(builder);
       for (const floor of floors) this._addSlab(builder, floor);
-      this._addCliffEdges(builder, grid, ramps, walls, null);
+      addCliffEdges(builder, grid, ramps, walls, null, gridSize);
+      geometry = builder.build();
     }
-    this.mesh = new THREE.Mesh(builder.build(), createFloorMaterial(light));
+    this.mesh = new THREE.Mesh(geometry, createFloorMaterial(light));
     // Nothing built yet (a new tile-built level): nothing to draw
-    this.mesh.visible = builder.positions.length > 0;
+    this.mesh.visible = geometry.attributes.position.array.length > 0;
   }
 
   static _tilesCenter(tiles) {
@@ -156,46 +292,6 @@ class Floor extends Entity {
     builder.quad([lo, 0, lo], [hi, 0, lo], [hi, 0, hi], [lo, 0, hi], [0, 1, 0]);
   }
 
-  /**
-   * One floor tile: a slab cell whose top sits at its storey's walk height,
-   * with a side face only where no tile of the same storey continues (the
-   * faces between neighbours are inside the floor).
-   */
-  _addTile(builder, grid, tile) {
-    const half = WORLD_SCALE / 2;
-    const top = tile.y * ELEVATION_HEIGHT;
-    const bottom = top - SLAB_THICKNESS;
-    const cx = tile.x * WORLD_SCALE;
-    const cz = tile.z * WORLD_SCALE;
-    const x0 = cx - half;
-    const x1 = cx + half;
-    const z0 = cz - half;
-    const z1 = cz + half;
-    builder.quad([x0, top, z0], [x1, top, z0], [x1, top, z1], [x0, top, z1], [0, 1, 0]);
-    builder.quad(
-      [x0, bottom, z0],
-      [x1, bottom, z0],
-      [x1, bottom, z1],
-      [x0, bottom, z1],
-      [0, -1, 0]
-    );
-    for (const side of SIDES) {
-      if (!grid.hasLevel(tile.x + side.dx, tile.z + side.dz, tile.y)) {
-        const ox = cx + side.dx * half;
-        const oz = cz + side.dz * half;
-        const rx = side.dz * half;
-        const rz = -side.dx * half;
-        builder.quad(
-          [ox - rx, top, oz - rz],
-          [ox + rx, top, oz + rz],
-          [ox + rx, bottom, oz + rz],
-          [ox - rx, bottom, oz - rz],
-          [side.dx, 0, side.dz]
-        );
-      }
-    }
-  }
-
   /** A raised storey: a slab whose TOP surface sits at the walk height. */
   _addSlab(builder, floor) {
     const half = WORLD_SCALE / 2;
@@ -209,89 +305,8 @@ class Floor extends Entity {
       floor.z2 * WORLD_SCALE + half
     );
   }
-
-  /**
-   * Trace every cliff edge: each side of a raised cell whose neighbour
-   * lacks that level, unless the neighbour is a ramp arriving there (its
-   * high end at this level, or its low end), holds a wall standing on that
-   * level, or is off the grid (the perimeter wall stands there). With
-   * tiles, every tile's storey counts (the ground's edge too), and nothing
-   * is off the grid: the built floor's edge is a cliff.
-   */
-  _addCliffEdges(builder, grid, ramps, walls, tiles) {
-    const rampAt = new Map(ramps.map((r) => [`${r.x},${r.z}`, r]));
-    const wallAt = new Set(walls.map((w) => `${w.x},${w.z},${w.y}`));
-    const rampJoins = (x, z, toward, level) => {
-      const ramp = rampAt.get(`${x},${z}`);
-      if (!ramp) return false;
-      const up = RAMP_UP[ramp.direction] || RAMP_UP.north;
-      const highEnd = up.dx === toward.dx && up.dz === toward.dz;
-      const lowEnd = up.dx === -toward.dx && up.dz === -toward.dz;
-      return (highEnd && ramp.y + 1 === level) || (lowEnd && ramp.y === level);
-    };
-    const edgesOf = (x, z, level) => {
-      for (const side of SIDES) {
-        const nx = x + side.dx;
-        const nz = z + side.dz;
-        const onGrid =
-          Boolean(tiles) || (nx >= 0 && nz >= 0 && nx < this.gridSize && nz < this.gridSize);
-        // From the neighbour, this cell lies the opposite way
-        const back = { dx: -side.dx, dz: -side.dz };
-        if (
-          onGrid &&
-          !grid.hasLevel(nx, nz, level) &&
-          !wallAt.has(`${nx},${nz},${level}`) &&
-          !rampJoins(nx, nz, back, level)
-        ) {
-          this._addEdgeLine(builder, x, z, side, level * ELEVATION_HEIGHT);
-        }
-      }
-    };
-    if (tiles) {
-      for (const tile of tiles) edgesOf(tile.x, tile.z, tile.y);
-      return;
-    }
-    for (let z = 0; z < this.gridSize; z += 1) {
-      for (let x = 0; x < this.gridSize; x += 1) {
-        for (const level of grid.getLevelsAt(x, z)) {
-          if (level > 0) edgesOf(x, z, level);
-        }
-      }
-    }
-  }
-
-  /** The line along one side of a raised cell: across its top, down its face. */
-  _addEdgeLine(builder, x, z, side, top) {
-    const half = WORLD_SCALE / 2;
-    const cx = x * WORLD_SCALE;
-    const cz = z * WORLD_SCALE;
-    // The side's outer line, and the run along it
-    const ox = cx + side.dx * half;
-    const oz = cz + side.dz * half;
-    const rx = side.dz * half; // along the edge: right = (dz, -dx) scaled
-    const rz = -side.dx * half;
-    const ix = ox - side.dx * EDGE_WIDTH; // inner line of the top strip
-    const iz = oz - side.dz * EDGE_WIDTH;
-    const y = top + EDGE_LIFT;
-    builder.quad(
-      [ox - rx, y, oz - rz],
-      [ox + rx, y, oz + rz],
-      [ix + rx, y, iz + rz],
-      [ix - rx, y, iz - rz],
-      [0, 1, 0],
-      1
-    );
-    const fx = ox + side.dx * EDGE_LIFT;
-    const fz = oz + side.dz * EDGE_LIFT;
-    builder.quad(
-      [fx - rx, top, fz - rz],
-      [fx + rx, top, fz + rz],
-      [fx + rx, top - EDGE_DROP, fz + rz],
-      [fx - rx, top - EDGE_DROP, fz - rz],
-      [side.dx, 0, side.dz],
-      1
-    );
-  }
 }
+
+Floor.SLAB_THICKNESS = SLAB_THICKNESS;
 
 export default Floor;
