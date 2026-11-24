@@ -22,7 +22,7 @@ import {
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import Entity from 'entities/Entity';
 import CreatureLook from 'entities/CreatureLook';
-import CreatureVoice from 'entities/CreatureVoice';
+import { createCreatureVoice } from 'core/creatureVoice';
 
 // A note counts as sounding this long (beats) past its notated end, so the
 // frame or two between one note's end and the next onset's callback (the
@@ -94,10 +94,10 @@ class Creature extends Entity {
     // every physics pass)
     this._forceVisitor = this._addForceFromSource.bind(this);
 
-    // Its voice (entities/CreatureVoice: a theremin with electric crackle):
-    // rolled for it once, or the one it had before the pole took it
-    // (data.voice — toSpec)
-    this.instrument = new CreatureVoice(this.id, { voice: data.voice });
+    // Its voice (resound-sound's Theremin, a theremin with electric
+    // crackle; core/creatureVoice): rolled for it once, or the one it had
+    // before the pole took it (data.voice — toSpec)
+    this.instrument = createCreatureVoice(this.id, data.voice);
     this.instrument.sourcePosition = this.position; // Set source position for listening
 
     // Set up note callback to emit to ListeningManager (for gates/fountains/creatures)
@@ -265,13 +265,18 @@ class Creature extends Entity {
   /**
    * A note of ours began (instrument noteCallback): remember when it ends in
    * musical-clock beats, and flare the look.
-   * @param {{pitch:string, length:string}} noteEvent
+   * @param {{pitch:string, length:string, durationBeats?:number}} noteEvent -
+   *   durationBeats: how long it sounds (the Theremin's: dots, and a tied
+   *   note's whole run, included)
    */
   noteOn(noteEvent) {
     const beat = gameState.musicalClock ? gameState.musicalClock.getCurrentBeat() : 0;
+    const beats = Number.isFinite(noteEvent.durationBeats)
+      ? noteEvent.durationBeats
+      : SongMatcher.lengthToBeats(noteEvent.length);
     this.soundingNotes.push({
       midi: midiOf(noteEvent.pitch),
-      endBeat: beat + SongMatcher.lengthToBeats(noteEvent.length),
+      endBeat: beat + beats,
     });
     if (this.look) this.look.noteOn();
   }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { NotationRenderer } from 'resound-notation/NotationRenderer';
+import noteBeats from 'core/noteBeats';
 
 // Engraved staves, SHARED: every display of the same staff (same song, same
 // render parameters) shows ONE texture. Engraving is the bulk of building an
@@ -110,10 +111,9 @@ function songBeats(song) {
     song && !Array.isArray(song) && Array.isArray(song.voices)
       ? song.voices[0].notes || []
       : song || [];
-  const BEATS = { '1/1': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25 };
   return notes.reduce((sum, entry) => {
     const note = Array.isArray(entry) ? entry[0] : entry;
-    return sum + (BEATS[note && note.length] || 4);
+    return sum + (note && note.length ? noteBeats(note) : 4);
   }, 0);
 }
 

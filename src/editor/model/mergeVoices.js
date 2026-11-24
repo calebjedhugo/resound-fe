@@ -11,9 +11,11 @@
  * plays as one sound), so the rhythm and every pitch survive. A slice too
  * long for one note value is written as tied values (rests: plain rests).
  * A pitch both voices sound at once is kept once (a chord holds no pitch
- * twice). Pure: canonical notes in ({ pitch?, length, dotted? }), canonical
- * notes out.
+ * twice). Pure: canonical notes in ({ pitch?, length, dotted? } — `dotted:
+ * 2` a double dot), canonical notes out.
  */
+
+import { dotFactor } from 'core/noteBeats';
 
 const TICKS_PER_WHOLE = 256;
 
@@ -40,7 +42,7 @@ const LETTER_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 function ticksOf(note) {
   const [n, d] = String(note.length).split('/').map(Number);
   if (!n || !d) return 0;
-  return Math.round((n / d) * TICKS_PER_WHOLE * (note.dotted ? 1.5 : 1));
+  return Math.round((n / d) * TICKS_PER_WHOLE * dotFactor(note.dotted));
 }
 
 /** MIDI number of a pitch ('C4' = 60, 'Bb3', 'F#5'); NaN if it isn't one. */

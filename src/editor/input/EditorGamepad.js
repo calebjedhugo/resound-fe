@@ -126,9 +126,12 @@ export const EDITOR_MAPPING = {
   song: [
     ['leftright', 'Move the edit cursor (through time)'],
     ['updown', 'Move the pitch cursor (lines and spaces)'],
-    ['cross', 'Pitch on / off at the pitch cursor (dot chosen: dot)'],
+    [
+      'cross',
+      'Pitch on / off at the pitch cursor (dot chosen: dot, double, none; tie chosen: tie / untie)',
+    ],
     ['square', 'Note → rest; rest → gone'],
-    ['l1/r1', 'Palette: longer / shorter (… dot)'],
+    ['l1/r1', 'Palette: longer / shorter (… dot, tie)'],
     ['triangle', 'Play / stop (the creature lights)'],
     ['l2', 'Hold: accidental, note duration'],
     ['r2', 'Hold: a rest, note duration'],

@@ -68,37 +68,43 @@ const GRAND_STAFF_VOICES = ['treble', 'bass'];
 const STAFF_MIDDLE_Y = 50;
 
 // ── Dotted-duration normalization ─────────────────────────────────────
-// SongModel represents a dotted value as a numerator-3 fraction (e.g. a
-// dotted quarter is '3/8'). The renderer instead wants a base length plus a
-// `dotted: true` flag ('1/4' + dotted). We translate at the boundary in both
-// directions so the model keeps its fraction invariant while stored and
-// rendered songs use the canonical dotted form (which the game display also
-// engraves correctly).
+// SongModel represents a dotted value as a fraction: one dot numerator 3
+// (a dotted quarter is '3/8'), a DOUBLE dot numerator 7 (a double-dotted
+// quarter is '7/16'). The renderer instead wants a base length plus a
+// `dotted` field ('1/4' + `dotted: true`; double: `dotted: 2`). We
+// translate at the boundary in both directions so the model keeps its
+// fraction invariant (measure fit is plain fraction math) while stored and
+// rendered songs use the canonical form (which the game display also
+// engraves, and the game's matching reads: core/noteBeats).
 
 const isPow2 = (d) => d > 0 && (d & (d - 1)) === 0;
+// A value's numerator by its dots: none 1, one 3, two 7 (2^(dots+1) - 1)
+const DOT_NUMERATORS = [1, 3, 7];
+const MAX_DOTS = DOT_NUMERATORS.length - 1;
 
-function isFractionDotted(length) {
+/**
+ * A model length's base value and dots: '3/8' -> { base: '1/4', dots: 1 },
+ * '7/16' -> { base: '1/4', dots: 2 }, '1/4' -> { base: '1/4', dots: 0 }.
+ */
+function splitLength(length) {
   const [n, d] = String(length).split('/').map(Number);
-  return n === 3 && isPow2(d);
+  const dots = DOT_NUMERATORS.indexOf(n);
+  if (dots > 0 && isPow2(d) && d >= 2 ** dots) return { base: `1/${d / 2 ** dots}`, dots };
+  return { base: String(length), dots: 0 };
 }
 
-/** '3/8' -> '1/4' (halve the denominator). */
-function dottedFractionToBase(length) {
-  const [, d] = length.split('/').map(Number);
-  return `1/${d / 2}`;
-}
-
-/** '1/4' -> '3/8' (double the denominator, numerator 3). */
-function baseToDottedFraction(base) {
-  const [, d] = base.split('/').map(Number);
-  return `3/${d * 2}`;
+/** splitLength's inverse: ('1/4', 2) -> '7/16'. */
+function joinLength(base, dots) {
+  if (!dots) return base;
+  const [, d] = String(base).split('/').map(Number);
+  return `${DOT_NUMERATORS[dots]}/${d * 2 ** dots}`;
 }
 
 /** Stored/canonical note ({length, dotted}) -> model fraction form. */
 function normalizeInNote(note) {
   const out = { ...note };
   if (out.dotted) {
-    out.length = baseToDottedFraction(out.length);
+    out.length = joinLength(out.length, out.dotted === 2 ? 2 : 1);
     delete out.dotted;
   }
   return out;
@@ -107,9 +113,10 @@ function normalizeInNote(note) {
 /** Model fraction form -> canonical note the renderer understands. */
 function normalizeOutNote(note) {
   const out = { ...note };
-  if (isFractionDotted(out.length)) {
-    out.length = dottedFractionToBase(out.length);
-    out.dotted = true;
+  const { base, dots } = splitLength(out.length);
+  if (dots) {
+    out.length = base;
+    out.dotted = dots === 2 ? 2 : true;
   }
   return out;
 }
@@ -134,6 +141,47 @@ const pitchName = (pitch) =>
   String(pitch)
     .replace('#', '\u266f')
     .replace(/^([A-G])b/, '$1\u266d');
+
+// ── Ties (per note: `tie: 'start' | 'continue' | 'stop'`) ──────────────
+/** Whether a note ties on to the next entry (start / continue). */
+const tiesOn = (note) => note.tie === 'start' || note.tie === 'continue';
+/** Whether a note is tied from the entry before (continue / stop). */
+const tiedFrom = (note) => note.tie === 'continue' || note.tie === 'stop';
+
+/** Write a note's tie from whether it is tied from before / on to next. */
+function setTie(note, from, on) {
+  const tie = { '00': null, 10: 'stop', '01': 'start', 11: 'continue' }[`${+!!from}${+!!on}`];
+  if (tie) note.tie = tie;
+  else delete note.tie;
+}
+
+/**
+ * Keep every tie joined: a tie stands only while the same pitch is in the
+ * next entry with a tie in from it — an edit that moved, removed or
+ * re-pitched either end (or put an entry between) leaves no half-tie
+ * behind. In place, over the model's entries.
+ */
+function repairTies(entries) {
+  const joined = new Set(); // `${index}|${pitch}`: entry index ties on to index + 1
+  entries.forEach((entry, i) => {
+    if (isRestEntry(entry)) return;
+    const next = entries[i + 1];
+    if (!next || isRestEntry(next)) return;
+    membersOf(entry).forEach((note) => {
+      if (!tiesOn(note)) return;
+      if (membersOf(next).some((n) => n.pitch === note.pitch && tiedFrom(n))) {
+        joined.add(`${i}|${note.pitch}`);
+      }
+    });
+  });
+  entries.forEach((entry, i) => {
+    if (isRestEntry(entry)) return;
+    membersOf(entry).forEach((note) => {
+      if (!note.tie) return;
+      setTie(note, joined.has(`${i - 1}|${note.pitch}`), joined.has(`${i}|${note.pitch}`));
+    });
+  });
+}
 
 /** Duration of a length fraction in quarter-note beats ('1/4' -> 1, '3/8' -> 1.5). */
 function fractionToQuarterBeats(length) {
@@ -310,6 +358,7 @@ export default class NotationEditor {
   }
 
   _emitChange() {
+    this._voiceModels.forEach((m) => repairTies(m._notes));
     this._revision += 1;
     this._onChange(JSON.parse(JSON.stringify(this._buildOutputSong())));
   }
@@ -387,7 +436,8 @@ export default class NotationEditor {
       'Enter: the pitch on / off',
       '⇧↑/⇧↓ accidental',
       '←/→ move',
-      '. dot',
+      '. dot (twice: double dot)',
+      't tie (the note at the pitch cursor)',
       'Del: note → rest → gone',
       'click: a note at the cursor',
       this._polyphonic ? '⇧-click: add to the chord' : null,
@@ -590,13 +640,16 @@ export default class NotationEditor {
   }
 
   /**
-   * ✕: with the dot chosen, dot / undot the entry at the cursor; else the
-   * pitch at the pitch cursor goes on (a rest becomes that note; a note
+   * ✕: with the dot chosen, the entry at the cursor's dots step (none →
+   * one → two → none); with the tie chosen, the note under the pitch
+   * cursor ties to (or unties from) the same pitch in the next entry; else
+   * the pitch at the pitch cursor goes on (a rest becomes that note; a note
    * gains it as a chord tone — a creature's single note moves there) or,
    * already there, comes off (the last pitch off leaves a rest).
    */
   cross() {
     if (this._palette.dotSelected) return this.toggleDot();
+    if (this._palette.tieSelected) return this.toggleTie();
     return this._act((model) => this._togglePitch(model, this.pitchCursor));
   }
 
@@ -638,18 +691,67 @@ export default class NotationEditor {
     return true;
   }
 
-  /** Dot / undot the entry at the cursor (a dot must fit in its measure). */
+  /**
+   * The dots of the entry at the cursor, a step along none → one dot → two
+   * dots (a double dot) → none. A dot more must fit in its measure; when a
+   * second dot doesn't, the step goes back to none (so ✕ can always take
+   * the dot off again) and says why.
+   */
   toggleDot() {
     return this._act((model) => {
       const i = this._target(model);
       if (i === null) return false;
-      const length = entryLength(model._notes[i]);
-      const dotted = String(length).startsWith('3/');
-      if (!dotted) {
-        const [, d] = String(length).split('/').map(Number);
-        if (!this._fits(model, i, `3/${d * 2}`, 'the dotted value')) return false;
+      const { base, dots } = splitLength(entryLength(model._notes[i]));
+      let next = dots >= MAX_DOTS ? 0 : dots + 1;
+      const what = next === 2 ? 'a second dot' : 'the dotted value';
+      if (next > 0 && !this._fits(model, i, joinLength(base, next), what)) {
+        if (next === 1) return false;
+        next = 0;
+        this._status(`${this.status} — the dot comes off`);
       }
-      model.toggleDot(i);
+      model.setDuration(i, joinLength(base, next));
+      this._emitChange();
+      return true;
+    });
+  }
+
+  /**
+   * ✕ with the tie chosen (or t): the note under the pitch cursor — in a
+   * chord, that one note: ties are per note — tied on to the same pitch in
+   * the next entry, or, already tied there, untied. Refused (with why)
+   * when there is no note under the pitch cursor, or the next entry has no
+   * note of that exact pitch (a tie joins one pitch to itself).
+   */
+  toggleTie() {
+    return this._act((model) => {
+      const i = this._target(model);
+      if (i === null) return false;
+      const position = this.pitchCursor;
+      const entry = model._notes[i];
+      const note = isRestEntry(entry)
+        ? null
+        : membersOf(entry).find((n) => staffPitch(n.pitch) === position);
+      if (!note) {
+        this._status('No note under the pitch cursor to tie');
+        return false;
+      }
+      const nextEntry = model._notes[i + 1];
+      const partner =
+        nextEntry && !isRestEntry(nextEntry)
+          ? membersOf(nextEntry).find((n) => n.pitch === note.pitch)
+          : null;
+      if (tiesOn(note) && partner && tiedFrom(partner)) {
+        setTie(note, tiedFrom(note), false);
+        setTie(partner, false, tiesOn(partner));
+      } else {
+        if (!partner) {
+          const what = nextEntry ? 'the next entry has' : 'there is';
+          this._status(`Nothing to tie to: ${what} no ${pitchName(note.pitch)} after it`);
+          return false;
+        }
+        setTie(note, tiedFrom(note), true);
+        setTie(partner, true, tiesOn(partner));
+      }
       this._emitChange();
       return true;
     });
@@ -657,22 +759,20 @@ export default class NotationEditor {
 
   /**
    * L2+L1 / R2+R1: the entry at the cursor a value longer (-1) or shorter
-   * (+1) — the palette's direction — keeping its dot; longer must fit.
+   * (+1) — the palette's direction — keeping its dots; longer must fit.
    */
   stepNoteDuration(step) {
     return this._act((model) => {
       const i = this._target(model);
       if (i === null) return false;
-      const length = String(entryLength(model._notes[i]));
-      const dotted = length.startsWith('3/');
-      const base = dotted ? dottedFractionToBase(length) : length;
+      const { base, dots } = splitLength(entryLength(model._notes[i]));
       const at = DURATIONS.findIndex((d) => d.length === base);
       const next = DURATIONS[at + step];
       if (at < 0 || !next) {
         this._status(step < 0 ? 'Already the longest value' : 'Already the shortest value');
         return false;
       }
-      const newLength = dotted ? baseToDottedFraction(next.length) : next.length;
+      const newLength = joinLength(next.length, dots);
       if (step < 0 && !this._fits(model, i, newLength, 'the longer value')) return false;
       model.setDuration(i, newLength);
       this._emitChange();
@@ -1202,6 +1302,9 @@ export default class NotationEditor {
         break;
       case '.':
         this.toggleDot();
+        break;
+      case 't':
+        this.toggleTie();
         break;
       case 'Delete':
       case 'Backspace': {

@@ -1,5 +1,6 @@
 import { quantizeToBeat, groupBy } from 'core/utils';
 import gameState from 'core/GameState';
+import { isTiedOn } from 'core/noteBeats';
 
 /**
  * ListeningManager - Global system for entities to listen to all sound sources
@@ -45,6 +46,9 @@ class ListeningManager {
   /**
    * Emit a note event (called by instruments when playing)
    * @param {Object} noteEvent - { pitch, length, timestamp, source, sourcePosition }
+   *   (+ optional `dotted`, `durationBeats`: how long it sounds, in quarter
+   *   beats — a tied note reports its whole held length; `tie`: a
+   *   continuation is ignored by matching, see groupNotesByBeat)
    */
   static emitNote(noteEvent) {
     const sourceArea = noteEvent.sourceArea || gameState.activeArea;
@@ -70,7 +74,9 @@ class ListeningManager {
 
   /**
    * Quantize captured notes to the 16th-note grid and group simultaneous
-   * notes, keeping beat positions (needed for phrase segmentation).
+   * notes, keeping beat positions (needed for phrase segmentation). A note
+   * event may carry `durationBeats` (how long it sounds — a tied note's
+   * whole held length) and `dotted`; matching reads either (noteBeats).
    * @param {Array} capturedNotes - Array of note events
    * @param {number} startTime - When listening started
    * @param {number} tempo - Tempo in BPM
@@ -79,7 +85,13 @@ class ListeningManager {
   static groupNotesByBeat(capturedNotes, startTime, tempo) {
     if (capturedNotes.length === 0) return [];
 
-    const quantized = capturedNotes.map((note) => ({
+    // A tie continuation ('continue' / 'stop') is a held note, not a strike:
+    // a tied pair is heard as ONE note (core/SongMatcher). A source that
+    // reports one event per tied note keeps only the first.
+    const struck = capturedNotes.some(isTiedOn)
+      ? capturedNotes.filter((note) => !isTiedOn(note))
+      : capturedNotes;
+    const quantized = struck.map((note) => ({
       ...note,
       beat: quantizeToBeat(note.timestamp, startTime, tempo, 16),
     }));

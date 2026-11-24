@@ -1218,14 +1218,13 @@ describe('Creature look (ball lightning)', () => {
 /**
  * A creature leaving the world (its area disposed: pruned, or the whole
  * world torn down) sings nothing more and lets go of the lines it built
- * (entities/CreatureVoice). Its wavetable (~0.6 MB in Chrome) is shared by
+ * (resound-sound's Theremin). Its wavetable (~0.6 MB in Chrome) is shared by
  * every creature of its warmth, and stays with the context.
  */
 /* eslint-disable import/first -- section header for the suite below; imports
    are hoisted by babel-jest so the placement is cosmetic */
-import { audioContextManager } from 'resound-sound';
+import { audioContextManager, Theremin } from 'resound-sound';
 import PortalManager from 'core/PortalManager';
-import { forgetSharedAudio } from 'entities/CreatureVoice';
 /* eslint-enable import/first */
 
 describe('A creature leaving the world', () => {
@@ -1306,7 +1305,7 @@ describe('A creature leaving the world', () => {
   });
 
   it('shares one wavetable among creatures of one warmth, however often they sing', async () => {
-    forgetSharedAudio(audioContextManager.getContext());
+    Theremin.forgetSharedAudio(audioContextManager.getContext());
     const waves = jest.spyOn(audioContextManager.getContext(), 'createPeriodicWave');
     const voice = {
       warmth: 0.9,

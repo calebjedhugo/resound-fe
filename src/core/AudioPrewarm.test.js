@@ -2,12 +2,11 @@
  * Audio built ahead, in idle time: the creatures' voices for every area as
  * it is built (core/AudioPrewarm). (The tape's piano was pre-rendered here
  * too until the tape stopped playing, 2026-11-23.) A voice is its theremin
- * wavetable (entities/CreatureVoice), shared by creatures of one warmth:
+ * wavetable (resound-sound's Theremin), shared by creatures of one warmth:
  * each test starts with none built.
  */
-import { audioContextManager } from 'resound-sound';
+import { audioContextManager, Theremin } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
-import { forgetSharedAudio } from 'entities/CreatureVoice';
 import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
 import StartGate from 'ui/StartGate';
@@ -15,7 +14,7 @@ import StartGate from 'ui/StartGate';
 describe('Building audio ahead', () => {
   const context = audioContextManager.getContext();
 
-  beforeEach(() => forgetSharedAudio(context));
+  beforeEach(() => Theremin.forgetSharedAudio(context));
 
   afterEach(() => {
     jest.restoreAllMocks();
@@ -103,7 +102,7 @@ describe('What building ahead costs a frame in play', () => {
   }
 
   beforeEach(() => {
-    forgetSharedAudio(audioContextManager.getContext());
+    Theremin.forgetSharedAudio(audioContextManager.getContext());
     clock = 0;
     jest.spyOn(performance, 'now').mockImplementation(() => clock);
     // The context every creature sings on
@@ -154,7 +153,7 @@ describe('What building ahead costs a frame in play', () => {
 });
 
 /**
- * Each creature's next song is built ahead (CreatureVoice.prepare: the
+ * Each creature's next song is built ahead (Theremin.prepare: the
  * lines it will start), so the moment a note starts builds no audio node. A
  * world's creatures share their onsets: The Star's start 10-11 at once.
  */

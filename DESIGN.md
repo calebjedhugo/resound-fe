@@ -212,6 +212,13 @@ automated playtesters can observe them.)
   mechanics. Polyphonic targets (chords, multi-voice) keep their true
   rhythm. A failed utterance flashes the target red (wordless feedback)
   and is logged in the F3 panel.
+  - **Ties and dots match as they SOUND (ruled 2026-11-24):** a tied pair
+    is ONE held note (one onset lasting both values: a quarter tied to a
+    quarter matches a held half note, never two struck quarters); ties are
+    per note, so in a chord only the tied tone holds. A dot lasts x1.5, a
+    double dot (`dotted: 2`) x1.75 (`core/noteBeats`). A heard note's length
+    is its `durationBeats` when the source reports one, else its `length`
+    + `dotted`; a reported tie continuation is held, not struck.
   - **Onset-boundary grace (2026-07-11, round 4):** between one note's end
     and the next onset of a correct take, the due note arrives a few frames
     "late" (scheduling jitter inside the matcher's own tolerance). A due
@@ -549,7 +556,9 @@ CREATURES".)
 ## Creature voice (2026-11-24: a theremin with electricity crackle)
 
 The designer: "resemble a high-quality Theremin with electricity crackle".
-`entities/CreatureVoice` (replaces resound-sound's `Random`, whose rolled
+resound-sound's `Theremin` (in the library since 2026-11-24, null-tested
+bit-identical to the approved resound-fe class; the game's part, rolling a
+creature's voice, is `core/creatureVoice`) (replaces resound-sound's `Random`, whose rolled
 oscillator type + lowpass made some creatures square-wave buzzers).
 
 - **Tone**: one near-sine wavetable (2nd harmonic -19 dB, 3rd -24, falling
@@ -583,8 +592,12 @@ oscillator type + lowpass made some creatures square-wave buzzers).
   3.7% of real time offline, the old voice 3.8%; ten simultaneous onsets
   schedule in 0.55 ms (old 0.46). The wavetable is shared by every
   creature of a warmth (13 steps).
-- The editor's audition (A, Play Song) sings in the same voice
-  (`DEFAULT_VOICE`, the middle of every range).
+- The editor's audition (A, Play Song) and the song editor's Play sing in
+  the same voice (`Theremin.DEFAULT_VOICE`, the middle of every range,
+  crackle on), tied notes held and dots read as a creature sings them.
+- **Several creatures never clip**: resound-sound's master output runs
+  through a limiter (-3 dBFS, transparent below it): three creatures in a
+  triad peaked 1.73, now 0.84; a lone voice is unchanged (2026-11-24).
 
 ## Environment look (APPROVED direction 2026-11-22)
 

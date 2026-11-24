@@ -8,8 +8,9 @@
  * It docks along the bottom of the window over a light backdrop, so the
  * viewport above stays in sight: while Play sounds a creature's song, each
  * note is reported (`onNote`) and the creature lights up in the viewport as
- * it would in game; Stop (or closing) reports `onStop`. A grand staff plays
- * both staves (a resound-sound Sequencer over the same Synth).
+ * it would in game; Stop (or closing) reports `onStop`. It plays in a
+ * creature's voice (resound-sound's Theremin) on a resound-sound Sequencer:
+ * a grand staff both staves, ties held, dots read.
  *
  * Layout: header (title, ×), body (palette + staff), and an always-visible
  * footer holding Play / Stop / Clear, the hint and status line, Options and
@@ -22,8 +23,8 @@
 import NotationEditor from 'editor/ui/NotationEditor';
 import PadFocus from 'editor/input/PadFocus';
 import mergeVoices from 'editor/model/mergeVoices';
-import { Synth, Sequencer } from 'resound-sound';
-import { noteSeconds } from 'editor/audio/SongAudition';
+import { Sequencer } from 'resound-sound';
+import { createEditorVoice } from 'editor/audio/SongAudition';
 
 const isGrand = (data) => (data.staffGroups || []).some((g) => g.type === 'brace');
 
@@ -450,37 +451,25 @@ export default class SongEditorModal {
   // ── Playback ──────────────────────────────────────────────────────
 
   /**
-   * Lazily create a resound-sound Synth to sound editor playback. Returns null
-   * where Web Audio is unavailable (e.g. jsdom tests), in which case the editor
-   * still animates its playback cursor silently.
+   * Lazily create editor playback: a creature's voice (resound-sound's
+   * Theremin in its default voice, crackle as in game; SongAudition's
+   * createEditorVoice) on a Sequencer. Returns null where Web Audio is
+   * unavailable (e.g. jsdom tests), in which case the editor still animates
+   * its playback cursor silently.
    */
   _ensurePlayer() {
     if (this._player) return this._player;
-    const hasAudio =
-      typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
-    let synth = null;
-    if (hasAudio) {
-      try {
-        synth = new Synth();
-      } catch {
-        synth = null;
-      }
-    }
-    if (!synth) return null;
-    // Each note it sounds lights the entity in the viewport (onNote); a stop
-    // puts it out (onStop). The editor talks to the wrapper only.
-    synth.noteCallback = (event) => {
-      if (this._entityId === null) return;
-      const { tempo } = this._undoManager.getMetadata();
-      this._onNote(this._entityId, event.pitch, noteSeconds(event, tempo));
-    };
+    const voice = createEditorVoice('song-editor');
+    if (!voice) return null;
+    // The editor talks to the wrapper only. A stop puts the entity out
+    // (onStop).
     this._player = {
-      synth,
-      play: (args) => (args.voices ? this._playVoices(synth, args) : synth.play(args)),
+      voice,
+      play: (args) => this._playVoices(voice, args),
       stop: () => {
         if (this._sequencer) this._sequencer.stop();
         this._sequencer = null;
-        synth.stop();
+        voice.stopAll(0.05);
         if (this._entityId !== null) this._onStop(this._entityId);
       },
     };
@@ -488,21 +477,24 @@ export default class SongEditorModal {
   }
 
   /**
-   * A grand staff's staves together: a Sequencer walks both voices on one
-   * beat clock (ties held as one sound) and sounds each note on the Synth,
-   * lighting the entity as the single-staff path does.
+   * Play the song: a grand staff's staves together (`{ voices }`), a single
+   * staff as one voice (`{ data }`). A Sequencer walks the voices on one
+   * beat clock (dots read, a tied note held as ONE sound, chord members
+   * tied each on their own: resound-sound buildTimeline) and sounds each
+   * note on the creature voice, lighting the entity for as long as it
+   * sounds (onNote).
    */
-  _playVoices(synth, { voices, tempo, basis }) {
+  _playVoices(voice, { voices, data, tempo, basis }) {
     if (this._sequencer) this._sequencer.stop();
     const instrument = {
       startNote: (pitch, ms) => {
-        synth.startNote(pitch, ms);
+        voice.startNote(pitch, ms);
         if (this._entityId !== null) this._onNote(this._entityId, pitch, ms / 1000);
       },
-      stopAll: (fade) => synth.stopAll(fade),
+      stopAll: (fade) => voice.stopAll(fade),
     };
     this._sequencer = new Sequencer({ instrument, lookaheadMs: 0 });
-    this._sequencer.play({ voices, tempo, basis });
+    this._sequencer.play({ voices: voices || [{ id: 0, notes: data || [] }], tempo, basis });
   }
 
   /** Stop the song if it is playing (the editor's Play takes the stage). */
@@ -548,8 +540,10 @@ export default class SongEditorModal {
    * SONG_ACTIONS): left / right (edit cursor), pitchUp / pitchDown (pitch
    * cursor), sharpen / flatten (L2 + up/down: the note under the pitch
    * cursor's accidental), cross (the pitch on / off — or, the dot chosen,
-   * dot), rest (R2 + ✕: a rest of the chosen duration), erase (□: note →
-   * rest → gone), longer / shorter (L1/R1: the palette), noteLonger /
+   * the dots: none → one → two → none; the tie chosen, the note under the
+   * pitch cursor tied / untied), rest (R2 + ✕: a rest of the chosen
+   * duration), erase (□: note → rest → gone), longer / shorter (L1/R1: the
+   * palette, whole … 32nd, dot, tie), noteLonger /
    * noteShorter (L2+L1 / R2+R1: the note at the cursor), play, voice (the
    * other staff), undo / redo (L3 / R3), options (the popover), close.
    * While the popover or dialog is open, the pad walks it instead.
@@ -586,7 +580,7 @@ export default class SongEditorModal {
         break;
       case 'longer':
       case 'shorter':
-        // The palette runs whole -> 32nd, dot: a shorter value is further along
+        // The palette runs whole -> 32nd, dot, tie: a shorter value is further along
         editor.palette.step(action === 'shorter' ? 1 : -1);
         break;
       case 'noteLonger':

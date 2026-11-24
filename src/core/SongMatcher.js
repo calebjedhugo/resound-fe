@@ -1,6 +1,19 @@
 /**
- * SongMatcher - Utilities for comparing songs for exact matches
+ * SongMatcher - Utilities for comparing songs for exact matches.
+ *
+ * Songs are compared as they SOUND (the designer's ruling, 2026-11-24): a
+ * dotted value lasts its dots (core/noteBeats: x1.5, a double dot x1.75),
+ * and a TIED pair is one held note — one onset lasting both values — never
+ * two strikes. So a quarter tied to a quarter and a half note are the same
+ * song.
  */
+import { lengthBeats, soundingBeats, isTiedOn } from 'core/noteBeats';
+
+const BEAT_EPS = 1e-6;
+// A heard note's durationBeats is worked back from milliseconds (resound-
+// sound: ms * tempo / 60000), so a duration compares within this
+const DURATION_EPS = 1e-3;
+
 class SongMatcher {
   /**
    * Flatten a multi-voice song into a sequential note/chord array.
@@ -20,8 +33,8 @@ class SongMatcher {
       let beat = 0;
       for (const note of voice.notes || []) {
         entries.push({ beat, note });
-        const [num, den] = note.length.split('/').map(Number);
-        beat += num / den;
+        // Whole-note units (only compared with each other), dots included
+        beat += lengthBeats(note.length, note.dotted) / 4;
       }
     }
 
@@ -52,57 +65,38 @@ class SongMatcher {
   }
 
   /**
-   * Compare two songs for exact match (quantized)
-   * @param {Array} capturedSong - Captured/recorded song data
-   * @param {Array|Object} requiredSong - Required song data (flat array or voices format)
+   * Compare two songs for an exact match AS THEY SOUND: the same onsets at
+   * the same beats, each with the same pitches held for the same time, and
+   * the same total length (rests included). A tied pair is one held note,
+   * so it matches the single value it adds up to.
+   * @param {Array|Object} capturedSong - Flat array or voices format
+   * @param {Array|Object} requiredSong - Flat array or voices format
    * @returns {boolean} True if songs match exactly
    */
   static songsMatch(capturedSong, requiredSong) {
     if (!capturedSong || !requiredSong) {
       return false;
     }
-
-    const flatRequired = this.flattenSong(requiredSong);
-
-    // Must have same number of notes/chords
-    if (capturedSong.length !== flatRequired.length) {
-      return false;
-    }
-
-    // Compare each note/chord
-    for (let i = 0; i < capturedSong.length; i += 1) {
-      const captured = capturedSong[i];
-      const required = flatRequired[i];
-
-      // Both are chords (arrays)
-      if (Array.isArray(captured) && Array.isArray(required)) {
-        if (!this.chordsMatch(captured, required)) {
-          return false;
-        }
-      }
-      // Both are single notes
-      else if (!Array.isArray(captured) && !Array.isArray(required)) {
-        if (!this.notesMatch(captured, required)) {
-          return false;
-        }
-      }
-      // One is chord, one is note - no match
-      else {
-        return false;
-      }
-    }
-
-    return true;
+    const a = this.targetTimeline(capturedSong);
+    const b = this.targetTimeline(requiredSong);
+    if (a.onsets.length !== b.onsets.length) return false;
+    if (Math.abs(a.totalBeats - b.totalBeats) > BEAT_EPS) return false;
+    return a.onsets.every((onset, i) => {
+      const other = b.onsets[i];
+      if (Math.abs(onset.beat - other.beat) > BEAT_EPS) return false;
+      if (onset.notes.length !== other.notes.length) return false;
+      if (onset.notes.length === 1) return this.notesMatch(onset.notes[0], other.notes[0]);
+      return this.chordsMatch(onset.notes, other.notes);
+    });
   }
 
   /**
-   * Note length string → quarter-note beats ("1/4" → 1, "1/8" → 0.5).
-   * Malformed lengths count as one beat.
+   * Note length string → quarter-note beats ("1/4" → 1, "1/8" → 0.5), with
+   * a note's `dotted` field when given (true: x1.5, 2: x1.75). Malformed
+   * lengths count as one beat.
    */
-  static lengthToBeats(length) {
-    const [num, den] = String(length).split('/').map(Number);
-    if (!num || !den) return 1;
-    return (num * 4) / den;
+  static lengthToBeats(length, dotted) {
+    return lengthBeats(length, dotted);
   }
 
   /**
@@ -112,33 +106,53 @@ class SongMatcher {
    * flattenSong, which collapses voices to a sequential list), so
    * polyphonic targets keep their rhythm. Used by anchored matching:
    * a rest is an EXPECTED GAP in the pattern, not an entry to compare.
+   *
+   * Dots lengthen a value (x1.5, a double dot x1.75). A TIE holds a pitch
+   * on (per note, so in a chord each member ties on its own): a note tied
+   * on from the same pitch in the entry before adds its value to that
+   * onset's `durationBeats` and is no onset of its own — resound-sound's
+   * buildTimeline rule (a rest, or a tie to a pitch that isn't there, ends
+   * it; a continuation with nothing to continue sounds as a fresh note).
    * @param {Array|Object} requiredSong - Flat array or { voices: [...] }
    * @returns {{onsets: Array<{beat: number, notes: Array}>, totalBeats: number}}
-   *   onsets sorted by beat; totalBeats spans trailing rests/sustains
+   *   onsets sorted by beat (each note: { pitch, length, dotted?,
+   *   durationBeats } — durationBeats the whole held length); totalBeats
+   *   spans trailing rests/sustains
    */
   static targetTimeline(requiredSong) {
     const byBeat = new Map();
     const addOnset = (beat, note) => {
       const key = Math.round(beat * 1e6) / 1e6;
       if (!byBeat.has(key)) byBeat.set(key, { beat: key, notes: [] });
-      byBeat.get(key).notes.push({ pitch: note.pitch, length: note.length });
+      const out = { pitch: note.pitch, length: note.length, durationBeats: soundingBeats(note) };
+      if (note.dotted) out.dotted = note.dotted;
+      byBeat.get(key).notes.push(out);
+      return out;
     };
     const walkSequence = (entries) => {
       let clock = 0;
+      let open = new Map(); // pitch -> the onset note a tie is holding on
       for (const entry of entries || []) {
-        if (Array.isArray(entry)) {
-          if (entry.length > 0) {
-            const beatHere = clock;
-            entry.filter((n) => n && n.pitch).forEach((n) => addOnset(beatHere, n));
-            clock += Math.min(...entry.map((n) => this.lengthToBeats(n && n.length)));
+        if (!entry) continue;
+        const members = (Array.isArray(entry) ? entry : [entry]).filter(Boolean);
+        if (members.length === 0) continue;
+        const held = new Map();
+        for (const n of members) {
+          if (!n.pitch) continue;
+          const holding = isTiedOn(n) ? open.get(n.pitch) : null;
+          if (holding) {
+            holding.durationBeats += soundingBeats(n);
+            if (n.tie === 'continue') held.set(n.pitch, holding);
+          } else {
+            const onset = addOnset(clock, n);
+            if (n.tie === 'start' || n.tie === 'continue') held.set(n.pitch, onset);
           }
-        } else if (entry && entry.pitch) {
-          addOnset(clock, entry);
-          clock += this.lengthToBeats(entry.length);
-        } else if (entry) {
-          // Rest: advances the clock, emits no onset
-          clock += this.lengthToBeats(entry.length);
         }
+        // A tie reaches only the next entry; a rest (nothing pitched) ends all
+        open = held;
+        clock += Array.isArray(entry)
+          ? Math.min(...members.map((n) => lengthBeats(n.length, n.dotted)))
+          : lengthBeats(entry.length, entry.dotted);
       }
       return clock;
     };
@@ -181,20 +195,25 @@ class SongMatcher {
       } else {
         current.elements.push(notes.map((n) => ({ pitch: n.pitch, length: n.length })));
       }
-      const durationBeats = Math.min(...notes.map((n) => this.lengthToBeats(n.length)));
+      const durationBeats = Math.min(...notes.map((n) => soundingBeats(n)));
       expectedNext = beat + durationBeats;
     }
     return phrases;
   }
 
   /**
-   * Compare two single notes
-   * @param {Object} note1 - { pitch, length }
-   * @param {Object} note2 - { pitch, length }
+   * Compare two single notes: the same pitch, sounding the same time (its
+   * dots, or a heard / timeline note's `durationBeats` — a tied note's whole
+   * held length). '1/4' + dotted and a heard note lasting 1.5 beats match.
+   * @param {Object} note1 - { pitch, length, dotted?, durationBeats? }
+   * @param {Object} note2 - { pitch, length, dotted?, durationBeats? }
    * @returns {boolean} True if notes match
    */
   static notesMatch(note1, note2) {
-    return note1.pitch === note2.pitch && note1.length === note2.length;
+    return (
+      note1.pitch === note2.pitch &&
+      Math.abs(soundingBeats(note1) - soundingBeats(note2)) < DURATION_EPS
+    );
   }
 
   /**

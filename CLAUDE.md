@@ -64,7 +64,7 @@ Run `npm ls resound-sound` after any relink: two copies in the tree gives two
 AudioContexts and two instrument registries.
 
 - Game UI imports from `resound-sound` and `resound-notation` (not `audio/` / `notation/`, which no longer exist)
-- The **staff editor is local game code** (`src/editor/ui/NotationEditor.js` + `model/SongModel.js` + `ui/RhythmPalette.js` + `ui/staffCoords.js`) built on the published renderer's public API (`render()` + `components/*` + `lib/*`). `SongEditorModal.js` wires it to the entity model (`onChange` → `undoManager`) and injects a `resound-sound` `Synth` for playback. See `src/editor/CLAUDE.md`.
+- The **staff editor is local game code** (`src/editor/ui/NotationEditor.js` + `model/SongModel.js` + `ui/RhythmPalette.js` + `ui/staffCoords.js`) built on the published renderer's public API (`render()` + `components/*` + `lib/*`). `SongEditorModal.js` wires it to the entity model (`onChange` → `undoManager`) and plays it in a creature's voice (`resound-sound` `Theremin` on a `Sequencer`). See `src/editor/CLAUDE.md`.
 
 ### Puzzle Editor (`src/editor/`)
 - Separate Vite entry point: `editor.html` (access at `/editor.html` during dev)
@@ -130,9 +130,12 @@ instead of "fixing" it.
 
 ### Web Audio
 - AudioContext must be resumed on user interaction (handled in main.js)
+- resound-sound's master output (mute) runs through its **master limiter**
+  (-3 dBFS, unity below it, a fixed 6 ms look-ahead), so creatures summing
+  past full scale don't clip — never add another limiter or compressor here
 - Don't create oscillators until needed (memory leak if not stopped)
 - **Audio is built ahead** (`core/AudioPrewarm`, from `PuzzleLoader.buildArea`):
-  every area's creature voices (`CreatureVoice.warm`, one job per creature:
+  every area's creature voices (`Theremin.warm`, one job per creature:
   its wavetable, shared per warmth). Flat out
   while the StartGate is up, else only in idle periods with room for the job
   (8 ms timer slices without requestIdleCallback) — an unwarmed note still
@@ -140,7 +143,7 @@ instead of "fixing" it.
   price (`isWarm`). A world reset drops the queued creature voices. (The
   tape's piano pre-render went with tape playback, 2026-11-23.)
 - **Each creature's NEXT song is built ahead too** (`Creature.prepareNextSong`
-  → `AudioPrewarm.prepareSong` → `CreatureVoice.prepare`: the LINES it will
+  → `AudioPrewarm.prepareSong` → `Theremin.prepare`: the LINES it will
   start, unstarted and unconnected), asked for as a song ends and at
   construction, so the frame its onset lands in builds no audio node
   (creatures share onsets: The Star starts 10-11 notes in one frame). Idle
@@ -149,9 +152,15 @@ instead of "fixing" it.
   a creature let out of the pole has its voice AND first song built at
   the press (`AudioPrewarm.prepareNow`, ~1.4 ms on the key press): it
   sings on that beat or the next, on a fresh instrument.
-- **Creatures sing as a THEREMIN with crackle** (`entities/CreatureVoice`,
-  DESIGN.md "Creature voice"; it replaced resound-sound's `Random`
-  2026-11-24). A song plays on continuous LINES (one per chord member;
+- **Creatures sing as a THEREMIN with crackle** (resound-sound's
+  `Theremin`, moved into the library 2026-11-24 unchanged in sound;
+  `core/creatureVoice` rolls each creature's voice and reads it back from a
+  spec; DESIGN.md "Creature voice"; it replaced resound-sound's `Random`
+  2026-11-24). Its `play()` holds ties (chord members each on their own)
+  and reads dots (`dotted: 2` = double); its note events carry
+  `durationBeats` (a tied note's whole run: `Creature.noteOn` lights for
+  it). Never re-implement the voice or its tie/dot timing here: change it
+  in resound-sound (and re-null it there; the designer approved the sound). A song plays on continuous LINES (one per chord member;
   9 nodes each, kept 1.5 s past silence), so a note is only AudioParam
   automation: glide, dip, vibrato, crackle. Its wavetable is SHARED per
   warmth per context (never per creature or pitch). `Creature.dispose` calls
@@ -535,9 +544,9 @@ instead of "fixing" it.
   (no tap/hold), keyboard and pad alike
 - **A slot holds a SPEC, not a song**: `{id, spec, colour, css}`, spec =
   `Creature.toSpec()` (song, interval, audibleRange, size, maxSpeed,
-  `voice`, `phase`). **Voice = the CreatureVoice's rolled voice** (warmth,
+  `voice`, `phase`). **Voice = the Theremin's rolled voice** (warmth,
   vibrato rate/depth, attack, glide, spark — rolled with Math.random, NOT
-  from the creature id), given to the new creature's CreatureVoice
+  from the creature id; `core/creatureVoice`), given to the new creature's Theremin
 - **Commit points**: absorb — the creature is `hold()`-ed (instrument
   disposed: silent at once; no physics) and lands in its slot the moment the
   tip CONNECTS, its body leaves its area when drawn in; release — a fresh

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import ListeningManager from 'core/ListeningManager';
 import { evaluatePhrasesCached } from 'core/phraseMatching';
 import SongMatcher from 'core/SongMatcher';
+import { soundingBeats } from 'core/noteBeats';
 import gameState from 'core/GameState';
 import { getDistance } from 'core/utils';
 import { WORLD_SCALE, ELEVATION_HEIGHT, PLAYER_COLLISION_RADIUS } from 'core/constants';
@@ -301,7 +302,7 @@ class Gate extends Entity {
       const note = notes[i];
       const age = now - note.timestamp;
       if (age > Gate.LONGEST_NOTE_MS) break;
-      if (age >= 0 && age < SongMatcher.lengthToBeats(note.length) * msPerBeat) {
+      if (age >= 0 && age < soundingBeats(note) * msPerBeat) {
         const midi = midiOf(note.pitch);
         if (Number.isFinite(midi)) out.push(midi);
       }

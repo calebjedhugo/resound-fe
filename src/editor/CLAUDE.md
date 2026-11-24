@@ -30,8 +30,19 @@ Files (`ui/` + `model/`):
   note instead. Pitches go on IN THE KEY (`staffCoords.keyPitch`: the F
   line in D is F♯). □ / Delete (`erase`): note → rest → gone. L2+↑/↓ /
   ⇧↑/⇧↓ (`stepAccidental`): ♭ ↔ ♮ ↔ ♯ of the note under the pitch cursor.
-  Dot (palette's dot + ✕, or .) and a longer value (`stepNoteDuration`)
-  must fit too. **No pitch ever goes in on the editor's own initiative**
+  Dots (palette's dot + ✕, or .; `toggleDot`) step none → one → TWO (a
+  double dot, `dotted: 2`) → none (ruled 2026-11-24); each dot must fit, a
+  second that doesn't takes the dot off (says why). A longer value
+  (`stepNoteDuration`, dots kept) must fit too. **Ties** (palette's tie +
+  ✕, or t; `toggleTie`): the note under the pitch cursor — PER NOTE, so in
+  a chord just that tone — ties to the same pitch (exact spelling) in the
+  next entry, or unties; refused, saying why, when that entry has no such
+  pitch (or is a rest / the end) or no note is under the pitch cursor.
+  Every edit re-joins ties (`repairTies` in `_emitChange`): a tie whose
+  other end was re-pitched, removed or separated goes. The model keeps
+  dots in the fraction (one dot numerator 3, '3/8'; two numerator 7,
+  '7/16': `splitLength`/`joinLength`); stored songs are canonical
+  `{length, dotted: true | 2}`. **No pitch ever goes in on the editor's own initiative**
   (no default notes/pitches; new entities' songs are `[]`). The edit cursor
   OPENS AT THE END (on the last entry); an entry goes in at the cursor and
   the cursor goes AFTER it (mid-song too); a CLICK puts a note at the
@@ -42,7 +53,10 @@ Files (`ui/` + `model/`):
   nearest system, a move scrolls the cursor into view. Cmd/Ctrl/Alt keys
   are left alone; Space plays/stops; Tab/⇧Tab other staff. Play on a grand
   staff hands the player BOTH voices (`play({voices})`; the modal plays
-  them on a resound-sound `Sequencer` over its Synth). Play/Stop/Clear,
+  either kind on a resound-sound `Sequencer` over a creature voice — the
+  `Theremin` in its default voice, crackle on — so dots, double dots and
+  ties (held, not re-struck, chord members each on their own) sound as in
+  game, and the entity lights for each note's sounding length). Play/Stop/Clear,
   the hint and the status line go in `controlsContainer` (the modal's
   footer).
 - **Undo in the modal**: ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y; the pad's L3 / R3) in `SongEditorModal`
@@ -50,12 +64,16 @@ Files (`ui/` + `model/`):
   level behind it), then re-show the entity (`NotationEditor.setSong`, or a
   rebuilt editor when the grand staff came or went).
 - **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
-- **RhythmPalette.js** — whole … 32nd, then the DOT (chosen, ✕ dots; the
-  last note value stays the entry duration, shown `kept`). Icons are
+- **RhythmPalette.js** — whole … 32nd, then the DOT (chosen, ✕ steps the
+  dots) and the TIE (chosen, ✕ ties; `tieSelected`, `chooseMode`); with
+  either chosen the last note value stays the entry duration, shown `kept`. Icons are
   `resound-notation/components/Note` notes, but the library draws glyphs as
   `<use>` of per-SVG `<defs>` that only `render()` writes, so the palette
   copies the defs from one hidden render into every icon (`glyphDefs`) —
   without them the icons were bare stems (2026-11-24).
+- **The game reads ties and dots as they SOUND** (`core/noteBeats`,
+  `core/SongMatcher`): a tied pair is one held note to a gate, a double
+  dot x1.75 — see DESIGN.md "Matching".
 - **mergeVoices.js** (`model/`) — grand staff → one staff: both voices
   sliced at every onset/release into chords, held notes split and TIED, a
   doubled pitch kept once. Nothing is dropped.
@@ -68,8 +86,9 @@ Files (`ui/` + `model/`):
   the treble or the bass staff — and merges both staves onto it
   (`mergeVoices`; one undo step). Constructs the editor
   (`import NotationEditor from 'editor/ui/NotationEditor'`), persists `onChange` through
-  `undoManager.updateEntity(...)`, and injects a `resound-sound` `Synth` as the audio `player`
-  (guarded for no-`AudioContext` test envs). See `_createEditor()`.
+  `undoManager.updateEntity(...)`, and injects a creature voice (resound-sound `Theremin`
+  on a `Sequencer`, `_ensurePlayer`/`_playVoices`) as the audio `player`
+  (guarded for no-`AudioContext` test envs: `SongAudition.createEditorVoice`). See `_createEditor()`.
 
 It imports the renderer from the **registry** package: `resound-notation`,
 `resound-notation/components/Note`, `resound-notation/lib/*`. No local copy of
@@ -196,7 +215,8 @@ edits show up in the game on a manual reload.
   (`SongEditorModal` `onNote` / `onStop`; the modal docks at the bottom and
   the camera frames the entity in the band above it) and by **A** — quick
   audition of the song under the cursor (`audio/SongAudition.js`, in the
-  creatures' own voice: `entities/CreatureVoice` `DEFAULT_VOICE`;
+  creatures' own voice: resound-sound's `Theremin` in its default voice,
+  played by `Theremin.play` exactly as a creature sings: ties held, dots read;
   also the entity menu's Play Song). Editor audio is audible by design.
 
 ## Play (2026-11-23; one tab: `play/PlayPreview.js`)
@@ -290,9 +310,12 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 - **Song editor** (`SongEditorModal.padAction`; `SONG_ACTIONS` +
   `SONG_ACTIONS_L2/_R2`, the NotationEditor's own methods; ruled
   2026-11-24): ←/→ edit cursor, ↑/↓ pitch cursor, ✕ pitch on/off at the
-  pitch cursor (the palette's dot chosen: dot), R2+✕ a rest of the chosen
-  duration (if it fits), □ note → rest → gone, L2+↑/↓ accidental of the
-  note under the pitch cursor, L1/R1 the PALETTE only (whole … 32nd, dot),
+  pitch cursor (the palette's dot chosen: the dots, none → one → two →
+  none; its tie chosen: tie / untie the note under the pitch cursor), R2+✕
+  a rest of the chosen duration (if it fits; the designer asked for R2+✕ =
+  tie, but it stays insert-rest by their earlier ruling — the tie card is
+  the way), □ note → rest → gone, L2+↑/↓ accidental of the
+  note under the pitch cursor, L1/R1 the PALETTE only (whole … 32nd, dot, tie),
   L2+L1 / R2+R1 the note at the cursor longer / shorter, L3 undo, R3 redo,
   △ play/stop, Share other staff, Options the popover (clef, Clear; d-pad
   walks, ←/→ steps the clef, ✕ commits, ○/Options back), ○ close. L2 / R2

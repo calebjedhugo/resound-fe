@@ -1,7 +1,7 @@
 /**
  * AudioPrewarm — build ahead the audio that a first note would otherwise
  * build mid-frame (resound-sound builds it lazily):
- *  - each creature's voice (entities/CreatureVoice): its theremin
+ *  - each creature's voice (resound-sound's Theremin): its theremin
  *    wavetable, shared by every creature of the same warmth (~1 ms the
  *    first time, nothing after), and the shared crackle noise; `warm()`
  *    builds them ahead, one job per creature.
@@ -9,7 +9,7 @@
  *    oscillator + vibrato + crackle each, 9 nodes, one per chord member and
  *    again after a long rest), and a world's creatures share their onsets:
  *    The Star's start 10-11 at once. A creature asks for its next song as
- *    one ends (`prepareSong`, CreatureVoice.prepare): one job per creature,
+ *    one ends (`prepareSong`, Theremin.prepare): one job per creature,
  *    with a deadline before that song starts.
  * (The player's tape Piano was pre-rendered here too until the tape stopped
  * playing, 2026-11-23: the pole holds creatures now, which sing themselves.)
@@ -188,7 +188,7 @@ const AudioPrewarm = {
     for (const entity of area.entities) {
       const { instrument } = entity;
       if (entity.type === 'creature' && notePitches(entity.song).length > 0) {
-        // Instruments that can build their voices ahead (CreatureVoice)
+        // Instruments that can build their voices ahead (the Theremin)
         if (typeof instrument.warm === 'function') voiceJobs.push(instrument);
       }
     }
@@ -197,11 +197,11 @@ const AudioPrewarm = {
 
   /**
    * Build a creature's next performance of its song ahead
-   * (CreatureVoice.prepare: the lines it will start, so its onset frame
+   * (Theremin.prepare: the lines it will start, so its onset frame
    * only schedules them): in idle time, and NOTES_LEAD_MS before it starts
    * at the latest, idle time or not. Replaces the creature's waiting
    * request, if any.
-   * @param {Instrument} instrument - one that prepares songs (CreatureVoice)
+   * @param {Instrument} instrument - one that prepares songs (the Theremin)
    * @param {Array} song - notes and chords
    * @param {number} startsInMs - when the song starts, from now
    * @param {number} [tempo] - its tempo (how long its rests are)

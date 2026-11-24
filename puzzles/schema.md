@@ -80,6 +80,11 @@ This document defines the structure for Resound puzzle files.
         // OR
         [{ "pitch": "string", "length": "string" }] // Chord
       ],
+      // Any note (or chord member) may also carry:
+      //   "dotted": true | 2           // one dot (x1.5) or a double dot (x1.75)
+      //   "tie": "start" | "continue" | "stop"  // per note: held into the same
+      //                                // pitch in the next entry (one sound;
+      //                                // gates match it as one held note)
       "direction": "string"          // For ramps: "north", "south", "east", "west"
     }
   ]

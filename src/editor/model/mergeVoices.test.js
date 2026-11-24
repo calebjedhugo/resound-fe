@@ -74,4 +74,25 @@ describe('mergeVoices', () => {
       { pitch: 'A4', length: '1/4', tie: 'stop' },
     ]);
   });
+  it('times a double-dotted note at 1.75 of its value (its release cuts the other voice there)', () => {
+    const merged = mergeVoices([
+      [
+        { pitch: 'E5', length: '1/2', dotted: 2 },
+        { pitch: 'F5', length: '1/8' },
+      ],
+      [{ pitch: 'C3', length: '1/1' }],
+    ]);
+    // E5 sounds 3.5 beats: C3 is cut there and tied over into F5's eighth
+    const last = merged.at(-1);
+    expect(last).toEqual([
+      { pitch: 'C3', length: '1/8', tie: 'stop' },
+      { pitch: 'F5', length: '1/8' },
+    ]);
+    const beats = merged.reduce((sum, entry) => {
+      const note = Array.isArray(entry) ? entry[0] : entry;
+      const [n, d] = note.length.split('/').map(Number);
+      return sum + (n / d) * 4 * (note.dotted ? 1.5 : 1);
+    }, 0);
+    expect(beats).toBe(4);
+  });
 });

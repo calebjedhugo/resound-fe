@@ -634,7 +634,7 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
     expect(last(changes)).toHaveLength(4);
   });
 
-  it('the palette’s dot makes Enter (✕) dot and undot — a dot must fit too', () => {
+  it('the palette’s dot makes Enter (✕) step the dots: one, two (a double dot), none — each must fit', () => {
     const { editor, container, changes } = makeEditor({
       song: [C4, C4, { pitch: 'E4', length: '1/2' }],
     });
@@ -647,13 +647,44 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
     keydown(editor, 'ArrowLeft'); // on the second C4
     keydown(editor, 'Enter');
     expect(last(changes)[1]).toEqual({ pitch: 'C4', length: '1/4', dotted: true });
-    keydown(editor, 'Enter');
+    keydown(editor, 'Enter'); // the designer: "two ✕ button pushes is two dots"
+    expect(last(changes)[1]).toEqual({ pitch: 'C4', length: '1/4', dotted: 2 });
+    keydown(editor, 'Enter'); // "three is back to none"
     expect(last(changes)[1]).toEqual(C4);
     // A rest is still entered at the last note value chosen (shown kept)
     expect(container.querySelector('.rhythm-btn.kept').dataset.length).toBe('1/4');
   });
 
-  it('L1 / R1 step the palette through the note values to the dot, and change nothing else', () => {
+  it('a second dot that will not fit takes the dot off instead, saying why', () => {
+    const { editor, changes } = makeEditor({
+      // 2.5 beats used: 1.5 left — a dotted quarter fits, a double-dotted one does not
+      song: [{ pitch: 'C4', length: '1/2' }, { pitch: 'D4', length: '1/8' }, C4],
+    });
+    editor.palette.chooseMode('dot');
+    editor.cross();
+    expect(last(changes)[2]).toEqual({ pitch: 'C4', length: '1/4', dotted: true });
+    editor.cross();
+    expect(last(changes)[2]).toEqual(C4);
+    expect(editor.status).toMatch(/No room: a second dot needs 1\.75 beats; 1\.5 beats left/);
+    expect(editor.status).toMatch(/the dot comes off/);
+  });
+
+  it('a double-dotted note loads, measures and changes value as its 1.75 shares', () => {
+    const { editor, changes } = makeEditor({
+      song: [{ pitch: 'C4', length: '1/2', dotted: 2 }],
+    });
+    // 3.5 of 4 beats used: an eighth fits after it, a quarter starts a new measure
+    keydown(editor, '5');
+    expect(last(changes)).toEqual([{ pitch: 'C4', length: '1/2', dotted: 2 }, { length: '1/8' }]);
+    keydown(editor, 'ArrowLeft');
+    keydown(editor, 'ArrowLeft'); // on the note (the first press only moves the cursor before the rest)
+    editor.stepNoteDuration(1); // a double-dotted quarter
+    expect(last(changes)[0]).toEqual({ pitch: 'C4', length: '1/4', dotted: 2 });
+    nextFrame();
+    expect(editor._staffEl.querySelectorAll('.augmentation-dot')).toHaveLength(2);
+  });
+
+  it('L1 / R1 step the palette through the note values to the dot and the tie, and change nothing else', () => {
     const { editor, changes } = makeEditor({ song: [C4] });
     expect(editor.palette.step(1)).toBe(true); // 8th
     editor.palette.step(1);
@@ -661,10 +692,112 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
     expect(editor.palette.activeLength).toBe('1/32');
     editor.palette.step(1);
     expect(editor.palette.dotSelected).toBe(true);
+    editor.palette.step(1);
+    expect(editor.palette.tieSelected).toBe(true);
+    expect(editor.palette.dotSelected).toBe(false);
     expect(editor.palette.step(1)).toBe(false);
     editor.palette.step(-1);
+    expect(editor.palette.dotSelected).toBe(true);
+    editor.palette.step(-1);
     expect(editor.palette.dotSelected).toBe(false);
+    expect(editor.palette.activeLength).toBe('1/32');
     expect(changes).toHaveLength(0);
+  });
+
+  describe('the tie card (the designer: “toggling a tie is the same as a dot”)', () => {
+    const chord = (...pitches) => pitches.map((pitch) => ({ pitch, length: '1/4' }));
+
+    it('sits next to the dot; chosen, ✕ ties the note under the pitch cursor to the same pitch next', () => {
+      const { editor, container, changes } = makeEditor({ song: [C4, C4] });
+      const cards = [...container.querySelectorAll('.rhythm-btn')];
+      expect(cards.indexOf(container.querySelector('.rhythm-tie'))).toBe(
+        cards.indexOf(container.querySelector('.rhythm-dot')) + 1
+      );
+      container.querySelector('.rhythm-tie').click();
+      expect(editor.palette.tieSelected).toBe(true);
+      keydown(editor, 'ArrowLeft');
+      keydown(editor, 'ArrowLeft'); // the first C4
+      expect(editor.pitchCursor).toBe('C4');
+      keydown(editor, 'Enter');
+      expect(last(changes)).toEqual([
+        { pitch: 'C4', length: '1/4', tie: 'start' },
+        { pitch: 'C4', length: '1/4', tie: 'stop' },
+      ]);
+      nextFrame();
+      expect(editor._staffEl.querySelectorAll('.tie')).toHaveLength(1);
+      keydown(editor, 'Enter'); // again: untied
+      expect(last(changes)).toEqual([C4, C4]);
+    });
+
+    it('ties per note: in a chord only the note under the pitch cursor ties', () => {
+      const { editor, changes } = makeEditor({
+        song: [chord('C4', 'E4', 'G4'), chord('C4', 'F4', 'A4')],
+      });
+      editor.moveCursor(-1);
+      editor.moveCursor(-1); // the first chord
+      editor.movePitchCursor(-5); // A4 (the last pitch written, where it opened) -> C4
+      expect(editor.pitchCursor).toBe('C4');
+      editor.palette.chooseMode('tie');
+      editor.cross();
+      const [first, second] = last(changes);
+      expect(first).toEqual([
+        { pitch: 'C4', length: '1/4', tie: 'start' },
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ]);
+      expect(second).toEqual([
+        { pitch: 'C4', length: '1/4', tie: 'stop' },
+        { pitch: 'F4', length: '1/4' },
+        { pitch: 'A4', length: '1/4' },
+      ]);
+      nextFrame();
+      expect(editor._staffEl.querySelectorAll('.tie')).toHaveLength(1);
+    });
+
+    it('refuses a tie the next entry has no pitch for (or no note under the pitch cursor), saying why', () => {
+      const { editor, changes } = makeEditor({
+        song: [chord('C4', 'E4'), chord('D4', 'F4'), { length: '1/4' }],
+      });
+      editor.moveCursor(-1);
+      editor.moveCursor(-1);
+      editor.moveCursor(-1); // the first chord
+      editor.palette.chooseMode('tie');
+      while (editor.pitchCursor !== 'E4')
+        editor.movePitchCursor(editor.pitchCursor > 'E4' ? -1 : 1);
+      expect(editor.cross()).toBe(false);
+      expect(editor.status).toBe('Nothing to tie to: the next entry has no E4 after it');
+      editor.movePitchCursor(1); // F4: not in this chord
+      expect(editor.cross()).toBe(false);
+      expect(editor.status).toBe('No note under the pitch cursor to tie');
+      editor.moveCursor(1); // the second chord, a rest after it
+      expect(editor.cross()).toBe(false);
+      expect(editor.status).toMatch(/Nothing to tie to: the next entry has no F4/);
+      expect(changes).toHaveLength(0);
+    });
+
+    it('t ties from the keyboard; an edit that breaks a tie’s end takes the tie away', () => {
+      const { editor, changes } = makeEditor({ song: [C4, C4] });
+      keydown(editor, 'ArrowLeft');
+      keydown(editor, 'ArrowLeft');
+      keydown(editor, 't');
+      expect(last(changes)[0]).toEqual({ pitch: 'C4', length: '1/4', tie: 'start' });
+      keydown(editor, 'ArrowRight');
+      keydown(editor, 'ArrowUp', { shiftKey: true }); // C#4: no longer the same pitch
+      expect(last(changes)).toEqual([C4, { pitch: 'C#4', length: '1/4' }]);
+    });
+
+    it('a tie keeps through a dot and a value change on either note', () => {
+      const { editor, changes } = makeEditor({ song: [C4, C4] });
+      editor.moveCursor(-1);
+      editor.moveCursor(-1);
+      editor.toggleTie();
+      editor.toggleDot();
+      editor.stepNoteDuration(1);
+      expect(last(changes)).toEqual([
+        { pitch: 'C4', length: '1/8', dotted: true, tie: 'start' },
+        { pitch: 'C4', length: '1/4', tie: 'stop' },
+      ]);
+    });
   });
 
   it('the note at the cursor takes a longer / shorter value, keeping its dot; longer must fit', () => {
