@@ -1,4 +1,3 @@
-import { Random } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
 import gameState from 'core/GameState';
 import ListeningManager from 'core/ListeningManager';
@@ -23,6 +22,7 @@ import {
 import { getFloorY, getEffectiveElevation } from 'core/ElevationMovement';
 import Entity from 'entities/Entity';
 import CreatureLook from 'entities/CreatureLook';
+import CreatureVoice from 'entities/CreatureVoice';
 
 // A note counts as sounding this long (beats) past its notated end, so the
 // frame or two between one note's end and the next onset's callback (the
@@ -37,32 +37,6 @@ const NOTE_END_GRACE_BEATS = 0.08;
 const soundCapable = memoizeOnEntityList((entities) =>
   entities.filter((entity) => entity.instrument)
 );
-
-/**
- * A creature's VOICE: the timbre resound-sound's Random rolled for it once
- * (waveform, filter, envelope, harmonics — Math.random, not seeded by the
- * instrument id), copied so a creature rebuilt from a spec sounds the same.
- * @param {Random} instrument
- * @returns {?object}
- */
-function voiceOf(instrument) {
-  if (!instrument || instrument.waveform === undefined) return null;
-  return {
-    waveform: instrument.waveform,
-    filterCutoff: instrument.filterCutoff,
-    envelope: { ...instrument.envelope },
-    harmonics: (instrument.harmonics || []).map((harmonic) => ({ ...harmonic })),
-  };
-}
-
-/** Give `instrument` a voice voiceOf took (before it has built any note). */
-function applyVoice(instrument, voice) {
-  if (!voice) return;
-  instrument.waveform = voice.waveform;
-  instrument.filterCutoff = voice.filterCutoff;
-  instrument.envelope = { ...voice.envelope };
-  instrument.harmonics = voice.harmonics.map((harmonic) => ({ ...harmonic }));
-}
 
 /** The first beat at or after `beat` congruent to `phase` modulo `interval`. */
 function nextBeatInPhase(beat, phase, interval) {
@@ -120,10 +94,10 @@ class Creature extends Entity {
     // every physics pass)
     this._forceVisitor = this._addForceFromSource.bind(this);
 
-    // Create unique instrument for this creature: a random timbre, or the
-    // one it had before the pole took it (data.voice — toSpec)
-    this.instrument = new Random(this.id);
-    applyVoice(this.instrument, data.voice);
+    // Its voice (entities/CreatureVoice: a theremin with electric crackle):
+    // rolled for it once, or the one it had before the pole took it
+    // (data.voice — toSpec)
+    this.instrument = new CreatureVoice(this.id, { voice: data.voice });
     this.instrument.sourcePosition = this.position; // Set source position for listening
 
     // Set up note callback to emit to ListeningManager (for gates/fountains/creatures)
@@ -399,7 +373,7 @@ class Creature extends Entity {
     const clock = gameState.musicalClock;
     if (!clock) return;
     const beats = Math.max(0, this.nextSingBeat - clock.getCurrentBeat());
-    AudioPrewarm.prepareSong(this.instrument, this.song, clock.beatsToMs(beats));
+    AudioPrewarm.prepareSong(this.instrument, this.song, clock.beatsToMs(beats), clock.tempo);
   }
 
   /**
@@ -439,7 +413,7 @@ class Creature extends Entity {
       audibleRange: this.audibleRange,
       size: this.size,
       maxSpeed: this.maxSpeed,
-      voice: voiceOf(this.instrument),
+      voice: this.instrument.getVoice(),
       phase: ((this.nextSingBeat % interval) + interval) % interval,
     };
   }

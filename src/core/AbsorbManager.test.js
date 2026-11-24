@@ -458,13 +458,8 @@ describe('A creature taken and let out again is the same creature', () => {
     ctx.loadPuzzle('recording-basic');
     await ctx.tick(16);
     const [before] = ctx.getCreatures();
-    const voice = ({ waveform, filterCutoff, envelope, harmonics }) => ({
-      waveform,
-      filterCutoff,
-      envelope,
-      harmonics,
-    });
-    const was = JSON.parse(JSON.stringify(voice(before.instrument)));
+    const was = before.instrument.getVoice();
+    expect(was.warmth).toEqual(expect.any(Number));
 
     ctx.pressKey('r');
     await ctx.finishPole();
@@ -473,7 +468,7 @@ describe('A creature taken and let out again is the same creature', () => {
 
     const [after] = ctx.getCreatures();
     expect(after).not.toBe(before);
-    expect(voice(after.instrument)).toEqual(was);
+    expect(after.instrument.getVoice()).toEqual(was);
     expect(after.song).toEqual(before.song);
     expect(after.audibleRange).toBe(before.audibleRange);
   });

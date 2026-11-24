@@ -44,8 +44,8 @@ automated playtesters can observe them.)
   - **Absorbed = silent at once**: the creature stops singing the moment the
     tip touches it (no partial song reaches a gate after that) and stops
     moving; its body leaves the world once drawn in. **Released = the same
-    creature**: same song, timing, range, body, speed and VOICE (the timbre
-    it rolled) — but its schedule starts again on the beat it is let out
+    creature**: same song, timing, range, body, speed and VOICE (the
+    theremin voice it rolled: "Creature voice") — but its schedule starts again on the beat it is let out
     (ruling below; it used to keep its old phase). It stays still and out of
     reach until the pole is back.
   - **Nothing duplicates or vanishes across area pruning**: a puzzle's own
@@ -545,6 +545,46 @@ CREATURES".)
   variants of each loaded scene's materials — compile while the StartGate
   is up (`core/ShaderPrewarm`), so the first note and the first open door
   no longer stall on shader compiles (perf pass 2026-10-12).
+
+## Creature voice (2026-11-24: a theremin with electricity crackle)
+
+The designer: "resemble a high-quality Theremin with electricity crackle".
+`entities/CreatureVoice` (replaces resound-sound's `Random`, whose rolled
+oscillator type + lowpass made some creatures square-wave buzzers).
+
+- **Tone**: one near-sine wavetable (2nd harmonic -19 dB, 3rd -24, falling
+  fast; a faint buzz of partials 8-16 at -50 dB and below). Notes are played
+  on a continuous LINE per voice part, so they JOIN like a theremin's:
+  legato notes glide there (exponential, ~9 ms time constant: -25 cents at
+  30 ms, on pitch by ~60 ms) with a short loudness dip that re-articulates
+  (-8 dB moving, -18 dB on a repeated pitch, so repeated notes stay
+  countable); a note after silence scoops up 20 cents (on pitch by ~50 ms).
+- **Vibrato develops after the onset**: none for 160 ms, a 350 ms swell to
+  ~±8-14 cents at 5-6 Hz, jittered a little per note. The pitch at a note's
+  centre is within ~1 cent.
+- **Attack** soft but defined (20-32 ms); the onset's halfway point is
+  13 ms after the beat from silence, ~20 ms on a legato note (the old voice:
+  13-49 ms). No clicks: the worst broadband transient is as low as the old
+  sine voice's (-78 dB re peak; the old sawtooth rolls were -51).
+- **Crackle**: sparse band-passed noise bursts (2.5-7.5 kHz, a few ms; one
+  in ten a longer falling "zap"): a crack on every attack, a cluster around
+  it, then ~3.5 a second while a note holds. Quiet overall (RMS -35 dB re
+  the tone), but each spike peaks near the tone's peak (~-6 dB): heard as
+  sparks, not hiss.
+- **Each creature rolls its voice** (warmth, vibrato rate/depth, attack,
+  glide, spark = crackle rate), carried across the pole (`toSpec` `voice`).
+  An old Random-shaped voice is ignored (that creature keeps its roll).
+- **Level**: matched to the old voice's typical roll (RMS 0.37 vs a 0.36
+  median), with far more headroom (peak ~0.8 vs ~1.4).
+- **Cost**: a line is 9 nodes (oscillator, vibrato LFO + depth, envelope,
+  looping shared noise, crackle gate + band-pass), built ahead per song
+  (`AudioPrewarm`), stopped 1.5 s after it falls silent; a note builds no
+  node. Six creatures singing near-continuously (one in triads) render at
+  3.7% of real time offline, the old voice 3.8%; ten simultaneous onsets
+  schedule in 0.55 ms (old 0.46). The wavetable is shared by every
+  creature of a warmth (13 steps).
+- The editor's audition (A, Play Song) sings in the same voice
+  (`DEFAULT_VOICE`, the middle of every range).
 
 ## Environment look (APPROVED direction 2026-11-22)
 

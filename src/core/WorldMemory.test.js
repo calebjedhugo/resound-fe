@@ -117,13 +117,12 @@ describe('An area pruned and built again comes back as it was left', () => {
   });
 
   it('a creature keeps its voice (the timbre it rolled) across the prune', async () => {
-    const voice = ({ waveform, filterCutoff, envelope, harmonics }) =>
-      JSON.parse(JSON.stringify({ waveform, filterCutoff, envelope, harmonics }));
-    const was = voice(creatureOf().instrument);
+    const was = creatureOf().instrument.getVoice();
+    expect(was.vibratoRate).toEqual(expect.any(Number));
 
     await awayAndBack();
 
-    expect(voice(creatureOf().instrument)).toEqual(was);
+    expect(creatureOf().instrument.getVoice()).toEqual(was);
   });
 
   it('an opened gate is still open (and does not count a new opening)', async () => {

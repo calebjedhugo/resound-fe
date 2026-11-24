@@ -132,30 +132,34 @@ instead of "fixing" it.
 - AudioContext must be resumed on user interaction (handled in main.js)
 - Don't create oscillators until needed (memory leak if not stopped)
 - **Audio is built ahead** (`core/AudioPrewarm`, from `PuzzleLoader.buildArea`):
-  every area's creature voices (`Random.warm`, one job per pitch). Flat out
+  every area's creature voices (`CreatureVoice.warm`, one job per creature:
+  its wavetable, shared per warmth). Flat out
   while the StartGate is up, else only in idle periods with room for the job
   (8 ms timer slices without requestIdleCallback) — an unwarmed note still
   plays, built lazily. Only work that builds something runs or sets a job's
   price (`isWarm`). A world reset drops the queued creature voices. (The
   tape's piano pre-render went with tape playback, 2026-11-23.)
 - **Each creature's NEXT song is built ahead too** (`Creature.prepareNextSong`
-  → `AudioPrewarm.prepareSong` → `Random.prepare`: every note's nodes,
-  unstarted and unconnected), asked for as a song ends and at
+  → `AudioPrewarm.prepareSong` → `CreatureVoice.prepare`: the LINES it will
+  start, unstarted and unconnected), asked for as a song ends and at
   construction, so the frame its onset lands in builds no audio node
   (creatures share onsets: The Star starts 10-11 notes in one frame). Idle
   time first; else forced `NOTES_LEAD_MS` before the song, ONE song per
   task, on voices already built (never builds a voice). The one exception:
   a creature let out of the pole has its voice AND first song built at
   the press (`AudioPrewarm.prepareNow`, ~1.4 ms on the key press): it
-  sings on that beat or the next, on a fresh instrument. Needs a resound-sound with
-  `Random.prepare` (older: no-op, its tests skip)
-- **A Random voice is ~0.6 MB** of Chrome wavetable per (creature, pitch) at
-  44.1-48 kHz; above 88.2 kHz resound-sound builds none (one would be
-  ~2.8 MB; measured 2026-10-17): `Creature.dispose` calls
-  `instrument.dispose()` (not `stop()`), which frees them and lets no
-  straggler note out of a song in progress; `Fountain.dispose` too (its song
-  never outlives its area). A fountain's song hushes its area's creatures,
-  never another fountain
+  sings on that beat or the next, on a fresh instrument.
+- **Creatures sing as a THEREMIN with crackle** (`entities/CreatureVoice`,
+  DESIGN.md "Creature voice"; it replaced resound-sound's `Random`
+  2026-11-24). A song plays on continuous LINES (one per chord member;
+  9 nodes each, kept 1.5 s past silence), so a note is only AudioParam
+  automation: glide, dip, vibrato, crackle. Its wavetable is SHARED per
+  warmth per context (never per creature or pitch). `Creature.dispose` calls
+  `instrument.dispose()` (not `stop()`): lets no straggler note out of a
+  song in progress; `Fountain.dispose` too (its song never outlives its
+  area). A fountain's song hushes its area's creatures, never another
+  fountain. The jest audio mock's `currentTime` follows (fake) `Date.now`,
+  so a voice sees its notes end
 
 ### Musical Timing
 - **NEVER use `Date.now()` or `performance.now()` for music** - always use MusicalClock
@@ -531,9 +535,9 @@ instead of "fixing" it.
   (no tap/hold), keyboard and pad alike
 - **A slot holds a SPEC, not a song**: `{id, spec, colour, css}`, spec =
   `Creature.toSpec()` (song, interval, audibleRange, size, maxSpeed,
-  `voice`, `phase`). **Voice = the Random's rolled timbre** (waveform,
-  filterCutoff, envelope, harmonics — resound-sound rolls it with
-  Math.random, NOT from the instrument id), copied onto the new Random
+  `voice`, `phase`). **Voice = the CreatureVoice's rolled voice** (warmth,
+  vibrato rate/depth, attack, glide, spark — rolled with Math.random, NOT
+  from the creature id), given to the new creature's CreatureVoice
 - **Commit points**: absorb — the creature is `hold()`-ed (instrument
   disposed: silent at once; no physics) and lands in its slot the moment the
   tip CONNECTS, its body leaves its area when drawn in; release — a fresh

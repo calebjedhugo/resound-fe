@@ -190,7 +190,7 @@ class AbsorbManager {
     area.entityManager.add(creature);
     // Its voice and first song built NOW, so the beat it sings on builds
     // nothing (a fresh instrument has no voice yet; core/AudioPrewarm)
-    AudioPrewarm.prepareNow(creature.instrument, creature.song);
+    AudioPrewarm.prepareNow(creature.instrument, creature.song, gameState.musicalClock?.tempo);
     WorldMemory.release(creature, area.id);
     inventory[activeSlot] = null;
     for (let i = 0; i < 3; i += 1) this._colour[i] = held.colour[i];

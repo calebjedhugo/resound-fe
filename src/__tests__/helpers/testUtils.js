@@ -589,6 +589,7 @@ function createTestContext(options = {}) {
         song: config.song || [{ pitch: 'C4', length: '1/4' }],
         interval: config.interval || 4,
         audibleRange: config.audibleRange || 15,
+        voice: config.voice,
       });
 
       activeEntityManager().add(creature);

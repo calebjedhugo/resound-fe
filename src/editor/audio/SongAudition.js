@@ -4,23 +4,25 @@
  * at a time: auditioning another stops the first, auditioning the same one
  * again stops it.
  *
- * Sound goes through a resound-sound Synth (the song editor's instrument), so
- * it obeys resound-sound's master output like every other sound. Each note
+ * Sound goes through a creature's own voice (entities/CreatureVoice, the
+ * theremin, in its middle-of-the-range DEFAULT_VOICE), so an audition sounds
+ * like the game, and it obeys resound-sound's master output like every
+ * other sound. Each note
  * as it starts is reported (`onNote`) with how long it sounds, so the
  * viewport can light the creature note by note (GameLookLayer.noteOn), and a
  * stop is reported (`onStop`) so it can go dark at once.
  */
-import { Synth } from 'resound-sound';
+import CreatureVoice, { DEFAULT_VOICE } from 'entities/CreatureVoice';
 import SongMatcher from 'core/SongMatcher';
 import noteBeats from 'editor/util/noteBeats';
 
-/** A resound-sound Synth, or null where Web Audio is missing (jsdom tests). */
+/** A creature voice, or null where Web Audio is missing (jsdom tests). */
 function defaultPlayer() {
   const hasAudio =
     typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
   if (!hasAudio) return null;
   try {
-    return new Synth();
+    return new CreatureVoice('audition', { voice: DEFAULT_VOICE });
   } catch {
     return null;
   }

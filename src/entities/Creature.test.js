@@ -1217,14 +1217,15 @@ describe('Creature look (ball lightning)', () => {
 
 /**
  * A creature leaving the world (its area disposed: pruned, or the whole
- * world torn down) sings nothing more and lets go of the voices it built —
- * each one a PeriodicWave the browser keeps ~0.6 MB of wavetables for
- * (~2.8 MB at 96 kHz; resound-sound's Random).
+ * world torn down) sings nothing more and lets go of the lines it built
+ * (entities/CreatureVoice). Its wavetable (~0.6 MB in Chrome) is shared by
+ * every creature of its warmth, and stays with the context.
  */
 /* eslint-disable import/first -- section header for the suite below; imports
    are hoisted by babel-jest so the placement is cosmetic */
 import { audioContextManager } from 'resound-sound';
 import PortalManager from 'core/PortalManager';
+import { forgetSharedAudio } from 'entities/CreatureVoice';
 /* eslint-enable import/first */
 
 describe('A creature leaving the world', () => {
@@ -1285,39 +1286,45 @@ describe('A creature leaving the world', () => {
     expect(oscillators).not.toHaveBeenCalled();
   });
 
-  it('lets go of the voices it built when its area goes', () => {
+  it('lets go of the lines it built when its area goes', () => {
     const context = audioContextManager.getContext();
-    const create = context.createPeriodicWave.bind(context);
-    const waves = [];
-    jest.spyOn(context, 'createPeriodicWave').mockImplementation((...args) => {
-      const wave = create(...args);
-      waves.push(wave);
-      return wave;
+    const create = context.createOscillator.bind(context);
+    const oscillators = [];
+    jest.spyOn(context, 'createOscillator').mockImplementation(() => {
+      const oscillator = create();
+      oscillators.push(oscillator);
+      return oscillator;
     });
     const creature = midPhrase();
-    // (The walk does reach its C4 voice while it lives)
-    expect(waves.some((wave) => reachableFrom(creature.instrument).has(wave))).toBe(true);
+    // (The walk does reach the line it is singing on while it lives)
+    expect(oscillators.some((node) => reachableFrom(creature.instrument).has(node))).toBe(true);
 
     PortalManager.reset();
 
     const left = reachableFrom(creature.instrument);
-    expect(waves.filter((wave) => left.has(wave))).toEqual([]);
+    expect(oscillators.filter((node) => left.has(node))).toEqual([]);
   });
 
-  it('holds one voice per distinct pitch of its song, however often it sings it', async () => {
+  it('shares one wavetable among creatures of one warmth, however often they sing', async () => {
+    forgetSharedAudio(audioContextManager.getContext());
     const waves = jest.spyOn(audioContextManager.getContext(), 'createPeriodicWave');
-    // The harness's sandbox: built without prewarming, so it builds its own
-    const creature = ctx.addCreature({
-      song: [PHRASE[0], PHRASE[1], PHRASE[0]],
-      interval: 4,
-    });
+    const voice = {
+      warmth: 0.9,
+      vibratoRate: 5.2,
+      vibratoDepth: 10,
+      attack: 0.024,
+      glide: 0.008,
+      spark: 1,
+    };
+    // The harness's sandbox: built without prewarming, so they build their own
+    const creatures = ['C4', 'G4'].map((pitch) =>
+      ctx.addCreature({ song: [{ pitch, length: '1/4' }, PHRASE[1]], interval: 4, voice })
+    );
 
     await ctx.advanceBeats(12);
 
-    const sung = sungBy(creature);
-    expect(sung.length).toBeGreaterThanOrEqual(9); // three songs or more
-    expect(new Set(sung)).toEqual(new Set(['C4', 'E4']));
-    expect(waves).toHaveBeenCalledTimes(2);
+    creatures.forEach((creature) => expect(sungBy(creature).length).toBeGreaterThanOrEqual(6));
+    expect(waves).toHaveBeenCalledTimes(1);
   });
 });
 

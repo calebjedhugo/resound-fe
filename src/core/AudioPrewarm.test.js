@@ -1,16 +1,21 @@
 /**
  * Audio built ahead, in idle time: the creatures' voices for every area as
  * it is built (core/AudioPrewarm). (The tape's piano was pre-rendered here
- * too until the tape stopped playing, 2026-11-23.)
+ * too until the tape stopped playing, 2026-11-23.) A voice is its theremin
+ * wavetable (entities/CreatureVoice), shared by creatures of one warmth:
+ * each test starts with none built.
  */
 import { audioContextManager } from 'resound-sound';
 import AudioPrewarm from 'core/AudioPrewarm';
+import { forgetSharedAudio } from 'entities/CreatureVoice';
 import gameState from 'core/GameState';
 import PortalManager from 'core/PortalManager';
 import StartGate from 'ui/StartGate';
 
 describe('Building audio ahead', () => {
   const context = audioContextManager.getContext();
+
+  beforeEach(() => forgetSharedAudio(context));
 
   afterEach(() => {
     jest.restoreAllMocks();
@@ -78,6 +83,9 @@ describe('What building ahead costs a frame in play', () => {
   let clock;
   let waves; // the creatures' voice builds
 
+  // Creatures of six different warmths: six wavetables to build
+  const WARMTHS = [0.7, 0.8, 0.9, 1, 1.1, 1.2];
+
   /** A fresh AudioPrewarm: nothing measured yet. */
   function fresh() {
     let prewarm;
@@ -87,11 +95,15 @@ describe('What building ahead costs a frame in play', () => {
     return { prewarm };
   }
 
-  function creatureSinging(pitches) {
-    return ctx.addCreature({ song: pitches.map((pitch) => ({ pitch, length: '1/4' })) });
+  function creatureSinging(pitches, warmth = 1) {
+    return ctx.addCreature({
+      song: pitches.map((pitch) => ({ pitch, length: '1/4' })),
+      voice: { warmth, vibratoRate: 5.5, vibratoDepth: 11, attack: 0.026, glide: 0.009, spark: 1 },
+    });
   }
 
   beforeEach(() => {
+    forgetSharedAudio(audioContextManager.getContext());
     clock = 0;
     jest.spyOn(performance, 'now').mockImplementation(() => clock);
     // The context every creature sings on
@@ -111,9 +123,9 @@ describe('What building ahead costs a frame in play', () => {
 
   it('runs no more than a slice of work per timer task without requestIdleCallback', async () => {
     const { prewarm } = fresh();
-    const creature = creatureSinging(['C4', 'D4', 'E4', 'F4', 'G4', 'A4']);
+    const creatures = WARMTHS.map((warmth) => creatureSinging(['C4', 'E4'], warmth));
 
-    prewarm.warmArea({ entities: [creature] }); // a neighbor loading mid-play
+    prewarm.warmArea({ entities: creatures }); // a neighbor loading mid-play
     const spent = [];
     for (let slice = 0; slice < 10; slice += 1) {
       const before = clock;
@@ -142,14 +154,22 @@ describe('What building ahead costs a frame in play', () => {
 });
 
 /**
- * Each creature's next song is built ahead (Random.prepare: every note's
- * oscillator, onset source and envelope gain), so the moment a note starts
- * builds no audio node. A world's creatures share their onsets: built as
- * they start, The Star's 10-11 notes built 33 nodes in the one frame they
- * start in.
+ * Each creature's next song is built ahead (CreatureVoice.prepare: the
+ * lines it will start), so the moment a note starts builds no audio node. A
+ * world's creatures share their onsets: The Star's start 10-11 at once.
  */
 describe("Building each creature's next song ahead", () => {
-  const BUILT_PER_NOTE = 3; // its oscillator, onset source and envelope gain
+  // A line's nodes among those counted: its oscillator and vibrato LFO,
+  // the vibrato depth, envelope and crackle gate gains, its noise source
+  const BUILT_PER_LINE = 6;
+
+  // Two creatures singing one note together every 8 beats: each song
+  // starts a fresh line (the last one has stopped by then)
+  function twoCreatures() {
+    return ['C4', 'G4'].map((pitch) =>
+      ctx.addCreature({ song: [{ pitch, length: '1/4' }], interval: 8 })
+    );
+  }
 
   /**
    * Count the audio nodes built as these creatures' notes start (inside
@@ -222,20 +242,36 @@ describe("Building each creature's next song ahead", () => {
     delete window.cancelIdleCallback;
   });
 
-  it('starts every song on notes built ahead in idle time', async () => {
+  it('starts every song on lines built ahead in idle time', async () => {
     grantIdleTime();
-    ctx.loadPuzzle('recording-two-creatures'); // C4 and G4, a song every 4 beats
     // Each sings its first song the moment it is built (in the game the
     // StartGate holds the world still while that one is built)
+    const creatures = twoCreatures();
     await ctx.advanceBeats(2);
-    const built = watchNodeBuilds(ctx.getCreatures());
-    ctx.clearEmittedNotes();
+    const built = watchNodeBuilds(creatures);
+    const before = ctx.getEmittedNotes().length;
 
-    await ctx.advanceBeats(12);
+    await ctx.advanceBeats(24);
 
-    expect(ctx.getEmittedNotes()).toHaveLength(6); // three songs each
+    expect(ctx.getEmittedNotes().length - before).toBe(6); // three songs each
     expect(built.atOnset).toBe(0);
-    expect(built.ahead).toBeGreaterThanOrEqual(6 * BUILT_PER_NOTE);
+    expect(built.ahead).toBeGreaterThanOrEqual(6 * BUILT_PER_LINE);
+  });
+
+  it('plays a whole song on one line: its later notes build nothing', async () => {
+    grantIdleTime();
+    const creature = ctx.addCreature({
+      song: ['C4', 'E4', 'G4', 'C5'].map((pitch) => ({ pitch, length: '1/8' })),
+      interval: 8,
+    });
+    await ctx.advanceBeats(8);
+    const built = watchNodeBuilds([creature]);
+
+    await ctx.advanceBeats(8); // one song
+
+    expect(built.onsetsAt).toHaveLength(4);
+    expect(built.atOnset).toBe(0);
+    expect(built.ahead).toBe(BUILT_PER_LINE); // the next song's one line
   });
 
   it('builds every note of a song ahead, the ones its play loop starts on timers too', async () => {
@@ -272,17 +308,17 @@ describe("Building each creature's next song ahead", () => {
         ? setTimeout(() => built.inCallback(callback)({ timeRemaining: () => 0 }), options.timeout)
         : -1
     );
-    ctx.loadPuzzle('recording-two-creatures'); // two songs that start together
+    const creatures = twoCreatures(); // two songs that start together
     await ctx.advanceBeats(2);
-    built = watchNodeBuilds(ctx.getCreatures());
-    ctx.clearEmittedNotes();
+    built = watchNodeBuilds(creatures);
+    const before = ctx.getEmittedNotes().length;
 
-    await ctx.advanceBeats(12);
+    await ctx.advanceBeats(24);
 
-    expect(ctx.getEmittedNotes()).toHaveLength(6);
+    expect(ctx.getEmittedNotes().length - before).toBe(6);
     expect(built.atOnset).toBe(0);
     // Each creature's next song in a task of its own, never both in one
-    expect(built.mostInOneCallback).toBe(BUILT_PER_NOTE);
+    expect(built.mostInOneCallback).toBe(BUILT_PER_LINE);
     // And frames before the song: a frame late, it would have to race it
     built.onsetsAt.forEach((onset) => {
       const lastBuild = Math.max(...built.aheadAt.filter((at) => at <= onset));

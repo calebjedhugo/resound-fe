@@ -4,20 +4,28 @@
  */
 
 /**
+ * Mock AudioParam: every scheduling method, recorded. (stopAll()'s
+ * click-free fade cancels pending ramps first; without cancelScheduledValues
+ * the whole fade throws and is swallowed, untested, on every pause.)
+ */
+function mockParam(value) {
+  return {
+    value,
+    setValueAtTime: jest.fn(),
+    linearRampToValueAtTime: jest.fn(),
+    exponentialRampToValueAtTime: jest.fn(),
+    cancelScheduledValues: jest.fn(),
+    cancelAndHoldAtTime: jest.fn(),
+    setTargetAtTime: jest.fn(),
+  };
+}
+
+/**
  * Mock GainNode
  */
 class MockGainNode {
   constructor() {
-    this.gain = {
-      value: 1,
-      setValueAtTime: jest.fn(),
-      linearRampToValueAtTime: jest.fn(),
-      exponentialRampToValueAtTime: jest.fn(),
-      // stopAll()'s click-free fade cancels pending ramps first; without this
-      // the whole fade throws and is swallowed, untested, on every pause.
-      cancelScheduledValues: jest.fn(),
-      setTargetAtTime: jest.fn(),
-    };
+    this.gain = mockParam(1);
   }
 
   connect() {
@@ -32,18 +40,8 @@ class MockGainNode {
  */
 class MockOscillatorNode {
   constructor() {
-    this.frequency = {
-      value: 440,
-      setValueAtTime: jest.fn(),
-      linearRampToValueAtTime: jest.fn(),
-      exponentialRampToValueAtTime: jest.fn(),
-    };
-    this.detune = {
-      value: 0,
-      setValueAtTime: jest.fn(),
-      linearRampToValueAtTime: jest.fn(),
-      exponentialRampToValueAtTime: jest.fn(),
-    };
+    this.frequency = mockParam(440);
+    this.detune = mockParam(0);
     this.type = 'sine';
     this.onended = null;
   }
@@ -89,16 +87,8 @@ class MockWaveShaperNode {
 class MockBiquadFilterNode {
   constructor() {
     this.type = 'lowpass';
-    this.frequency = {
-      value: 350,
-      setValueAtTime: jest.fn(),
-      linearRampToValueAtTime: jest.fn(),
-      exponentialRampToValueAtTime: jest.fn(),
-    };
-    this.Q = {
-      value: 1,
-      setValueAtTime: jest.fn(),
-    };
+    this.frequency = mockParam(350);
+    this.Q = mockParam(1);
     this.gain = {
       value: 0,
       setValueAtTime: jest.fn(),
@@ -117,10 +107,16 @@ class MockBiquadFilterNode {
  */
 class MockAudioContext {
   constructor() {
-    this.currentTime = 0;
+    this._createdAt = Date.now();
     this.destination = {};
     this.state = 'running';
     this.sampleRate = 44100;
+  }
+
+  // The audio clock runs with (Jest's fake) time, as a real one runs on its
+  // own: an instrument that schedules by it sees its notes end
+  get currentTime() {
+    return Math.max(0, Date.now() - this._createdAt) / 1000;
   }
 
   createOscillator() {
@@ -157,6 +153,7 @@ class MockAudioContext {
     return {
       buffer: null,
       connect: jest.fn(() => ({ connect: jest.fn() })),
+      disconnect: jest.fn(),
       start: jest.fn(),
       stop: jest.fn(),
       onended: null,

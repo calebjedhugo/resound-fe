@@ -1,15 +1,16 @@
 /**
  * AudioPrewarm — build ahead the audio that a first note would otherwise
  * build mid-frame (resound-sound builds it lazily):
- *  - each creature's voice. A Random builds a pitch's wavetable on its first
- *    note of it (~1-1.5 ms at 44.1-48 kHz; above 88.2 kHz it builds none);
- *    `warm()` builds them ahead, one job per (creature, pitch).
- *  - each creature's next song. Every note starts on audio nodes of its own
- *    (~0.1 ms of building at 1x, Chrome 152), and a world's creatures share
- *    their onsets: The Star's start 10-11 notes in one frame (4.3/6.9 ms
- *    mean/max at 1x, 10.7/16.6 at 4x, measured 2026-10-17). A creature asks
- *    for its next song as one ends (`prepareSong`, Random.prepare): one job
- *    per creature, with a deadline before that song starts.
+ *  - each creature's voice (entities/CreatureVoice): its theremin
+ *    wavetable, shared by every creature of the same warmth (~1 ms the
+ *    first time, nothing after), and the shared crackle noise; `warm()`
+ *    builds them ahead, one job per creature.
+ *  - each creature's next song. A song plays on LINES (a continuous
+ *    oscillator + vibrato + crackle each, 9 nodes, one per chord member and
+ *    again after a long rest), and a world's creatures share their onsets:
+ *    The Star's start 10-11 at once. A creature asks for its next song as
+ *    one ends (`prepareSong`, CreatureVoice.prepare): one job per creature,
+ *    with a deadline before that song starts.
  * (The player's tape Piano was pre-rendered here too until the tape stopped
  * playing, 2026-11-23: the pole holds creatures now, which sing themselves.)
  *
@@ -44,8 +45,8 @@ const MAX_IDLE_MS = 50;
 const TIMER_FALLBACK_MS = 50;
 const TIMER_SLICE_MS = 8;
 
-const noteJobs = new Map(); // instrument -> { pitches, dueAt }: a creature's next song
-const voiceJobs = []; // { instrument, pitch }: one creature voice each
+const noteJobs = new Map(); // instrument -> { song, tempo, dueAt }: a creature's next song
+const voiceJobs = []; // instruments: one creature voice each
 let held = false;
 let scheduled = false;
 let scheduledBy = Infinity; // the latest the scheduled run starts (performance.now ms)
@@ -116,23 +117,23 @@ function unschedule() {
 }
 
 /**
- * A creature's next song, on the voices it has: a voice is a job of its own,
- * priced apart, so a song never builds one (a note whose voice isn't built
+ * A creature's next song, on the voice it has: a voice is a job of its own,
+ * priced apart, so a song never builds one (a song whose voice isn't built
  * yet builds both as it starts, as before).
  */
 function buildNotes(instrument) {
-  const { pitches } = noteJobs.get(instrument);
+  const { song, tempo } = noteJobs.get(instrument);
   noteJobs.delete(instrument);
-  const voiced = pitches.filter((pitch) => instrument.isWarm([pitch]));
-  // Built already (or it builds none, or its creature is gone): nothing to build
-  if (!instrument.isPrepared(voiced)) timed('notes', () => instrument.prepare(voiced));
+  if (!instrument.isWarm()) return;
+  // Built already (or its creature is gone): nothing to build
+  if (!instrument.isPrepared(song, tempo)) timed('notes', () => instrument.prepare(song, tempo));
 }
 
 /** The next creature voice, unless its creature has it already. */
 function buildVoice() {
-  const { instrument, pitch } = voiceJobs.shift();
-  // It sang the pitch first (or builds no voices): nothing to build
-  if (!instrument.isWarm([pitch])) timed('voice', () => instrument.warm([pitch]));
+  const instrument = voiceJobs.shift();
+  // It sang first, or shares a built wavetable: nothing to build
+  if (!instrument.isWarm()) timed('voice', () => instrument.warm());
 }
 
 /** Behind the StartGate: the next job, whatever it costs (voices before songs). */
@@ -178,11 +179,6 @@ function notePitches(song) {
   return pitches;
 }
 
-/** Every pitch a song sounds, once. */
-function songPitches(song) {
-  return [...new Set(notePitches(song))];
-}
-
 const AudioPrewarm = {
   /**
    * Queue a newly built area's sounds: each creature's voice for its song.
@@ -190,34 +186,31 @@ const AudioPrewarm = {
    */
   warmArea(area) {
     for (const entity of area.entities) {
-      if (entity.type === 'creature') {
-        const pitches = songPitches(entity.song);
-        const { instrument } = entity;
-        for (const pitch of pitches) {
-          // Instruments that can build their voices ahead (Random), a pitch
-          // a job so that a job fits an idle period
-          if (typeof instrument.warm === 'function') voiceJobs.push({ instrument, pitch });
-        }
+      const { instrument } = entity;
+      if (entity.type === 'creature' && notePitches(entity.song).length > 0) {
+        // Instruments that can build their voices ahead (CreatureVoice)
+        if (typeof instrument.warm === 'function') voiceJobs.push(instrument);
       }
     }
     schedule();
   },
 
   /**
-   * Build a creature's next performance of its song ahead (Random.prepare:
-   * every note's nodes, so its onset frame only schedules them): in idle
-   * time, and NOTES_LEAD_MS before it starts at the latest, idle time or
-   * not. Replaces the creature's waiting request, if any.
-   * @param {Instrument} instrument - one that prepares notes (Random)
+   * Build a creature's next performance of its song ahead
+   * (CreatureVoice.prepare: the lines it will start, so its onset frame
+   * only schedules them): in idle time, and NOTES_LEAD_MS before it starts
+   * at the latest, idle time or not. Replaces the creature's waiting
+   * request, if any.
+   * @param {Instrument} instrument - one that prepares songs (CreatureVoice)
    * @param {Array} song - notes and chords
    * @param {number} startsInMs - when the song starts, from now
+   * @param {number} [tempo] - its tempo (how long its rests are)
    */
-  prepareSong(instrument, song, startsInMs) {
+  prepareSong(instrument, song, startsInMs, tempo = 120) {
     if (typeof instrument.prepare !== 'function') return; // it builds as it plays
-    const pitches = notePitches(song);
-    if (instrument.isPrepared(pitches)) return; // nothing to build
+    if (instrument.isPrepared(song, tempo)) return; // nothing to build
     const dueAt = performance.now() + Math.max(0, startsInMs - NOTES_LEAD_MS);
-    noteJobs.set(instrument, { pitches, dueAt });
+    noteJobs.set(instrument, { song, tempo, dueAt });
     // A run already scheduled for later than that gives way to one by then
     if (scheduled && dueAt < scheduledBy) unschedule();
     schedule();
@@ -232,16 +225,13 @@ const AudioPrewarm = {
    * several voices at once, and the idle-time prices are one job's.
    * @param {Instrument} instrument
    * @param {Array} song - notes and chords
+   * @param {number} [tempo] - its tempo (how long its rests are)
    */
-  prepareNow(instrument, song) {
+  prepareNow(instrument, song, tempo = 120) {
     noteJobs.delete(instrument);
-    const pitches = songPitches(song);
-    if (typeof instrument.warm === 'function' && !instrument.isWarm(pitches)) {
-      instrument.warm(pitches);
-    }
-    const notes = notePitches(song);
-    if (typeof instrument.prepare === 'function' && !instrument.isPrepared(notes)) {
-      instrument.prepare(notes);
+    if (typeof instrument.warm === 'function' && !instrument.isWarm()) instrument.warm();
+    if (typeof instrument.prepare === 'function' && !instrument.isPrepared(song, tempo)) {
+      instrument.prepare(song, tempo);
     }
   },
 
