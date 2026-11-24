@@ -936,12 +936,10 @@ describe('SongEditorModal', () => {
       return id;
     }
 
-    it('writes rest first: R2+✕ a rest, ↑/↓ the pitch cursor, ✕ the pitch on, □ note → rest → gone', () => {
+    it('writes rest first: ✕ on nothing a rest, ↑/↓ the pitch cursor, ✕ the pitch on, □ note → rest → gone', () => {
       const id = open('gate', { song: [] });
       const song = () => env.undoManager.getEntity(id).data.song;
-      modal.padAction('cross'); // nothing to put a pitch on
-      expect(song()).toEqual([]);
-      modal.padAction('rest');
+      modal.padAction('cross'); // nothing at the cursor: the rest goes in
       expect(song()).toEqual([{ length: '1/4' }]);
       modal.padAction('pitchUp');
       modal.padAction('cross');

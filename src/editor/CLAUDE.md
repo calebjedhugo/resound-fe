@@ -18,8 +18,8 @@ Files (`ui/` + `model/`):
   through the same path: the editor owns the ResizeObserver; the renderer's
   is OFF (`observeContainer: false` — it re-engraved without the overlay).
   **Entry is REST FIRST (designer's rulings 2026-11-24)**: a rest of the
-  palette's duration goes in at the edit cursor (`insertRest`: R2+✕, a
-  duration key 2–7, r) ONLY if it fits in what is left of its measure
+  palette's duration goes in at the edit cursor (`insertRest`: ✕ / Enter
+  with nothing at the cursor, R2+✕, a duration key 2–7, r) ONLY if it fits in what is left of its measure
   (`_roomAt`, barred as SongModel bars; a full measure starts a new one;
   refusals say why in the status line). The PITCH CURSOR (a staff line /
   space, ↑/↓; cyan ring + name + dashed ledger guides) then puts pitches on
@@ -310,7 +310,7 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 - **Song editor** (`SongEditorModal.padAction`; `SONG_ACTIONS` +
   `SONG_ACTIONS_L2/_R2`, the NotationEditor's own methods; ruled
   2026-11-24): ←/→ edit cursor, ↑/↓ pitch cursor, ✕ pitch on/off at the
-  pitch cursor (the palette's dot chosen: the dots, none → one → two →
+  pitch cursor (nothing at the edit cursor: ✕ enters the rest; the palette's dot chosen: the dots, none → one → two →
   none; its tie chosen: tie / untie the note under the pitch cursor), R2+✕
   a rest of the chosen duration (if it fits; the designer asked for R2+✕ =
   tie, but it stays insert-rest by their earlier ruling — the tie card is

@@ -431,9 +431,11 @@ describe('NotationEditor note entry', () => {
         .every((entry) => !entry.pitch)
     ).toBe(true);
     const empty = makeEditor();
-    keydown(empty.editor, 'Enter'); // a pitch with nothing to put it on: nothing
-    expect(empty.changes).toHaveLength(0);
-    expect(empty.editor.status).toMatch(/enter a rest first/);
+    keydown(empty.editor, 'Enter'); // nothing at the cursor: ✕ enters the rest
+    expect(empty.changes.at(-1)).toHaveLength(1);
+    expect(empty.changes.at(-1)[0].pitch).toBeUndefined();
+    keydown(empty.editor, 'Enter'); // and ✕ again puts the pitch on it
+    expect(empty.changes.at(-1)[0].pitch).toBeTruthy();
   });
 
   it('leaves Cmd / Ctrl / Alt shortcuts to the browser and the modal', () => {

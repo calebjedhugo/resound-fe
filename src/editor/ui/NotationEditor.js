@@ -564,7 +564,7 @@ export default class NotationEditor {
   _target(model) {
     const i = model._selectedIndex;
     if (i === null || i >= model._notes.length) {
-      this._status('Nothing at the cursor: enter a rest first');
+      this._status('Nothing at the cursor: press ✕ to enter a rest');
       return null;
     }
     return i;
@@ -645,12 +645,16 @@ export default class NotationEditor {
    * cursor ties to (or unties from) the same pitch in the next entry; else
    * the pitch at the pitch cursor goes on (a rest becomes that note; a note
    * gains it as a chord tone — a creature's single note moves there) or,
-   * already there, comes off (the last pitch off leaves a rest).
+   * already there, comes off (the last pitch off leaves a rest). With
+   * nothing at the cursor, ✕ enters a rest of the chosen duration there.
    */
   cross() {
     if (this._palette.dotSelected) return this.toggleDot();
     if (this._palette.tieSelected) return this.toggleTie();
-    return this._act((model) => this._togglePitch(model, this.pitchCursor));
+    const model = this._activeModel();
+    const i = model._selectedIndex;
+    if (i === null || i >= model._notes.length) return this.insertRest();
+    return this._act((m) => this._togglePitch(m, this.pitchCursor));
   }
 
   _togglePitch(model, position) {
