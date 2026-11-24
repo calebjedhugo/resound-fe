@@ -45,14 +45,11 @@ describe('NotationEditor', () => {
     expect(svg.querySelector('[data-note-index="1"]')).toBeTruthy();
   });
 
-  it('inserts a note with a duration key and reports it through onChange', () => {
+  it('a duration key enters a REST of it at the end and reports it through onChange', () => {
     const { editor, changes } = makeEditor({ song: [{ pitch: 'C4', length: '1/4' }] });
-    keydown(editor, '5'); // eighth note
+    keydown(editor, '5'); // eighth
     expect(changes.length).toBe(1);
-    const song = changes[changes.length - 1];
-    expect(Array.isArray(song)).toBe(true);
-    expect(song).toHaveLength(2);
-    expect(song.some((n) => n.length === '1/8')).toBe(true);
+    expect(changes[0]).toEqual([{ pitch: 'C4', length: '1/4' }, { length: '1/8' }]);
   });
 
   it('normalizes dotted durations to the canonical { length, dotted } form on output', () => {
@@ -72,34 +69,25 @@ describe('NotationEditor', () => {
     expect(editor._activeModel().toSongArray()[0]).toMatchObject({ pitch: 'C4', length: '3/8' });
   });
 
-  it('deletes the selected note', () => {
+  it('Delete turns the note at the cursor into a rest, and the rest it leaves goes next', () => {
     const { editor, changes } = makeEditor({
       song: [
         { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
+        { pitch: 'E4', length: '1/2', dotted: true },
       ],
     });
-    keydown(editor, 'ArrowLeft'); // select index 0
+    keydown(editor, 'ArrowLeft');
+    keydown(editor, 'ArrowLeft'); // on C4
     keydown(editor, 'Delete');
-    const song = changes[changes.length - 1];
-    expect(song).toHaveLength(1);
-    expect(song[0].pitch).toBe('E4');
-  });
-
-  it('backspaces the last note when nothing is selected', () => {
-    const { editor, changes } = makeEditor({
-      song: [
-        { pitch: 'C4', length: '1/4' },
-        { pitch: 'E4', length: '1/4' },
-      ],
-    });
-    // Move the cursor to the end (deselecting), then backspace drops the last.
+    expect(changes.at(-1)).toEqual([
+      { length: '1/4' },
+      { pitch: 'E4', length: '1/2', dotted: true },
+    ]);
+    keydown(editor, 'Delete');
+    expect(changes.at(-1)).toEqual([{ pitch: 'E4', length: '1/2', dotted: true }]);
     keydown(editor, 'ArrowRight');
-    keydown(editor, 'ArrowRight');
-    keydown(editor, 'Backspace');
-    const song = changes[changes.length - 1];
-    expect(song).toHaveLength(1);
-    expect(song[0].pitch).toBe('C4');
+    keydown(editor, 'Backspace'); // the dotted half keeps its value as a rest
+    expect(changes.at(-1)).toEqual([{ length: '1/2', dotted: true }]);
   });
 
   it('clears every note via the Clear button', () => {
@@ -201,7 +189,7 @@ describe('NotationEditor keyboard rendering', () => {
 
     keydown(editor, 'Shift');
     keydown(editor, 'q');
-    keydown(editor, '+'); // transpose, but nothing is selected
+    keydown(editor, 'ArrowRight'); // already at the end
     nextFrame();
 
     expect(staffSvg(editor)).toBe(svg);
@@ -251,9 +239,9 @@ describe('NotationEditor keyboard rendering', () => {
     });
     const render = jest.spyOn(editor._renderer, 'render');
 
-    // Both voices start alike (cursor at the end, nothing selected), so only
-    // the voice itself tells the first switch apart.
-    [['Enter'], ['ArrowLeft'], ['Enter', { shiftKey: true }]].forEach(([key, extra]) => {
+    // Both voices start alike (cursor at the end), so only the voice itself
+    // tells the first switch apart.
+    [['Tab'], ['ArrowLeft'], ['Tab', { shiftKey: true }]].forEach(([key, extra]) => {
       const engraved = render.mock.calls.length;
       keydown(editor, key, extra);
       nextFrame();
@@ -386,60 +374,70 @@ describe('NotationEditor note entry', () => {
   const E4 = { pitch: 'E4', length: '1/4' };
   const G4 = { pitch: 'G4', length: '1/4' };
   const nextFrame = () => jest.advanceTimersByTime(16);
-  const pitches = (song) => song.map((n) => n.pitch || 'rest');
 
-  it('entering notes mid-song puts each after the one before, as at the end', () => {
-    const { editor, changes } = makeEditor({ song: [C4, E4, G4] });
-    keydown(editor, 'ArrowRight'); // on E4
-    keydown(editor, '4'); // a quarter at the cursor (E4's pitch) ...
-    keydown(editor, '+'); // ... raised: F4
-    keydown(editor, '4'); // the next one goes after it, not before
-    keydown(editor, '+');
-    keydown(editor, '+'); // F#4 -> G4
-    keydown(editor, 'r'); // and a rest after that
-    expect(pitches(changes.at(-1))).toEqual(['C4', 'F4', 'G4', 'rest', 'E4', 'G4']);
+  it('opens with the edit cursor at the END, on the last entry', () => {
+    const { editor } = makeEditor({ song: [C4, E4, G4] });
+    expect(editor.cursorPosition).toBe(3);
+    expect(editor.selectedNote).toMatchObject({ pitch: 'G4' });
+    expect(makeEditor().editor.cursorPosition).toBe(0);
   });
 
-  it('right from a note just entered selects the next note, without skipping it', () => {
-    const { editor } = makeEditor({ song: [C4, E4, G4] });
-    keydown(editor, 'ArrowRight'); // on E4
-    keydown(editor, '4'); // entered before E4; E4 is next
+  it('entering rests mid-song puts each after the one before, as at the end', () => {
+    const { editor, changes } = makeEditor({ song: [C4, E4, G4], timeSignature: null });
+    keydown(editor, 'ArrowLeft');
+    keydown(editor, 'ArrowLeft'); // on E4: entries go in before it
+    keydown(editor, '4');
+    keydown(editor, '5'); // the next one goes after the first, not before
+    expect(changes.at(-1)).toEqual([C4, { length: '1/4' }, { length: '1/8' }, E4, G4]);
+  });
+
+  it('right from an entry just entered selects the next one, without skipping it', () => {
+    const { editor } = makeEditor({ song: [C4, E4, G4], timeSignature: null });
+    keydown(editor, 'ArrowLeft');
+    keydown(editor, 'ArrowLeft'); // on E4
+    keydown(editor, 'r'); // entered before E4; E4 is next
     keydown(editor, 'ArrowRight');
     expect(editor.selectedNote).toMatchObject({ pitch: 'E4' });
   });
 
-  it('Delete on a note just entered takes it back, as a backspace', () => {
-    const { editor, changes } = makeEditor({ song: [C4, E4, G4] });
-    keydown(editor, 'ArrowRight');
-    keydown(editor, '4');
-    keydown(editor, '+'); // F4, entered between C4 and E4
+  it('Delete on a rest just entered takes it back, as a backspace', () => {
+    const { editor, changes } = makeEditor({ song: [C4, E4, G4], timeSignature: null });
+    keydown(editor, 'ArrowLeft');
+    keydown(editor, 'ArrowLeft'); // on E4
+    keydown(editor, 'r'); // a rest between C4 and E4
     keydown(editor, 'Delete');
-    expect(pitches(changes.at(-1))).toEqual(['C4', 'E4', 'G4']);
+    expect(changes.at(-1)).toEqual([C4, E4, G4]);
     expect(editor.selectedNote).toMatchObject({ pitch: 'C4' }); // back after C4 ...
-    keydown(editor, '4'); // ... so the next entry goes where F4 was
-    expect(pitches(changes.at(-1))).toEqual(['C4', 'C4', 'E4', 'G4']);
+    keydown(editor, '5'); // ... so the next entry goes where the rest was
+    expect(changes.at(-1)).toEqual([C4, { length: '1/8' }, E4, G4]);
   });
 
-  it('a duration key also makes that the chosen duration, for rests and the palette', () => {
+  it('a duration key also makes that the chosen duration, for r and the palette', () => {
     const { editor, container, changes } = makeEditor({ song: [C4] });
-    keydown(editor, 'ArrowRight'); // past C4
-    keydown(editor, '5'); // an eighth note
-    keydown(editor, 'r'); // so an eighth rest too
-    expect(changes.at(-1).slice(1)).toEqual([{ pitch: 'C4', length: '1/8' }, { length: '1/8' }]);
+    keydown(editor, '5'); // an eighth rest
+    keydown(editor, 'r'); // so an eighth rest again
+    expect(changes.at(-1).slice(1)).toEqual([{ length: '1/8' }, { length: '1/8' }]);
     expect(container.querySelector('.rhythm-btn.active').dataset.length).toBe('1/8');
   });
 
-  it('a new note with nothing (or a rest) selected takes the pitch of the note before', () => {
-    const { editor, changes } = makeEditor({ song: [C4, E4, G4] });
-    ['ArrowRight', 'ArrowRight', 'ArrowRight'].forEach((k) => keydown(editor, k)); // at the end
-    keydown(editor, 'r'); // a rest, selected
-    keydown(editor, '4');
-    expect(changes.at(-1).at(-1)).toEqual({ pitch: 'G4', length: '1/4' });
+  it('never puts a pitch in on its own: entry is always a rest first', () => {
+    const { editor, changes } = makeEditor({ song: [C4, E4, G4], timeSignature: null });
+    ['2', '3', '4', '5', '6', '7', 'r'].forEach((k) => keydown(editor, k));
+    expect(changes.at(-1)).toHaveLength(10);
+    expect(
+      changes
+        .at(-1)
+        .slice(3)
+        .every((entry) => !entry.pitch)
+    ).toBe(true);
+    const empty = makeEditor();
+    keydown(empty.editor, 'Enter'); // a pitch with nothing to put it on: nothing
+    expect(empty.changes).toHaveLength(0);
+    expect(empty.editor.status).toMatch(/enter a rest first/);
   });
 
   it('leaves Cmd / Ctrl / Alt shortcuts to the browser and the modal', () => {
     const { editor, changes } = makeEditor({ song: [C4] });
-    keydown(editor, 'ArrowLeft'); // C4 selected
     keydown(editor, 'r', { metaKey: true }); // Cmd+R reloads; no rest
     keydown(editor, 'b', { ctrlKey: true });
     keydown(editor, '4', { altKey: true });
@@ -508,7 +506,7 @@ describe('NotationEditor note entry', () => {
     it('draws the edit cursor on the system of the note it is at', () => {
       const { editor } = makeEditor({ song });
       expect(systems(editor).length).toBeGreaterThan(2);
-      for (let i = 0; i < 30; i += 1) keydown(editor, 'ArrowRight');
+      for (let i = 0; i < 10; i += 1) keydown(editor, 'ArrowLeft');
       nextFrame();
       const svg = editor._staffEl.querySelector('svg');
       const selectedSystem = svg.querySelector('.note-selected').closest('[data-voice-id]');
@@ -522,7 +520,7 @@ describe('NotationEditor note entry', () => {
         scrolled.push(this);
       };
       const { editor } = makeEditor({ song });
-      for (let i = 0; i < 30; i += 1) keydown(editor, 'ArrowRight');
+      for (let i = 0; i < 30; i += 1) keydown(editor, 'ArrowLeft');
       nextFrame();
       const cursor = editor._staffEl.querySelector('.cursor-line');
       expect(scrolled.at(-1)).toBe(cursor);
@@ -548,5 +546,252 @@ describe('NotationEditor note entry', () => {
       );
       expect(changes.at(-1).at(-1)).toEqual({ pitch: 'B4', length: '1/4' });
     });
+  });
+});
+
+describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
+  const C4 = { pitch: 'C4', length: '1/4' };
+  const nextFrame = () => jest.advanceTimersByTime(16);
+  const last = (changes) => changes.at(-1);
+
+  it('a rest goes in first; Enter puts the pitch cursor’s pitch on it, again takes it off', () => {
+    const { editor, changes } = makeEditor({ song: [] });
+    expect(editor.pitchCursor).toBe('B4'); // the treble staff's middle line, nothing written
+    editor.insertRest();
+    expect(last(changes)).toEqual([{ length: '1/4' }]);
+    keydown(editor, 'ArrowUp');
+    keydown(editor, 'ArrowUp'); // D5
+    keydown(editor, 'Enter');
+    expect(last(changes)).toEqual([{ pitch: 'D5', length: '1/4' }]);
+    keydown(editor, 'Enter'); // D5 again: off, leaving the rest
+    expect(last(changes)).toEqual([{ length: '1/4' }]);
+  });
+
+  it('builds chords at the pitch cursor — no pitch twice — and the last pitch off leaves a rest', () => {
+    const { editor, changes } = makeEditor({ song: [{ length: '1/2' }] });
+    editor.cross(); // B4
+    editor.movePitchCursor(-2);
+    editor.cross(); // G4 joins: low to high
+    expect(last(changes)).toEqual([
+      [
+        { pitch: 'G4', length: '1/2' },
+        { pitch: 'B4', length: '1/2' },
+      ],
+    ]);
+    editor.movePitchCursor(2);
+    editor.cross(); // B4 off
+    expect(last(changes)).toEqual([{ pitch: 'G4', length: '1/2' }]);
+    editor.movePitchCursor(-2);
+    editor.cross(); // G4 off: the rest is back
+    expect(last(changes)).toEqual([{ length: '1/2' }]);
+  });
+
+  it('a chord holds a pitch once, however it is spelled', () => {
+    const { editor, changes } = makeEditor({ song: [[{ pitch: 'E#4', length: '1/4' }]] });
+    editor.movePitchCursor(1); // F4: sounds as E#4
+    expect(editor.pitchCursor).toBe('F4');
+    expect(editor.cross()).toBe(false);
+    expect(changes).toHaveLength(0);
+    expect(editor.status).toMatch(/already in the chord/);
+  });
+
+  it('a creature’s song holds one note: a pitch elsewhere moves it there', () => {
+    const { editor, changes } = makeEditor({
+      song: [{ pitch: 'C5', length: '1/4' }],
+      polyphonic: false,
+    });
+    expect(editor.pitchCursor).toBe('C5'); // the cursor starts on the last pitch written
+    editor.movePitchCursor(-1);
+    editor.cross();
+    expect(last(changes)).toEqual([{ pitch: 'B4', length: '1/4' }]);
+  });
+
+  it('a pitch goes on in the key: the F line in D major is F sharp', () => {
+    const { editor, changes } = makeEditor({ song: [{ length: '1/4' }], keySignature: 'D' });
+    editor.movePitchCursor(-3); // F4
+    editor.cross();
+    expect(last(changes)).toEqual([{ pitch: 'F#4', length: '1/4' }]);
+  });
+
+  it('refuses a rest that will not fit in what is left of the measure, saying why', () => {
+    const { editor, changes } = makeEditor({ song: [C4, C4, C4] }); // 4/4: one beat left
+    keydown(editor, '3'); // a half
+    expect(changes).toHaveLength(0);
+    expect(editor.status).toBe('No room: that rest needs 2 beats; 1 beat left in this measure');
+    keydown(editor, '4'); // a quarter fits ...
+    keydown(editor, '3'); // ... and a full measure starts a new one with room
+    expect(last(changes).slice(3)).toEqual([{ length: '1/4' }, { length: '1/2' }]);
+    expect(editor.status).toBe('');
+  });
+
+  it('measures the room mid-song too, before the cursor', () => {
+    const { editor, changes } = makeEditor({ song: [{ pitch: 'C4', length: '1/2' }, C4, C4] });
+    keydown(editor, 'ArrowLeft');
+    keydown(editor, 'ArrowLeft'); // before the second note: 2 beats used
+    keydown(editor, '2');
+    expect(changes).toHaveLength(0);
+    keydown(editor, '3');
+    expect(last(changes)).toHaveLength(4);
+  });
+
+  it('the palette’s dot makes Enter (✕) dot and undot — a dot must fit too', () => {
+    const { editor, container, changes } = makeEditor({
+      song: [C4, C4, { pitch: 'E4', length: '1/2' }],
+    });
+    container.querySelector('.rhythm-dot').click();
+    expect(editor.palette.dotSelected).toBe(true);
+    keydown(editor, 'Enter'); // a dotted half needs 3 beats; 2 left
+    expect(changes).toHaveLength(0);
+    expect(editor.status).toMatch(/No room: the dotted value needs 3 beats; 2 beats left/);
+    keydown(editor, 'ArrowLeft');
+    keydown(editor, 'ArrowLeft'); // on the second C4
+    keydown(editor, 'Enter');
+    expect(last(changes)[1]).toEqual({ pitch: 'C4', length: '1/4', dotted: true });
+    keydown(editor, 'Enter');
+    expect(last(changes)[1]).toEqual(C4);
+    // A rest is still entered at the last note value chosen (shown kept)
+    expect(container.querySelector('.rhythm-btn.kept').dataset.length).toBe('1/4');
+  });
+
+  it('L1 / R1 step the palette through the note values to the dot, and change nothing else', () => {
+    const { editor, changes } = makeEditor({ song: [C4] });
+    expect(editor.palette.step(1)).toBe(true); // 8th
+    editor.palette.step(1);
+    editor.palette.step(1); // 32nd
+    expect(editor.palette.activeLength).toBe('1/32');
+    editor.palette.step(1);
+    expect(editor.palette.dotSelected).toBe(true);
+    expect(editor.palette.step(1)).toBe(false);
+    editor.palette.step(-1);
+    expect(editor.palette.dotSelected).toBe(false);
+    expect(changes).toHaveLength(0);
+  });
+
+  it('the note at the cursor takes a longer / shorter value, keeping its dot; longer must fit', () => {
+    const { editor, changes } = makeEditor({
+      song: [{ pitch: 'C4', length: '1/4', dotted: true }],
+    });
+    editor.stepNoteDuration(1);
+    expect(last(changes)).toEqual([{ pitch: 'C4', length: '1/8', dotted: true }]);
+    editor.stepNoteDuration(-1);
+    editor.stepNoteDuration(-1); // a dotted half: fits
+    expect(last(changes)).toEqual([{ pitch: 'C4', length: '1/2', dotted: true }]);
+    expect(editor.stepNoteDuration(-1)).toBe(false); // a dotted whole: no
+    expect(editor.status).toMatch(/No room/);
+  });
+
+  it('the accidental of the note under the pitch cursor steps flat, natural, sharp — never a doubled pitch', () => {
+    const { editor, changes } = makeEditor({
+      song: [
+        [
+          { pitch: 'E4', length: '1/4' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      ],
+    });
+    expect(editor.pitchCursor).toBe('G4');
+    keydown(editor, 'ArrowUp', { shiftKey: true });
+    expect(last(changes)[0][1].pitch).toBe('G#4');
+    expect(editor.stepAccidental(1)).toBe(false);
+    expect(editor.status).toBe('Already sharp');
+    editor.movePitchCursor(-2); // E4
+    editor.stepAccidental(1); // E#4 is F, not in the chord: fine
+    expect(last(changes)[0][0].pitch).toBe('E#4');
+    editor.movePitchCursor(1); // F4: no note there
+    expect(editor.stepAccidental(-1)).toBe(false);
+    expect(editor.status).toMatch(/No note under the pitch cursor/);
+  });
+
+  it('refuses an accidental that would sound a chord tone again', () => {
+    const { editor } = makeEditor({
+      song: [
+        [
+          { pitch: 'E4', length: '1/4' },
+          { pitch: 'F4', length: '1/4' },
+        ],
+      ],
+    });
+    editor.movePitchCursor(-1); // E4
+    expect(editor.stepAccidental(1)).toBe(false);
+    expect(editor.status).toMatch(/E♯4 would sound F4 again/);
+  });
+
+  it('draws the pitch cursor at the edit cursor, ringing a note there, naming the pitch', () => {
+    const { editor } = makeEditor({ song: [C4] });
+    let cursor = editor._staffEl.querySelector('.pitch-cursor');
+    expect(cursor.classList.contains('on-note')).toBe(true); // on C4, below the staff
+    expect(cursor.querySelector('.pitch-cursor-label').textContent).toBe('C4');
+    expect(cursor.querySelectorAll('.pitch-cursor-ledger')).toHaveLength(1); // C4's ledger line
+    keydown(editor, 'ArrowUp');
+    nextFrame();
+    cursor = editor._staffEl.querySelector('.pitch-cursor');
+    expect(cursor.classList.contains('on-note')).toBe(false);
+    expect(cursor.querySelector('.pitch-cursor-label').textContent).toBe('D4');
+    expect(cursor.closest('[data-voice-id]').dataset.voiceId).toBe('v0');
+  });
+
+  it('a grand staff plays both staves: the player gets both voices', () => {
+    const player = { play: jest.fn(), stop: jest.fn() };
+    const { editor } = makeEditor({
+      player,
+      staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      song: {
+        voices: [
+          { id: 'treble', notes: [{ pitch: 'E5', length: '1/2' }] },
+          { id: 'bass', notes: [{ pitch: 'C3', length: '1/4', dotted: true }] },
+        ],
+      },
+    });
+    editor.play();
+    expect(player.play).toHaveBeenCalledWith({
+      voices: [
+        { id: 'treble', notes: [{ pitch: 'E5', length: '1/2' }] },
+        { id: 'bass', notes: [{ pitch: 'C3', length: '1/4', dotted: true }] },
+      ],
+      tempo: 120,
+      basis: 4,
+    });
+  });
+
+  it('Play, Stop, Clear, the hint and the status go in the controls container given', () => {
+    const footer = document.createElement('div');
+    document.body.appendChild(footer);
+    const { editor, container } = makeEditor({ song: [C4], controlsContainer: footer });
+    expect(container.querySelector('.playback-controls')).toBeNull();
+    expect(footer.querySelector('.song-play-btn')).toBeTruthy();
+    expect(footer.querySelector('.song-clear-btn')).toBeTruthy();
+    expect(footer.querySelector('.song-edit-hint').textContent).toContain('pitch cursor');
+    expect(footer.querySelector('.song-edit-status')).toBeTruthy();
+    editor.dispose();
+    expect(footer.children).toHaveLength(0);
+  });
+});
+
+describe('RhythmPalette icons', () => {
+  it('each note value shows its notehead (the glyph defs travel with every icon)', () => {
+    const { container } = makeEditor();
+    const buttons = [...container.querySelectorAll('.rhythm-btn[data-length]')];
+    expect(buttons.map((b) => b.dataset.length)).toEqual([
+      '1/1',
+      '1/2',
+      '1/4',
+      '1/8',
+      '1/16',
+      '1/32',
+    ]);
+    buttons.forEach((button) => {
+      const svg = button.querySelector('svg');
+      const head = svg.querySelector('use.note-head');
+      expect(head).toBeTruthy();
+      const id = head.getAttribute('href').slice(1);
+      expect(svg.querySelector(`defs [id="${id}"]`)).toBeTruthy(); // resolves in its own svg
+    });
+    const flags = buttons.map((b) => b.querySelector('use.note-flag'));
+    expect(flags.slice(0, 3).every((f) => f === null)).toBe(true);
+    flags.slice(3).forEach((flag, i) => {
+      const svg = buttons[i + 3].querySelector('svg');
+      expect(svg.querySelector(`defs [id="${flag.getAttribute('href').slice(1)}"]`)).toBeTruthy();
+    });
+    expect(container.querySelector('.rhythm-dot')).toBeTruthy();
   });
 });

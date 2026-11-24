@@ -20,6 +20,9 @@ const PAD_SECTIONS = [
   ['viewport+r2', 'Controller — R2 held'],
   ['panel', 'Controller — sidebar (touchpad)'],
   ['song', 'Controller — song editor'],
+  ['song+l2', 'Controller — song editor, L2 held'],
+  ['song+r2', 'Controller — song editor, R2 held'],
+  ['song-options', 'Controller — song editor options'],
 ];
 const padName = (buttons) =>
   buttons

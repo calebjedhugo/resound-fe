@@ -9,7 +9,8 @@
  *   panel     — the sidebar's controls (PadFocus), entered with the touchpad
  *   menu      — an open entity / editor menu (ContextMenu's own keys)
  *   map       — the world map (PadFocus over its puzzles)
- *   song      — the song editor (SongEditorModal.padAction)
+ *   song      — the song editor (SongEditorModal.padAction; song-options
+ *               while its Options popover / staff dialog is open)
  *
  * Most buttons press the editor's own keys (synthetic keydowns marked
  * `fromGamepad`, as the game's Gamepad does), so the controller and the
@@ -123,36 +124,57 @@ export const EDITOR_MAPPING = {
     ['circle', 'Close the map'],
   ],
   song: [
-    ['leftright', 'Move the edit cursor'],
-    ['updown', 'The selected note up / down'],
-    ['cross', 'Insert a note (chosen duration)'],
-    ['square', 'Delete the note'],
-    ['l1/r1', 'Longer / shorter duration'],
+    ['leftright', 'Move the edit cursor (through time)'],
+    ['updown', 'Move the pitch cursor (lines and spaces)'],
+    ['cross', 'Pitch on / off at the pitch cursor (dot chosen: dot)'],
+    ['square', 'Note → rest; rest → gone'],
+    ['l1/r1', 'Palette: longer / shorter (… dot)'],
     ['triangle', 'Play / stop (the creature lights)'],
-    ['l2', 'Dot the note'],
-    ['r2', 'A rest'],
-    ['options', 'Sharp → flat → natural'],
+    ['l2', 'Hold: accidental, note duration'],
+    ['r2', 'Hold: a rest, note duration'],
+    ['l3/r3', 'Undo / redo'],
+    ['options', 'Clef, Clear… (the popover)'],
     ['share', 'Other staff (grand staff)'],
     ['circle', 'Close'],
   ],
+  'song+l2': [
+    ['updown', 'Accidental of the note there: ♯ / ♭'],
+    ['l1/r1', 'The note: longer / shorter'],
+  ],
+  'song+r2': [
+    ['cross', 'A rest of the chosen duration (if it fits)'],
+    ['l1/r1', 'The note: longer / shorter'],
+  ],
+  'song-options': [
+    ['updown', 'Move between controls'],
+    ['leftright', 'Change the value shown (clef)'],
+    ['cross', 'Choose'],
+    ['circle', 'Back to the staff'],
+    ['options', 'Back to the staff'],
+  ],
 };
 
+// The song editor's actions (SongEditorModal.padAction) by button; while L2
+// or R2 is held, its own row first (an unlisted button keeps its plain job).
+// L2 / R2 alone do nothing: they only change other buttons.
 const SONG_ACTIONS = {
   left: 'left',
   right: 'right',
-  up: 'up',
-  down: 'down',
-  cross: 'insert',
-  square: 'delete',
+  up: 'pitchUp',
+  down: 'pitchDown',
+  cross: 'cross',
+  square: 'erase',
   l1: 'longer',
   r1: 'shorter',
   triangle: 'play',
-  l2: 'dot',
-  r2: 'rest',
-  options: 'accidental',
+  l3: 'undo',
+  r3: 'redo',
+  options: 'options',
   share: 'voice',
   circle: 'close',
 };
+const SONG_ACTIONS_L2 = { up: 'sharpen', down: 'flatten', l1: 'noteLonger', r1: 'noteShorter' };
+const SONG_ACTIONS_R2 = { cross: 'rest', l1: 'noteLonger', r1: 'noteShorter' };
 
 const dominant = (x, y) => {
   if (Math.abs(x) >= Math.abs(y)) return x > 0 ? 'right' : 'left';
@@ -318,8 +340,11 @@ export default class EditorGamepad {
     if (!button) return;
     const app = this._app;
     const context = app.padContext();
-    if (context === 'song') {
-      if (SONG_ACTIONS[button]) app.songEditorModal.padAction(SONG_ACTIONS[button]);
+    if (context === 'song' || context === 'song-options') {
+      const { l2, r2 } = this.modifiers;
+      const action =
+        (l2 && SONG_ACTIONS_L2[button]) || (r2 && SONG_ACTIONS_R2[button]) || SONG_ACTIONS[button];
+      if (action) app.songEditorModal.padAction(action);
       return;
     }
     if (context === 'menu') {

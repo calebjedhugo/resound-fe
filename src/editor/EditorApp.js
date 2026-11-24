@@ -737,7 +737,9 @@ export default class EditorApp {
 
   /** What the controller is driving now: song, menu, map, panel or viewport. */
   padContext() {
-    if (this.songEditorModal.isOpen) return 'song';
+    if (this.songEditorModal.isOpen) {
+      return this.songEditorModal.panelOpen ? 'song-options' : 'song';
+    }
     if (this.contextMenu.isOpen) return 'menu';
     if (this.worldOverview.isOpen) return 'map';
     if (this._panelMode) return 'panel';

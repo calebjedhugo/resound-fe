@@ -17,20 +17,56 @@ Files (`ui/` + `model/`):
   (`_drawSelection`), any other key draws nothing. A staff resize re-engraves
   through the same path: the editor owns the ResizeObserver; the renderer's
   is OFF (`observeContainer: false` — it re-engraved without the overlay).
-  Entry: a note/rest entered at the cursor is selected and the cursor goes
-  AFTER it (mid-song too), so the next entry follows; a duration key also
-  sets the palette's duration. A long song wraps onto systems (one staff
-  group per voice each): the cursor is drawn on its note's system, a click
-  maps by the nearest system, a move scrolls the selection into view.
-  Cmd/Ctrl/Alt keys are left alone; Space plays/stops.
-- **Undo in the modal**: ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y) in `SongEditorModal`
+  **Entry is REST FIRST (designer's rulings 2026-11-24)**: a rest of the
+  palette's duration goes in at the edit cursor (`insertRest`: R2+✕, a
+  duration key 2–7, r) ONLY if it fits in what is left of its measure
+  (`_roomAt`, barred as SongModel bars; a full measure starts a new one;
+  refusals say why in the status line). The PITCH CURSOR (a staff line /
+  space, ↑/↓; cyan ring + name + dashed ledger guides) then puts pitches on
+  and off the entry at the edit cursor (`cross`: ✕ / Enter): on a rest it
+  becomes that note, on a note's own pitch it comes off (the last one off
+  leaves the rest), elsewhere it joins the chord (sorted, never the same
+  sounding pitch twice) — a creature (`polyphonic: false`) moves its one
+  note instead. Pitches go on IN THE KEY (`staffCoords.keyPitch`: the F
+  line in D is F♯). □ / Delete (`erase`): note → rest → gone. L2+↑/↓ /
+  ⇧↑/⇧↓ (`stepAccidental`): ♭ ↔ ♮ ↔ ♯ of the note under the pitch cursor.
+  Dot (palette's dot + ✕, or .) and a longer value (`stepNoteDuration`)
+  must fit too. **No pitch ever goes in on the editor's own initiative**
+  (no default notes/pitches; new entities' songs are `[]`). The edit cursor
+  OPENS AT THE END (on the last entry); an entry goes in at the cursor and
+  the cursor goes AFTER it (mid-song too); a CLICK puts a note at the
+  clicked pitch in at the edit cursor (⇧-click: pitch on/off, as ✕). Each
+  action is a public method the keyboard and `SongEditorModal.padAction`
+  share. A long song wraps onto systems (one staff group per voice each):
+  the cursors are drawn on their entry's system, a click maps by the
+  nearest system, a move scrolls the cursor into view. Cmd/Ctrl/Alt keys
+  are left alone; Space plays/stops; Tab/⇧Tab other staff. Play on a grand
+  staff hands the player BOTH voices (`play({voices})`; the modal plays
+  them on a resound-sound `Sequencer` over its Synth). Play/Stop/Clear,
+  the hint and the status line go in `controlsContainer` (the modal's
+  footer).
+- **Undo in the modal**: ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y; the pad's L3 / R3) in `SongEditorModal`
   walk back only through the steps recorded since it opened (never into the
   level behind it), then re-show the entity (`NotationEditor.setSong`, or a
   rebuilt editor when the grand staff came or went).
 - **SongModel.js** (`model/`) — pure measure-aware editing model (cursor, transpose, dot, chords).
-- **RhythmPalette.js** — duration selector (renders note icons via `resound-notation/components/Note`).
+- **RhythmPalette.js** — whole … 32nd, then the DOT (chosen, ✕ dots; the
+  last note value stays the entry duration, shown `kept`). Icons are
+  `resound-notation/components/Note` notes, but the library draws glyphs as
+  `<use>` of per-SVG `<defs>` that only `render()` writes, so the palette
+  copies the defs from one hidden render into every icon (`glyphDefs`) —
+  without them the icons were bare stems (2026-11-24).
+- **mergeVoices.js** (`model/`) — grand staff → one staff: both voices
+  sliced at every onset/release into chords, held notes split and TIED, a
+  doubled pitch kept once. Nothing is dropped.
 - **staffCoords.js** — reverse pitch mapping (click Y → pitch) via `resound-notation/lib/notePositions`.
-- **SongEditorModal.js** — modal wrapper: builds chrome + clef selector, constructs the editor
+- **SongEditorModal.js** — modal wrapper: header (title, ×), body (palette +
+  staff), always-visible footer (Play/Stop/Clear, hint + status, Options,
+  Done). **Options** (footer button / the pad's Options) toggles a popover
+  with the clef dropdown and Clear, walked by the pad with `PadFocus`
+  (context `song-options`). Leaving the grand staff opens a dialog — keep
+  the treble or the bass staff — and merges both staves onto it
+  (`mergeVoices`; one undo step). Constructs the editor
   (`import NotationEditor from 'editor/ui/NotationEditor'`), persists `onChange` through
   `undoManager.updateEntity(...)`, and injects a `resound-sound` `Synth` as the audio `player`
   (guarded for no-`AudioContext` test envs). See `_createEditor()`.
@@ -159,7 +195,8 @@ edits show up in the game on a manual reload.
   the floor/walls (`AreaLight`). Fed by the song editor's Play
   (`SongEditorModal` `onNote` / `onStop`; the modal docks at the bottom and
   the camera frames the entity in the band above it) and by **A** — quick
-  audition of the song under the cursor (`audio/SongAudition.js`, a Synth;
+  audition of the song under the cursor (`audio/SongAudition.js`, in the
+  creatures' own voice: `entities/CreatureVoice` `DEFAULT_VOICE`;
   also the entity menu's Play Song). Editor audio is audible by design.
 
 ## Play (2026-11-23; one tab: `play/PlayPreview.js`)
@@ -250,11 +287,16 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
   reverts) or a number field (committed each step), ✕ clicks / toggles /
   gives a text field the keyboard, ○ (or the touchpad) back to the level.
   World-map nodes carry `data-pad-focus`.
-- **Song editor** (`SongEditorModal.padAction`, each the staff's own key):
-  ←/→ edit cursor, ↑/↓ selected note's pitch, ✕ insert a note of the chosen
-  duration, □ delete, L1/R1 longer/shorter duration, △ play/stop, L2 dot,
-  R2 rest, Options steps the SELECTED note's own accidental (none→♯→♭→♮),
-  Share flips staves (both ways), ○ close.
+- **Song editor** (`SongEditorModal.padAction`; `SONG_ACTIONS` +
+  `SONG_ACTIONS_L2/_R2`, the NotationEditor's own methods; ruled
+  2026-11-24): ←/→ edit cursor, ↑/↓ pitch cursor, ✕ pitch on/off at the
+  pitch cursor (the palette's dot chosen: dot), R2+✕ a rest of the chosen
+  duration (if it fits), □ note → rest → gone, L2+↑/↓ accidental of the
+  note under the pitch cursor, L1/R1 the PALETTE only (whole … 32nd, dot),
+  L2+L1 / R2+R1 the note at the cursor longer / shorter, L3 undo, R3 redo,
+  △ play/stop, Share other staff, Options the popover (clef, Clear; d-pad
+  walks, ←/→ steps the clef, ✕ commits, ○/Options back), ○ close. L2 / R2
+  alone do nothing; the legend shows `song+l2` / `song+r2` while held.
 - **Menus** (ContextMenu): d-pad ↑/↓, ✕ choose, ○ close.
 - Caveats: a pad press is no user activation: a Play from the pad starts
   the game's audio only if the browser allows it (the editor page was

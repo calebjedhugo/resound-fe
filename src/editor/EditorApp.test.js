@@ -1477,17 +1477,41 @@ describe('EditorApp wiring', () => {
       });
       tap('triangle');
       expect(app.padContext()).toBe('song');
-
-      tap('right'); // the edit cursor past the note
-      tap('cross'); // a note of the chosen duration
       const song = () => app.undoManager.getEntity(id).data.song;
+
+      tap('cross'); // the edit cursor opens at the end, on C4: C4 off -> a rest
+      expect(song()).toEqual([{ length: '1/4' }]);
+      tap('l2'); // L2 / R2 alone do nothing
+      tap('r2');
+      expect(song()).toEqual([{ length: '1/4' }]);
+
+      hold('r2');
+      expect(app.padLegend.shown).toBe('song+r2');
+      tap('cross'); // R2 + Cross: a rest of the chosen duration
+      letGo('r2');
       expect(song()).toHaveLength(2);
 
-      tap('up'); // the new note a step up
-      expect(song()[1].pitch).not.toBe(song()[0].pitch);
+      tap('up'); // the pitch cursor a step up: D4
+      tap('cross'); // the rest takes it
+      expect(song()[1]).toEqual({ pitch: 'D4', length: '1/4' });
+      hold('l2');
+      tap('up'); // L2 + up: sharper
+      letGo('l2');
+      expect(song()[1].pitch).toBe('D#4');
 
-      tap('square');
-      expect(song()).toHaveLength(1);
+      tap('l3'); // undo
+      expect(song()[1].pitch).toBe('D4');
+      tap('r3'); // redo
+      expect(song()[1].pitch).toBe('D#4');
+
+      tap('square'); // the note -> a rest
+      tap('square'); // the rest -> gone
+      expect(song()).toEqual([{ length: '1/4' }]);
+
+      tap('options');
+      expect(app.padContext()).toBe('song-options');
+      tap('circle'); // back to the staff, the editor stays
+      expect(app.padContext()).toBe('song');
 
       tap('circle');
       expect(app.songEditorModal.isOpen).toBe(false);

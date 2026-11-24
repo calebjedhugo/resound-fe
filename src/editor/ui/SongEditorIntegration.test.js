@@ -407,6 +407,48 @@ describe('Song Editor Integration', () => {
     });
   });
 
+  // -- where entries go (the designer, 2026-11-24) -----------------------------
+
+  describe('entry at the edit cursor', () => {
+    it('a click puts its note in at the edit cursor, not at the end of the song', () => {
+      env = createTestEnvironment();
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('creature', 5, 0, 3, {
+        song: [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'E4', length: '1/4' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      });
+      modal.open(id);
+      const staff = env.root.querySelector('.notation-staff');
+      ['ArrowLeft', 'ArrowLeft'].forEach((key) =>
+        staff.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+      ); // before E4
+      clickStaff(env.root);
+      const { song } = env.undoManager.getEntity(id).data;
+      expect(song).toHaveLength(4);
+      expect(song[0].pitch).toBe('C4');
+      expect(song[1].pitch).toBeTruthy();
+      expect(song.slice(2).map((n) => n.pitch)).toEqual(['E4', 'G4']);
+    });
+
+    it('opening, moving and choosing durations put no note in on their own', () => {
+      env = createTestEnvironment();
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, { song: [] });
+      modal.open(id);
+      ['pitchUp', 'pitchDown', 'left', 'right', 'longer', 'shorter', 'cross', 'erase'].forEach(
+        (action) => modal.padAction(action)
+      );
+      env.root.querySelectorAll('.rhythm-btn').forEach((b) => b.click());
+      expect(env.undoManager.getEntity(id).data.song).toEqual([]);
+      modal.close();
+      modal.open(id);
+      expect(env.undoManager.getEntity(id).data.song).toEqual([]);
+    });
+  });
+
   // -- rest support -----------------------------------------------------------
 
   describe('rest support', () => {

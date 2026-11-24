@@ -8,29 +8,28 @@
  * It docks along the bottom of the window over a light backdrop, so the
  * viewport above stays in sight: while Play sounds a creature's song, each
  * note is reported (`onNote`) and the creature lights up in the viewport as
- * it would in game; Stop (or closing) reports `onStop`.
+ * it would in game; Stop (or closing) reports `onStop`. A grand staff plays
+ * both staves (a resound-sound Sequencer over the same Synth).
+ *
+ * Layout: header (title, ×), body (palette + staff), and an always-visible
+ * footer holding Play / Stop / Clear, the hint and status line, Options and
+ * Done. Options opens a popover with what the controller can't otherwise
+ * reach — the clef and Clear — walked with the pad (input/PadFocus) when it
+ * opened from the pad's Options. Leaving the grand staff asks which staff
+ * to keep (a dialog) and merges BOTH staves' notes onto it as chords
+ * (model/mergeVoices): nothing is dropped.
  */
 import NotationEditor from 'editor/ui/NotationEditor';
-import { Synth } from 'resound-sound';
+import PadFocus from 'editor/input/PadFocus';
+import mergeVoices from 'editor/model/mergeVoices';
+import { Synth, Sequencer } from 'resound-sound';
 import { noteSeconds } from 'editor/audio/SongAudition';
-import { DURATIONS } from 'editor/ui/RhythmPalette';
 
-// The controller's song-editing actions -> the staff's own keys (NotationEditor)
-const PAD_KEYS = {
-  left: 'ArrowLeft', // edit cursor left
-  right: 'ArrowRight', // edit cursor right
-  up: '+', // the selected note a step up
-  down: '-', // ...a step down
-  delete: 'Delete', // remove the selected note
-  dot: '.', // dot / undot it
-  rest: 'r', // a rest of the chosen duration at the cursor
-};
-// Options steps the selected note's accidental: none -> sharp -> flat -> natural
-const NEXT_ACCIDENTAL = { '': '#', '#': 'b', b: 'n' };
-const accidentalOf = (pitch) => {
-  const m = /^[A-G]([#b]?)\d+$/.exec(pitch || '');
-  return m ? m[1] : '';
-};
+const isGrand = (data) => (data.staffGroups || []).some((g) => g.type === 'brace');
+
+// The pad's actions while a popover / dialog of the modal has the focus
+const PANEL_MOVES = { pitchUp: -1, sharpen: -1, pitchDown: 1, flatten: 1 };
+const PANEL_ADJUSTS = { left: -1, right: 1 };
 
 export default class SongEditorModal {
   /**
@@ -51,6 +50,8 @@ export default class SongEditorModal {
     this._isOpen = false;
     this._entityId = null;
     this._player = null; // lazily-created audio player for editor playback
+    this._sequencer = null; // a grand staff's playback
+    this._panel = null; // { el, focus } — the popover or dialog the pad walks
     // Undo / redo steps this opening of the modal recorded (its notes and
     // clef): ⌘Z inside the modal walks back only through these, never into
     // the level edits behind it (it could undo the entity's own creation)
@@ -64,6 +65,16 @@ export default class SongEditorModal {
 
   get isOpen() {
     return this._isOpen;
+  }
+
+  /** Whether the Options popover or the staff dialog is open (the pad walks it). */
+  get panelOpen() {
+    return Boolean(this._panel);
+  }
+
+  /** The notation editor showing now (null while closed). */
+  get notationEditor() {
+    return this._notationEditor;
   }
 
   open(entityId) {
@@ -91,6 +102,7 @@ export default class SongEditorModal {
 
     const modalEl = document.createElement('div');
     modalEl.className = 'song-modal';
+    this._modalEl = modalEl;
 
     // Header
     const headerEl = document.createElement('div');
@@ -98,110 +110,52 @@ export default class SongEditorModal {
 
     const titleEl = document.createElement('span');
     titleEl.className = 'song-modal-title';
-    titleEl.textContent = `${typeName} Song \u2014 ${position}`;
+    titleEl.textContent = `${typeName} Song — ${position}`;
     headerEl.appendChild(titleEl);
-
-    // Body element (declared early so clef-change handler can reference it)
-    const bodyEl = document.createElement('div');
-    bodyEl.className = 'song-modal-body';
-
-    // Read puzzle metadata for musical context
-    const metadata = this._undoManager.getMetadata();
-
-    // Clef selector
-    const clefSelect = document.createElement('select');
-    clefSelect.className = 'prop-select clef-selector';
-    const currentClef = entity.data.clef || null;
-    const hasGrandStaff = (entity.data.staffGroups || []).some((g) => g.type === 'brace');
-
-    const autoOption = document.createElement('option');
-    autoOption.value = 'auto';
-    autoOption.textContent = 'Auto';
-    if (!currentClef && !hasGrandStaff) autoOption.selected = true;
-    clefSelect.appendChild(autoOption);
-
-    const trebleOption = document.createElement('option');
-    trebleOption.value = 'treble';
-    trebleOption.textContent = 'Treble';
-    if (currentClef === 'treble') trebleOption.selected = true;
-    clefSelect.appendChild(trebleOption);
-
-    const bassOption = document.createElement('option');
-    bassOption.value = 'bass';
-    bassOption.textContent = 'Bass';
-    if (currentClef === 'bass') bassOption.selected = true;
-    clefSelect.appendChild(bassOption);
-
-    if (isPolyphonic) {
-      const grandStaffOption = document.createElement('option');
-      grandStaffOption.value = 'grand-staff';
-      grandStaffOption.textContent = 'Grand Staff';
-      if (hasGrandStaff) grandStaffOption.selected = true;
-      clefSelect.appendChild(grandStaffOption);
-    }
-
-    clefSelect.onchange = () => {
-      const val = clefSelect.value;
-      const ent = this._undoManager.getEntity(entityId);
-      if (!ent) return;
-
-      const wasGrandStaff = (ent.data.staffGroups || []).some((g) => g.type === 'brace');
-      const isNowGrandStaff = val === 'grand-staff';
-
-      // Update entity data
-      const newData = { ...ent.data };
-      if (isNowGrandStaff) {
-        delete newData.clef;
-        newData.staffGroups = [{ type: 'brace', voiceIds: ['treble', 'bass'] }];
-      } else if (val === 'auto') {
-        delete newData.clef;
-        delete newData.staffGroups;
-      } else {
-        newData.clef = val;
-        delete newData.staffGroups;
-      }
-      this._recordEdit(() => this._undoManager.updateEntity(entityId, { data: newData }));
-
-      // Recreate editor if mode changed (grand staff <-> single staff)
-      if (wasGrandStaff !== isNowGrandStaff) {
-        this._notationEditor.dispose();
-        const updatedEntity = this._undoManager.getEntity(entityId);
-        this._notationEditor = this._createEditor(bodyEl, updatedEntity, metadata, isPolyphonic);
-      } else if (!isNowGrandStaff) {
-        this._notationEditor.setClef(val === 'auto' ? null : val);
-      }
-      // The keys go back to the staff, as after any other control
-      this._notationEditor.focus();
-    };
-    this._clefSelect = clefSelect;
-    this._bodyEl = bodyEl;
-    this._metadata = metadata;
-    this._isPolyphonic = isPolyphonic;
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'song-modal-close';
     closeBtn.innerHTML = '&times;';
     closeBtn.onclick = () => this.close();
-
-    headerEl.appendChild(clefSelect);
     headerEl.appendChild(closeBtn);
-
     modalEl.appendChild(headerEl);
 
     // Body
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'song-modal-body';
     modalEl.appendChild(bodyEl);
 
-    // Footer
+    // Footer: the editor's controls (Play / Stop / Clear, hint, status),
+    // Options, Done — always in sight
     const footerEl = document.createElement('div');
     footerEl.className = 'song-modal-footer';
+    const controlsEl = document.createElement('div');
+    controlsEl.className = 'song-modal-controls';
+    footerEl.appendChild(controlsEl);
+
+    const optionsBtn = document.createElement('button');
+    optionsBtn.className = 'editor-btn song-options-btn';
+    optionsBtn.type = 'button';
+    optionsBtn.textContent = 'Options';
+    optionsBtn.onclick = () => this.toggleOptions({ fromPad: false });
+    footerEl.appendChild(optionsBtn);
 
     const doneBtn = document.createElement('button');
-    doneBtn.className = 'editor-btn';
+    doneBtn.className = 'editor-btn song-done-btn';
     doneBtn.textContent = 'Done';
     doneBtn.onclick = () => this.close();
     footerEl.appendChild(doneBtn);
-
     modalEl.appendChild(footerEl);
+
+    // Read puzzle metadata for musical context
+    const metadata = this._undoManager.getMetadata();
+    this._bodyEl = bodyEl;
+    this._controlsEl = controlsEl;
+    this._metadata = metadata;
+    this._isPolyphonic = isPolyphonic;
+
+    this._buildOptionsPopover(modalEl, entity, isPolyphonic);
+    this._buildStaffDialog(modalEl);
 
     this._backdropEl.appendChild(modalEl);
 
@@ -209,19 +163,169 @@ export default class SongEditorModal {
     this._backdropEl.addEventListener('keydown', this._handleKeyDown);
     this._backdropEl.addEventListener('click', this._handleBackdropClick);
 
-    // Prevent clicks inside the modal from closing it
+    // Prevent clicks inside the modal from closing it; a click outside the
+    // Options popover closes the popover (not the staff dialog: it asks)
     modalEl.addEventListener('click', (e) => {
       e.stopPropagation();
+      const panel = this._panel && this._panel.el;
+      if (panel === this._popoverEl && !panel.contains(e.target) && e.target !== optionsBtn) {
+        this.closePanel();
+      }
     });
 
     // Append to root
     this._rootContainer.appendChild(this._backdropEl);
 
     // Create NotationEditor inside the body
-    this._notationEditor = this._createEditor(bodyEl, entity, metadata, isPolyphonic);
+    this._notationEditor = this._createEditor(entity);
 
     // The staff has the keyboard (the palette above it stays in sight)
     this._notationEditor.focus();
+  }
+
+  /** The Options popover: the clef and Clear (hidden until Options). */
+  _buildOptionsPopover(modalEl, entity, isPolyphonic) {
+    const popover = document.createElement('div');
+    popover.className = 'song-options-popover';
+    popover.hidden = true;
+
+    const clefLabel = document.createElement('label');
+    clefLabel.className = 'song-options-row';
+    clefLabel.textContent = 'Clef ';
+    const clefSelect = document.createElement('select');
+    clefSelect.className = 'prop-select clef-selector';
+    const options = [
+      ['auto', 'Auto'],
+      ['treble', 'Treble'],
+      ['bass', 'Bass'],
+    ];
+    if (isPolyphonic) options.push(['grand-staff', 'Grand Staff']);
+    options.forEach(([value, label]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      clefSelect.appendChild(option);
+    });
+    clefSelect.value = this._clefValue(entity.data);
+    clefSelect.onchange = () => this._changeClef(clefSelect.value);
+    clefLabel.appendChild(clefSelect);
+    popover.appendChild(clefLabel);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'editor-btn song-options-clear';
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear this staff';
+    clearBtn.onclick = () => {
+      this.closePanel();
+      if (this._notationEditor) this._notationEditor.clear();
+    };
+    popover.appendChild(clearBtn);
+
+    modalEl.appendChild(popover);
+    this._popoverEl = popover;
+    this._clefSelect = clefSelect;
+  }
+
+  /** Grand staff → one staff: which staff to keep (both staves' notes go on it). */
+  _buildStaffDialog(modalEl) {
+    const dialog = document.createElement('div');
+    dialog.className = 'song-staff-dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.hidden = true;
+    const text = document.createElement('p');
+    text.textContent =
+      'One staff from here: which one do you keep? Every note of BOTH staves goes ' +
+      'onto it, merged as chords (a note held across the other staff’s notes is split ' +
+      'and tied).';
+    dialog.appendChild(text);
+    const buttons = document.createElement('div');
+    buttons.className = 'song-staff-dialog-buttons';
+    [
+      ['treble', 'Keep the treble staff'],
+      ['bass', 'Keep the bass staff'],
+      [null, 'Cancel'],
+    ].forEach(([clef, label]) => {
+      const btn = document.createElement('button');
+      btn.className = 'editor-btn';
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.dataset.keep = clef || 'cancel';
+      btn.onclick = () => {
+        this.closePanel();
+        if (clef) this._mergeToSingleStaff(clef);
+      };
+      buttons.appendChild(btn);
+    });
+    dialog.appendChild(buttons);
+    modalEl.appendChild(dialog);
+    this._dialogEl = dialog;
+  }
+
+  _clefValue(data) {
+    if (isGrand(data)) return 'grand-staff';
+    return data.clef || 'auto';
+  }
+
+  /**
+   * The clef dropdown chose `value`. Leaving the grand staff only asks
+   * (the dialog); anything else applies at once.
+   */
+  _changeClef(value) {
+    const ent = this._undoManager.getEntity(this._entityId);
+    if (!ent) return;
+    const wasGrand = isGrand(ent.data);
+    if (value === this._clefValue(ent.data)) {
+      this.closePanel();
+      return;
+    }
+    if (wasGrand && value !== 'grand-staff') {
+      this._clefSelect.value = 'grand-staff'; // until a staff is chosen
+      this.closePanel();
+      this._openPanel(this._dialogEl, `[data-keep="${value === 'bass' ? 'bass' : 'treble'}"]`);
+      return;
+    }
+    const newData = { ...ent.data };
+    if (value === 'grand-staff') {
+      delete newData.clef;
+      newData.staffGroups = [{ type: 'brace', voiceIds: ['treble', 'bass'] }];
+    } else if (value === 'auto') {
+      delete newData.clef;
+      delete newData.staffGroups;
+    } else {
+      newData.clef = value;
+      delete newData.staffGroups;
+    }
+    this._recordEdit(() => this._undoManager.updateEntity(this._entityId, { data: newData }));
+    this.closePanel();
+    if (value === 'grand-staff' && !wasGrand) {
+      this._rebuildEditor();
+    } else {
+      this._notationEditor.setClef(value === 'auto' ? null : value);
+    }
+    // The keys go back to the staff, as after any other control
+    this._notationEditor.focus();
+  }
+
+  /** Both staves' notes onto one staff in `clef`, as chords; one undo step. */
+  _mergeToSingleStaff(clef) {
+    const ent = this._undoManager.getEntity(this._entityId);
+    if (!ent || !isGrand(ent.data)) return;
+    const { song } = ent.data;
+    const voices = song && Array.isArray(song.voices) ? song.voices.map((v) => v.notes || []) : [];
+    const merged = Array.isArray(song) ? song : mergeVoices(voices);
+    const newData = { ...ent.data, clef, song: merged };
+    delete newData.staffGroups;
+    this._recordEdit(() => this._undoManager.updateEntity(this._entityId, { data: newData }));
+    this._clefSelect.value = clef;
+    this._rebuildEditor();
+    this._notationEditor.focus();
+  }
+
+  /** A fresh editor for the entity as it is now (the staves came or went). */
+  _rebuildEditor() {
+    const entity = this._undoManager.getEntity(this._entityId);
+    if (this._notationEditor) this._notationEditor.dispose();
+    this._notationEditor = this._createEditor(entity);
   }
 
   /**
@@ -230,12 +334,14 @@ export default class SongEditorModal {
    * through onChange, which we persist via the undo manager. Both the initial
    * open and clef-driven recreation route through here.
    */
-  _createEditor(bodyEl, entity, metadata, isPolyphonic) {
+  _createEditor(entity) {
     const entityId = this._entityId;
+    const metadata = this._metadata;
     return new NotationEditor({
-      container: bodyEl,
+      container: this._bodyEl,
+      controlsContainer: this._controlsEl,
       song: entity.data.song || [],
-      polyphonic: isPolyphonic,
+      polyphonic: this._isPolyphonic,
       keySignature: metadata.keySignature || 'C',
       timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
       clef: entity.data.clef || null,
@@ -260,8 +366,8 @@ export default class SongEditorModal {
   }
 
   /**
-   * ⌘Z / ⇧⌘Z (Ctrl on other systems) inside the modal: undo / redo the
-   * song's edits made since it opened, and show the result.
+   * ⌘Z / ⇧⌘Z (Ctrl on other systems), L3 / R3 on the pad, inside the modal:
+   * undo / redo the song's edits made since it opened, and show the result.
    * @param {boolean} redo
    * @returns {boolean} whether a step was taken
    */
@@ -288,23 +394,60 @@ export default class SongEditorModal {
   _showEntity() {
     const entity = this._undoManager.getEntity(this._entityId);
     if (!entity) return;
-    const { clef = null, staffGroups = [], song = [] } = entity.data;
-    const grand = staffGroups.some((g) => g.type === 'brace');
-    this._clefSelect.value = grand ? 'grand-staff' : clef || 'auto';
+    const { clef = null, song = [] } = entity.data;
+    const grand = isGrand(entity.data);
+    this._clefSelect.value = this._clefValue(entity.data);
     if (grand !== this._notationEditor.isGrandStaff) {
-      this._notationEditor.dispose();
-      this._notationEditor = this._createEditor(
-        this._bodyEl,
-        entity,
-        this._metadata,
-        this._isPolyphonic
-      );
+      this._rebuildEditor();
     } else {
       if (!grand) this._notationEditor.setClef(clef);
       this._notationEditor.setSong(song);
     }
     this._notationEditor.focus();
   }
+
+  // ── The Options popover and the staff dialog ──────────────────────
+
+  /**
+   * Options (the pad's, or the footer button): open the popover, or close
+   * whatever popover / dialog is open.
+   */
+  toggleOptions({ fromPad = true } = {}) {
+    if (!this._isOpen) return;
+    if (this._panel) {
+      this.closePanel();
+      return;
+    }
+    this._openPanel(this._popoverEl, fromPad ? null : '.clef-selector');
+  }
+
+  _openPanel(el, target = null) {
+    el.hidden = false;
+    const focus = new PadFocus(() => el);
+    this._panel = { el, focus };
+    focus.enter(target);
+  }
+
+  /** Close the popover / dialog; the keys go back to the staff. */
+  closePanel() {
+    if (!this._panel) return;
+    const { el, focus } = this._panel;
+    focus.leave();
+    el.hidden = true;
+    this._panel = null;
+    if (this._notationEditor) this._notationEditor.focus();
+  }
+
+  /** The pad inside the popover / dialog: walk, change, choose, back. */
+  _padInPanel(action) {
+    const { focus } = this._panel;
+    if (PANEL_MOVES[action]) focus.move(PANEL_MOVES[action]);
+    else if (PANEL_ADJUSTS[action]) focus.adjust(PANEL_ADJUSTS[action]);
+    else if (action === 'cross' || action === 'rest') focus.activate();
+    else if (action === 'close' || action === 'options') this.closePanel();
+  }
+
+  // ── Playback ──────────────────────────────────────────────────────
 
   /**
    * Lazily create a resound-sound Synth to sound editor playback. Returns null
@@ -333,13 +476,33 @@ export default class SongEditorModal {
     };
     this._player = {
       synth,
-      play: (args) => synth.play(args),
+      play: (args) => (args.voices ? this._playVoices(synth, args) : synth.play(args)),
       stop: () => {
+        if (this._sequencer) this._sequencer.stop();
+        this._sequencer = null;
         synth.stop();
         if (this._entityId !== null) this._onStop(this._entityId);
       },
     };
     return this._player;
+  }
+
+  /**
+   * A grand staff's staves together: a Sequencer walks both voices on one
+   * beat clock (ties held as one sound) and sounds each note on the Synth,
+   * lighting the entity as the single-staff path does.
+   */
+  _playVoices(synth, { voices, tempo, basis }) {
+    if (this._sequencer) this._sequencer.stop();
+    const instrument = {
+      startNote: (pitch, ms) => {
+        synth.startNote(pitch, ms);
+        if (this._entityId !== null) this._onNote(this._entityId, pitch, ms / 1000);
+      },
+      stopAll: (fade) => synth.stopAll(fade),
+    };
+    this._sequencer = new Sequencer({ instrument, lookaheadMs: 0 });
+    this._sequencer.play({ voices, tempo, basis });
   }
 
   /** Stop the song if it is playing (the editor's Play takes the stage). */
@@ -351,6 +514,7 @@ export default class SongEditorModal {
     if (!this._isOpen) return;
 
     this._isOpen = false;
+    this._panel = null;
 
     // Dispose the NotationEditor
     if (this._notationEditor) {
@@ -380,66 +544,73 @@ export default class SongEditorModal {
   }
 
   /**
-   * A controller's song-editing action (editor/input/EditorGamepad): move
-   * the edit cursor (left/right), the selected note's pitch (up/down),
-   * insert a note of the chosen duration at the cursor (insert), delete,
-   * choose a shorter/longer duration (shorter/longer), dot, rest, cycle the
-   * selected note's accidental (accidental: sharp, flat, natural), switch
-   * staff (voice), play/stop (play), close. Each is the staff's own key or
-   * control, so it edits exactly as the keyboard and mouse do.
+   * A controller's song-editing action (editor/input/EditorGamepad
+   * SONG_ACTIONS): left / right (edit cursor), pitchUp / pitchDown (pitch
+   * cursor), sharpen / flatten (L2 + up/down: the note under the pitch
+   * cursor's accidental), cross (the pitch on / off — or, the dot chosen,
+   * dot), rest (R2 + ✕: a rest of the chosen duration), erase (□: note →
+   * rest → gone), longer / shorter (L1/R1: the palette), noteLonger /
+   * noteShorter (L2+L1 / R2+R1: the note at the cursor), play, voice (the
+   * other staff), undo / redo (L3 / R3), options (the popover), close.
+   * While the popover or dialog is open, the pad walks it instead.
    * @param {string} action
    */
   padAction(action) {
     if (!this._isOpen || !this._notationEditor) return;
-    const staff = this._backdropEl.querySelector('.notation-staff');
-    const pressKey = (key, mods = {}) => {
-      if (staff) staff.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...mods }));
-    };
-    if (action === 'voice') {
-      // Share flips between the staves (Enter alone only ever goes down)
-      pressKey('Enter', { shiftKey: this._notationEditor.activeVoiceIndex > 0 });
+    if (this._panel) {
+      this._padInPanel(action);
       return;
     }
-    if (PAD_KEYS[action]) {
-      pressKey(PAD_KEYS[action]);
-      return;
-    }
-    const rhythm = [...this._backdropEl.querySelectorAll('.rhythm-btn')];
-    const active = Math.max(
-      0,
-      rhythm.findIndex((b) => b.classList.contains('active'))
-    );
+    const editor = this._notationEditor;
     switch (action) {
-      case 'insert': {
-        const duration = DURATIONS.find((d) => d.length === rhythm[active]?.dataset.length);
-        pressKey((duration || DURATIONS[2]).key);
+      case 'left':
+      case 'right':
+        editor.moveCursor(action === 'left' ? -1 : 1);
         break;
-      }
+      case 'pitchUp':
+      case 'pitchDown':
+        editor.movePitchCursor(action === 'pitchUp' ? 1 : -1);
+        break;
+      case 'sharpen':
+      case 'flatten':
+        editor.stepAccidental(action === 'sharpen' ? 1 : -1);
+        break;
+      case 'cross':
+        editor.cross();
+        break;
+      case 'rest':
+        editor.insertRest();
+        break;
+      case 'erase':
+        editor.erase();
+        break;
+      case 'longer':
       case 'shorter':
-      case 'longer': {
-        // The palette runs whole -> 32nd: a shorter value is further along
-        const next = active + (action === 'shorter' ? 1 : -1);
-        if (rhythm[next]) rhythm[next].click();
+        // The palette runs whole -> 32nd, dot: a shorter value is further along
+        editor.palette.step(action === 'shorter' ? 1 : -1);
         break;
-      }
-      case 'accidental': {
-        // The next after the selected note's own (a chord: its first note's)
-        const note = this._notationEditor.selectedNote;
-        if (!note) break;
-        const pitch = Array.isArray(note) ? note[0].pitch : note.pitch;
-        const current = accidentalOf(pitch);
-        pressKey(NEXT_ACCIDENTAL[current] || '#');
+      case 'noteLonger':
+      case 'noteShorter':
+        editor.stepNoteDuration(action === 'noteShorter' ? 1 : -1);
         break;
-      }
       case 'play':
-        if (this._notationEditor.isPlaying) this._notationEditor.stop();
-        else this._notationEditor.play();
+        editor.togglePlay();
         break;
+      case 'voice':
+        editor.switchStaff(1);
+        break;
+      case 'undo':
+      case 'redo':
+        this.undo(action === 'redo');
+        break;
+      case 'options':
+        this.toggleOptions({ fromPad: true });
+        return;
       case 'close':
         this.close();
-        break;
+        return;
       default:
-        break;
+        return;
     }
     this._notationEditor?.focus();
   }
@@ -448,7 +619,9 @@ export default class SongEditorModal {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      this.close();
+      // A popover / dialog closes first (the dialog: cancel)
+      if (this._panel) this.closePanel();
+      else this.close();
       return;
     }
     // Undo / redo the song's edits (the staff leaves ⌘ keys alone). Not

@@ -21,6 +21,9 @@ const TITLES = {
   menu: 'Menu',
   map: 'World map',
   song: 'Song editor',
+  'song+l2': 'Song editor · L2 held',
+  'song+r2': 'Song editor · R2 held',
+  'song-options': 'Song editor options',
 };
 
 const GLYPH_PX = 20;
@@ -56,6 +59,8 @@ export default class PadLegend {
     let mapping = context;
     if (context === 'viewport' && mods.l2) mapping = 'viewport+l2';
     else if (context === 'viewport' && mods.r2) mapping = 'viewport+r2';
+    else if (context === 'song' && mods.l2) mapping = 'song+l2';
+    else if (context === 'song' && mods.r2) mapping = 'song+r2';
     const key = `${family}|${mapping}`;
     this.element.hidden = false;
     if (key === this._key) return;

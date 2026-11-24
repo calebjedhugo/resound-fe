@@ -202,7 +202,7 @@ describe('SongEditorModal', () => {
     });
 
     it('removes the backdrop when the Done button is clicked', () => {
-      const doneBtn = env.root.querySelector('.song-modal-footer .editor-btn');
+      const doneBtn = env.root.querySelector('.song-modal-footer .song-done-btn');
       doneBtn.click();
 
       expect(env.root.querySelector('.song-modal-backdrop')).toBeNull();
@@ -514,7 +514,7 @@ describe('SongEditorModal', () => {
   // -- clef selector -----------------------------------------------------------
 
   describe('clef selector', () => {
-    it('renders a clef dropdown in the modal header', () => {
+    it('renders a clef dropdown in the Options popover, which Options opens and closes', () => {
       modal = new SongEditorModal(env.root, env.undoManager);
       const id = env.undoManager.addEntity('creature', 5, 0, 3, {
         song: [],
@@ -524,9 +524,17 @@ describe('SongEditorModal', () => {
 
       modal.open(id);
 
-      const select = env.root.querySelector('.song-modal-header .clef-selector');
-      expect(select).not.toBeNull();
+      const popover = env.root.querySelector('.song-options-popover');
+      const select = popover.querySelector('.clef-selector');
       expect(select.tagName).toBe('SELECT');
+      expect(popover.hidden).toBe(true);
+      env.root.querySelector('.song-options-btn').click();
+      expect(popover.hidden).toBe(false);
+      expect(modal.panelOpen).toBe(true);
+      expect(document.activeElement).toBe(select);
+      env.root.querySelector('.song-options-btn').click();
+      expect(popover.hidden).toBe(true);
+      expect(document.activeElement).toBe(env.root.querySelector('.notation-staff'));
     });
 
     it('dropdown shows Auto, Treble, Bass options', () => {
@@ -734,9 +742,17 @@ describe('SongEditorModal', () => {
       const select = env.root.querySelector('.clef-selector');
       select.value = 'auto';
       select.dispatchEvent(new Event('change'));
+      // It asks which staff to keep first
+      const dialog = env.root.querySelector('.song-staff-dialog');
+      expect(dialog.hidden).toBe(false);
+      expect(env.undoManager.getEntity(id).data.staffGroups).toBeTruthy();
+      dialog.querySelector('[data-keep="bass"]').click();
 
       const entity = env.undoManager.getEntity(id);
       expect(entity.data.staffGroups).toBeUndefined();
+      expect(entity.data.clef).toBe('bass');
+      expect(select.value).toBe('bass');
+      expect(dialog.hidden).toBe(true);
     });
 
     it('Grand Staff creates editor with two staff-lines groups', () => {
@@ -840,8 +856,8 @@ describe('SongEditorModal', () => {
 
     it('Cmd+Z undoes the last note and Shift+Cmd+Z redoes it, on the staff too', () => {
       const id = openCreature();
-      press('ArrowRight');
       press('4');
+      press('Enter'); // a quarter rest, then its pitch
       press('4');
       expect(env.undoManager.getEntity(id).data.song).toHaveLength(3);
 
@@ -849,10 +865,13 @@ describe('SongEditorModal', () => {
       expect(env.undoManager.getEntity(id).data.song).toHaveLength(2);
       jest.advanceTimersByTime(16);
       expect(notesShown()).toBe(2);
+      press('z', { metaKey: true }); // the pitch comes off: a rest again
+      expect(env.undoManager.getEntity(id).data.song[1]).toEqual({ length: '1/4' });
 
       press('z', { metaKey: true, shiftKey: true });
+      press('z', { metaKey: true, shiftKey: true });
       expect(env.undoManager.getEntity(id).data.song).toHaveLength(3);
-      expect(notesShown()).toBe(3);
+      expect(notesShown()).toBe(2);
 
       press('z', { ctrlKey: true }); // Ctrl too
       expect(env.undoManager.getEntity(id).data.song).toHaveLength(2);
@@ -872,12 +891,11 @@ describe('SongEditorModal', () => {
 
     it('a new edit drops what could be redone', () => {
       const id = openCreature();
-      press('ArrowRight');
       press('4');
       press('z', { metaKey: true });
       press('5'); // an eighth instead
       press('z', { metaKey: true, shiftKey: true }); // nothing to redo
-      expect(env.undoManager.getEntity(id).data.song).toEqual([C4, { pitch: 'C4', length: '1/8' }]);
+      expect(env.undoManager.getEntity(id).data.song).toEqual([C4, { length: '1/8' }]);
     });
 
     it('undoes a switch to the grand staff, dropdown and staff alike', () => {
@@ -898,11 +916,13 @@ describe('SongEditorModal', () => {
 
     it('a clef change gives the keyboard back to the staff', () => {
       openCreature();
+      env.root.querySelector('.song-options-btn').click();
       const select = env.root.querySelector('.clef-selector');
-      select.focus();
+      expect(document.activeElement).toBe(select);
       select.value = 'bass';
       select.onchange();
       expect(document.activeElement).toBe(env.root.querySelector('.notation-staff'));
+      expect(modal.panelOpen).toBe(false);
     });
   });
 
@@ -916,29 +936,119 @@ describe('SongEditorModal', () => {
       return id;
     }
 
-    it("Options steps the selected note's own accidental: sharp, flat, natural", () => {
-      const id = open('creature', {
-        song: [
-          { pitch: 'C4', length: '1/4' },
-          { pitch: 'Eb4', length: '1/4' },
+    it('writes rest first: R2+✕ a rest, ↑/↓ the pitch cursor, ✕ the pitch on, □ note → rest → gone', () => {
+      const id = open('gate', { song: [] });
+      const song = () => env.undoManager.getEntity(id).data.song;
+      modal.padAction('cross'); // nothing to put a pitch on
+      expect(song()).toEqual([]);
+      modal.padAction('rest');
+      expect(song()).toEqual([{ length: '1/4' }]);
+      modal.padAction('pitchUp');
+      modal.padAction('cross');
+      expect(song()).toEqual([{ pitch: 'C5', length: '1/4' }]);
+      modal.padAction('pitchDown');
+      modal.padAction('pitchDown');
+      modal.padAction('cross'); // A4 joins the chord
+      expect(song()).toEqual([
+        [
+          { pitch: 'A4', length: '1/4' },
+          { pitch: 'C5', length: '1/4' },
         ],
-      });
-      const pitches = () => env.undoManager.getEntity(id).data.song.map((n) => n.pitch);
-      modal.padAction('accidental'); // nothing to step yet: no note selected
-      expect(pitches()).toEqual(['C4', 'Eb4']);
+      ]);
+      modal.padAction('sharpen'); // L2 + up: the note under the pitch cursor
+      expect(song()[0][0].pitch).toBe('A#4');
+      modal.padAction('flatten');
+      modal.padAction('flatten');
+      expect(song()[0][0].pitch).toBe('Ab4');
+      modal.padAction('erase');
+      expect(song()).toEqual([{ length: '1/4' }]);
+      modal.padAction('erase');
+      expect(song()).toEqual([]);
+    });
 
-      modal.padAction('left'); // on C4
-      modal.padAction('right'); // on Eb4: flat -> natural
-      modal.padAction('accidental');
-      expect(pitches()).toEqual(['C4', 'E4']);
+    it('L1/R1 choose the palette value only; L2+L1 / R2+R1 change the note at the cursor', () => {
+      const id = open('creature', { song: [{ pitch: 'C4', length: '1/4' }] });
+      const song = () => env.undoManager.getEntity(id).data.song;
+      modal.padAction('shorter');
+      expect(song()).toEqual([{ pitch: 'C4', length: '1/4' }]);
+      expect(env.root.querySelector('.rhythm-btn.active').dataset.length).toBe('1/8');
+      modal.padAction('rest');
+      expect(song()[1]).toEqual({ length: '1/8' });
+      modal.padAction('noteLonger');
+      expect(song()[1]).toEqual({ length: '1/4' });
+      modal.padAction('noteShorter');
+      modal.padAction('noteShorter');
+      expect(song()[1]).toEqual({ length: '1/16' });
+      expect(env.root.querySelector('.rhythm-btn.active').dataset.length).toBe('1/8');
+    });
 
-      modal.padAction('left'); // on C4, which has none: sharp first
-      modal.padAction('accidental');
-      expect(pitches()).toEqual(['C#4', 'E4']);
-      modal.padAction('accidental');
-      expect(pitches()).toEqual(['Cb4', 'E4']);
-      modal.padAction('accidental');
-      expect(pitches()).toEqual(['C4', 'E4']);
+    it('the palette’s dot, reached past the 32nd, makes ✕ dot the entry at the cursor', () => {
+      const id = open('creature', { song: [{ pitch: 'C4', length: '1/4' }] });
+      for (let i = 0; i < 4; i += 1) modal.padAction('shorter');
+      expect(env.root.querySelector('.rhythm-dot').classList.contains('active')).toBe(true);
+      modal.padAction('cross');
+      expect(env.undoManager.getEntity(id).data.song).toEqual([
+        { pitch: 'C4', length: '1/4', dotted: true },
+      ]);
+    });
+
+    it('a creature’s ✕ elsewhere moves its single note', () => {
+      const id = open('creature', { song: [{ pitch: 'C4', length: '1/4' }] });
+      modal.padAction('pitchUp');
+      modal.padAction('cross');
+      expect(env.undoManager.getEntity(id).data.song).toEqual([{ pitch: 'D4', length: '1/4' }]);
+    });
+
+    it('L3 undoes and R3 redoes, only what this opening did', () => {
+      const id = open('creature', { song: [{ pitch: 'C4', length: '1/4' }] });
+      const song = () => env.undoManager.getEntity(id).data.song;
+      modal.padAction('rest');
+      modal.padAction('undo');
+      expect(song()).toEqual([{ pitch: 'C4', length: '1/4' }]);
+      modal.padAction('undo');
+      expect(env.undoManager.getEntity(id)).toBeTruthy();
+      modal.padAction('redo');
+      expect(song()).toHaveLength(2);
+    });
+
+    it('Options toggles the popover; the pad walks it, changes the clef, and backs out', () => {
+      const id = open('gate', { song: [] });
+      const popover = env.root.querySelector('.song-options-popover');
+      modal.padAction('options');
+      expect(popover.hidden).toBe(false);
+      expect(modal.panelOpen).toBe(true);
+      expect(popover.querySelector('.clef-selector').classList.contains('pad-focus')).toBe(true);
+      modal.padAction('right'); // Treble shown
+      modal.padAction('right'); // Bass shown
+      modal.padAction('cross'); // committed
+      expect(env.undoManager.getEntity(id).data.clef).toBe('bass');
+      expect(popover.hidden).toBe(true);
+      expect(env.undoManager.getEntity(id).data.song).toEqual([]);
+      modal.padAction('options');
+      modal.padAction('pitchDown'); // to Clear
+      expect(popover.querySelector('.song-options-clear').classList.contains('pad-focus')).toBe(
+        true
+      );
+      modal.padAction('options'); // closes again
+      expect(popover.hidden).toBe(true);
+      modal.padAction('options');
+      modal.padAction('close'); // ○ backs out of the popover, the modal stays
+      expect(popover.hidden).toBe(true);
+      expect(modal.isOpen).toBe(true);
+    });
+
+    it('Escape closes the popover first, then the modal', () => {
+      open('gate', { song: [] });
+      modal.padAction('options');
+      const esc = () =>
+        env.root
+          .querySelector('.song-modal-backdrop')
+          .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      esc();
+      expect(modal.panelOpen).toBe(false);
+      expect(modal.isOpen).toBe(true);
+      esc();
+      expect(modal.isOpen).toBe(false);
     });
 
     it('Share flips between the two staves of a grand staff, both ways', () => {
@@ -955,6 +1065,97 @@ describe('SongEditorModal', () => {
       modal.padAction('voice');
       jest.advanceTimersByTime(16);
       expect(voice()).toBe('treble');
+    });
+  });
+
+  // -- grand staff -> one staff ------------------------------------------------
+
+  describe('leaving the grand staff', () => {
+    const grand = {
+      staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      song: {
+        voices: [
+          {
+            id: 'treble',
+            clef: 'treble',
+            notes: [
+              { pitch: 'E5', length: '1/2' },
+              { pitch: 'D5', length: '1/4' },
+              { pitch: 'C5', length: '1/4' },
+            ],
+          },
+          {
+            id: 'bass',
+            clef: 'bass',
+            notes: [
+              { pitch: 'C3', length: '1/4' },
+              { pitch: 'G3', length: '1/4' },
+              { pitch: 'C3', length: '1/2' },
+            ],
+          },
+        ],
+        staffGroups: [{ type: 'brace', voiceIds: ['treble', 'bass'] }],
+      },
+    };
+
+    function openGrand() {
+      modal = new SongEditorModal(env.root, env.undoManager);
+      const id = env.undoManager.addEntity('gate', 5, 0, 3, JSON.parse(JSON.stringify(grand)));
+      modal.open(id);
+      return id;
+    }
+
+    it('asks which staff to keep, then puts EVERY note of both on it as chords (ties where held)', () => {
+      const id = openGrand();
+      modal.padAction('options');
+      modal.padAction('right'); // Auto shown (Grand Staff wraps round)
+      modal.padAction('right'); // Treble shown
+      modal.padAction('cross');
+      expect(modal.panelOpen).toBe(true); // the dialog now
+      expect(document.activeElement.dataset.keep).toBe('treble');
+      modal.padAction('cross'); // keep the treble staff
+      const { data } = env.undoManager.getEntity(id);
+      expect(data.staffGroups).toBeUndefined();
+      expect(data.clef).toBe('treble');
+      expect(data.song).toEqual([
+        [
+          { pitch: 'C3', length: '1/4' },
+          { pitch: 'E5', length: '1/4', tie: 'start' },
+        ],
+        [
+          { pitch: 'G3', length: '1/4' },
+          { pitch: 'E5', length: '1/4', tie: 'stop' },
+        ],
+        [
+          { pitch: 'C3', length: '1/4', tie: 'start' },
+          { pitch: 'D5', length: '1/4' },
+        ],
+        [
+          { pitch: 'C3', length: '1/4', tie: 'stop' },
+          { pitch: 'C5', length: '1/4' },
+        ],
+      ]);
+      expect(env.root.querySelector('[data-voice-id="bass"]')).toBeNull();
+      expect(
+        env.root.querySelectorAll('.notation-staff svg [data-voice-id="v0"] .note')
+      ).toHaveLength(4);
+    });
+
+    it('Cancel keeps the grand staff, and one undo brings both staves back', () => {
+      const id = openGrand();
+      const select = env.root.querySelector('.clef-selector');
+      select.value = 'bass';
+      select.onchange();
+      env.root.querySelector('.song-staff-dialog [data-keep="cancel"]').click();
+      expect(env.undoManager.getEntity(id).data).toEqual(grand);
+      expect(select.value).toBe('grand-staff');
+
+      select.value = 'treble';
+      select.onchange();
+      env.root.querySelector('.song-staff-dialog [data-keep="treble"]').click();
+      modal.undo();
+      expect(env.undoManager.getEntity(id).data).toEqual(grand);
+      expect(env.root.querySelector('[data-voice-id="bass"]')).toBeTruthy();
     });
   });
 });
