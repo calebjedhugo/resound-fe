@@ -222,15 +222,15 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 | Input | Viewport | + L2 held | + R2 held |
 |---|---|---|---|
 | D-pad | cursor (repeats) | ↑/↓ storey (empty starts a floor); ←/→ undo/redo | move the entity |
-| Left stick | glide cursor (accelerates) | pan camera | glide the entity |
-| Right stick | orbit camera | zoom (↑ nearer) | — |
+| Left stick | pan camera | | |
+| Right stick | orbit camera (inverted, both axes) | | |
+| R3 / L3 | zoom in / out (a step; held, keeps going) | centre camera on cursor / reset camera | |
 | Cross | place chosen type / select / its menu; commits a floor draft | — | — |
 | Square | delete under cursor | start a floor here (F) | — |
 | Triangle | song editor | play/stop the song (A) | — |
 | Circle | back (Esc) | | |
 | L1 / R1 | palette prev / next | | carry entity down / up a storey |
 | L2 + R2 + d-pad ↑/↓ | carry entity a storey | | |
-| R3 / L3 | centre camera on cursor / reset camera | | |
 | Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, floor, Undo, Redo, look | | |
 | Share | game ↔ schematic look | | |
 | Touchpad | sidebar focus (`PadFocus`) | | |

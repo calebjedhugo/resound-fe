@@ -892,7 +892,7 @@ export default class EditorApp {
     if (!inside) this.centerCameraOnCursor();
   }
 
-  /** R3: glide the camera to centre on the cursor. */
+  /** L2 + R3: glide the camera to centre on the cursor. */
   centerCameraOnCursor() {
     const cell = this.editorScene.getHoveredGrid();
     const world = gridToWorld(cell.x, cell.z);
@@ -904,7 +904,7 @@ export default class EditorApp {
     this._requestFrame();
   }
 
-  /** L3: the camera back to where it starts, over the whole level. */
+  /** L2 + L3: the camera back to where it starts, over the whole level. */
   resetCamera() {
     const center = (this.undoManager.getMetadata().gridSize * WORLD_SCALE) / 2;
     this._glideTo = null;
@@ -921,14 +921,14 @@ export default class EditorApp {
     this._requestFrame();
   }
 
-  /** L2 + right stick: nearer (factor < 1) or further. */
+  /** R3 / L3 (click or hold): nearer (factor < 1) or further. */
   zoomCamera(factor) {
     zoom(this.camera, this.controls, factor);
     this.controls.update();
     this._requestFrame();
   }
 
-  /** L2 + left stick: slide the view, in shares of the camera's distance. */
+  /** The left stick: slide the view, in shares of the camera's distance. */
   panCamera(rightShare, forwardShare) {
     const { position } = this.camera;
     const { target } = this.controls;

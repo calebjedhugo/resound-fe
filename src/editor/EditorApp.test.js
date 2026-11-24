@@ -1240,7 +1240,17 @@ describe('EditorApp wiring', () => {
     // A pad as Chrome reports a DualShock 4, at rest
     let pad;
     const B = { cross: 0, circle: 1, square: 2, triangle: 3, l1: 4, r1: 5, l2: 6, r2: 7 };
-    Object.assign(B, { share: 8, options: 9, up: 12, down: 13, left: 14, right: 15, touchpad: 17 });
+    Object.assign(B, {
+      share: 8,
+      options: 9,
+      l3: 10,
+      r3: 11,
+      up: 12,
+      down: 13,
+      left: 14,
+      right: 15,
+    });
+    B.touchpad = 17;
 
     beforeEach(() => {
       pad = {
@@ -1296,25 +1306,62 @@ describe('EditorApp wiring', () => {
       letGo('right');
     });
 
-    it('the left stick glides the cursor, faster the longer it is held', () => {
+    it('the left stick pans the camera and never moves the cursor', () => {
+      const pan = jest.spyOn(app, 'panCamera');
       const move = app.editorScene.moveCursor;
-      pad.axes[1] = -1; // pushed up
+      pad.axes[0] = 1; // pushed right
       poll();
-      expect(move).toHaveBeenLastCalledWith(0, -1);
-      const stepsIn = (ms) => {
-        const before = move.mock.calls.length;
-        for (let t = 0; t < ms; t += 16) {
-          jest.advanceTimersByTime(16);
-          poll();
-        }
-        return move.mock.calls.length - before;
-      };
-      const early = stepsIn(500);
-      stepsIn(1000);
-      const late = stepsIn(500);
-      expect(late).toBeGreaterThan(early);
-      pad.axes[1] = 0;
+      jest.advanceTimersByTime(16);
       poll();
+      expect(pan).toHaveBeenCalled();
+      expect(pan.mock.calls.at(-1)[0]).toBeGreaterThan(0);
+      expect(move).not.toHaveBeenCalled();
+      pad.axes[0] = 0;
+      poll();
+    });
+
+    it('the right stick orbits inverted on both axes', () => {
+      const orbitSpy = jest.spyOn(app, 'orbitCamera');
+      pad.axes[2] = 1; // right
+      pad.axes[3] = -1; // up
+      poll();
+      jest.advanceTimersByTime(16);
+      poll();
+      const [azimuth, polar] = orbitSpy.mock.calls.at(-1);
+      expect(azimuth).toBeLessThan(0);
+      expect(polar).toBeLessThan(0); // readStick's y is up: pushed up gives +y, inverted
+      pad.axes[2] = 0;
+      pad.axes[3] = 0;
+      poll();
+    });
+
+    it('R3 zooms in and L3 out, a step a click and on while held; under L2 they centre / reset', () => {
+      const zoomSpy = jest.spyOn(app, 'zoomCamera');
+      tap('r3');
+      expect(zoomSpy).toHaveBeenLastCalledWith(0.8);
+      tap('l3');
+      expect(zoomSpy).toHaveBeenLastCalledWith(1.25);
+
+      zoomSpy.mockClear();
+      hold('r3');
+      for (let t = 0; t < 400; t += 16) {
+        jest.advanceTimersByTime(16);
+        poll();
+      }
+      expect(zoomSpy.mock.calls.length).toBeGreaterThan(2);
+      expect(zoomSpy.mock.calls.at(-1)[0]).toBeLessThan(1);
+      letGo('r3');
+
+      const centre = jest.spyOn(app, 'centerCameraOnCursor');
+      const reset = jest.spyOn(app, 'resetCamera');
+      zoomSpy.mockClear();
+      hold('l2');
+      tap('r3');
+      tap('l3');
+      letGo('l2');
+      expect(centre).toHaveBeenCalledTimes(1);
+      expect(reset).toHaveBeenCalledTimes(1);
+      expect(zoomSpy).not.toHaveBeenCalled();
     });
 
     it('L1 / R1 choose what to place, and Cross places it at the cursor', () => {

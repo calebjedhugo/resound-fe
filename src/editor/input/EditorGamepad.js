@@ -55,23 +55,18 @@ const TRIGGER_HELD = 0.35;
 const REPEAT_DELAY_MS = 300;
 const REPEAT_EVERY_MS = 100;
 
-// The left stick steps the cursor: past STEP_TILT it steps at once, then
-// repeats, faster the further it tilts and the longer it is held (down to
-// GLIDE_FASTEST_MS a step); it lets go under STEP_RELEASE_TILT
+// In a menu or panel the left stick steps the focus as the game's menus do:
+// past STEP_TILT at once, then repeating; it lets go under STEP_RELEASE_TILT
 const STEP_TILT = 0.5;
 const STEP_RELEASE_TILT = 0.3;
-const GLIDE_FIRST_MS = 260;
-const GLIDE_SLOWEST_MS = 190;
-const GLIDE_FASTEST_MS = 45;
-const GLIDE_RAMP_MS = 1200;
-// ...and in a menu or panel it steps as the game's menus do
 const MENU_DELAY_MS = 400;
 const MENU_REPEAT_MS = 150;
 
 // Camera speeds at full tilt
 const ORBIT_RADIANS_PER_S = 2.2;
 const TILT_RADIANS_PER_S = 1.3;
-const ZOOM_PER_S = 1.6; // e-folds of distance a second
+const ZOOM_PER_S = 1.6; // e-folds of distance a second, R3 / L3 held
+const ZOOM_CLICK = 0.8; // a click of R3 nearer by this much (L3: further)
 const PAN_SHARE_PER_S = 0.9; // of the camera's distance, a second
 
 /**
@@ -82,16 +77,16 @@ const PAN_SHARE_PER_S = 0.9; // of the camera's distance, a second
 export const EDITOR_MAPPING = {
   viewport: [
     ['dpad', 'Move the cursor (hold to repeat)'],
-    ['lstick', 'Glide the cursor (faster held)'],
+    ['lstick', 'Pan the camera'],
+    ['rstick', 'Orbit the camera'],
+    ['r3', 'Zoom in (hold: keep going)'],
+    ['l3', 'Zoom out (hold: keep going)'],
     ['cross', 'Place the chosen type · select · its menu'],
     ['square', 'Delete what is under the cursor'],
     ['triangle', "Edit the creature's / gate's song"],
     ['circle', 'Back: cancel, deselect'],
     ['l1/r1', 'Choose what to place'],
-    ['rstick', 'Orbit the camera'],
-    ['r3', 'Centre the camera on the cursor'],
-    ['l3', 'Reset the camera'],
-    ['l2', 'Hold: storeys, undo, zoom, pan, song'],
+    ['l2', 'Hold: storeys, undo, song, camera'],
     ['r2', 'Hold: carry the entity'],
     ['options', 'Menu: Play, puzzles, undo, look…'],
     ['share', 'Game look / schematic look'],
@@ -100,15 +95,14 @@ export const EDITOR_MAPPING = {
   'viewport+l2': [
     ['updown', 'Storey up / down'],
     ['leftright', 'Undo / redo'],
-    ['rstick', 'Zoom (up: nearer)'],
-    ['lstick', 'Pan the camera'],
+    ['r3', 'Centre the camera on the cursor'],
+    ['l3', 'Reset the camera'],
     ['triangle', 'Play / stop the song (it lights)'],
     ['square', 'Start a floor here (then ✕ commits)'],
     ['r2', '+ R2 and d-pad up/down: carry a storey'],
   ],
   'viewport+r2': [
     ['dpad', 'Move the entity (the cursor follows)'],
-    ['lstick', 'Glide the entity'],
     ['l1/r1', 'Carry it down / up a storey'],
   ],
   panel: [
@@ -179,7 +173,7 @@ export default class EditorGamepad {
     this._repeatAt = [];
     this._stickDir = null;
     this._stickNext = 0;
-    this._stickSince = 0;
+    this._pressedTime = [];
     this._sticksOut = [false, false];
     this._lastPoll = null;
     this._frame = null;
@@ -253,6 +247,7 @@ export default class EditorGamepad {
         this._down[i] = true;
         InputDevice.usePad(pad);
         this._repeatAt[i] = now + REPEAT_DELAY_MS;
+        this._pressedTime[i] = now;
         this._press(NAMES[i]);
       } else if (!pressed && this._down[i]) {
         this._down[i] = false;
@@ -419,10 +414,10 @@ export default class EditorGamepad {
         app.togglePanelFocus(true);
         break;
       case 'r3':
-        app.centerCameraOnCursor();
-        break;
       case 'l3':
-        app.resetCamera();
+        if (l2 && button === 'r3') app.centerCameraOnCursor();
+        else if (l2) app.resetCamera();
+        else app.zoomCamera(button === 'r3' ? ZOOM_CLICK : 1 / ZOOM_CLICK);
         break;
       default:
         break;
@@ -436,41 +431,36 @@ export default class EditorGamepad {
     const context = app.padContext();
     const walk = this._walk;
     const look = this._look;
-    const { l2, r2 } = this.modifiers;
 
     if (context !== 'viewport') {
       // The left stick steps through whatever has the focus, as the d-pad
-      this._stickSteps(walk, now, (dir) => this._press(dir), true);
+      this._stickSteps(walk, now, (dir) => this._press(dir));
       return;
     }
-    if (l2) {
-      // L2: the left stick pans, the right stick zooms
-      this._stickDir = null;
-      if (walk.x || walk.y)
-        app.panCamera(walk.x * PAN_SHARE_PER_S * dt, walk.y * PAN_SHARE_PER_S * dt);
-      if (look.y) app.zoomCamera(Math.exp(-look.y * ZOOM_PER_S * dt));
-      return;
+    this._stickDir = null;
+    // The left stick pans; the right stick orbits, inverted on both axes
+    // (the designer's ruling, 2026-11-23)
+    if (walk.x || walk.y) {
+      app.panCamera(walk.x * PAN_SHARE_PER_S * dt, walk.y * PAN_SHARE_PER_S * dt);
     }
-    this._stickSteps(
-      walk,
-      now,
-      (dir) => {
-        app.pressKey(ARROWS[dir], { shiftKey: r2 });
-        app.followCursor();
-      },
-      false
-    );
     if (look.x || look.y) {
-      app.orbitCamera(look.x * ORBIT_RADIANS_PER_S * dt, look.y * TILT_RADIANS_PER_S * dt);
+      app.orbitCamera(-look.x * ORBIT_RADIANS_PER_S * dt, -look.y * TILT_RADIANS_PER_S * dt);
     }
+    // R3 / L3 held past a click keep zooming (not under L2: those are the
+    // camera's centre / reset)
+    if (this.modifiers.l2) return;
+    const zoomHeld = (index) =>
+      this._held(index) && now - (this._pressedTime[index] ?? Infinity) >= REPEAT_DELAY_MS;
+    const zoomIn = zoomHeld(BUTTONS.r3);
+    const zoomOut = zoomHeld(BUTTONS.l3);
+    if (zoomIn !== zoomOut) app.zoomCamera(Math.exp((zoomIn ? -1 : 1) * ZOOM_PER_S * dt));
   }
 
   /**
    * Step `onStep(direction)` while the stick is tilted: at once, then
-   * repeating — at the menus' pace, or gliding faster the further and the
-   * longer it is held.
+   * repeating at the menus' pace.
    */
-  _stickSteps(stick, now, onStep, menuPace) {
+  _stickSteps(stick, now, onStep) {
     const tilt = Math.hypot(stick.x, stick.y);
     const held = this._stickDir;
     let dir = null;
@@ -481,19 +471,12 @@ export default class EditorGamepad {
     }
     if (dir !== held) {
       this._stickDir = dir;
-      this._stickSince = now;
-      this._stickNext = now + (menuPace ? MENU_DELAY_MS : GLIDE_FIRST_MS);
+      this._stickNext = now + MENU_DELAY_MS;
       onStep(dir);
       return;
     }
     if (now < this._stickNext) return;
-    let interval = MENU_REPEAT_MS;
-    if (!menuPace) {
-      const ramp = Math.min(1, (now - this._stickSince) / GLIDE_RAMP_MS);
-      const speed = Math.min(1, ramp * Math.min(1, tilt));
-      interval = GLIDE_SLOWEST_MS - (GLIDE_SLOWEST_MS - GLIDE_FASTEST_MS) * speed;
-    }
-    this._stickNext = now + interval;
+    this._stickNext = now + MENU_REPEAT_MS;
     onStep(dir);
   }
 }
