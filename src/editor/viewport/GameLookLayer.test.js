@@ -9,6 +9,7 @@ import UndoManager from 'editor/model/UndoManager';
 import GameLookLayer from 'editor/viewport/GameLookLayer';
 import Wall from 'entities/Wall';
 import { RAMP_MATERIAL } from 'entities/EntityLook';
+import { lightningLevel } from 'entities/EnvironmentLook';
 import { messiaenColour } from 'core/messiaenColour';
 import { cellsOfRects } from 'core/floorTiles';
 
@@ -124,6 +125,18 @@ describe('Drawing the level as the game does', () => {
     expect(drawn().some((n) => n.material === RAMP_MATERIAL)).toBe(false);
   });
 
+  it('is lively exactly while lightning flashes (else only slow drifts move)', () => {
+    layer.sync(undo);
+    let flashes = 0;
+    // A strike comes every 9-22 s
+    for (let t = 0; t < 45; t += 0.05) {
+      layer.update(0.05);
+      expect(layer.lively).toBe(lightningLevel() > 0);
+      if (layer.lively) flashes += 1;
+    }
+    expect(flashes).toBeGreaterThan(0);
+  });
+
   it('hides with the root (the schematic look)', () => {
     layer.visible = false;
     expect(layer.root.visible).toBe(false);
@@ -157,6 +170,26 @@ describe('A previewed song lights its creature, note by note', () => {
     layer.noteOn(id, 'E4', 0.5);
     for (let t = 0; t < 3; t += 0.05) layer.update(0.05);
     expect(layer.lookOf(id).glow).toBe(0);
+  });
+
+  it('is lively (drawn every frame) while a note sounds and while it fades, then calm', () => {
+    layer.update(0.016);
+    expect(layer.lively).toBe(false); // a silent bubble: only slow drifts move
+
+    layer.noteOn(id, 'E4', 0.5);
+    expect(layer.lively).toBe(true);
+    for (let t = 0; t < 0.6; t += 0.05) layer.update(0.05);
+    expect(layer.previewing).toBe(false); // the note is over...
+    expect(layer.lively).toBe(true); // ...but the light is still fading
+
+    for (let t = 0; t < 3; t += 0.05) layer.update(0.05);
+    expect(layer.lively).toBe(false);
+  });
+
+  it('is never lively while hidden (the schematic look draws on demand)', () => {
+    layer.noteOn(id, 'E4', 2);
+    layer.visible = false;
+    expect(layer.lively).toBe(false);
   });
 
   it('goes dark at once when the preview is stopped', () => {

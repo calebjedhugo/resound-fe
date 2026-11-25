@@ -27,7 +27,7 @@ import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT, DEFAULT_CREATURE_SIZE } from 'core/constants';
 import { messiaenColourCached, midiOf, registerLuminosity } from 'core/messiaenColour';
 import CreatureLook from 'entities/CreatureLook';
-import { AreaLight, createSky, tickEnvironment } from 'entities/EnvironmentLook';
+import { AreaLight, createSky, lightningLevel, tickEnvironment } from 'entities/EnvironmentLook';
 import { bindAreaLight } from 'entities/EntityLook';
 import Floor from 'entities/Floor';
 import Wall from 'entities/Wall';
@@ -119,6 +119,22 @@ export default class GameLookLayer {
   /** Whether it moves on its own now (the viewport keeps drawing): while shown. */
   get animates() {
     return this.root.visible;
+  }
+
+  /**
+   * Whether something on it moves QUICKLY now: lightning, or a creature lit
+   * by a previewed song (sounding, or still fading back to the bubble). The
+   * rest of its motion — the sky's drift, the bob and wobble, the waystones'
+   * breathing — takes seconds, so the viewport draws it at a calmer rate
+   * (EditorApp CALM_FRAME_MS) while this is false.
+   */
+  get lively() {
+    if (!this.root.visible) return false;
+    if (lightningLevel() > 0 || this.previewing) return true;
+    for (const entry of this._entities.values()) {
+      if (entry.look && entry.look.glow > 0) return true; // still fading
+    }
+    return false;
   }
 
   /**

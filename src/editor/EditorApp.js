@@ -63,6 +63,14 @@ const PLACE_KEYS = {
 // A click whose pointer moved more than this many pixels since mousedown is a
 // drag (camera rotate/pan), not a selection.
 const CLICK_DRAG_PX = 4;
+// The game look's CALM motion (the sky's drift, the creatures' bob and
+// wobble, the waystones' breathing, the gates' shimmer: all seconds-long) is
+// drawn at this rate; lightning, a lit creature and anything the user does
+// draw every frame (EditorApp._requestLookFrame).
+export const CALM_FRAME_MS = 1000 / 30;
+// A vsync this close to CALM_FRAME_MS after the last frame is on time
+// (vsync timestamps jitter; a 120 Hz display lands on 33.3 ms too)
+const CALM_SLACK_MS = 4;
 
 export default class EditorApp {
   constructor() {
@@ -73,6 +81,7 @@ export default class EditorApp {
     this.camera = null;
     this.controls = null;
     this._frameId = null; // pending on-demand render frame
+    this._lookCalm = false; // the pending frame is only the game look's calm motion
     this._dirty = false;
     // One-shot flag: set after a git revert so the next Cmd-Z restores the
     // reverted puzzle edits (git stash pop) instead of doing a model undo.
@@ -132,7 +141,10 @@ export default class EditorApp {
       this.gameLook.noteOn(entityId, pitch, seconds);
       this._requestFrame();
     };
-    const previewStop = (entityId) => this.gameLook.silence(entityId);
+    const previewStop = (entityId) => {
+      this.gameLook.silence(entityId);
+      this._requestFrame(); // its fade starts now, every frame
+    };
     this.songEditorModal = new SongEditorModal(
       document.getElementById('editor-root'),
       this.undoManager,
@@ -1984,15 +1996,47 @@ export default class EditorApp {
    * frames, no CPU (was rendering the whole scene 60×/sec for nothing).
    */
   _requestFrame() {
+    this._lookCalm = false; // anything but the calm look draws on the next frame
     this._dirty = true;
     if (this._frameId == null) {
       this._frameId = requestAnimationFrame((now) => this._renderFrame(now));
     }
   }
 
+  /**
+   * The game look asks for its next frame: the next one while something on
+   * it moves quickly (`gameLook.lively`: lightning, a lit or fading
+   * creature), else the first one CALM_FRAME_MS after the last drawn. Its
+   * slow drifts look the same at that rate (each frame still advances them
+   * by the real time since the last), and drawing them 60 times a second
+   * kept the GPU and the fan busy whenever the editor sat in the game look,
+   * the song editor open or not (2026-11-24). The frames between are
+   * skipped (`_lookCalm`, checked in `_renderFrame`). Anything that asks for
+   * a frame some other way (input, camera damping, a glide, an edit) still
+   * draws on the next one: `_requestFrame` clears the calm.
+   */
+  _requestLookFrame() {
+    if (this._frameId != null) return; // asked for already: drawn next frame
+    this._requestFrame();
+    this._lookCalm = !this.gameLook.lively;
+  }
+
   _renderFrame(now = 0) {
     this._frameId = null;
     if (!this._dirty) return;
+    // A calm frame not due yet waits for a later vsync (rAF's timestamps are
+    // vsync times: at 60 Hz this draws every other one). A timer to wake for
+    // it instead missed or beat its vsync whenever the GPU delayed frames
+    if (
+      this._lookCalm &&
+      this._lastFrameAt != null &&
+      !(this.preview && this.preview.active) &&
+      now - this._lastFrameAt < CALM_FRAME_MS - CALM_SLACK_MS
+    ) {
+      this._frameId = requestAnimationFrame((t) => this._renderFrame(t));
+      return;
+    }
+    this._lookCalm = false;
     this._dirty = false;
     const dt = this._lastFrameAt == null ? 0 : (now - this._lastFrameAt) / 1000;
     this._lastFrameAt = now;
@@ -2008,10 +2052,11 @@ export default class EditorApp {
     }
     this.controls.update(); // may emit 'change' (damping) → schedules the next frame
     // The game look moves on its own (the sky, the creatures' wobble, a
-    // previewed song): while it shows, every frame asks for the next
+    // previewed song): while it shows, every frame asks for the next (calm
+    // motion at CALM_FRAME_MS: _requestLookFrame)
     if (this._look === 'game' && this.gameLook.animates) {
       this.gameLook.update(dt);
-      this._requestFrame();
+      this._requestLookFrame();
     }
     // The camera gliding after the controller's cursor (followCursor)
     if (this._glideTo) {

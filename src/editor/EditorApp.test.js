@@ -2562,3 +2562,98 @@ describe('EditorApp per-input work', () => {
     expect(hud.textContent).toContain('Building floor E1');
   });
 });
+
+describe('EditorApp draws the game look calm at 30 fps', () => {
+  let app;
+  let frames; // animation-frame callbacks waiting for the next vsync
+  let clock; // the vsync timestamp, ms
+
+  /** Run `count` vsyncs at `hz`: each runs the callbacks asked for before it. */
+  function vsyncs(count, hz = 60) {
+    for (let i = 0; i < count; i += 1) {
+      clock += 1000 / hz;
+      const at = clock;
+      frames.splice(0).forEach((callback) => callback(at));
+    }
+  }
+
+  /** Draws (renderer.render calls) over `count` vsyncs at `hz`. */
+  function drawsOver(count, hz = 60) {
+    app.renderer.render.mockClear();
+    vsyncs(count, hz);
+    return app.renderer.render.mock.calls.length;
+  }
+
+  beforeEach(() => {
+    setupEditorDOM();
+    frames = [];
+    clock = 0;
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    localStorage.clear(); // opens in the game look
+    app = new EditorApp();
+    app.init();
+    // The game look shows and moves on its own; nothing on it is quick
+    expect(app.look).toBe('game');
+    app.gameLook.animates = true;
+    app.gameLook.lively = false;
+    app._requestFrame();
+    vsyncs(4);
+  });
+
+  afterEach(() => {
+    app.dispose();
+    app = null;
+    document.body.innerHTML = '';
+    localStorage.clear();
+    jest.restoreAllMocks();
+  });
+
+  it('draws every other vsync at 60 Hz, advancing the look by the real time between', () => {
+    app.gameLook.update.mockClear();
+    expect(drawsOver(60)).toBe(30);
+    // Each draw moves the look on by the 1/30 s since the last
+    app.gameLook.update.mock.calls.forEach(([dt]) => expect(dt).toBeCloseTo(1 / 30, 5));
+  });
+
+  it('draws 30 a second at 120 Hz too', () => {
+    expect(drawsOver(120, 120)).toBe(30);
+  });
+
+  it('draws every vsync while something on it is quick (lightning, a lit creature)', () => {
+    app.gameLook.lively = true;
+    vsyncs(2); // the next look frame asks at full rate
+    expect(drawsOver(60)).toBe(60);
+
+    app.gameLook.lively = false;
+    vsyncs(2);
+    expect(drawsOver(60)).toBe(30);
+  });
+
+  it('draws input on the very next vsync, between calm frames', () => {
+    // Line up just after a calm draw: the next calm one is two vsyncs away
+    if (drawsOver(1) === 0) expect(drawsOver(1)).toBe(1);
+    document.dispatchEvent(new Event('pointerdown'));
+    expect(drawsOver(1)).toBe(1);
+  });
+
+  it('keeps a camera fling (damping) at full rate', () => {
+    const onChange = app.controls.addEventListener.mock.calls.find(
+      ([type]) => type === 'change'
+    )[1];
+    app.controls.update.mockImplementation(() => onChange()); // still settling
+    expect(drawsOver(30)).toBe(30);
+
+    app.controls.update.mockImplementation(() => {}); // settled
+    vsyncs(2);
+    expect(drawsOver(30)).toBe(15);
+  });
+
+  it('draws nothing while idle in the schematic look', () => {
+    app.gameLook.animates = false;
+    vsyncs(2);
+    expect(drawsOver(60)).toBe(0);
+  });
+});

@@ -282,8 +282,13 @@ edits show up in the game on a manual reload.
 - **V** / the toolbar's ◐ toggles game ↔ schematic, remembered in
   localStorage (`io/lookPreference.js`, key `resound-editor-look`). The game
   look is synced only while shown (`_syncGameLook`). While it shows, every
-  frame asks for the next (the sky, the wobble); the schematic look keeps the
-  on-demand rendering.
+  frame asks for the next (`_requestLookFrame`) — but its CALM motion (the
+  sky's drift, the bob/wobble, the waystones' breathing, all seconds-long)
+  draws at `CALM_FRAME_MS` (30 fps, rAF vsyncs between skipped:
+  `_lookCalm`); lightning or a lit/fading creature (`GameLookLayer.lively`)
+  and any other request (input, camera damping, a glide, an edit) draw on
+  the next vsync (ruled for the fan, 2026-11-24: the 60 fps loop was ~half
+  the GPU while idle). The schematic look keeps the on-demand rendering.
 - **Songs light their creature** — `GameLookLayer.noteOn(id, pitch, seconds)`
   lights it note by note with Creature.updateLook's rule (messiaenColour over
   its sounding notes: a lone note is pearl, as in game) and its light falls on
