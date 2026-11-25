@@ -354,9 +354,13 @@ export default class EditorGamepad {
 
   // ---- Buttons ------------------------------------------------------------
 
-  /** A button let go: Cross ends the floor range it was building. */
+  /**
+   * A button let go: Cross ends the floor range it was building; R2 puts
+   * down what it carried (its floor tile, if it has none: EditorApp.endCarry).
+   */
   _letGo(button) {
     if (button === 'cross' && this._app.padConfirmEnd) this._app.padConfirmEnd();
+    if (button === 'r2' && this._app.endCarry) this._app.endCarry();
   }
 
   _press(button) {

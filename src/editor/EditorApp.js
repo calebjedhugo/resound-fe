@@ -110,6 +110,9 @@ export default class EditorApp {
     // Entity id of the gate awaiting its teleport partner (context menu
     // "Teleport" is a two-click flow); null = not picking
     this._linkPickSourceId = null;
+    // What R2 / Shift is carrying (an entity id, or 'player' for the spawn):
+    // it builds no floor on the way, only where it is let go (endCarry)
+    this._carry = null;
   }
 
   init() {
@@ -1823,8 +1826,8 @@ export default class EditorApp {
   /**
    * Shift+Arrow: move the entity (or player spawn) on the cursor cell by one
    * cell in the arrow direction. The cursor follows so you can keep nudging.
-   * Refused if the target is occupied. A target with no floor gets its tile
-   * built in the same step (EntityPlacer: anything placed brings its floor).
+   * Refused if the target is occupied. A carry: no floor is built on the
+   * way — where it is let go (Shift / R2 up) gets its tile (endCarry).
    */
   _moveEntityAtCursor(delta) {
     const cell = this.editorScene.getHoveredGrid();
@@ -1839,7 +1842,8 @@ export default class EditorApp {
         this._showToast('That cell is already occupied');
         return;
       }
-      this.entityPlacer.setEntityPosition(entityId, tx, tz, elevation);
+      this.entityPlacer.setEntityPosition(entityId, tx, tz, elevation, { buildFloor: false });
+      this._carry = entityId;
       this.editorScene.moveCursor(delta.dx, delta.dz);
       this._selectAndShow(entityId);
       return;
@@ -1852,16 +1856,36 @@ export default class EditorApp {
         return;
       }
       // The spawn is a singleton; placing it again just relocates it.
-      this.entityPlacer.placeEntity('player', tx, tz, elevation);
+      this.entityPlacer.placeEntity('player', tx, tz, elevation, {}, { buildFloor: false });
+      this._carry = 'player';
       this.editorScene.moveCursor(delta.dx, delta.dz);
+    }
+  }
+
+  /**
+   * R2 (the pad) / Shift (the keyboard) let go: what they carried is put
+   * down — its cell gets its floor tile if it has none (one undo step). A
+   * carry builds no floor on the way: moving across a gap leaves no trail
+   * of tiles.
+   */
+  endCarry() {
+    const carried = this._carry;
+    if (carried === null) return;
+    this._carry = null;
+    const um = this.undoManager;
+    const at = carried === 'player' ? um.getPlayerSpawn() : um.getEntity(carried);
+    if (!at) return; // undone or deleted meanwhile
+    if (!um.hasFloor(at.x, at.y, at.z)) {
+      um.addTiles([{ x: at.x, y: at.y, z: at.z }]);
+      this._requestFrame();
     }
   }
 
   /**
    * Shift+Option+Up/Down: carry the entity (or player spawn) on the cursor
    * cell a storey up/down, and follow it there (the active storey switches
-   * so it stays under the cursor). A cell with no floor there gets its tile
-   * in the same step. Refused past the deepest subfloor / the top storey or
+   * so it stays under the cursor). No floor is built on the way: a cell
+   * with none gets its tile when the carry is let go (endCarry). Refused past the deepest subfloor / the top storey or
    * onto an occupied cell.
    */
   _moveEntityLayer(dir) {
@@ -1878,7 +1902,10 @@ export default class EditorApp {
         this._showToast('That cell is already occupied');
         return;
       }
-      this.entityPlacer.setEntityPosition(entityId, cell.x, cell.z, targetElev);
+      this.entityPlacer.setEntityPosition(entityId, cell.x, cell.z, targetElev, {
+        buildFloor: false,
+      });
+      this._carry = entityId;
       this.elevationSelector.step(dir); // follow the entity to its new storey
       this._selectAndShow(entityId);
       return;
@@ -1890,7 +1917,15 @@ export default class EditorApp {
         this._showToast('That cell is already occupied');
         return;
       }
-      this.entityPlacer.placeEntity('player', cell.x, cell.z, targetElev);
+      this.entityPlacer.placeEntity(
+        'player',
+        cell.x,
+        cell.z,
+        targetElev,
+        {},
+        { buildFloor: false }
+      );
+      this._carry = 'player';
       this.elevationSelector.step(dir);
     }
   }
@@ -2304,10 +2339,15 @@ export default class EditorApp {
     // Enter let go: a floor range being built is built (wherever focus is)
     this._onKeyUp = (e) => {
       if (e.key === 'Enter') this._commitRange();
+      if (e.key === 'Shift') this.endCarry();
     };
     document.addEventListener('keyup', this._onKeyUp);
-    // Focus leaving the window loses the keyup: call the range off
-    this._onBlur = () => this._cancelRange();
+    // Focus leaving the window loses the keyup: call the range off, and
+    // let a carry go where it is (nothing is left standing on air)
+    this._onBlur = () => {
+      this._cancelRange();
+      this.endCarry();
+    };
     window.addEventListener('blur', this._onBlur);
   }
 

@@ -82,6 +82,16 @@ describe('EntityPlacer', () => {
       expect(undoManager.hasTile(0, 0, 0)).toBe(true); // its first cell keeps its floor
     });
 
+    it('a carry (buildFloor: false) moves the entity or spawn and builds nothing', () => {
+      const id = placer.placeEntity('gate', 0, 0, 0);
+      placer.setEntityPosition(id, 4, 0, 2, { buildFloor: false });
+      expect(undoManager.getEntity(id)).toMatchObject({ x: 4, y: 2, z: 0 });
+      expect(undoManager.hasTile(4, 2, 0)).toBe(false);
+      placer.placeEntity('player', 6, 6, 0, {}, { buildFloor: false });
+      expect(undoManager.getPlayerSpawn()).toEqual({ x: 6, y: 0, z: 6 });
+      expect(undoManager.getTiles()).toEqual([{ x: 0, y: 0, z: 0 }]);
+    });
+
     it("on a wall's top (floor a storey up) it stacks no tile", () => {
       placer.placeEntity('wall', 2, 2, 0); // brings its tile at E0
       const id = placer.placeEntity('creature', 2, 2, 1);

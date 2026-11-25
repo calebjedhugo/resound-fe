@@ -268,10 +268,14 @@ edits show up in the game on a manual reload.
   `isWallTop`): entities go on it with NO tile stacked, the validator
   counts it, ✕ there never builds floor, floor ranges skip it.
 - **Anything placed brings its floor** (`EntityPlacer._withFloor`):
-  placing, moving (Shift+arrows, the property panel's X/Z), carrying to
-  another storey or placing the spawn on a cell with no tile builds it in
-  the SAME undo step (`UndoManager.batch`: several mutations, one step, one
-  change).
+  placing, moving (the property panel's X/Z) or placing the spawn on a
+  cell with no tile builds it in the SAME undo step (`UndoManager.batch`:
+  several mutations, one step, one change). **A carry builds none on the
+  way** (ruled 2026-11-25: "should not create a floor tile until R2 is
+  released"): Shift+arrows / R2+d-pad, and the storey carries, move with
+  `buildFloor: false`; letting go of R2 / Shift (or the window losing
+  focus) puts it down — `EditorApp.endCarry` builds the tile under it if
+  it has none, its own undo step.
 - **□ / Delete**: the entity, else the spawn, else that floor tile. So twice
   on an entity: the entity, then its floor.
 - **Storeys**: Option+↑/↓ (L2 + d-pad ↑/↓) go to any storey from
@@ -458,7 +462,7 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 | Square | delete the entity, else the floor tile under the cursor | — (freed) | — |
 | Triangle | song editor | play/stop the song (A) | — |
 | Circle | back (Esc) | | |
-| L1 / R1 | palette prev / next (floor only between the ends) | | carry entity down / up a storey (brings its floor) |
+| L1 / R1 | palette prev / next (floor only between the ends) | | carry entity down / up a storey (its floor when R2 is let go) |
 | L2 + R2 + d-pad ↑/↓ | carry entity a storey | | |
 | Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, Undo, Redo, look, view (cutaway), sharp rendering | | |
 | Share | game ↔ schematic look | view: full → storey cut → cutaway (X) | |

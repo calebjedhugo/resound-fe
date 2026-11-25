@@ -868,7 +868,35 @@ describe('EditorApp wiring', () => {
       const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
       shiftPress('ArrowRight');
       // setEntityPosition(id, gridX, gridZ, elevation)
-      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0);
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0, {
+        buildFloor: false,
+      });
+    });
+
+    it('Shift+Arrow builds no floor on the way; letting Shift go builds the tile under it', () => {
+      app.entityPlacer.setEntityPosition.mockImplementation((eid, x, z, y) =>
+        app.undoManager.updateEntity(eid, { x, y, z })
+      );
+      const id = app.undoManager.addEntity('creature', 7, 0, 7, {});
+      shiftPress('ArrowRight');
+      expect(app.undoManager.getTiles()).toEqual([]);
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift', bubbles: true }));
+      expect(app.undoManager.getTiles()).toEqual([{ x: 8, y: 0, z: 7 }]);
+      // ...once: a later Shift let go with nothing carried builds nothing
+      app.undoManager.updateEntity(id, { x: 2 });
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift', bubbles: true }));
+      expect(app.undoManager.getTiles()).toEqual([{ x: 8, y: 0, z: 7 }]);
+    });
+
+    it('a carried spawn gets its tile when Shift is let go', () => {
+      app.entityPlacer.placeEntity.mockImplementation((type, x, z, y) =>
+        app.undoManager.setPlayerSpawn(x, y, z)
+      );
+      app.undoManager.setPlayerSpawn(7, 0, 7);
+      shiftPress('ArrowRight');
+      expect(app.undoManager.getTiles()).toEqual([]);
+      window.dispatchEvent(new Event('blur')); // focus lost: let go where it is
+      expect(app.undoManager.getTiles()).toEqual([{ x: 8, y: 0, z: 7 }]);
     });
 
     it('refuses a Shift+Arrow move onto an occupied cell', () => {
@@ -881,7 +909,14 @@ describe('EditorApp wiring', () => {
     it('relocates the player spawn with Shift+Arrow', () => {
       app.undoManager.setPlayerSpawn(7, 0, 7);
       shiftPress('ArrowRight');
-      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('player', 8, 7, 0);
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith(
+        'player',
+        8,
+        7,
+        0,
+        {},
+        { buildFloor: false }
+      );
     });
 
     it('Shift+Arrow may park the spawn on a waystone tile', () => {
@@ -889,7 +924,14 @@ describe('EditorApp wiring', () => {
       app.undoManager.setPlayerSpawn(7, 0, 7);
       app.entityPlacer.placeEntity.mockClear();
       shiftPress('ArrowRight');
-      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('player', 8, 7, 0);
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith(
+        'player',
+        8,
+        7,
+        0,
+        {},
+        { buildFloor: false }
+      );
     });
   });
 
@@ -925,7 +967,7 @@ describe('EditorApp wiring', () => {
       expect(app.editorScene.activeElevation).toBe(9);
     });
 
-    it('builds floor on a subfloor, and carries an entity down onto it (its tile comes too)', () => {
+    it('builds floor on a subfloor, and carries an entity down onto it (its tile comes when let go)', () => {
       optionPress('ArrowDown');
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
@@ -934,7 +976,9 @@ describe('EditorApp wiring', () => {
       optionPress('ArrowUp');
       const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
       optionPress('ArrowDown', true);
-      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 7, 7, -1);
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 7, 7, -1, {
+        buildFloor: false,
+      });
       expect(app.editorScene.activeElevation).toBe(-1);
     });
 
@@ -949,7 +993,9 @@ describe('EditorApp wiring', () => {
     it('Shift+Option+Up carries the entity up a storey and follows it', () => {
       const id = app.undoManager.addEntity('wall', 7, 0, 7, {}); // cursor (7,7), elev 0
       optionPress('ArrowUp', true);
-      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 7, 7, 1);
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 7, 7, 1, {
+        buildFloor: false,
+      });
       expect(app.editorScene.activeElevation).toBe(1); // active layer follows
     });
 
@@ -1286,7 +1332,9 @@ describe('EditorApp wiring', () => {
 
       shiftArrowRight();
 
-      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0);
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0, {
+        buildFloor: false,
+      });
       expect(ri.hide).not.toHaveBeenCalled(); // hiding frees them
       expect(ri.show).toHaveBeenLastCalledWith(app.undoManager.getEntity(id), mockMesh.position);
     });
@@ -1823,12 +1871,36 @@ describe('EditorApp wiring', () => {
       });
     });
 
+    it('R2 carries with no floor on the way; letting R2 go builds the tile under it', () => {
+      app.entityPlacer.setEntityPosition.mockImplementation((eid, x, z, y) =>
+        app.undoManager.updateEntity(eid, { x, y, z })
+      );
+      app.undoManager.addTiles([{ x: 7, y: 0, z: 7 }]);
+      const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
+      hold('r2');
+      tap('right');
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 8, z: 7 }); // the cursor followed
+      tap('right');
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: 0, z: 7 }]); // no trail
+      letGo('r2');
+      expect(app.undoManager.getEntity(id)).toEqual(expect.objectContaining({ x: 9, z: 7 }));
+      expect(app.undoManager.getTiles()).toEqual(
+        expect.arrayContaining([
+          { x: 7, y: 0, z: 7 },
+          { x: 9, y: 0, z: 7 },
+        ])
+      );
+      expect(app.undoManager.getTiles()).toHaveLength(2);
+    });
+
     it('R2 held carries the entity under the cursor with the d-pad (Shift+arrows)', () => {
       const id = app.undoManager.addEntity('wall', 7, 0, 7, {});
       hold('r2');
       tap('right');
       letGo('r2');
-      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0);
+      expect(app.entityPlacer.setEntityPosition).toHaveBeenCalledWith(id, 8, 7, 0, {
+        buildFloor: false,
+      });
     });
 
     it('L2 held: d-pad left / right undo and redo', () => {

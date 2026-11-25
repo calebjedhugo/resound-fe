@@ -90,14 +90,20 @@ export default class EntityPlacer {
     return meshes;
   }
 
-  placeEntity(type, gridX, gridZ, elevation, data = {}) {
+  /**
+   * @param {object} [options]
+   * @param {boolean} [options.buildFloor=true] - false: no floor tile with
+   *   it (the spawn carried with R2 / Shift gets its tile when let go:
+   *   EditorApp.endCarry)
+   */
+  placeEntity(type, gridX, gridZ, elevation, data = {}, { buildFloor = true } = {}) {
     // One thing per tile — except a waystone, which may share a cell with the
     // player spawn (spawning on a waystone is legal) and with a gate (a
     // waystone under a doorway).
     if (this._isCellOccupied(gridX, elevation, gridZ, type)) return null;
 
     if (type === 'player') {
-      return this._placePlayerSpawn(gridX, gridZ, elevation);
+      return this._placePlayerSpawn(gridX, gridZ, elevation, buildFloor);
     }
 
     const entityData = { ...defaultData(type), ...data };
@@ -106,8 +112,12 @@ export default class EntityPlacer {
       entityData.gateId = nextGateId(usedGateIds(this._undoManager.getEntities()));
     }
     // Anything placed brings its floor tile: one undo step for both
-    const id = this._withFloor(gridX, elevation, gridZ, () =>
-      this._undoManager.addEntity(type, gridX, elevation, gridZ, entityData)
+    const id = this._withFloor(
+      gridX,
+      elevation,
+      gridZ,
+      () => this._undoManager.addEntity(type, gridX, elevation, gridZ, entityData),
+      buildFloor
     );
     this._createMesh(id, type, gridX, gridZ, elevation, entityData);
     return id;
@@ -117,11 +127,12 @@ export default class EntityPlacer {
    * Run a placement or move onto cell (x, y, z) as ONE undo step, building
    * the floor tile there first when the cell has none (the floor is only
    * what the designer builds; nothing stands on air). A wall's top is floor
-   * already: nothing is stacked on it.
+   * already: nothing is stacked on it. `build` false: just `fn` (a carry
+   * builds the tile when it ends).
    */
-  _withFloor(x, y, z, fn) {
+  _withFloor(x, y, z, fn, build = true) {
     const um = this._undoManager;
-    if (!um.hasFloor || um.hasFloor(x, y, z)) return fn();
+    if (!build || !um.hasFloor || um.hasFloor(x, y, z)) return fn();
     const run = () => {
       um.addTiles([{ x, y, z }]);
       return fn();
@@ -132,11 +143,16 @@ export default class EntityPlacer {
   /**
    * Move an already-placed entity to a new grid cell, updating both the model
    * and its existing mesh (so selection highlighting survives the move). A
-   * cell with no floor gets its tile in the same undo step.
+   * cell with no floor gets its tile in the same undo step — unless
+   * `buildFloor` is false (a carry: the tile comes when it ends).
    */
-  setEntityPosition(id, gridX, gridZ, elevation) {
-    this._withFloor(gridX, elevation, gridZ, () =>
-      this._undoManager.updateEntity(id, { x: gridX, y: elevation, z: gridZ })
+  setEntityPosition(id, gridX, gridZ, elevation, { buildFloor = true } = {}) {
+    this._withFloor(
+      gridX,
+      elevation,
+      gridZ,
+      () => this._undoManager.updateEntity(id, { x: gridX, y: elevation, z: gridZ }),
+      buildFloor
     );
     const mesh = this._entityMeshes.get(id);
     if (!mesh) return;
@@ -164,9 +180,13 @@ export default class EntityPlacer {
     return spawnHere;
   }
 
-  _placePlayerSpawn(gridX, gridZ, elevation) {
-    this._withFloor(gridX, elevation, gridZ, () =>
-      this._undoManager.setPlayerSpawn(gridX, elevation, gridZ)
+  _placePlayerSpawn(gridX, gridZ, elevation, buildFloor = true) {
+    this._withFloor(
+      gridX,
+      elevation,
+      gridZ,
+      () => this._undoManager.setPlayerSpawn(gridX, elevation, gridZ),
+      buildFloor
     );
     this._createPlayerSpawnMesh(gridX, gridZ, elevation);
     return null; // No entity id for player spawn
