@@ -130,7 +130,8 @@ automated playtesters can observe them.)
     (0.1 beat) past a beat it IS that beat — the first note sounds at once
     and the rest of that song is drawn back onto the grid — else the next
     beat. Its schedule restarts there (next sing beat = that beat, then +=
-    interval), whatever phase it sang on before. The pole's reach-out,
+    its period: see "Creatures sing on the beat"), whatever phase it sang
+    on before. The pole's reach-out,
     flare and pour (0.87 s at rest) are compressed to finish just before
     that beat, never quicker than 0.25 s (`RELEASE_MIN_EMERGE_S`); with the
     beat closer than that it starts singing while still pouring out of the
@@ -232,9 +233,29 @@ automated playtesters can observe them.)
     itself, whatever its source — player OR creature. (The old rule waited
     for the utterance to end plus a beat of silence, so a continuous singer
     near a gate never flashed it; only poc-clap's gapped singers did.) The
-    one grace: a beat-group whose grid slot is still within tolerance may
-    be a chord mid-assembly, so judgment holds until its slot passes
-    (`TOL_BEATS`, ~a 16th).
+    one grace: the newest onset may be a chord mid-assembly, so judgment
+    holds until its spread passes (`CHORD_SPREAD_BEATS`, ~half a 16th).
+  - **Onsets are compared with each other, never with a grid (2026-11-24,
+    approved by the designer after control-test-2 took several loops):**
+    notes heard within `CHORD_SPREAD_BEATS` (0.13) of an onset's first note
+    are ONE onset (a chord when several: `ListeningManager.groupNotesByBeat`),
+    and each target onset must land within `TOL_BEATS` (0.13) of where it is
+    due, counted from the take's own first onset. Sixteenths stay distinct
+    (0.25 apart), a note a sixteenth off is still the wrong rhythm, rotated
+    takes still fail. It used to snap every note to a 16th grid on the
+    listener's clock (from when it was built, unrelated to the music's
+    beat): a chord whose two creatures sounded a frame apart either side of
+    a grid line split into two onsets and failed the take — a pair singing
+    back to back drifted across those lines and only matched on some loops.
+    A chord whose first notes are in and whose others are still on their
+    way is in progress (the fade doesn't flicker); one whose others never
+    come fails once its spread has passed.
+  - **A completion consumes the TAKE, not everything heard (2026-11-24):**
+    the gate keeps what it heard after the take's last note, so a take that
+    starts as another ends (a creature singing back to back: its next
+    downbeat lands on the frame the last window closes) counts too — the
+    door is held through every loop of a parked performer, not every
+    other one.
   - **Wrong-note LOCKOUT on gates (ruled 2026-07-16):** a mismatch voids
     everything the gate has heard AND deafens it for a short window
     (`Gate.MISMATCH_LOCKOUT_MS`) — notes played during the lockout are not
@@ -245,6 +266,17 @@ automated playtesters can observe them.)
     flash decays over exactly the lockout window, doubling as the wordless
     "gate is resetting — wait" signifier. Fountains keep the old
     no-lockout capture (flash is immediate there too).
+- **Creatures sing on the beat, loop after loop (2026-11-24):** a creature's
+  songs start `period` beats apart — its `interval`, or, for a song as long
+  as that or longer, the song itself rounded up to a whole beat (it sings
+  back to back). Each starts on its beat of that grid: the first note on
+  the first frame at or past it (or, back to back, when the last song
+  ends), the rest drawn back onto the grid by as much (the release's late-
+  grace snap, now every song). A song too late to draw back (later than its
+  first note's length: a stalled frame) is sat out, and the next is on the
+  grid again. It used to start each song whenever the last one ended, a
+  frame or more late, so a back-to-back singer drifted off the beat a frame
+  a loop — and off another creature released on the beat beside it.
 - **Gates open on the COMPLETED song, LATCH, and close when you walk
   through** (ruled 2026-07-10, superseding the 2026-07-05 play-to-pass grace
   and its multi-note caveat). The full rule:

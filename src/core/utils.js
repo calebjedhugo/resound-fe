@@ -30,24 +30,6 @@ export function getDistanceVolume(distance, maxDistance) {
 }
 
 /**
- * Quantize a timestamp to nearest beat subdivision
- * @param {number} timestamp - Timestamp in milliseconds
- * @param {number} startTime - Recording start time in milliseconds
- * @param {number} tempo - Tempo in BPM
- * @param {number} subdivision - Beat subdivision (16 = 16th notes)
- * @returns {number} Quantized beat position
- */
-export function quantizeToBeat(timestamp, startTime, tempo, subdivision = 16) {
-  const msPerBeat = (60 / tempo) * 1000;
-  const elapsed = timestamp - startTime;
-  const beat = elapsed / msPerBeat;
-
-  // Quantize to nearest subdivision
-  const subdivisions = subdivision / 4; // 16th notes = 4 subdivisions per beat
-  return Math.round(beat * subdivisions) / subdivisions;
-}
-
-/**
  * Group an array of objects by a key
  * @param {Array} array - Array to group
  * @param {string} key - Key to group by

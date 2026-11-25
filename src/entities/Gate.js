@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import ListeningManager from 'core/ListeningManager';
-import { evaluatePhrasesCached } from 'core/phraseMatching';
+import { evaluatePhrasesCached, TOL_BEATS } from 'core/phraseMatching';
 import SongMatcher from 'core/SongMatcher';
 import { soundingBeats } from 'core/noteBeats';
 import gameState from 'core/GameState';
@@ -167,6 +167,27 @@ class Gate extends Entity {
     this.capturedNotes.push(noteEvent);
   }
 
+  /**
+   * A completed take is consumed so its notes don't re-open the gate every
+   * frame — the TAKE, and nothing heard after it: a take that starts as this
+   * one ends (a creature singing back to back, its next downbeat landing on
+   * this window's last frame) still counts. Its own notes go, so they can't
+   * corrupt that next window either; history before them is forgotten
+   * (core/phraseMatching's trim horizon), what follows them stays judgeable.
+   * @param {?{lastNoteMs: number}} take - phraseMatching's `_completedTake`
+   */
+  _consumeTake(take) {
+    const now = Date.now();
+    const lastNoteMs = take && Number.isFinite(take.lastNoteMs) ? take.lastNoteMs : now;
+    const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
+    const tolMs = TOL_BEATS * (60000 / tempo);
+    this.capturedNotes = this.capturedNotes.filter((n) => n.timestamp > lastNoteMs);
+    // An anchor after the take's last note is judgeable (it must lie past
+    // the horizon by the tolerance), nothing at or before it
+    this._trimHorizonMs = Math.max(this._trimHorizonMs ?? -Infinity, lastNoteMs - tolMs);
+    this._lastJudgedStartBeat = undefined;
+  }
+
   /** The other face of an in-level (same-puzzle) door pair, or null. */
   _sameAreaPartner() {
     if (!this.link || !this.area || this.link.puzzleId !== this.area.id) return null;
@@ -217,10 +238,7 @@ class Gate extends Entity {
     this._inProgress = result === 'in-progress';
     if (result === true) {
       this._lastCompletionMs = Date.now();
-      // Consume the performance so the same notes don't re-open every frame.
-      this.capturedNotes = [];
-      this._trimHorizonMs = Date.now();
-      this._lastJudgedStartBeat = undefined;
+      this._consumeTake(this._completedTake);
       // A fresh completion earns a fresh opening — any deferred close from a
       // previous crossing is superseded.
       this._closePending = false;

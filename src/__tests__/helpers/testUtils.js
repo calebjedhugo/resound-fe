@@ -62,6 +62,8 @@ import portalWallsA from '../fixtures/puzzles/portal-walls-a.json';
 import portalWallsB from '../fixtures/puzzles/portal-walls-b.json';
 import deployBasic from '../fixtures/puzzles/deploy-basic.json';
 import portalTwoPairs from '../fixtures/puzzles/portal-two-pairs.json';
+import twoVoiceGate from '../fixtures/puzzles/two-voice-gate.json';
+import twoVoiceGateEmpty from '../fixtures/puzzles/two-voice-gate-empty.json';
 
 /**
  * A TEST SINGER: a sound source standing where the player stands, singing a
@@ -162,6 +164,8 @@ const TEST_PUZZLES = {
   'portal-walls-b': portalWallsB,
   'deploy-basic': deployBasic,
   'portal-two-pairs': portalTwoPairs,
+  'two-voice-gate': twoVoiceGate,
+  'two-voice-gate-empty': twoVoiceGateEmpty,
 };
 
 /**

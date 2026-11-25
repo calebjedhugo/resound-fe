@@ -79,7 +79,7 @@ This document defines the structure for Resound puzzle files.
           // OR
           [{ "pitch": "string", "length": "string" }] // Chord
         ],
-        "interval": number,          // Beats between song repetitions (creatures only)
+        "interval": number,          // Beats between song STARTS (creatures only); under the song's length: back to back, the song's length rounded up to a beat
         "audibleRange": number,      // Audio range in world units (creatures only)
         "clapDisplacement": "string" // RETIRED 2026-11-23: ignored if present
       },

@@ -1,0 +1,141 @@
+{
+  "id": "two-voice-gate-empty",
+  "name": "A two-voice gate, its singers on the tape (control-test-2's songs)",
+  "difficulty": 1,
+  "gridSize": 10,
+  "tempo": 120,
+  "playerStart": {
+    "x": 3,
+    "y": 0,
+    "z": 7
+  },
+  "entities": [
+    {
+      "type": "gate",
+      "position": {
+        "x": 5,
+        "y": 0,
+        "z": 8
+      },
+      "song": {
+        "voices": [
+          {
+            "id": "treble",
+            "clef": "treble",
+            "notes": [
+              {
+                "pitch": "A4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "B4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "C5",
+                "length": "1/4"
+              },
+              {
+                "pitch": "F4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "E4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "A4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "B4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "E4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "F4",
+                "length": "1/2"
+              },
+              {
+                "pitch": "B3",
+                "length": "1/2"
+              },
+              {
+                "pitch": "A3",
+                "length": "1/1"
+              }
+            ]
+          },
+          {
+            "id": "bass",
+            "clef": "bass",
+            "notes": [
+              {
+                "pitch": "A3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "G3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "F3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "C4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "C4",
+                "length": "1/4"
+              },
+              {
+                "pitch": "A2",
+                "length": "1/4"
+              },
+              {
+                "pitch": "B2",
+                "length": "1/4"
+              },
+              {
+                "pitch": "C3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "D3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "E3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "F3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "G3",
+                "length": "1/4"
+              },
+              {
+                "pitch": "A3",
+                "length": "1/1"
+              }
+            ]
+          }
+        ],
+        "staffGroups": [
+          {
+            "type": "brace",
+            "voiceIds": ["treble", "bass"]
+          }
+        ]
+      },
+      "audibleRange": 15
+    }
+  ]
+}

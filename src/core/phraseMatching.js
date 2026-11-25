@@ -19,8 +19,15 @@
  * the window that aren't the target's (a chord where a single note is due,
  * a sound during a target rest) — in-window exclusivity is what makes a
  * continuous singer beside a door jam it forever.
+ *
+ * Onsets are compared with EACH OTHER, never with a fixed grid (2026-11-24):
+ * notes heard together (ListeningManager.groupNotesByBeat: within
+ * CHORD_SPREAD_BEATS) are one onset, and each target onset must land within
+ * TOL_BEATS of where it is due, counted from the take's own first onset.
+ * (A fixed 16th grid on the listener's clock split a chord whose two
+ * creatures landed either side of one of its lines.)
  */
-import ListeningManager from 'core/ListeningManager';
+import ListeningManager, { CHORD_SPREAD_BEATS } from 'core/ListeningManager';
 import SongMatcher from 'core/SongMatcher';
 import gameState from 'core/GameState';
 
@@ -30,8 +37,10 @@ import gameState from 'core/GameState';
 // the offending note itself (ruled 2026-07-16).
 export const PHRASE_GAP_BEATS = 1;
 
-// Alignment tolerance: within one 16th-note grid slot (grid step = 0.25)
-const TOL_BEATS = 0.13;
+// Alignment tolerance: an onset lands within this of where it is due
+// (counted from the take's first onset) — just over half a sixteenth, so a
+// note a sixteenth off is the wrong rhythm
+export const TOL_BEATS = 0.13;
 
 // A cached verdict's lifetime ends this much (beats) before the one turn
 // computed by subtraction, so float rounding can never place that turn
@@ -52,11 +61,40 @@ function groupMatchesOnset(group, onset) {
 }
 
 /**
+ * Is the group heard so far PART of this chord onset — fewer notes, each one
+ * of its notes, nothing else? (Its other notes may still be on their way:
+ * a chord's members come from independent sources.)
+ */
+function groupIsPartOfOnset(group, onset) {
+  if (group.notes.length >= onset.notes.length) return false;
+  const left = [...onset.notes];
+  return group.notes.every((note) => {
+    const i = left.findIndex((wanted) => SongMatcher.notesMatch(note, wanted));
+    if (i === -1) return false;
+    left.splice(i, 1);
+    return true;
+  });
+}
+
+/** The unused group nearest `beat`, within the tolerance (or undefined). */
+function groupNear(groups, used, beat) {
+  let best;
+  for (const g of groups) {
+    const off = Math.abs(g.beat - beat);
+    if (!used.has(g) && off <= TOL_BEATS && (!best || off < Math.abs(best.beat - beat))) best = g;
+  }
+  return best;
+}
+
+/**
  * Evaluate a listener's captured notes against its required song.
  * @param {Object} listener - entity with capturedNotes, listeningStartTime,
  *   requiredSong; a _lastJudgedStartBeat marker is maintained on it
  * @returns {true|'in-progress'|'mismatch'|false} true = a completed
- *   performance matches (full target + trailing silence). 'in-progress' = a
+ *   performance matches (its window — the target's span from its first
+ *   onset — has closed). `listener._completedTake` is set to
+ *   `{ endMs, lastNoteMs }`: when that window closed, and the last note of
+ *   the take (so its owner can consume the take and no more). 'in-progress' = a
  *   correct performance is UNDERWAY (every onset due so far matches, nothing
  *   extra, the trailing silence hasn't elapsed yet) — used by play-to-pass
  *   gates to open AS the song is performed. 'mismatch' = a wrong note just
@@ -184,7 +222,7 @@ function judge(listener, tempo, nowMs, horizon) {
           turnAt(horizon, want - TOL_BEATS - TURN_SLACK_BEATS);
           break;
         }
-        const group = groups.find((g) => !used.has(g) && Math.abs(g.beat - want) <= TOL_BEATS);
+        const group = groupNear(groups, used, want);
         if (!group && !windowClosed && nowBeat <= want + TOL_BEATS) {
           // Onset-boundary grace: the due note hasn't arrived yet but is
           // still within tolerance (scheduling jitter between one note's end
@@ -193,6 +231,19 @@ function judge(listener, tempo, nowMs, horizon) {
           // snaps opaque between the notes of a correct take. A WRONG note
           // at the onset (group found, mismatched) still fails at once.
           turnAt(horizon, want + TOL_BEATS);
+          break;
+        }
+        if (
+          group &&
+          !windowClosed &&
+          nowBeat <= group.beat + CHORD_SPREAD_BEATS &&
+          groupIsPartOfOnset(group, onset)
+        ) {
+          // A chord mid-assembly: some of its notes are in, the rest may
+          // still land (their sources sound a frame or two apart). Still
+          // in progress — the fade never flickers on a correct chord.
+          used.add(group);
+          turnAt(horizon, group.beat + CHORD_SPREAD_BEATS);
           break;
         }
         if (!group || !groupMatchesOnset(group, onset)) {
@@ -219,7 +270,19 @@ function judge(listener, tempo, nowMs, horizon) {
         if (ahead) turnAt(horizon, ahead.beat);
       }
       if (!extras) {
-        if (windowClosed) return true;
+        if (windowClosed) {
+          let lastNoteMs = -Infinity;
+          used.forEach((g) =>
+            g.notes.forEach((n) => {
+              if (n.timestamp > lastNoteMs) lastNoteMs = n.timestamp;
+            })
+          );
+          listener._completedTake = {
+            endMs: listener.listeningStartTime + endBeat * msPerBeat,
+            lastNoteMs,
+          };
+          return true;
+        }
         inProgress = true; // could still complete — don't report a miss yet
       }
     }
@@ -235,11 +298,11 @@ function judge(listener, tempo, nowMs, horizon) {
   // creature noise included (a continuous singer never yields the trailing
   // silence the old rule waited for, so gates near jammers never flashed).
   const lastGroup = groups[groups.length - 1];
-  // One grace: a group whose grid slot is still within tolerance may be a
-  // chord mid-assembly (mates from independent sources land frames apart) —
-  // hold judgment until its slot has passed.
-  if (nowBeat <= lastGroup.beat + TOL_BEATS) {
-    turnAt(horizon, lastGroup.beat + TOL_BEATS);
+  // One grace: the newest group may be a chord mid-assembly (mates from
+  // independent sources land frames apart) — hold judgment until its spread
+  // has passed.
+  if (nowBeat <= lastGroup.beat + CHORD_SPREAD_BEATS) {
+    turnAt(horizon, lastGroup.beat + CHORD_SPREAD_BEATS);
     return false;
   }
   // One report per offending sound: stay silent until something NEW lands.

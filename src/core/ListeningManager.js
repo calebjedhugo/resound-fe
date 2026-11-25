@@ -1,6 +1,12 @@
-import { quantizeToBeat, groupBy } from 'core/utils';
 import gameState from 'core/GameState';
 import { isTiedOn } from 'core/noteBeats';
+
+// Notes heard within this many beats of the first note of a group sound
+// TOGETHER (one onset, a chord when there are several): its members come
+// from independent sources (two creatures, each on its own frame and its own
+// timers) and never land on the same millisecond. Under a sixteenth (0.25),
+// so a sixteenth run stays a run.
+export const CHORD_SPREAD_BEATS = 0.13;
 
 /**
  * ListeningManager - Global system for entities to listen to all sound sources
@@ -73,10 +79,16 @@ class ListeningManager {
   }
 
   /**
-   * Quantize captured notes to the 16th-note grid and group simultaneous
-   * notes, keeping beat positions (needed for phrase segmentation). A note
-   * event may carry `durationBeats` (how long it sounds — a tied note's
-   * whole held length) and `dotted`; matching reads either (noteBeats).
+   * Group captured notes into ONSETS: notes heard together (within
+   * CHORD_SPREAD_BEATS of a group's first note) are one onset, a chord when
+   * there are several. Each group's `beat` is its first note's, on the
+   * listener's own count (beats since `startTime`) — NOT snapped to any
+   * grid: matching compares onsets with each other (core/phraseMatching),
+   * so where the count's beats fall relative to the performance doesn't
+   * matter. (Snapping to a fixed 16th grid split a chord whose two sources
+   * landed either side of a grid line, 2026-11-24.) A note event may carry
+   * `durationBeats` (how long it sounds — a tied note's whole held length)
+   * and `dotted`; matching reads either (noteBeats).
    * @param {Array} capturedNotes - Array of note events
    * @param {number} startTime - When listening started
    * @param {number} tempo - Tempo in BPM
@@ -91,19 +103,25 @@ class ListeningManager {
     const struck = capturedNotes.some(isTiedOn)
       ? capturedNotes.filter((note) => !isTiedOn(note))
       : capturedNotes;
-    const quantized = struck.map((note) => ({
-      ...note,
-      beat: quantizeToBeat(note.timestamp, startTime, tempo, 16),
-    }));
-    const grouped = groupBy(quantized, 'beat');
-    return Object.keys(grouped)
-      .map(Number)
-      .sort((a, b) => a - b)
-      .map((beat) => ({ beat, notes: grouped[beat] }));
+    const msPerBeat = 60000 / tempo;
+    const timed = struck
+      .map((note) => ({ ...note, beat: (note.timestamp - startTime) / msPerBeat }))
+      .sort((a, b) => a.beat - b.beat);
+    const groups = [];
+    let current = null;
+    for (const note of timed) {
+      if (current && note.beat - current.beat <= CHORD_SPREAD_BEATS) {
+        current.notes.push(note);
+      } else {
+        current = { beat: note.beat, notes: [note] };
+        groups.push(current);
+      }
+    }
+    return groups;
   }
 
   /**
-   * Process captured notes into song format (quantize and group)
+   * Process captured notes into song format (grouped into onsets)
    * @param {Array} capturedNotes - Array of note events
    * @param {number} startTime - When listening started
    * @param {number} tempo - Tempo in BPM

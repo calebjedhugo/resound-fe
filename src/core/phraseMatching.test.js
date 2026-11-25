@@ -14,6 +14,7 @@ import SongMatcher from 'core/SongMatcher';
 import ListeningManager from 'core/ListeningManager';
 import evaluatePhrases, { evaluatePhrasesCached } from 'core/phraseMatching';
 import heardStreams from '../__tests__/fixtures/listening/heard-streams.json';
+import twoVoiceGate from '../__tests__/fixtures/puzzles/two-voice-gate.json';
 
 const TEMPO = 120; // 500ms per beat
 const MS_PER_BEAT = 60000 / TEMPO;
@@ -491,8 +492,15 @@ describe('Judging only when the verdict can change (evaluatePhrasesCached)', () 
    * `[ms, from, to, trimHorizonMs, lastJudgedBefore, verdict, lastJudgedAfter,
    * tempo, repeat]` — at `ms` it held notes[from..to), and the same call
    * repeated `repeat` times, 16 ms apart. Times count from its epoch.
+   *
+   * The recorded verdicts are the old matcher's (onsets snapped to a 16th
+   * grid), which put each window's close up to half a sixteenth from where
+   * it now falls, and the recorded state that follows them (what a
+   * completion or wrong note consumed) follows those frames: they are no
+   * longer the reference. What the listeners DID with those notes, judged
+   * now, is checked against what they did then in core/recordedPlay.test.js.
    */
-  it('agrees with a fresh judgment, and with the verdicts of recorded play', () => {
+  it('agrees with a fresh judgment over recorded play', () => {
     const hear = (listener, notes, [, from, to, trim, judgedBefore]) => {
       // The heard list grows in place (onNoteCaptured) or is replaced (a
       // trim, a consumed take)
@@ -513,29 +521,24 @@ describe('Judging only when the verdict can change (evaluatePhrasesCached)', () 
 
     const disagreements = [];
     let calls = 0;
+    const verdicts = new Set();
     for (const stream of heardStreams) {
       const pair = twins(stream.song);
       for (const call of stream.calls) {
-        const [ms, , , , , verdict, judgedAfter, tempo, repeat] = call;
+        const [ms, , , , , , , tempo, repeat] = call;
         setTempo(tempo);
         for (let k = 0; k < repeat; k += 1) {
           const at = ms + 16 * k;
           jest.setSystemTime(EPOCH + at);
           pair.forEach((listener) => hear(listener, stream.notes, call));
           const where = { stream: stream.id, at };
-          const fresh = judgeTwins(pair, disagreements, where);
-          const recordedJudged = judgedAfter === null ? undefined : judgedAfter;
-          if (
-            fresh !== VERDICTS[verdict] ||
-            !Object.is(pair[0]._lastJudgedStartBeat, recordedJudged)
-          ) {
-            disagreements.push({ ...where, fresh, recorded: VERDICTS[verdict] });
-          }
+          verdicts.add(judgeTwins(pair, disagreements, where));
           calls += 1;
         }
       }
     }
     expect(calls).toBe(16947);
+    expect([...verdicts].sort()).toEqual([...VERDICTS].sort()); // every kind was judged
     expect(disagreements).toEqual([]);
   });
 
@@ -738,5 +741,189 @@ describe('Judging only when the verdict can change (evaluatePhrasesCached)', () 
       // closing: a handful of judgments, not one per frame
       expect(judgments.mock.calls.length).toBeLessThanOrEqual(12);
     });
+  });
+});
+
+describe('evaluatePhrases — timing: sixteenths, tolerance, simultaneity', () => {
+  const RUN = [
+    { pitch: 'C4', length: '1/16' },
+    { pitch: 'D4', length: '1/16' },
+    { pitch: 'E4', length: '1/8' },
+  ];
+
+  it('notes a sixteenth apart are two onsets', () => {
+    const listener = makeListener({
+      requiredSong: RUN,
+      notes: [
+        [0, 'C4', '1/16'],
+        [0.25, 'D4', '1/16'],
+        [0.5, 'E4', '1/8'],
+      ],
+      nowBeats: 1.5,
+    });
+    expect(evaluatePhrases(listener)).toBe(true);
+  });
+
+  it('two sixteenths heard together are a chord, not the run', () => {
+    const listener = makeListener({
+      requiredSong: RUN,
+      notes: [
+        [0, 'C4', '1/16'],
+        [0, 'D4', '1/16'],
+        [0.5, 'E4', '1/8'],
+      ],
+      nowBeats: 1.5,
+    });
+    expect(evaluatePhrases(listener)).not.toBe(true);
+  });
+
+  it('a note a sixteenth late is the wrong rhythm', () => {
+    const listener = makeListener({
+      requiredSong: RUN,
+      notes: [
+        [0, 'C4', '1/16'],
+        [0.25, 'D4', '1/16'],
+        [0.75, 'E4', '1/8'],
+      ],
+      nowBeats: 1.75,
+    });
+    expect(evaluatePhrases(listener)).not.toBe(true);
+  });
+
+  it('a note 0.1 beat off its onset is on time; 0.2 beat off is not', () => {
+    const take = (late) =>
+      makeListener({
+        notes: [
+          [0, 'B4'],
+          [1 + late, 'C#5'],
+          [2, 'G#4'],
+        ],
+        nowBeats: 5,
+      });
+    expect(evaluatePhrases(take(0.1))).toBe(true);
+    expect(evaluatePhrases(take(-0.1))).toBe(true);
+    expect(evaluatePhrases(take(0.2))).not.toBe(true);
+    expect(evaluatePhrases(take(-0.2))).not.toBe(true);
+  });
+
+  it('a stray note 40 ms off a due single note makes it a chord', () => {
+    const listener = makeListener({
+      notes: [
+        [0, 'B4'],
+        [1, 'C#5'],
+        [1 + 40 / MS_PER_BEAT, 'D4'],
+        [2, 'G#4'],
+      ],
+      nowBeats: 6,
+    });
+    expect(evaluatePhrases(listener)).toBe('mismatch');
+  });
+});
+
+/**
+ * Two creatures each singing one voice of a two-voice song (the designer's
+ * control-test-2, copied into fixtures/puzzles/two-voice-gate.json): one
+ * performance from two sources, whose onsets never land on the same
+ * millisecond (each sings from its own frame, its notes timed by its own
+ * timers).
+ */
+describe('evaluatePhrases — two voices from two sources', () => {
+  const EPOCH = 1770000000000;
+  const GATE_SONG = twoVoiceGate.entities.find((e) => e.type === 'gate').song;
+  const [TREBLE, BASS] = twoVoiceGate.entities
+    .filter((e) => e.type === 'creature')
+    .map((e) => e.data.song);
+  const SONG_MS = SongMatcher.targetTimeline(GATE_SONG).totalBeats * MS_PER_BEAT;
+
+  /** One voice sung from `startMs`, each note `late()` ms later than the last's lateness. */
+  const sung = (song, startMs, late = () => 0) => {
+    let beat = 0;
+    let drift = 0;
+    return song.map((note, i) => {
+      if (i > 0) drift += late();
+      const heard = {
+        pitch: note.pitch,
+        length: note.length,
+        timestamp: startMs + beat * MS_PER_BEAT + drift,
+      };
+      beat += SongMatcher.lengthToBeats(note.length);
+      return heard;
+    });
+  };
+  const byTime = (a, b) => a.timestamp - b.timestamp;
+  const listenerFor = () => ({
+    requiredSong: GATE_SONG,
+    listeningStartTime: EPOCH,
+    capturedNotes: [],
+  });
+
+  it('a chord its sources sound 30-60 ms apart still matches, wherever the listener’s count falls', () => {
+    const misses = [];
+    [30, 45, 60, -30, -60].forEach((offsetMs) => {
+      for (let phaseMs = 0; phaseMs < 125; phaseMs += 5) {
+        const start = EPOCH + 4000 + phaseMs;
+        const listener = listenerFor();
+        listener.capturedNotes = [...sung(TREBLE, start), ...sung(BASS, start + offsetMs)].sort(
+          byTime
+        );
+        jest.setSystemTime(start + SONG_MS + Math.abs(offsetMs) + 20);
+        const verdict = evaluatePhrases(listener);
+        if (verdict !== true) misses.push({ offsetMs, phaseMs, verdict });
+      }
+    });
+    expect(misses).toEqual([]);
+  });
+
+  it('stays in-progress while a chord’s second note is on its way (no fade flicker)', () => {
+    const start = EPOCH + 4000;
+    const all = [...sung(TREBLE, start), ...sung(BASS, start + 30)].sort(byTime);
+    const flickers = [];
+    const listener = listenerFor();
+    for (let ms = start; ms < start + SONG_MS - 10; ms += 5) {
+      jest.setSystemTime(ms);
+      const heard = all.filter((n) => n.timestamp <= ms);
+      if (heard.length !== listener.capturedNotes.length) listener.capturedNotes = heard;
+      const verdict = evaluatePhrases(listener);
+      if (verdict !== 'in-progress') flickers.push({ at: ms - start, verdict });
+    }
+    expect(flickers).toEqual([]);
+  });
+
+  it('a chord whose second note never comes is a mismatch once its window passes', () => {
+    const start = EPOCH + 4000;
+    const listener = listenerFor();
+    listener.capturedNotes = [sung(TREBLE, start)[0]];
+    jest.setSystemTime(start + 0.2 * MS_PER_BEAT);
+    expect(evaluatePhrases(listener)).toBe('mismatch');
+  });
+
+  it('opens on its first take for any source offset to 40 ms, timer drift to 2 ms a note, and any listening phase (seeded)', () => {
+    let seed = 1124;
+    const random = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    const failures = [];
+    for (let run = 0; run < 150; run += 1) {
+      const start = EPOCH + 4000 + random() * 125;
+      const offsetMs = random() * 80 - 40;
+      const late = () => random() * 2;
+      const all = [...sung(TREBLE, start, late), ...sung(BASS, start + offsetMs, late)].sort(
+        byTime
+      );
+      const listener = listenerFor();
+      let verdict = false;
+      // Judged every frame as it is heard, like a gate
+      for (let ms = Math.min(start, start + offsetMs); ms < start + SONG_MS + 200; ms += 16) {
+        jest.setSystemTime(ms);
+        const heard = all.filter((n) => n.timestamp <= ms);
+        if (heard.length !== listener.capturedNotes.length) listener.capturedNotes = heard;
+        verdict = heard.length ? evaluatePhrases(listener) : false;
+        if (verdict === true || verdict === 'mismatch') break;
+        if (heard.length && verdict !== 'in-progress') break;
+      }
+      if (verdict !== true) failures.push({ run, offsetMs: Math.round(offsetMs), verdict });
+    }
+    expect(failures).toEqual([]);
   });
 });

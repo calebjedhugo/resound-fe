@@ -172,14 +172,26 @@ instead of "fixing" it.
 
 ### Musical Timing
 - **NEVER use `Date.now()` or `performance.now()` for music** - always use MusicalClock
-- Quantization happens to nearest 16th note
+- **No grid in matching** (2026-11-24): heard notes are grouped into onsets
+  by arrival (`CHORD_SPREAD_BEATS` 0.13: a chord's members come from
+  different creatures, frames apart) and compared with each other — each
+  target onset within `TOL_BEATS` (0.13) of where it is due from the take's
+  first onset. Never snap heard notes to a grid on the listener's clock: a
+  chord split across a grid line failed its take (control-test-2). A
+  completed take is consumed up to its last note only
+  (`Gate._consumeTake`), so a back-to-back performer's next take counts
 - **A released creature sings its first note on the beat of the press**
   (ruled 2026-11-23, replacing clapping): within `RELEASE_LATE_GRACE_BEATS`
   (0.1) past a beat it is that beat (sounds at once, the rest of that song
   snapped back onto the grid via note offsets), else the next; its schedule
   restarts there (`Creature` `data.firstSingBeat`; `releaseBeatFor`). A
   creature REBUILT after a prune keeps its PHASE instead (`toSpec` `phase`:
-  next sing beat from the world clock, core/WorldMemory). No clapping (C
+  next sing beat modulo its `period`, from the world clock, core/WorldMemory).
+  **Every song is on the beat** (2026-11-24): `nextSingBeat` advances by
+  `period` and never slips; each song's lateness (a frame, or the last
+  song's timers when back to back) is drawn back onto the grid, too late
+  to draw back and that song is sat out — so creatures released on the
+  beat stay together loop after loop. No clapping (C
   does nothing in the world; Circle only backs out of menus)
 - Matching tolerates sounds AFTER the aligned window but a foreign note
   INSIDE it corrupts, and (ruled 2026-07-16) a wrong note is judged
@@ -201,7 +213,8 @@ instead of "fixing" it.
 - Perfect intervals (unison, octave) don't affect movement
 - **`interval` = beats between song STARTS**, not the rest gap — it must
   exceed the song's length or the creature sings continuously (and never
-  moves)
+  moves): then its songs start `period` = the song's length rounded up to
+  a whole beat apart, back to back on the beat (`Creature.period`)
 - **Look = ball lightning, visual only** (`entities/CreatureLook.js`, DESIGN.md
   "Creature look"): floats (mesh placed only via `placeMesh`); colour from the harmony
   it hears via `forEachSoundSource` — the forces' source model; never add a second one

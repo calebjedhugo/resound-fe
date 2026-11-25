@@ -38,6 +38,13 @@ const soundCapable = memoizeOnEntityList((entities) =>
   entities.filter((entity) => entity.instrument)
 );
 
+/** A song's first element's length in beats (a chord: its shortest note). */
+function firstElementBeats(song) {
+  const first = song[0];
+  const notes = Array.isArray(first) ? first : [first];
+  return Math.min(...notes.map((note) => SongMatcher.lengthToBeats(note.length, note.dotted)));
+}
+
 /** The first beat at or after `beat` congruent to `phase` modulo `interval`. */
 function nextBeatInPhase(beat, phase, interval) {
   return phase + interval * Math.ceil((beat - phase) / interval - 1e-9);
@@ -54,7 +61,18 @@ class Creature extends Entity {
 
     // Song data
     this.song = data.song;
-    this.interval = data.interval || 8; // Quarter notes between songs
+    this.interval = data.interval || 8; // Quarter notes between song STARTS
+    // The beats between its song starts as it sings: its interval, or — a
+    // song as long as that or longer — the song itself, rounded up to a
+    // whole beat (it sings back to back, on the beat). Its schedule keeps
+    // to this grid: a song that ends late never pushes the next one later
+    this.period = Math.max(
+      this.interval,
+      Math.ceil(SongMatcher.targetTimeline(this.song).totalBeats - 1e-9)
+    );
+    // How late (beats) a song may start and still be drawn back onto the
+    // grid: its first note's length (any later and its notes would bunch)
+    this._snapLimitBeats = firstElementBeats(this.song);
     this.audibleRange = data.audibleRange || 15; // World units
     this.absorbRange = this.audibleRange * ABSORB_RANGE_PERCENTAGE;
 
@@ -125,20 +143,19 @@ class Creature extends Entity {
     // Initialize to next beat boundary to prevent drift
     const currentBeat = gameState.musicalClock?.getCurrentBeat() || 0;
     this.nextSingBeat = Math.ceil(currentBeat); // Next integer beat
-    // A creature released from the pole keeps its old schedule's phase
-    // (data.phase: its next sing beat modulo its interval; see wake)
+    // A creature rebuilt (a pruned area, core/WorldMemory) keeps its old
+    // schedule's phase (data.phase: its next sing beat modulo its period)
     const phase = typeof data.phase === 'number' ? data.phase : null;
     if (phase !== null) {
-      this.nextSingBeat = nextBeatInPhase(currentBeat, phase, this.interval);
+      this.nextSingBeat = nextBeatInPhase(currentBeat, phase, this.period);
     }
     // ...unless it was just let out: its first note sounds on the beat it
     // was released on, and its schedule starts again from there
     // (core/AbsorbManager). A beat a moment past (the late grace) sounds at
-    // once, the rest of that song snapped back onto the grid
-    this._snapBack = false;
+    // once, the rest of that song snapped back onto the grid (as every
+    // song is: update)
     if (typeof data.firstSingBeat === 'number') {
       this.nextSingBeat = data.firstSingBeat;
-      this._snapBack = true;
     }
 
     // Can the pole reach it from the player? (active area, absorbRange, in
@@ -199,12 +216,18 @@ class Creature extends Entity {
 
     const currentBeat = gameState.musicalClock.getCurrentBeat();
 
-    // Check if it's time to sing (deterministic based on musical time)
+    // Time to sing? Every song starts on its beat (nextSingBeat, on the
+    // period's grid): its first note on the first frame at or past it
+    // (or, back to back, the frame its last song ends), the rest drawn back
+    // onto the grid by as much. Too late to draw back (a stalled frame)
+    // and it sits that song out, back on the grid with the next.
     if (currentBeat >= this.nextSingBeat && !this.instrument.playbackState.isPlaying) {
-      this.sing(this._snapBack ? currentBeat - this.nextSingBeat : 0);
-      this._snapBack = false;
-      // Maintain schedule to prevent drift
-      this.nextSingBeat += this.interval;
+      const lateBeats = currentBeat - this.nextSingBeat;
+      if (lateBeats < this._snapLimitBeats) this.sing(lateBeats);
+      this.nextSingBeat += this.period;
+      if (this.nextSingBeat <= currentBeat) {
+        this.nextSingBeat = nextBeatInPhase(currentBeat, this.nextSingBeat, this.period);
+      }
     }
 
     // Distance to player: sound takes the SHORTEST path — direct within the
@@ -406,12 +429,12 @@ class Creature extends Entity {
    * else (a slot of the tape holds one; core/WorldMemory keeps one per
    * released creature): its song and timing, range, body, speed, its VOICE
    * (the timbre its instrument rolled), and the PHASE of its schedule (its
-   * next sing beat modulo its interval), so a released creature sings on
-   * its old beat.
+   * next sing beat modulo its period), so a rebuilt creature sings on its
+   * old beat.
    * @returns {object} data for `new Creature(position, spec)`
    */
   toSpec() {
-    const { interval } = this;
+    const { interval, period } = this;
     return {
       song: this.song,
       interval,
@@ -419,7 +442,7 @@ class Creature extends Entity {
       size: this.size,
       maxSpeed: this.maxSpeed,
       voice: this.instrument.getVoice(),
-      phase: ((this.nextSingBeat % interval) + interval) % interval,
+      phase: ((this.nextSingBeat % period) + period) % period,
     };
   }
 
