@@ -122,6 +122,7 @@ jest.mock('editor/viewport/EntityPlacer', () =>
     clearPlayerSpawn: jest.fn(),
     refreshLinkBadge: jest.fn(),
     setLook: jest.fn(),
+    applyCut: jest.fn(),
   }))
 );
 
@@ -137,6 +138,7 @@ jest.mock('editor/viewport/GameLookLayer', () =>
     silence: jest.fn(),
     lookOf: jest.fn(() => null),
     setCuesVisible: jest.fn(),
+    applyCut: jest.fn(),
     root: {},
     dispose: jest.fn(),
   }))
@@ -186,6 +188,8 @@ import { loadSession } from 'editor/io/sessionPersistence';
 import { deserializePuzzle } from 'editor/model/serialization';
 import { createLink } from 'editor/io/portalLinks';
 import { savePuzzleJsonToRepo } from 'editor/io/repoPersistence';
+import { CUT_UNIFORMS } from 'entities/CutawayLook';
+import { gridToWorld } from 'editor/viewport/gridUtils';
 /* eslint-enable import/first */
 
 function setupEditorDOM() {
@@ -1323,6 +1327,134 @@ describe('EditorApp wiring', () => {
     });
   });
 
+  describe('the cutaway view: seeing inside containers', () => {
+    beforeAll(() => localStorage.clear());
+    afterEach(() => localStorage.clear());
+
+    const press = (key) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      );
+    const hud = () => document.querySelector('.viewport-hud').textContent;
+    const draw = () => {
+      // One drawn frame (requestAnimationFrame is held: run it by hand)
+      app._dirty = true;
+      app._frameId = null;
+      app._renderFrame(1000);
+    };
+
+    it('opens in the cutaway, and says so in the readout', () => {
+      expect(app.cutawayMode).toBe('cutaway');
+      draw();
+      expect(hud()).toContain('Cell (7, 7) · E0 · Cutaway');
+    });
+
+    it('X steps full → storey cut → cutaway, into the readout and the shaders', () => {
+      press('x');
+      expect(app.cutawayMode).toBe('full');
+      draw();
+      expect(hud()).toContain('E0 · Full view');
+      expect(CUT_UNIFORMS.uCutMode.value).toBe(0);
+
+      press('X');
+      expect(app.cutawayMode).toBe('storey');
+      draw();
+      expect(hud()).toContain('E0 · Storey cut');
+      expect(CUT_UNIFORMS.uCutMode.value).toBe(1);
+
+      press('x');
+      expect(app.cutawayMode).toBe('cutaway');
+      draw();
+      expect(CUT_UNIFORMS.uCutMode.value).toBe(2);
+    });
+
+    it('is remembered: the next visit opens in the view last chosen', () => {
+      press('x');
+      app.dispose();
+      setupEditorDOM();
+      app = new EditorApp();
+      app.init();
+      expect(app.cutawayMode).toBe('full');
+    });
+
+    it("the Options menu has it (the pad's way in), naming the view", () => {
+      app.openEditorMenu();
+      const item = [...document.querySelectorAll('.context-menu-item')].find((b) =>
+        b.textContent.startsWith('View:')
+      );
+      expect(item.textContent).toBe('View: Cutaway (X)');
+      item.click();
+      expect(app.cutawayMode).toBe('full');
+    });
+
+    it('each drawn frame tells the game look which entities are ghosts', () => {
+      app.gameLook.applyCut.mockClear();
+      draw();
+      expect(app.gameLook.applyCut).toHaveBeenCalledWith(app.cutaway);
+      // The schematic look's primitives instead, while it shows
+      press('v');
+      app.entityPlacer.applyCut.mockClear();
+      draw();
+      expect(app.entityPlacer.applyCut).toHaveBeenCalledWith(app.cutaway);
+    });
+
+    describe('a right-click goes through ghosts to what is inside', () => {
+      let wall;
+      let creature;
+      beforeEach(() => {
+        // The cursor (7, 7) inside a container; its near wall (the camera is
+        // to the south) at (7, 9), a creature inside at (7, 8)
+        const at = gridToWorld(7, 7);
+        app.camera.position.set(at.x, 30, at.z + 30);
+        wall = app.undoManager.addEntity('wall', 7, 0, 9, {});
+        creature = app.undoManager.addEntity('creature', 7, 0, 8, { song: [] });
+        const meshes = [wall, creature].map((entityId) => ({ userData: { entityId } }));
+        app.entityPlacer.getAllMeshes.mockReturnValue(meshes);
+        app.entityPlacer.getEntityIdFromMesh.mockImplementation((m) => m.userData.entityId);
+        // The ray meets whatever it is handed in that order: the wall first
+        mockIntersectObjects.mockImplementation((objects) => objects.map((object) => ({ object })));
+      });
+      afterEach(() => mockIntersectObjects.mockReset());
+
+      const rightClick = () =>
+        document
+          .getElementById('editor-viewport')
+          .dispatchEvent(
+            new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true })
+          );
+
+      it("in the cutaway: the creature's menu", () => {
+        rightClick();
+        expect(document.querySelector('.context-menu').textContent).toContain('Edit Song');
+      });
+
+      it('in the full view: the wall takes it (no menu)', () => {
+        press('x');
+        rightClick();
+        expect(document.querySelector('.context-menu')).toBeNull();
+      });
+    });
+
+    it('Play draws the level whole, and the cut comes back with the editor', () => {
+      draw();
+      expect(CUT_UNIFORMS.uCutMode.value).toBe(2);
+      app._standAside();
+      expect(CUT_UNIFORMS.uCutMode.value).toBe(0);
+      expect(app.gameLook.applyCut).toHaveBeenLastCalledWith(app.cutaway);
+      expect(app.cutaway.ghosts({ type: 'wall', x: 7, y: 5, z: 7 })).toBe(false);
+      app._comeBack();
+      draw();
+      expect(CUT_UNIFORMS.uCutMode.value).toBe(2);
+    });
+
+    it('closing the editor puts the shared cut back off', () => {
+      draw();
+      app.dispose();
+      expect(CUT_UNIFORMS.uCutMode.value).toBe(0);
+      app = null;
+    });
+  });
+
   describe('hearing a song from the viewport (A)', () => {
     const press = (key) =>
       document.dispatchEvent(
@@ -1701,6 +1833,19 @@ describe('EditorApp wiring', () => {
       expect(app.look).toBe('schematic');
       tap('share');
       expect(app.look).toBe('game');
+    });
+
+    it('L2 + Share steps the view (full / storey cut / cutaway), the look kept', () => {
+      localStorage.clear();
+      expect(app.cutawayMode).toBe('cutaway');
+      hold('l2');
+      tap('share');
+      expect(app.cutawayMode).toBe('full');
+      tap('share');
+      expect(app.cutawayMode).toBe('storey');
+      letGo('l2');
+      expect(app.look).toBe('game');
+      localStorage.clear();
     });
 
     it('Options menu: sharp rendering on and off', () => {
@@ -2770,7 +2915,7 @@ describe('EditorApp per-input work', () => {
 
     press('ArrowUp', { altKey: true }); // onto the empty E1
     flushFrames();
-    expect(hud.textContent).toContain('E1 · no floor');
+    expect(hud.textContent).toContain('E1 · Cutaway · no floor');
     press('Enter'); // held: building floor there
     flushFrames();
     expect(hud.textContent).toContain('Building floor E1');
@@ -2869,6 +3014,59 @@ describe('EditorApp draws the game look calm at 30 fps', () => {
     app.gameLook.animates = false;
     vsyncs(2);
     expect(drawsOver(60)).toBe(0);
+  });
+
+  describe('the cutaway follows the view on the very next vsync, calm or not', () => {
+    /** Line up just after a calm draw: the next calm one is two vsyncs away. */
+    const afterCalmDraw = () => {
+      if (drawsOver(1) === 0) expect(drawsOver(1)).toBe(1);
+    };
+
+    it('a storey change', () => {
+      afterCalmDraw();
+      app.editorScene.activeElevation = 3;
+      app.editorScene.onViewChange();
+      expect(drawsOver(1)).toBe(1);
+      expect(CUT_UNIFORMS.uCutStorey.value).toBe(3);
+    });
+
+    it('a cursor move', () => {
+      afterCalmDraw();
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: -4, z: 11 });
+      app.editorScene.onViewChange();
+      expect(drawsOver(1)).toBe(1);
+      expect(CUT_UNIFORMS.uCutCentre.value).toEqual([-4, 11]);
+    });
+
+    it('an orbit (and its damping): the near side turns with the camera', () => {
+      const onChange = app.controls.addEventListener.mock.calls.find(
+        ([type]) => type === 'change'
+      )[1];
+      const at = gridToWorld(7, 7); // the cursor (the scene stand-in's)
+      afterCalmDraw();
+      app.camera.position.set(at.x + 30, 30, at.z);
+      onChange();
+      expect(drawsOver(1)).toBe(1);
+      expect(CUT_UNIFORMS.uCutView.value[0]).toBeCloseTo(1);
+      expect(CUT_UNIFORMS.uCutView.value[1]).toBeCloseTo(0);
+
+      // The pad's right stick orbits too
+      afterCalmDraw();
+      app.camera.position.set(at.x, 30, at.z - 30);
+      app.orbitCamera(0, 0);
+      expect(drawsOver(1)).toBe(1);
+      expect(CUT_UNIFORMS.uCutView.value[1]).toBeCloseTo(-1);
+    });
+
+    it('the schematic look (drawn only on demand) follows them too', () => {
+      app.gameLook.animates = false;
+      vsyncs(2);
+      app.editorScene.activeElevation = -2;
+      app.editorScene.onViewChange();
+      expect(drawsOver(1)).toBe(1);
+      expect(CUT_UNIFORMS.uCutStorey.value).toBe(-2);
+      expect(drawsOver(10)).toBe(0); // and then rests again
+    });
   });
 });
 

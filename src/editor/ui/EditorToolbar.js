@@ -55,6 +55,10 @@ const SHORTCUTS = [
   ['Delete / Backspace', 'Delete the entity; on bare floor, the floor tile'],
   ['Escape', 'Deselect / cancel'],
   ['V', 'Game look / schematic look'],
+  [
+    'X',
+    'View: full / storey cut (above the storey ghosted) / cutaway (and the walls in front of the cursor)',
+  ],
   ['Cmd/Ctrl + Enter', 'Play the level in the game (saves first)'],
   ['Drag / Shift-drag / wheel', 'Orbit / pan / zoom the camera'],
   ['Cmd/Ctrl + Z', 'Undo'],

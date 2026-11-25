@@ -52,3 +52,33 @@ export function saveSharp(sharp) {
     // Private mode / blocked storage: the choice still applies this visit
   }
 }
+
+/**
+ * The CUTAWAY view, remembered the same way (this browser only): 'full'
+ * (everything drawn whole, as before), 'storey' (the storeys above the
+ * active one ghosted) or 'cutaway' (that, and the walls and gates on the
+ * camera's side of the cursor ghosted too: the default). See
+ * entities/CutawayLook.
+ */
+const CUT_KEY = 'resound-editor-cut';
+
+export const CUT_VIEWS = ['full', 'storey', 'cutaway'];
+
+/** The remembered cutaway view ('cutaway' when none is, or storage can't be read). */
+export function loadCut() {
+  try {
+    const stored = localStorage.getItem(CUT_KEY);
+    return CUT_VIEWS.includes(stored) ? stored : 'cutaway';
+  } catch {
+    return 'cutaway';
+  }
+}
+
+/** Remember the cutaway view for the next visit (best effort). */
+export function saveCut(view) {
+  try {
+    localStorage.setItem(CUT_KEY, view);
+  } catch {
+    // Private mode / blocked storage: the view still applies this visit
+  }
+}

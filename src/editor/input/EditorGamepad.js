@@ -94,7 +94,7 @@ export const EDITOR_MAPPING = {
     ['l1/r1', 'Choose what to place (… floor only between the ends)'],
     ['l2', 'Hold: storeys, undo, song, camera'],
     ['r2', 'Hold: carry the entity'],
-    ['options', 'Menu: Play, puzzles, undo, look, sharp…'],
+    ['options', 'Menu: Play, puzzles, undo, look, view (cutaway), sharp…'],
     ['share', 'Game look / schematic look'],
     ['touchpad', 'The sidebar panels'],
   ],
@@ -104,6 +104,7 @@ export const EDITOR_MAPPING = {
     ['r3', 'Centre the camera on the cursor'],
     ['l3', 'Reset the camera'],
     ['triangle', 'Play / stop the song (it lights)'],
+    ['share', 'View: full / storey cut / cutaway'],
     ['r2', '+ R2 and d-pad up/down: carry a storey'],
   ],
   'viewport+r2': [
@@ -455,7 +456,8 @@ export default class EditorGamepad {
         app.openEditorMenu();
         break;
       case 'share':
-        app.toggleLook();
+        if (l2) app.cycleCutaway();
+        else app.toggleLook();
         break;
       case 'touchpad':
         app.togglePanelFocus(true);

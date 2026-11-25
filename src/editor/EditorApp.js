@@ -10,6 +10,7 @@ import EntityDragger from 'editor/viewport/EntityDragger';
 import GhostPreview from 'editor/viewport/GhostPreview';
 import RangeIndicator from 'editor/viewport/RangeIndicator';
 import GameLookLayer from 'editor/viewport/GameLookLayer';
+import Cutaway from 'editor/viewport/Cutaway';
 import ElevationSelector, { MAX_STOREY, MIN_STOREY } from 'editor/ui/ElevationSelector';
 import TileSlabs from 'editor/viewport/TileSlabs';
 import EntityToolbar from 'editor/ui/EntityToolbar';
@@ -117,6 +118,12 @@ export default class EditorApp {
     this._setupCamera();
     this._setupControls();
     this.editorScene = new EditorScene(this.scene, this.undoManager);
+    // The see-inside view (X, the Options menu, L2 + Share): the storeys
+    // above the active one, and the walls between the camera and the
+    // cursor, drawn as ghosts (editor/viewport/Cutaway). It follows the
+    // storey, the cursor and the camera: each change draws again
+    this.cutaway = new Cutaway();
+    this.editorScene.onViewChange = () => this._requestFrame();
     this.elevationSelector = new ElevationSelector(
       document.getElementById('elevation-panel'),
       this.editorScene,
@@ -131,6 +138,7 @@ export default class EditorApp {
     this._look = loadLook();
     this.ghostPreview = new GhostPreview(this.scene);
     this.selectionManager = new SelectionManager(this.camera, this.entityPlacer);
+    this.selectionManager.isGhost = (entity) => this._isGhost(entity);
     this.entityToolbar = new EntityToolbar(
       document.getElementById('entity-toolbar'),
       (toolType) => {
@@ -363,7 +371,8 @@ export default class EditorApp {
         ? ` · no floor (✕ / Enter places the ${tool === 'player' ? 'spawn' : tool} with its floor)`
         : ' · no floor (✕ / Enter builds it)';
     }
-    const cellText = grid ? `Cell (${grid.x}, ${grid.z}) · E${storey}${bareText}` : '';
+    const cutText = this.cutaway ? ` · ${this.cutaway.label}` : '';
+    const cellText = grid ? `Cell (${grid.x}, ${grid.z}) · E${storey}${cutText}${bareText}` : '';
     const toolText = tool
       ? `Placing ${tool} — Enter (or ✕) places it at the cursor; Esc cancels`
       : '';
@@ -891,6 +900,10 @@ export default class EditorApp {
         action: () => this.toggleLook(),
       },
       {
+        label: `View: ${this.cutaway.label} (X)`,
+        action: () => this.cycleCutaway(),
+      },
+      {
         label: this._sharp ? 'Sharp rendering: on' : 'Sharp rendering: off',
         action: () => this.toggleSharp(),
       },
@@ -1208,6 +1221,48 @@ export default class EditorApp {
     this.gameLook.setSelected(id, this.undoManager);
   }
 
+  // --- The cutaway: seeing inside (editor/viewport/Cutaway) ---------------
+
+  /** 'full' | 'storey' (the storey cut) | 'cutaway' (the default). */
+  get cutawayMode() {
+    return this.cutaway.mode;
+  }
+
+  /** X / the Options menu / L2 + Share: full → storey cut → cutaway → full, remembered. */
+  cycleCutaway() {
+    this.setCutaway(this.cutaway.cycle());
+  }
+
+  /** @param {'full'|'storey'|'cutaway'} mode */
+  setCutaway(mode) {
+    this.cutaway.setMode(mode);
+    this._showToast(`${this.cutaway.label} (X)`, 'success');
+    this._requestFrame();
+  }
+
+  /**
+   * The cut for now (the active storey, the cursor, the camera), into the
+   * floor and wall shaders and onto each look's entities. Before every
+   * frame drawn and every pick.
+   */
+  _updateCut() {
+    if (!this.cutaway || this.cutaway.suspended) return;
+    this.cutaway.update({
+      storey: this.editorScene.activeElevation,
+      cursor: this.editorScene.getHoveredGrid(),
+      camera: this.camera,
+    });
+    // Only the look on screen (the other's meshes are hidden; switching
+    // looks draws a frame, which applies it)
+    if (this._look === 'game') this.gameLook.applyCut(this.cutaway);
+    else this.entityPlacer.applyCut(this.cutaway);
+  }
+
+  /** Whether an entity is a ghost in the cutaway now (never picked). */
+  _isGhost(entity) {
+    return Boolean(this.cutaway && entity && this.cutaway.ghosts(entity));
+  }
+
   // --- Play: the level in the game -----------------------------------------
 
   /**
@@ -1271,6 +1326,10 @@ export default class EditorApp {
     this.audition.stop();
     this.songEditorModal.stopPlayback();
     this.controls.enabled = false;
+    // The game is drawn whole: no cut on the way in or out
+    this.cutaway.suspend();
+    this.gameLook.applyCut(this.cutaway);
+    this.entityPlacer.applyCut(this.cutaway);
     if (this._look !== 'game') {
       this._look = 'game';
       this._applyLook();
@@ -1294,6 +1353,7 @@ export default class EditorApp {
       child.visible = true; // eslint-disable-line no-param-reassign
     });
     this.gameLook.setCuesVisible(true);
+    this.cutaway.resume();
     if (aside.look !== this._look) {
       this._look = aside.look;
       this._applyLook();
@@ -1503,9 +1563,18 @@ export default class EditorApp {
     const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), this.camera);
-    const hits = raycaster.intersectObjects(this.entityPlacer.getAllMeshes());
+    const hits = raycaster.intersectObjects(this._pickableMeshes());
     if (hits.length === 0) return null;
     return this.entityPlacer.getEntityIdFromMesh(hits[0].object);
+  }
+
+  /** The entity meshes a pointer can pick: the cutaway's ghosts are passed through. */
+  _pickableMeshes() {
+    this._updateCut();
+    return this.entityPlacer.getAllMeshes().filter((mesh) => {
+      const id = this.entityPlacer.getEntityIdFromMesh(mesh);
+      return id === null || !this._isGhost(this.undoManager.getEntity(id));
+    });
   }
 
   _setupViewportClick() {
@@ -2167,6 +2236,11 @@ export default class EditorApp {
           e.preventDefault();
           this.toggleLook();
           return;
+        case 'x':
+        case 'X':
+          e.preventDefault();
+          this.cycleCutaway();
+          return;
         case 'a':
         case 'A':
           e.preventDefault();
@@ -2273,6 +2347,9 @@ export default class EditorApp {
     this.editorScene.update();
     this.ghostPreview.update(this.editorScene.getHoveredGrid(), this.editorScene.activeElevation);
     this._updateHud();
+    // The cutaway as the view is NOW (camera moved by the controls or a
+    // glide above, the cursor, the storey): every drawn frame, calm or not
+    this._updateCut();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -2312,6 +2389,7 @@ export default class EditorApp {
 
   dispose() {
     if (this._frameId) cancelAnimationFrame(this._frameId);
+    if (this.cutaway) this.cutaway.suspend(); // the shared cut uniforms back off
     if (this.preview) this.preview.dispose();
     document.removeEventListener('keydown', this._onKeyDown);
     document.removeEventListener('keyup', this._onKeyUp);

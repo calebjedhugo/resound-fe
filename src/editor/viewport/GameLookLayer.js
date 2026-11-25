@@ -19,6 +19,11 @@
  * the selection's outline and a violet base on linked gates. The schematic
  * meshes (EntityPlacer) stay in the scene as the pick targets, invisible.
  *
+ * The CUTAWAY (editor/viewport/Cutaway, entities/CutawayLook): the floor and
+ * the walls ghost themselves in their shaders from the shared cut uniforms;
+ * each entity is told by applyCut (a creature's look, a gate's shell and
+ * staff, a ramp, a waystone, a fountain, the spawn).
+ *
  * Coordinates: the game puts a cell's CENTRE at x * WORLD_SCALE; the editor
  * at x * WORLD_SCALE + WORLD_SCALE / 2. Everything is built in game
  * coordinates under one root group offset by half a cell.
@@ -36,6 +41,7 @@ import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import Waystone from 'entities/Waystone';
 import NotationDisplay from 'ui/NotationDisplay';
+import { addGhostDither, setMaterialGhost } from 'entities/CutawayLook';
 import { createOutlineBox, createOutlineMaterial } from 'editor/viewport/outlineBox';
 import { GAME_OFFSET } from 'editor/viewport/gridUtils';
 
@@ -60,6 +66,10 @@ const OUTLINE_SIZES = {
 const ALWAYS_OPEN_OPACITY = 0.3;
 // A gate's box is a whole cell, this tall (Gate.GEOMETRY)
 const GATE_HEIGHT = 3;
+// A ghost's staff (CutawayLook) and the spawn's marker, this much of their
+// opacity (both are see-through already: no sorting changes)
+const GHOST_STAFF_OPACITY = 0.15;
+const GHOST_SPAWN_OPACITY = 0.25;
 
 /** Free a mesh tree's own geometry/materials (shared ones are skipped). */
 function freeTree(object) {
@@ -165,6 +175,40 @@ export default class GameLookLayer {
 
     this._syncSpawn(model.getPlayerSpawn());
     if (this._selection) this.setSelected(this._selection.id, model);
+  }
+
+  /**
+   * Ghost the entities the cutaway cuts (editor/viewport/Cutaway; the floor
+   * and walls do it themselves from the shared uniforms). Called before
+   * every frame the editor draws: only what changed is written.
+   * @param {{ghosts: function(object): boolean}} cutaway
+   */
+  applyCut(cutaway) {
+    for (const entry of this._entities.values()) {
+      const ghost = cutaway.ghosts(entry.at);
+      if (ghost !== entry.ghost) {
+        entry.ghost = ghost;
+        if (entry.look) entry.look.setGhost(ghost);
+        if (entry.shell) entry.shell.material.uniforms.uGhost.value = ghost ? 1 : 0;
+        if (entry.ramp) entry.ramp.ghost = ghost;
+        if (entry.dithered) setMaterialGhost(entry.dithered, ghost);
+      }
+    }
+    if (this._spawn) {
+      const ghost = cutaway.ghosts(this._spawn.userData.at);
+      if (ghost !== this._spawn.userData.ghost) {
+        this._spawn.userData.ghost = ghost;
+        for (const part of this._spawn.children) {
+          part.material.opacity = part.userData.opacity * (ghost ? GHOST_SPAWN_OPACITY : 1);
+        }
+      }
+    }
+  }
+
+  /** Whether the entity's look is drawn as a ghost now (tests). */
+  isGhost(entityId) {
+    const entry = this._entities.get(entityId);
+    return Boolean(entry && entry.ghost);
   }
 
   /**
@@ -342,9 +386,13 @@ export default class GameLookLayer {
       entry = this._build(entity, metadata);
       if (!entry) return;
       entry.sig = sig;
+      entry.ghost = false; // drawn whole until the cutaway says otherwise
+      if (entry.notation) this._ghostStaff(entry);
       this._entities.set(entity.id, entry);
       this.root.add(entry.object);
     }
+    // Where it stands, as the cutaway reads it (a creature moves unrebuilt)
+    entry.at = { type: entity.type, x: entity.x, y: entity.y, z: entity.z };
     if (entry.look) entry.look.place(this._floorPoint(entity));
   }
 
@@ -395,7 +443,7 @@ export default class GameLookLayer {
         }
         const notation = this._notation(data.song, 'gate', metadata);
         notation.meshes.forEach((plane) => mesh.add(plane));
-        const entry = { type: 'gate', object: new THREE.Group(), notation };
+        const entry = { type: 'gate', object: new THREE.Group(), notation, shell: mesh };
         entry.object.add(mesh);
         if (data.link) {
           // A closed linked gate looks like any gate in game: the editor
@@ -416,18 +464,20 @@ export default class GameLookLayer {
       }
       case 'fountain': {
         const mesh = Fountain.buildBasinMesh(position);
+        addGhostDither(mesh.material); // its own material: the editor's to ghost
         const notation = this._notation(data.song, 'fountain', metadata);
         notation.meshes.forEach((plane) => mesh.add(plane));
-        return { type: 'fountain', object: mesh, notation };
+        return { type: 'fountain', object: mesh, notation, dithered: mesh.material };
       }
       case 'ramp': {
         const ramp = new Ramp(position, { direction: data.direction || 'north' });
         ramp.area = this._lightArea; // lit by the editor's creature light
-        return { type: 'ramp', object: ramp.mesh };
+        return { type: 'ramp', object: ramp.mesh, ramp };
       }
       case 'waystone': {
         const mesh = Waystone.buildTileMesh(position);
-        return { type: 'waystone', object: mesh, pulse: Math.random() };
+        addGhostDither(mesh.material); // its own material: the editor's to ghost
+        return { type: 'waystone', object: mesh, pulse: Math.random(), dithered: mesh.material };
       }
       default:
         return null;
@@ -442,6 +492,22 @@ export default class GameLookLayer {
       timeSignature: metadata.timeSignature !== undefined ? metadata.timeSignature : [4, 4],
       keySignature: metadata.keySignature || null,
     });
+  }
+
+  /**
+   * A ghost's staff shows faintly: each plane's own per-draw fade
+   * (NotationDisplay's onBeforeRender, chained, never replaced) and then
+   * the ghost's share of it.
+   */
+  // eslint-disable-next-line class-methods-use-this
+  _ghostStaff(entry) {
+    for (const plane of entry.notation.meshes) {
+      const own = plane.onBeforeRender;
+      plane.onBeforeRender = function ghostStaff(...args) {
+        if (own) own.apply(this, args);
+        if (entry.ghost) plane.material.opacity *= GHOST_STAFF_OPACITY; // eslint-disable-line no-param-reassign
+      };
+    }
   }
 
   _removeEntity(id, entry) {
@@ -471,6 +537,7 @@ export default class GameLookLayer {
       new THREE.MeshBasicMaterial({ color: SPAWN_COLOR, transparent: true, opacity: 0.45 })
     );
     body.position.set(0, 0.9, 0);
+    body.userData.opacity = body.material.opacity;
     group.add(body);
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.62, 0.78, 40),
@@ -484,7 +551,9 @@ export default class GameLookLayer {
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(0, 0.03, 0);
+    ring.userData.opacity = ring.material.opacity;
     group.add(ring);
+    group.userData = { at: { type: 'player', x: spawn.x, y: spawn.y, z: spawn.z }, ghost: false };
     group.position.set(spawn.x * WORLD_SCALE, spawn.y * ELEVATION_HEIGHT, spawn.z * WORLD_SCALE);
     this.root.add(group);
     this._spawn = group;

@@ -904,6 +904,15 @@ Rulings (designer, 2026-11-22):
   moved for its footprint, L2 + ↑/↓ for its storeys — and letting go
   builds only its outline at every storey: a hollow container, floor
   brought only under its bottom ring, one undo step.
+- **The editor's cutaway** (ruled 2026-11-25; the designer: "We also need
+  to be able to see things inside of containers… some version of levels
+  above the focused level being transparent and below being solid"): the
+  active storey is the focus. Storeys above it draw as faint ghosts (a
+  screen door with pale outlines, the shape still reading); it and those
+  below draw solid, a wall's top with its wall. By default the walls and
+  gates on the camera's side of the cursor are ghosts too, following the
+  orbit. Clicks pass through ghosts. One toggle (full / storey cut /
+  cutaway), remembered per browser; Play and the game always draw whole.
 - **Subfloors** (ruled 2026-11-24): storeys below the ground (negative,
   down to -9 in the editor) work like any other — ramps, walls, creatures,
   the spawn, the pole's sight (the floor above a subfloor blocks the sight

@@ -549,6 +549,10 @@ class Group {
   }
 }
 
+// The editor's grid and axes (EditorScene): lines it never reads back
+class GridHelper extends Group {}
+class AxesHelper extends Group {}
+
 // Lights draw nothing, but three keys programs by the scene's light counts
 // (ShaderPrewarm mirrors the world's lights into its stand-in scene)
 class Light extends Group {
@@ -721,6 +725,8 @@ module.exports = {
   Plane,
   Color,
   Group,
+  GridHelper,
+  AxesHelper,
   Scene,
   Mesh,
   InstancedMesh,

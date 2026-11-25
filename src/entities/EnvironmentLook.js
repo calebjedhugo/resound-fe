@@ -44,8 +44,9 @@ import gameState from 'core/GameState';
 import memoizeOnEntityList from 'core/entityListMemo';
 import { messiaenColourCached } from 'core/messiaenColour';
 import { WALL_HIDE_GLSL } from 'core/portalMath';
-import { WALL_HEIGHT } from 'core/constants';
+import { WALL_HEIGHT, WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { harmonyLightInto, HARMONY_COLOUR_TAU } from 'entities/CreatureLook';
+import { CUT_UNIFORMS, CUT_VERTEX_GLSL, CUT_FRAGMENT_GLSL } from 'entities/CutawayLook';
 
 // ---- Palette (sRGB hex; the shaders work in linear and encode on output) --
 const PALETTE = {
@@ -725,6 +726,12 @@ const WALL_VERTEX = /* glsl */ `
   varying vec3 vNormalW;
   varying float vUp;
   varying float vRim;
+  // The editor's cutaway (entities/CutawayLook; off in the game): this
+  // wall a ghost, where on its box, which neighbours continue it
+  varying float vGhost;
+  varying vec3 vBox;
+  varying vec4 vSides;
+  varying vec2 vEnds;
   #include <common>
   #include <clipping_planes_pars_vertex>
   #ifdef USE_INSTANCING
@@ -733,8 +740,13 @@ const WALL_VERTEX = /* glsl */ `
     attribute vec2 aStack; // walls under this one in its column; the column's height
   #endif
   ${WALL_HIDE_GLSL}
+  ${CUT_VERTEX_GLSL}
 
   void main() {
+    vGhost = 0.0;
+    vBox = position;
+    vSides = vec4(0.0);
+    vEnds = vec2(0.0);
     mat4 model = modelMatrix;
     #ifdef USE_INSTANCING
       model = modelMatrix * instanceMatrix;
@@ -763,6 +775,26 @@ const WALL_VERTEX = /* glsl */ `
       else if (normal.z < -0.5) faceHidden = aSideHide.w;
       else if (normal.y > 0.5) faceHidden = aTopHide.x;
       vRim = 1.0 - aTopHide.y;
+      // The editor's cutaway: this wall's cell and storey (its instance's
+      // place, in the level's own coordinates)
+      vec3 at = instanceMatrix[3].xyz;
+      vec2 cell = floor(at.xz / ${WORLD_SCALE.toFixed(3)} + 0.5);
+      float storey = floor((at.y - ${(WALL_HEIGHT / 2).toFixed(3)}) / ${ELEVATION_HEIGHT.toFixed(
+        3
+      )} + 0.5);
+      float above = aStack.y - aStack.x - 1.0;
+      vGhost = cutGhost(cell, storey, 1.0);
+      vSides = aSideHide;
+      vEnds = vec2(step(0.5, aStack.x), step(0.5, above));
+      // A solid wall beside (or under) a ghost shows the face it hid
+      // against it, so it stays closed seen through the ghost
+      if (faceHidden > 0.5 && vGhost < 0.5 && uCutMode > 0.5) {
+        if (abs(normal.y) < 0.5) {
+          if (cutGhost(cell + normal.xz, storey, 1.0) > 0.5) faceHidden = 0.0;
+        } else if (normal.y > 0.5 && above > 0.5 && cutGhost(cell, storey + 1.0, 1.0) > 0.5) {
+          faceHidden = 0.0;
+        }
+      }
       if (
         faceHidden > 0.5 ||
         wallHiddenBy(uHideA, uHideLatA, centre) ||
@@ -783,16 +815,45 @@ const WALL_FRAGMENT = /* glsl */ `
   varying vec3 vNormalW;
   varying float vUp;
   varying float vRim;
+  varying float vGhost;
+  varying vec3 vBox;
+  varying vec4 vSides;
+  varying vec2 vEnds;
   #include <common>
   #include <clipping_planes_pars_fragment>
   ${PALETTE_GLSL}
   ${KEY_GLSL}
   ${LIGHT_GLSL}
   ${FINISH_GLSL}
+  ${CUT_FRAGMENT_GLSL}
+
+  // A ghost's outline, \`dist\` from an edge: about a pixel at least
+  float ghostLine(float dist) {
+    float fw = fwidth(dist);
+    float width = max(0.04, fw * 1.25);
+    return 1.0 - smoothstep(width, width + fw, dist);
+  }
 
   void main() {
     #include <clipping_planes_fragment>
     vec3 n = normalize(vNormalW);
+    // The editor's cutaway: a ghost keeps its OUTER edges whole (where no
+    // wall continues it) and a screen door of the rest
+    float ghostEdge = 0.0;
+    if (vGhost > 0.5) {
+      vec3 boxHalf = vec3(${(WORLD_SCALE / 2).toFixed(3)}, ${(WALL_HEIGHT / 2).toFixed(3)}, ${(
+        WORLD_SCALE / 2
+      ).toFixed(3)});
+      vec3 d = boxHalf - abs(vBox);
+      vec3 outer = vec3(
+        1.0 - (vBox.x > 0.0 ? vSides.x : vSides.y),
+        1.0 - (vBox.y > 0.0 ? vEnds.y : vEnds.x),
+        1.0 - (vBox.z > 0.0 ? vSides.z : vSides.w)
+      );
+      vec3 shown = (1.0 - abs(n)) * outer;
+      ghostEdge = max(shown.x * ghostLine(d.x), max(shown.y * ghostLine(d.y), shown.z * ghostLine(d.z)));
+      if (ghostEdge < 0.5 && cutDropped()) discard;
+    }
     vec3 v = normalize(cameraPosition - vWorld);
     vec3 col;
     if (n.y > 0.5) {
@@ -820,6 +881,9 @@ const WALL_FRAGMENT = /* glsl */ `
     // falls on from above most
     col += uStrike * (0.1 + 0.18 * vUp);
     gl_FragColor = finish(col, creatureLight(vWorld, n));
+    if (vGhost > 0.5) {
+      gl_FragColor.rgb = mix(mix(gl_FragColor.rgb, GHOST_EDGE, 0.3), GHOST_EDGE, ghostEdge);
+    }
   }
 `;
 
@@ -842,7 +906,7 @@ const hideUniforms = () => ({
  */
 export function createWallMaterial(light = NO_LIGHT) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...WORLD_UNIFORMS, ...light.uniforms, ...hideUniforms() },
+    uniforms: { ...WORLD_UNIFORMS, ...CUT_UNIFORMS, ...light.uniforms, ...hideUniforms() },
     vertexShader: WALL_VERTEX,
     fragmentShader: WALL_FRAGMENT,
     clipping: true,
@@ -854,16 +918,20 @@ export function createWallMaterial(light = NO_LIGHT) {
 
 const FLOOR_VERTEX = /* glsl */ `
   attribute float aEdge;
+  attribute vec4 aCut; // its owner for the editor's cutaway: cell x, z, storey, a wall's
   varying vec3 vWorld;
   varying vec3 vNormalW;
   varying float vEdge;
+  varying float vGhost;
   #include <common>
   #include <clipping_planes_pars_vertex>
+  ${CUT_VERTEX_GLSL}
   void main() {
     vec4 world = modelMatrix * vec4(position, 1.0);
     vWorld = world.xyz;
     vNormalW = normal; // built in world space (Floor), never rotated
     vEdge = aEdge;
+    vGhost = cutGhost(aCut.xy, aCut.z, aCut.w);
     vec4 mvPosition = viewMatrix * world;
     gl_Position = projectionMatrix * mvPosition;
     #include <clipping_planes_vertex>
@@ -878,15 +946,20 @@ const FLOOR_FRAGMENT = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormalW;
   varying float vEdge;
+  varying float vGhost;
   #include <common>
   #include <clipping_planes_pars_fragment>
   ${PALETTE_GLSL}
   ${KEY_GLSL}
   ${LIGHT_GLSL}
   ${FINISH_GLSL}
+  ${CUT_FRAGMENT_GLSL}
 
   void main() {
     #include <clipping_planes_fragment>
+    // The editor's cutaway: a ghost keeps its edge lines whole and a
+    // screen door of the rest
+    if (vGhost > 0.5 && vEdge < 0.5 && cutDropped()) discard;
     vec3 n = normalize(vNormalW);
     vec3 v = normalize(cameraPosition - vWorld);
     vec3 col;
@@ -909,6 +982,9 @@ const FLOOR_FRAGMENT = /* glsl */ `
       col = SLAB_SIDE * (0.8 + 0.3 * max(dot(n, KEY_DIR), 0.0));
     }
     gl_FragColor = finish(col, creatureLight(vWorld, n));
+    if (vGhost > 0.5) {
+      gl_FragColor.rgb = vEdge > 0.5 ? GHOST_EDGE : mix(gl_FragColor.rgb, GHOST_EDGE, 0.3);
+    }
   }
 `;
 
@@ -920,7 +996,7 @@ const FLOOR_FRAGMENT = /* glsl */ `
  */
 export function createFloorMaterial(light = NO_LIGHT) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...WORLD_UNIFORMS, ...light.uniforms },
+    uniforms: { ...WORLD_UNIFORMS, ...CUT_UNIFORMS, ...light.uniforms },
     vertexShader: FLOOR_VERTEX,
     fragmentShader: FLOOR_FRAGMENT,
     clipping: true,
