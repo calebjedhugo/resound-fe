@@ -16,8 +16,14 @@ export const onSlotFlash = (fn) => {
   };
 };
 
-const flashSlot = (kind) => {
-  handlers.forEach((fn) => fn(kind));
+/**
+ * @param {string} kind - 'silent'
+ * @param {object} [detail] - what was refused: `{ releaseRefused: true }`
+ *   when Space had a creature to let out but no good spot (ui/ReleaseMarker
+ *   flares red)
+ */
+const flashSlot = (kind, detail = null) => {
+  handlers.forEach((fn) => fn(kind, detail));
 };
 
 export default flashSlot;

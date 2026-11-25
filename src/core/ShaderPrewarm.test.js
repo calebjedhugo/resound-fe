@@ -17,6 +17,7 @@ import DeployManager from 'core/DeployManager';
 import gameState from 'core/GameState';
 import CreatureLook from 'entities/CreatureLook';
 import PoleLook from 'entities/PoleLook';
+import ReleaseMarker from 'ui/ReleaseMarker';
 import Gate from 'entities/Gate';
 import Fountain from 'entities/Fountain';
 import KeyHints from 'ui/KeyHints';
@@ -381,6 +382,15 @@ describe('Every look gameplay can show is compiled behind the start gate', () =>
     expect(objectsIn(scene).filter((object) => object.isSprite)).toHaveLength(2);
     expect(coldPrograms(scene)).toEqual([]);
     hints.dispose();
+  });
+
+  it('the release marker (where Space would let a creature out)', () => {
+    const scene = litScene();
+    const marker = new ReleaseMarker(scene);
+    marker.group.visible = true;
+
+    expect(coldPrograms(scene)).toEqual([]);
+    marker.dispose();
   });
 
   it('the pole, out and flaring (drawn over the main view in a scene of its own)', () => {

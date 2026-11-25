@@ -18,6 +18,7 @@ import KeyHints from 'ui/KeyHints';
 import CameraModeBadge from 'ui/CameraModeBadge';
 import PauseMenu from 'ui/PauseMenu';
 import InventoryUI from 'ui/InventoryUI';
+import ReleaseMarker from 'ui/ReleaseMarker';
 import EndingOverlay from 'ui/EndingOverlay';
 import DebugUI from 'ui/DebugUI';
 import NotationDisplay from 'ui/NotationDisplay';
@@ -87,6 +88,8 @@ const inventoryUI = new InventoryUI();
 const debugUI = new DebugUI();
 const startGate = new StartGate();
 const keyHints = new KeyHints(scene);
+// Where Space would let the cursor slot's creature out, on the floor
+const releaseMarker = new ReleaseMarker(scene);
 const cameraModeBadge = new CameraModeBadge();
 const endingOverlay = new EndingOverlay();
 
@@ -102,6 +105,7 @@ PortalManager.initialize(scene, (puzzle, arrivalGate) => {
   AbsorbManager.finishNow();
   HintMemory.arm(puzzle && puzzle.teaches);
   keyHints.hideAll();
+  releaseMarker.hideAll();
   if (arrivalGate && arrivalGate.ending) endingOverlay.show();
 });
 
@@ -158,6 +162,7 @@ async function startPuzzle(puzzleId, pendingLoad = null) {
     HintMemory.reset();
     HintMemory.arm(puzzleData.teaches);
     keyHints.hideAll();
+    releaseMarker.hideAll();
     startGate.show(); // the world exists: a key/click may wake it now
   } catch (error) {
     console.error('Failed to load puzzle:', error);
@@ -192,6 +197,7 @@ function exitToMenu() {
   startGate.hide();
   endingOverlay.hide();
   keyHints.hideAll();
+  releaseMarker.hideAll();
   cameraModeBadge.update(gameState);
   stateMachine.setState('MENU');
 }
@@ -248,6 +254,7 @@ function update(deltaTime) {
     tickEnvironment(deltaTime, PortalManager.getActiveArea());
     inventoryUI.update();
     keyHints.update(deltaTime);
+    releaseMarker.update(deltaTime);
     debugUI.update();
   }
   cameraModeBadge.update(gameState);
@@ -358,6 +365,7 @@ async function leaveForEditor() {
   audioContextManager.setMuted(true);
   if (pauseMenu) pauseMenu.hide();
   keyHints.hideAll();
+  releaseMarker.hideAll();
   const report = {
     areaId: gameState.currentPuzzle ? gameState.currentPuzzle.id : null,
     pose: currentPose(),
@@ -612,6 +620,7 @@ if (import.meta.env.DEV) {
           [AbsorbManager, 'update', 'update.pole'],
           [inventoryUI, 'update', 'update.inventoryUI'],
           [keyHints, 'update', 'update.keyHints'],
+          [releaseMarker, 'update', 'update.releaseMarker'],
           [debugUI, 'update', 'update.debugUI'],
           [cameraModeBadge, 'update', 'update.cameraBadge'],
           [ShaderPrewarm, 'run', 'render.prewarm'],

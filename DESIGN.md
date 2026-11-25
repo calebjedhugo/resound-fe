@@ -40,6 +40,16 @@ automated playtesters can observe them.)
     body, nor anywhere the player can't SEE it land (past a wall's corner,
     a closed gate or a door: the same sightline as absorbing). Bad spot or
     empty slot: grey flash. The slot is empty after.
+  - **The release marker** (asked 2026-11-25: "let the player know when
+    deployment is possible and feedback for a failed deployment";
+    `ui/ReleaseMarker`): while the cursor slot holds a creature, a ring the
+    size of its body lies on the floor where Space would let it out — in
+    its colour with a dot at the centre when the spot is good, dim red
+    with no dot when it isn't; a press refused there flares it red and
+    swells it once. Hidden with an empty slot and while the pole works.
+    Unlike the release HINT it never retires.
+  - **A slot's number counts the notes heard**: single notes and chords,
+    never rests, never a note only tied on from the one before.
   - **One pole action at a time**; R and Space during one are ignored.
   - **Absorbed = silent at once**: the creature stops singing the moment the
     tip touches it (no partial song reaches a gate after that) and stops

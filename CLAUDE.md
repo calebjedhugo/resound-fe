@@ -621,11 +621,14 @@ instead of "fixing" it.
   it: a visual-only clone at the partner face, sharing the real tile's
   material so the glow syncs (`_rebuildTileMirrors`)
 - `ui/InventoryUI` (was RecordingUI): slots show the held creature's orb +
-  note count, a landing pop; the reach mark (pale ring, ×N) over the cursor
+  note count (heard notes: no rests, no tied-on continuations), a landing pop; the reach mark (pale ring, ×N) over the cursor
   slot pulses red during an absorb. KeyHints: the absorb hint (R) floats
   over `AbsorbManager.target()`, the release hint (Space, small) low over
   the release spot; their puzzle lesson ids stay `record` / `playback`
-  (puzzle JSON vocabulary); `slots` is gone
+  (puzzle JSON vocabulary); `slots` is gone. `ui/ReleaseMarker` (never
+  retires): a body-sized floor ring at `releaseSpot` while the cursor slot
+  holds one — creature colour + dot = good, dim red = not, a red flare on a
+  refused Space (`flashSlot('silent', { releaseRefused: true })`)
 - **The ACTIVE waystone + deployable waystone gate** (ruled 2026-07-18):
   stepping on a waystone turns it GOLD (one active tile world-wide) and
   makes it the destination of the player's deployable gate. G cycles

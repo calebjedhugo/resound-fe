@@ -172,7 +172,9 @@ class AbsorbManager {
     const area = gameState.activeArea;
     const spot = held && area ? this.releaseSpot(held.spec.size) : null;
     if (!spot || !spot.valid) {
-      flashSlot('silent');
+      // A creature in hand and nowhere good for it: the floor marker flares
+      // red too (ui/ReleaseMarker)
+      flashSlot('silent', held && spot ? { releaseRefused: true } : null);
       return false;
     }
     // Its first note sounds on the beat of the press (the late grace) or

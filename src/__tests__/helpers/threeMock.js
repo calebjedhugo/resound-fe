@@ -265,6 +265,13 @@ class Color {
     return this;
   }
 
+  setRGB(r, g, b) {
+    this.r = r;
+    this.g = g;
+    this.b = b;
+    return this;
+  }
+
   // As three's (hue wrapped into 0..1)
   setHSL(h, s, l) {
     const hue = ((h % 1) + 1) % 1;
