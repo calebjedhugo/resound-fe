@@ -5,8 +5,16 @@ import { onSlotFlash } from 'ui/slotFlash';
 const SLOT_PX = 50;
 const MARK_PX = 32;
 
-/** How many notes (single notes and chords) a held creature's song has. */
-const noteCount = (spec) => (spec && Array.isArray(spec.song) ? spec.song.length : 0);
+/**
+ * How many notes a held creature's song has, as heard: single notes and
+ * chords, never rests, and never a note only tied on from the one before
+ * (a tie's `continue` / `stop` — the same sound held).
+ */
+const strikes = (note) =>
+  Boolean(note && note.pitch) && note.tie !== 'continue' && note.tie !== 'stop';
+const isSounding = (entry) => (Array.isArray(entry) ? entry.some(strikes) : strikes(entry));
+const noteCount = (spec) =>
+  spec && Array.isArray(spec.song) ? spec.song.filter(isSounding).length : 0;
 
 /**
  * InventoryUI - the slot strip in the bottom-right corner: one slot per tape
