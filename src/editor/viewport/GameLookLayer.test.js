@@ -12,6 +12,9 @@ import { RAMP_MATERIAL } from 'entities/EntityLook';
 import { lightningLevel } from 'entities/EnvironmentLook';
 import { messiaenColour } from 'core/messiaenColour';
 import { cellsOfRects } from 'core/floorTiles';
+import Cutaway from 'editor/viewport/Cutaway';
+import { clearCut } from 'entities/CutawayLook';
+import { gridToWorld } from 'editor/viewport/gridUtils';
 
 const E_WHOLE = [{ pitch: 'E4', length: '1/1' }];
 const G_HALF = [{ pitch: 'G4', length: '1/2' }];
@@ -241,5 +244,124 @@ describe('Editor cues over the dark look', () => {
 
     layer.setCuesVisible(true);
     expect(drawn().filter((n) => n.visible !== false)).toHaveLength(before);
+  });
+});
+
+describe('The cutaway: ghosts of what is above, and of the walls in front', () => {
+  // A container on the ground: a ring of walls round cells 0..4 with a gate
+  // in its south side, a creature and a fountain inside; up on storey 1 a
+  // creature, a ramp, a waystone and the spawn. The cursor in the middle,
+  // the camera to the south.
+  let ids;
+  let cutaway;
+  const look = (view) => {
+    const at = gridToWorld(2, 2);
+    cutaway.setMode(view);
+    cutaway.update({
+      storey: 0,
+      cursor: { x: 2, z: 2 },
+      camera: { position: new THREE.Vector3(at.x, 30, at.z + 30) },
+    });
+    layer.applyCut(cutaway);
+  };
+
+  beforeEach(() => {
+    cutaway = new Cutaway(); // no browser storage here: it opens in the cutaway
+    for (let i = 0; i <= 4; i += 1) {
+      undo.addEntity('wall', i, 0, 0, {});
+      if (i !== 2) undo.addEntity('wall', i, 0, 4, {});
+      if (i > 0 && i < 4) {
+        undo.addEntity('wall', 0, 0, i, {});
+        undo.addEntity('wall', 4, 0, i, {});
+      }
+    }
+    ids = {
+      gate: undo.addEntity('gate', 2, 0, 4, { song: E_WHOLE, gateId: 'gate-1' }),
+      inside: undo.addEntity('creature', 2, 0, 2, { song: E_WHOLE }),
+      fountain: undo.addEntity('fountain', 1, 0, 2, { song: [] }),
+      above: undo.addEntity('creature', 1, 1, 1, { song: E_WHOLE }),
+      ramp: undo.addEntity('ramp', 3, 1, 1, { direction: 'north' }),
+      waystone: undo.addEntity('waystone', 3, 1, 3, {}),
+    };
+    undo.setPlayerSpawn(1, 1, 3);
+    layer.sync(undo);
+  });
+
+  afterEach(() => clearCut());
+
+  const rampLook = () => drawn().find((n) => n.material === RAMP_MATERIAL);
+  // The spawn's ghost: plain see-through meshes (no shader, no ghost hook)
+  const spawnParts = () =>
+    drawn().filter(
+      (n) =>
+        n.geometry &&
+        n.material &&
+        n.material.transparent &&
+        !n.material.uniforms &&
+        !n.material.userData.cutGhost &&
+        !n._isNotationMesh &&
+        n.userData &&
+        n.userData.opacity !== undefined
+    );
+
+  it('cutaway: everything above is a ghost; in front, the gate in the near wall; inside stays solid', () => {
+    look('cutaway');
+    expect(layer.isGhost(ids.above)).toBe(true);
+    expect(layer.lookOf(ids.above).ghosted).toBe(true);
+    expect(layer.isGhost(ids.ramp)).toBe(true);
+    expect(layer.isGhost(ids.waystone)).toBe(true);
+    expect(layer.isGhost(ids.gate)).toBe(true);
+    expect(layer.isGhost(ids.inside)).toBe(false);
+    expect(layer.lookOf(ids.inside).ghosted).toBe(false);
+    expect(layer.isGhost(ids.fountain)).toBe(false);
+  });
+
+  it("tells each look in its own way: a creature's look, a gate's shell, a ramp, a disc's material", () => {
+    look('cutaway');
+    const gateShell = drawn().find(
+      (n) => n.material && n.material.uniforms && n.material.uniforms.uProgress
+    );
+    expect(gateShell.material.uniforms.uGhost.value).toBe(1);
+    // The ramp's own flag, which its draw hands the shared material
+    rampLook().onBeforeRender();
+    expect(RAMP_MATERIAL.uniforms.uGhost.value).toBe(1);
+    // The waystone's disc and the fountain's basin (the one wearing a staff)
+    const dithered = drawn().filter((n) => n.material && n.material.userData.cutGhost);
+    expect(dithered).toHaveLength(2);
+    const basin = dithered.find((n) => n.children.some((c) => c._isNotationMesh));
+    const disc = dithered.find((n) => n !== basin);
+    expect(disc.material.userData.cutGhost.value).toBe(1);
+    expect(basin.material.userData.cutGhost.value).toBe(0);
+  });
+
+  it('the storey cut keeps the near wall whole, and full draws everything whole', () => {
+    look('storey');
+    expect(layer.isGhost(ids.gate)).toBe(false);
+    expect(layer.isGhost(ids.above)).toBe(true);
+
+    look('full');
+    Object.values(ids).forEach((id) => expect(layer.isGhost(id)).toBe(false));
+    expect(layer.lookOf(ids.above).ghosted).toBe(false);
+    rampLook().onBeforeRender();
+    expect(RAMP_MATERIAL.uniforms.uGhost.value).toBe(0);
+  });
+
+  it("the spawn's marker up above fades with its storey", () => {
+    const before = spawnParts().map((n) => n.material.opacity);
+    expect(before).toHaveLength(2);
+    look('storey');
+    spawnParts().forEach((n, i) => expect(n.material.opacity).toBeLessThan(before[i]));
+    look('full');
+    expect(spawnParts().map((n) => n.material.opacity)).toEqual(before);
+  });
+
+  it('a creature that moves up into the cut storeys becomes a ghost (its look kept)', () => {
+    look('storey');
+    const own = layer.lookOf(ids.inside);
+    undo.updateEntity(ids.inside, { y: 1 });
+    layer.sync(undo);
+    layer.applyCut(cutaway);
+    expect(layer.lookOf(ids.inside)).toBe(own);
+    expect(own.ghosted).toBe(true);
   });
 });

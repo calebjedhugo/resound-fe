@@ -323,6 +323,39 @@ edits show up in the game on a manual reload.
   and any other request (input, camera damping, a glide, an edit) draw on
   the next vsync (ruled for the fan, 2026-11-24: the 60 fps loop was ~half
   the GPU while idle). The schematic look keeps the on-demand rendering.
+- **The cutaway: seeing inside containers** (ruled 2026-11-25;
+  `viewport/Cutaway.js`, rule + GLSL in `entities/CutawayLook.js`). ONE
+  view toggle, three modes — **X**, the Options menu ("View: …"), **L2 +
+  Share** — shown in the readout (`Cell (x, z) · E0 · Cutaway`), remembered
+  per browser (`io/lookPreference` `loadCut`/`saveCut`, key
+  `resound-editor-cut`, try/catch): **Full** (all whole) → **Storey cut**
+  (every storey ABOVE the active one a ghost: floors, walls, entities;
+  the active one and below solid; a wall's top, floor one storey up, stays
+  with its wall) → **Cutaway** (default: that, plus WALLS and GATES on the
+  active storey on the camera's side of the CURSOR). Near-side rule
+  (`cellGhosted`, JS twin of the GLSL `cutGhost` — change both): with `v` =
+  cell − cursor and `d` the horizontal unit direction cursor → camera, a
+  ghost when `0.5 < v·d ≤ 12` and `|v×d| ≤ 4.5` cells (a room-wide strip
+  from the cursor toward the eye: a container's near wall(s) and the near
+  halves of its sides open, its far side and the cursor's own cell stay;
+  camera overhead = no near side). A GHOST is a screen-door discard (3 px in
+  16, `ghostKeeps`/`cutDropped`), never alpha blending, its outline kept
+  pale and whole. **Uniforms default OFF; only the editor writes them**: the
+  floor and wall shaders read the SHARED `CUT_UNIFORMS` (cell owners: the
+  floor's `aCut` attribute from `buildTileGeometry`, a wall top owned by its
+  wall; walls from their instance matrix — a solid wall shows the face it
+  hid against a ghost neighbour or a ghost stacked on it); entities get a
+  per-object `uGhost` (gate material, `Ramp.ghost` → `bindRampLight`,
+  `CreatureLook.setGhost`, `addGhostDither` on the editor's own waystone /
+  fountain / schematic materials and `TileSlabs`; a ghost's staff at 15%).
+  `_updateCut` runs before EVERY drawn frame (calm or not) and every pick;
+  the storey and cursor call `EditorScene.onViewChange` → a frame, an orbit
+  draws through the controls' 'change'. **Picking skips ghosts**
+  (`_pickableMeshes`, `SelectionManager.isGhost` /
+  `EntityPlacer.getPickableMeshes`): a right-click / double-click goes
+  through the near wall to what is inside; the cursor stays on the active
+  storey's plane. Play suspends it (`_standAside`: the game look whole);
+  the game never writes it
 - **Resolution: as the game renders by default** (ruled 2026-11-24): 1x
   pixel ratio, no antialiasing (`_createRenderer`). **Sharp rendering**
   (screen pixel ratio + antialiasing, the editor's old look, ~7x the GPU
@@ -427,8 +460,8 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 | Circle | back (Esc) | | |
 | L1 / R1 | palette prev / next (floor only between the ends) | | carry entity down / up a storey (brings its floor) |
 | L2 + R2 + d-pad ↑/↓ | carry entity a storey | | |
-| Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, Undo, Redo, look, sharp rendering | | |
-| Share | game ↔ schematic look | | |
+| Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, Undo, Redo, look, view (cutaway), sharp rendering | | |
+| Share | game ↔ schematic look | view: full → storey cut → cutaway (X) | |
 | Touchpad | sidebar focus (`PadFocus`) | | |
 
 - **Sidebar / world map** (`input/PadFocus.js`): d-pad ↑/↓ moves a visible

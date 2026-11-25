@@ -34,6 +34,9 @@ export default class EditorScene {
     // The floor range being built while ✕ / Enter is held: { anchor: {x,z},
     // elevation } (a rectangle from the anchor to the cursor); else null
     this._floorRange = null;
+    // Called whenever the active storey or the cursor changes (the editor
+    // draws again: the cutaway follows both)
+    this.onViewChange = null;
 
     this._createGrid();
     this._createAxes();
@@ -51,10 +54,16 @@ export default class EditorScene {
     return this._activeElevation;
   }
   set activeElevation(val) {
+    const changed = val !== this._activeElevation;
     this._activeElevation = val;
     // The grid, raycast plane, and cursor all live on the active storey.
     this._positionGrid();
     this._positionCursorMesh();
+    if (changed) this._viewChanged();
+  }
+
+  _viewChanged() {
+    if (this.onViewChange) this.onViewChange();
   }
 
   _createGrid() {
@@ -246,13 +255,16 @@ export default class EditorScene {
     this._cursorCell = { x: this._cursorCell.x + dx, z: this._cursorCell.z + dz };
     this._positionCursorMesh();
     this._positionGrid();
+    if (dx !== 0 || dz !== 0) this._viewChanged();
   }
 
   /** Put the cursor on a cell. */
   setCursor(cell) {
+    const changed = cell.x !== this._cursorCell.x || cell.z !== this._cursorCell.z;
     this._cursorCell = { x: cell.x, z: cell.z };
     this._positionCursorMesh();
     this._positionGrid();
+    if (changed) this._viewChanged();
   }
 
   /** Reset the cursor to the middle of what is built (e.g. on loading a puzzle). */

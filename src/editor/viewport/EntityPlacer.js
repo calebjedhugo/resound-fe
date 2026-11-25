@@ -4,6 +4,7 @@ import { gridToWorld } from 'editor/viewport/gridUtils';
 import ENTITY_COLORS from 'editor/viewport/entityColors';
 import { createEntityGeometry, Y_OFFSETS } from 'editor/viewport/entityGeometry';
 import { isValidGateId, nextGateId, usedGateIds } from 'editor/util/gateIds';
+import { addGhostDither, setMaterialGhost } from 'entities/CutawayLook';
 
 // Entity types _createMesh knows how to place (player spawn is separate).
 const PLACEABLE_TYPES = ['creature', 'gate', 'fountain', 'wall', 'ramp', 'waystone'];
@@ -53,6 +54,40 @@ export default class EntityPlacer {
   _applyDrawn(mesh) {
     // eslint-disable-next-line no-param-reassign
     mesh.material.visible = this._drawn;
+  }
+
+  /**
+   * Ghost the schematic meshes the cutaway cuts (editor/viewport/Cutaway):
+   * drawn as a screen door in the schematic look. Before every frame drawn.
+   * @param {{ghosts: function(object): boolean}} cutaway
+   */
+  applyCut(cutaway) {
+    for (const entity of this._undoManager.getEntities()) {
+      const mesh = this._entityMeshes.get(entity.id);
+      if (mesh) setMaterialGhost(mesh.material, cutaway.ghosts(entity));
+    }
+    const spawn = this._undoManager.getPlayerSpawn();
+    if (this._playerSpawnMesh && spawn) {
+      setMaterialGhost(
+        this._playerSpawnMesh.material,
+        cutaway.ghosts({ type: 'player', ...spawn })
+      );
+    }
+  }
+
+  /**
+   * The meshes a click or a pointer can pick: every entity's, less those
+   * `isGhost` says are ghosts (a click goes through a ghost to what is
+   * inside it).
+   * @param {function(object): boolean} [isGhost] - of an entity
+   * @returns {THREE.Mesh[]}
+   */
+  getPickableMeshes(isGhost = () => false) {
+    const meshes = [];
+    this._entityMeshes.forEach((mesh, id) => {
+      if (!isGhost(this._undoManager.getEntity(id))) meshes.push(mesh);
+    });
+    return meshes;
   }
 
   placeEntity(type, gridX, gridZ, elevation, data = {}) {
@@ -145,7 +180,7 @@ export default class EntityPlacer {
 
     // Spawn marker: cone pointing down
     const geo = createEntityGeometry('player');
-    const mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.player });
+    const mat = addGhostDither(new THREE.MeshStandardMaterial({ color: ENTITY_COLORS.player }));
     const mesh = new THREE.Mesh(geo, mat);
     this._placeSpawnMesh(mesh, gridX, gridZ, elevation);
     mesh.rotation.x = Math.PI; // Point downward
@@ -168,7 +203,8 @@ export default class EntityPlacer {
     if (!PLACEABLE_TYPES.includes(type)) return;
 
     const geo = createEntityGeometry(type);
-    const mat = new THREE.MeshStandardMaterial({ color: ENTITY_COLORS[type] });
+    // Ghosted by the cutaway in the schematic look (applyCut)
+    const mat = addGhostDither(new THREE.MeshStandardMaterial({ color: ENTITY_COLORS[type] }));
     const mesh = new THREE.Mesh(geo, mat);
     this._fitMesh(mesh, { id, type, x: gridX, y: elevation, z: gridZ, data });
     this._applyDrawn(mesh);

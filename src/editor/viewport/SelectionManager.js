@@ -8,6 +8,9 @@ export default class SelectionManager {
     this._selectedId = null;
     this._originalColor = null;
     this._onSelectionChange = null; // callback
+    // Which entities are ghosts in the cutaway (editor/viewport/Cutaway):
+    // a click passes through them
+    this.isGhost = () => false;
   }
 
   set onSelectionChange(fn) {
@@ -51,7 +54,7 @@ export default class SelectionManager {
     const mouse = new THREE.Vector2(mouseX, mouseY);
     this._raycaster.setFromCamera(mouse, this._camera);
 
-    const meshes = this._entityPlacer.getAllMeshes();
+    const meshes = this._entityPlacer.getPickableMeshes(this.isGhost);
     if (this._entityPlacer._playerSpawnMesh) {
       meshes.push(this._entityPlacer._playerSpawnMesh);
     }

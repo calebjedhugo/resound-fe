@@ -6,11 +6,14 @@
  * flat schematic colours: each storey its own hue (subfloors too), the
  * edge lines pale. The game look draws the floor itself (GameLookLayer
  * builds the game's Floor), so these show only while the schematic look
- * does.
+ * does. The cutaway ghosts them as it does the game's floor, per tile, from
+ * the geometry's owners (`aCut`) and the shared cut uniforms
+ * (entities/CutawayLook addGhostDither).
  */
 import * as THREE from 'three';
 import { ELEVATION_HEIGHT } from 'core/constants';
 import Floor, { buildTileGeometry } from 'entities/Floor';
+import { addGhostDither } from 'entities/CutawayLook';
 import { GAME_OFFSET } from 'editor/viewport/gridUtils';
 
 const EDGE_COLOR = new THREE.Color(0xe8e2cf);
@@ -26,7 +29,9 @@ export default class TileSlabs {
     this._mesh = null;
     this._key = null;
     this._visible = true;
-    this._material = new THREE.MeshStandardMaterial({ vertexColors: true });
+    this._material = addGhostDither(new THREE.MeshStandardMaterial({ vertexColors: true }), {
+      perVertex: true,
+    });
   }
 
   /**
