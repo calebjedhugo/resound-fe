@@ -152,6 +152,39 @@ describe('Two creatures singing a two-voice gate song, back to back', () => {
     expect(misses).toEqual([]);
   });
 
+  it('a stalled frame janks but drops no note, and the voices come back onto the grid', async () => {
+    // Run to just before the third loop's downbeat, then stall one frame
+    // well past it: the downbeat comes 0.8 s (1.6 beats) late, more than
+    // the first note (a quarter) can be drawn back by
+    await runFor(2 * LOOP_MS - 100);
+    await jest.advanceTimersByTimeAsync(900);
+    gameState.musicalClock.update(0.9);
+    AbsorbManager.update(0.9);
+    await runFor(6 * LOOP_MS);
+
+    [treble, bass].forEach((creature) => {
+      const notes = notesOf(creature);
+      // Every loop is sung whole: no loop sat out, no note dropped
+      expect(notes.map((n) => n.pitch)).toEqual(
+        Array.from(
+          { length: notes.length },
+          (_, i) => creature.song[i % creature.song.length].pitch
+        )
+      );
+      const loops = loopsOf(creature);
+      expect(loops.length).toBeGreaterThanOrEqual(7);
+      // The stalled loop starts late...
+      const due = (k) => beatZeroMs + k * SONG_BEATS * MS_PER_BEAT;
+      expect(loops[2][0].timestamp - due(2)).toBeGreaterThan(500);
+      // ...and a few loops on, every note is back on the grid
+      const offsets = offsetsOf(creature.song);
+      loops[6].forEach((note, j) => {
+        const off = note.timestamp - (due(6) + offsets[j] * MS_PER_BEAT);
+        expect(Math.abs(off)).toBeLessThan(20 + TIMER_LATE_MS * (creature.song.length + 1));
+      });
+    });
+  });
+
   it('the gate counts EVERY loop: a completion does not eat the next take', async () => {
     const completions = countCompletions(gate);
     await runFor(8 * LOOP_MS + 200);

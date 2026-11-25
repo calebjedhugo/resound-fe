@@ -219,11 +219,14 @@ class Creature extends Entity {
     // Time to sing? Every song starts on its beat (nextSingBeat, on the
     // period's grid): its first note on the first frame at or past it
     // (or, back to back, the frame its last song ends), the rest drawn back
-    // onto the grid by as much. Too late to draw back (a stalled frame)
-    // and it sits that song out, back on the grid with the next.
+    // onto the grid by as much, but never by more than half the first
+    // note (it always keeps half its length). Later than that (a stalled
+    // frame) it is still sung, every note — a stall janks, it never drops
+    // a note — and drawn back by that half: a back-to-back singer catches
+    // up over its next songs, one with a gap is on the grid again at once.
     if (currentBeat >= this.nextSingBeat && !this.instrument.playbackState.isPlaying) {
       const lateBeats = currentBeat - this.nextSingBeat;
-      if (lateBeats < this._snapLimitBeats) this.sing(lateBeats);
+      this.sing(Math.min(lateBeats, this._snapLimitBeats / 2));
       this.nextSingBeat += this.period;
       if (this.nextSingBeat <= currentBeat) {
         this.nextSingBeat = nextBeatInPhase(currentBeat, this.nextSingBeat, this.period);

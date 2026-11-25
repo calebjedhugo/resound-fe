@@ -272,9 +272,10 @@ automated playtesters can observe them.)
   back to back). Each starts on its beat of that grid: the first note on
   the first frame at or past it (or, back to back, when the last song
   ends), the rest drawn back onto the grid by as much (the release's late-
-  grace snap, now every song). A song too late to draw back (later than its
-  first note's length: a stalled frame) is sat out, and the next is on the
-  grid again. It used to start each song whenever the last one ended, a
+  grace snap, now every song), by at most half the first note. A song
+  later than that (a stalled frame) is still sung whole: a stall janks, it
+  never drops a note (designer, 2026-11-24). A back-to-back singer catches
+  up over its next songs; one with a gap is on the grid with the next. It used to start each song whenever the last one ended, a
   frame or more late, so a back-to-back singer drifted off the beat a frame
   a loop — and off another creature released on the beat beside it.
 - **Gates open on the COMPLETED song, LATCH, and close when you walk

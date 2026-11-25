@@ -189,8 +189,9 @@ instead of "fixing" it.
   next sing beat modulo its `period`, from the world clock, core/WorldMemory).
   **Every song is on the beat** (2026-11-24): `nextSingBeat` advances by
   `period` and never slips; each song's lateness (a frame, or the last
-  song's timers when back to back) is drawn back onto the grid, too late
-  to draw back and that song is sat out — so creatures released on the
+  song's timers when back to back) is drawn back onto the grid, by at most
+  half the first note; a stall janks but NEVER drops a note (the late song
+  is sung whole and catches up) — so creatures released on the
   beat stay together loop after loop. No clapping (C
   does nothing in the world; Circle only backs out of menus)
 - Matching tolerates sounds AFTER the aligned window but a foreign note
