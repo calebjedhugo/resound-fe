@@ -173,8 +173,10 @@ describe('A previewed song lights its creature, note by note', () => {
   });
 
   it('is lively (drawn every frame) while a note sounds and while it fades, then calm', () => {
+    // The storm's lightning strikes at random and is lively too: compare
+    // against it, so a strike landing mid-test can't fail it
     layer.update(0.016);
-    expect(layer.lively).toBe(false); // a silent bubble: only slow drifts move
+    expect(layer.lively).toBe(lightningLevel() > 0); // a silent bubble: only slow drifts move
 
     layer.noteOn(id, 'E4', 0.5);
     expect(layer.lively).toBe(true);
@@ -183,7 +185,7 @@ describe('A previewed song lights its creature, note by note', () => {
     expect(layer.lively).toBe(true); // ...but the light is still fading
 
     for (let t = 0; t < 3; t += 0.05) layer.update(0.05);
-    expect(layer.lively).toBe(false);
+    expect(layer.lively).toBe(lightningLevel() > 0);
   });
 
   it('is never lively while hidden (the schematic look draws on demand)', () => {
