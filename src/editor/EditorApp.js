@@ -88,8 +88,11 @@ export default class EditorApp {
     // Any model mutation clears it (see the setOnChange hook).
     this._pendingUnrevert = false;
     // The floor range being built while ✕ / Enter is held on a cell with no
-    // floor: { anchor: {x,z}, elevation }; else null (confirmDown/confirmUp)
+    // floor (floor only): { anchor: {x,z}, elevation }; else null
     this._floorRange = null;
+    // The wall box being drawn while ✕ / Enter is held with Wall chosen:
+    // { anchor: {x,z}, from, to } (storeys); else null
+    this._wallRange = null;
     this._validationTimer = null;
     this._autoSaveTimer = null;
     this._repoSaves = new Set(); // autosave writes still in flight
@@ -352,19 +355,28 @@ export default class EditorApp {
     if (!this._hudEl) return;
     const grid = this.editorScene.getHoveredGrid();
     const storey = this.editorScene.activeElevation;
-    const bare = grid && !this.undoManager.hasTile(grid.x, storey, grid.z);
-    const cellText = grid
-      ? `Cell (${grid.x}, ${grid.z}) · E${storey}${bare ? ' · no floor (✕ / Enter builds it)' : ''}`
-      : '';
+    const bare = grid && !this.undoManager.hasFloor(grid.x, storey, grid.z);
     const tool = this.entityToolbar ? this.entityToolbar.activeTool : null;
+    let bareText = '';
+    if (bare) {
+      bareText = tool
+        ? ` · no floor (✕ / Enter places the ${tool === 'player' ? 'spawn' : tool} with its floor)`
+        : ' · no floor (✕ / Enter builds it)';
+    }
+    const cellText = grid ? `Cell (${grid.x}, ${grid.z}) · E${storey}${bareText}` : '';
     const toolText = tool
       ? `Placing ${tool} — Enter (or ✕) places it at the cursor; Esc cancels`
       : '';
     const pickText =
       this._linkPickSourceId !== null ? 'Teleport: click another gate to link (Esc cancels)' : '';
-    const draftText = this._floorRange
-      ? `Building floor E${this._floorRange.elevation} — move to size it, let go to build, Esc cancels`
-      : '';
+    let draftText = '';
+    if (this._floorRange) {
+      draftText = `Building floor E${this._floorRange.elevation} — move to size it, let go to build, Esc cancels`;
+    } else if (this._wallRange) {
+      const { from, to } = this._wallRange;
+      const span = from === to ? `E${from}` : `E${Math.min(from, to)}–E${Math.max(from, to)}`;
+      draftText = `Building walls ${span} — move to size it, Option/L2 + ↑/↓ for storeys, let go to build (a hollow box), Esc cancels`;
+    }
     const text = [pickText, draftText, toolText, cellText].filter(Boolean).join(' · ');
     // Runs every frame (a camera fling is ~60): rewriting the same text would
     // still replace the text node and re-lay the HUD out each time.
@@ -668,7 +680,7 @@ export default class EditorApp {
     this.editorScene.recenterCursor();
     this.entityPlacer.rebuildFromModel();
     this._syncTileSlabs();
-    this._cancelFloorRange();
+    this._cancelRange();
     this.elevationSelector.syncTo(0);
     this.metadataPanel.refresh();
     this.selectionManager.deselect();
@@ -792,19 +804,23 @@ export default class EditorApp {
   /** L1 / R1: the previous / next type to place (Cross places it). */
   cyclePalette(step) {
     const tool = this.entityToolbar.cycle(step);
-    const name = tool === 'player' ? 'player spawn' : tool;
+    let name = tool === 'player' ? 'player spawn' : tool;
+    if (!tool) name = 'floor only (✕ builds floor)';
     this._showToast(`Placing: ${name}`, 'success');
     this._requestFrame();
   }
 
   /**
-   * Cross pressed (the pad): on a cell with no floor at the active storey,
-   * start building floor there (held and moved: a range; let go builds it);
-   * else on an empty cell place the chosen type; on an entity select it,
-   * and on the selected one open its menu.
+   * Cross pressed (the pad). With NO entity chosen (floor only), on a cell
+   * with no floor at the active storey it starts building floor there (held
+   * and moved: a range; let go builds it). With Wall chosen, on an empty
+   * cell it starts a wall box (held: moved and L2 + ↑/↓, a hollow box; a
+   * tap: one wall). With another type chosen, an empty cell gets it placed
+   * — with its floor tile, if it has none, in the same press and undo step.
+   * On an entity it selects it, and on the selected one opens its menu.
    */
   padConfirm() {
-    if (this._startFloorRangeAtCursor()) return;
+    if (this._startRangeAtCursor()) return;
     const cell = this.editorScene.getHoveredGrid();
     const entityId = this._entityIdAtCell(cell);
     const tool = this.entityToolbar.activeTool;
@@ -821,14 +837,14 @@ export default class EditorApp {
     else this._selectAndShow(entityId);
   }
 
-  /** Cross let go (the pad): a floor range being built is built. */
+  /** Cross let go (the pad): a floor range or wall box being drawn is built. */
   padConfirmEnd() {
-    this._commitFloorRange();
+    this._commitRange();
   }
 
-  /** The pad went with Cross held: the floor range is called off. */
+  /** The pad went with Cross held: the floor range / wall box is called off. */
   cancelFloorRange() {
-    this._cancelFloorRange();
+    this._cancelRange();
   }
 
   /** Triangle: the song editor for what is under the cursor (else the selection). */
@@ -1522,11 +1538,19 @@ export default class EditorApp {
       const grid = this.editorScene.gridFromEvent(e, this.camera);
       if (!grid) return;
 
-      // A click on a cell with no floor (at the active storey) builds its
-      // tile, as ✕ / Enter does
+      // A click on a cell with no floor (at the active storey) does what a
+      // tap of ✕ / Enter does there: places the chosen type with its floor,
+      // or (floor only) builds the tile
       if (this._cellIsBare(grid)) {
-        this.undoManager.addTiles([{ x: grid.x, y: this.editorScene.activeElevation, z: grid.z }]);
-        this.selectionManager.deselect();
+        const tool = this.entityToolbar.activeTool;
+        if (tool) {
+          this._placeAtCursor(tool);
+        } else {
+          this.undoManager.addTiles([
+            { x: grid.x, y: this.editorScene.activeElevation, z: grid.z },
+          ]);
+          this.selectionManager.deselect();
+        }
         return;
       }
 
@@ -1734,6 +1758,7 @@ export default class EditorApp {
    * onto an occupied cell.
    */
   _moveEntityLayer(dir) {
+    if (this._floorRange || this._wallRange) return; // ✕ / Enter held: not a carry
     const cell = this.editorScene.getHoveredGrid();
     const current = this.editorScene.activeElevation;
     const targetElev = current + dir;
@@ -1775,6 +1800,12 @@ export default class EditorApp {
    * built is called off.
    */
   _navigateLayer(dir) {
+    // A wall box being drawn (✕ held, Wall chosen) grows a storey instead;
+    // the active storey (and the cursor) stays on the box's first storey
+    if (this._wallRange) {
+      this._extendWallRange(dir);
+      return;
+    }
     const target = this.editorScene.activeElevation + dir;
     if (target < MIN_STOREY || target > MAX_STOREY) return;
     this._cancelFloorRange();
@@ -1782,24 +1813,40 @@ export default class EditorApp {
     this._requestFrame();
   }
 
-  // --- Building floor (✕ / Enter on a cell with no floor) ------------------
+  // --- Building floor and wall boxes (✕ / Enter held) ---------------------
 
-  /** Nothing stands on the cell at the active storey and it has no floor. */
+  /**
+   * Nothing stands on the cell at the active storey and it has no floor
+   * (a built tile, or the top of a wall a storey below: hasFloor).
+   */
   _cellIsBare(cell) {
     const y = this.editorScene.activeElevation;
-    if (this.undoManager.hasTile(cell.x, y, cell.z)) return false;
+    if (this.undoManager.hasFloor(cell.x, y, cell.z)) return false;
     if (this._entityIdAtCell(cell) !== null) return false;
     const spawn = this.undoManager.getPlayerSpawn();
     return !(spawn && spawn.x === cell.x && spawn.y === y && spawn.z === cell.z);
   }
 
   /**
-   * ✕ / Enter pressed on a cell with no floor: start building floor there —
-   * a rectangle from this cell to wherever the cursor is when it is let go
-   * (shown while held). True if it started (the press is used up).
+   * ✕ / Enter pressed: start what a HOLD builds, if anything — with no
+   * entity chosen (floor only) on a cell with no floor, a floor range; with
+   * Wall chosen on an empty cell, a wall box. True if one started (the
+   * press is used up; letting go builds it). Any other case is a tap.
+   */
+  _startRangeAtCursor() {
+    if (this._floorRange || this._wallRange) return true; // already held (a key repeat)
+    const tool = this.entityToolbar.activeTool;
+    if (tool === 'wall') return this._startWallRangeAtCursor();
+    if (tool) return false;
+    return this._startFloorRangeAtCursor();
+  }
+
+  /**
+   * Floor only, ✕ / Enter pressed on a cell with no floor: start building
+   * floor there — a rectangle from this cell to wherever the cursor is when
+   * it is let go (shown while held). True if it started.
    */
   _startFloorRangeAtCursor() {
-    if (this._floorRange) return true; // already holding one (a key repeat)
     const cell = this.editorScene.getHoveredGrid();
     if (!this._cellIsBare(cell)) return false;
     const elevation = this.editorScene.activeElevation;
@@ -1810,8 +1857,46 @@ export default class EditorApp {
   }
 
   /**
-   * ✕ / Enter let go: build floor on every cell of the range that has none,
-   * as ONE undo step.
+   * Wall chosen, ✕ / Enter pressed on a cell a wall may go on: start a wall
+   * box there — the rectangle from this cell to the cursor, across the
+   * storeys Option/L2 + ↑/↓ add while held (shown as a translucent box).
+   * Letting go builds its walls (_commitWallRange); a tap is one wall.
+   */
+  _startWallRangeAtCursor() {
+    const cell = this.editorScene.getHoveredGrid();
+    const elevation = this.editorScene.activeElevation;
+    if (this._isCellOccupied(cell.x, elevation, cell.z, 'wall')) return false;
+    this._wallRange = { anchor: { x: cell.x, z: cell.z }, from: elevation, to: elevation };
+    this.editorScene.setWallRange(this._wallRange.anchor, elevation, elevation);
+    this._requestFrame();
+    return true;
+  }
+
+  /** Option/L2 + ↑/↓ while a wall box is held: one storey more up / down. */
+  _extendWallRange(dir) {
+    const range = this._wallRange;
+    const to = range.to + dir;
+    if (to < MIN_STOREY || to > MAX_STOREY) return;
+    range.to = to;
+    this.editorScene.setWallRange(range.anchor, range.from, range.to);
+    this._requestFrame();
+  }
+
+  /** ✕ / Enter let go: build the floor range or the wall box being held. */
+  _commitRange() {
+    if (this._floorRange) this._commitFloorRange();
+    else if (this._wallRange) this._commitWallRange();
+  }
+
+  /** Call off a floor range or wall box (Esc, a load, the window losing focus). */
+  _cancelRange() {
+    this._cancelFloorRange();
+    this._cancelWallRange();
+  }
+
+  /**
+   * Build the floor range let go: floor on every cell of it that has none
+   * (a wall's top is floor already), as ONE undo step.
    */
   _commitFloorRange() {
     const range = this._floorRange;
@@ -1825,7 +1910,7 @@ export default class EditorApp {
     const z2 = Math.max(range.anchor.z, cursor.z);
     for (let z = z1; z <= z2; z += 1) {
       for (let x = x1; x <= x2; x += 1) {
-        if (!this.undoManager.hasTile(x, range.elevation, z)) {
+        if (!this.undoManager.hasFloor(x, range.elevation, z)) {
           cells.push({ x, y: range.elevation, z });
         }
       }
@@ -1834,11 +1919,60 @@ export default class EditorApp {
     this._requestFrame();
   }
 
+  /**
+   * Build the wall box let go, as ONE undo step: walls on the rectangle's
+   * OUTLINE at every storey it spans — a hollow container, nothing inside
+   * (no walls, no floor). A cell that already holds a wall (or anything
+   * else) is skipped. Each wall brings a floor tile only where it would
+   * stand on nothing: the bottom ring, usually; a wall stacked on a wall
+   * stands on its top. A 1-wide box is a plain line of walls; a tap, one
+   * wall.
+   */
+  _commitWallRange() {
+    const range = this._wallRange;
+    if (!range) return;
+    this._cancelWallRange();
+    const cursor = this.editorScene.getHoveredGrid();
+    const x1 = Math.min(range.anchor.x, cursor.x);
+    const x2 = Math.max(range.anchor.x, cursor.x);
+    const z1 = Math.min(range.anchor.z, cursor.z);
+    const z2 = Math.max(range.anchor.z, cursor.z);
+    const low = Math.min(range.from, range.to);
+    const high = Math.max(range.from, range.to);
+    const um = this.undoManager;
+    let placed = 0;
+    um.batch(() => {
+      // Bottom storey first: the walls above stand on these
+      for (let y = low; y <= high; y += 1) {
+        for (let z = z1; z <= z2; z += 1) {
+          for (let x = x1; x <= x2; x += 1) {
+            const outline = x === x1 || x === x2 || z === z1 || z === z2;
+            if (outline && !this._isCellOccupied(x, y, z, 'wall')) {
+              if (!um.hasFloor(x, y, z)) um.addTiles([{ x, y, z }]);
+              um.addEntity('wall', x, y, z, {});
+              placed += 1;
+            }
+          }
+        }
+      }
+    });
+    if (placed > 0) this.entityPlacer.rebuildFromModel();
+    this._requestFrame();
+  }
+
   /** Call off a floor range being built (Esc, a storey change, a load). */
   _cancelFloorRange() {
     if (!this._floorRange) return;
     this._floorRange = null;
     this.editorScene.clearFloorRange();
+    this._requestFrame();
+  }
+
+  /** Call off a wall box being drawn. */
+  _cancelWallRange() {
+    if (!this._wallRange) return;
+    this._wallRange = null;
+    this.editorScene.clearWallRange();
     this._requestFrame();
   }
 
@@ -1973,7 +2107,7 @@ export default class EditorApp {
         this.entityToolbar.deselect();
         this._cancelLinkPick('Teleport cancelled');
         this.selectionManager.deselect();
-        this._cancelFloorRange();
+        this._cancelRange();
         return;
       }
 
@@ -2009,9 +2143,11 @@ export default class EditorApp {
         }
         case 'Enter':
           e.preventDefault();
-          // Held on a cell with no floor: builds floor (a range, sized with
-          // the arrows, built on keyup). A repeat of a held Enter does nothing
-          if (e.repeat || this._startFloorRangeAtCursor()) return;
+          // Held: floor only on a cell with no floor builds floor (a range,
+          // sized with the arrows), Wall chosen draws a wall box (Option +
+          // ↑/↓ for storeys) — built on keyup. A repeat of a held Enter
+          // does nothing
+          if (e.repeat || this._startRangeAtCursor()) return;
           if (
             this.entityToolbar.activeTool &&
             this._entityIdAtCell(this.editorScene.getHoveredGrid()) === null
@@ -2049,11 +2185,11 @@ export default class EditorApp {
     document.addEventListener('keydown', this._onKeyDown);
     // Enter let go: a floor range being built is built (wherever focus is)
     this._onKeyUp = (e) => {
-      if (e.key === 'Enter') this._commitFloorRange();
+      if (e.key === 'Enter') this._commitRange();
     };
     document.addEventListener('keyup', this._onKeyUp);
     // Focus leaving the window loses the keyup: call the range off
-    this._onBlur = () => this._cancelFloorRange();
+    this._onBlur = () => this._cancelRange();
     window.addEventListener('blur', this._onBlur);
   }
 

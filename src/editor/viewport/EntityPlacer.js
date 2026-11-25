@@ -81,11 +81,12 @@ export default class EntityPlacer {
   /**
    * Run a placement or move onto cell (x, y, z) as ONE undo step, building
    * the floor tile there first when the cell has none (the floor is only
-   * what the designer builds; nothing stands on air).
+   * what the designer builds; nothing stands on air). A wall's top is floor
+   * already: nothing is stacked on it.
    */
   _withFloor(x, y, z, fn) {
     const um = this._undoManager;
-    if (!um.hasTile || um.hasTile(x, y, z)) return fn();
+    if (!um.hasFloor || um.hasFloor(x, y, z)) return fn();
     const run = () => {
       um.addTiles([{ x, y, z }]);
       return fn();

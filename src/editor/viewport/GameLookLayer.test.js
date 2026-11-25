@@ -53,7 +53,9 @@ describe('Drawing the level as the game does', () => {
 
     const batches = wallBatches();
     expect(batches).toHaveLength(1);
-    expect(batches[0].geometry).toBe(Wall.GEOMETRY);
+    // Its own copy of the wall box (it carries each wall's face masks)
+    expect(batches[0].geometry).not.toBe(Wall.GEOMETRY);
+    expect(batches[0].userData.ownsGeometry).toBe(true);
     expect(batches[0].count).toBe(2);
   });
 

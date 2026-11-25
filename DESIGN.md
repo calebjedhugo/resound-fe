@@ -879,6 +879,24 @@ Rulings (designer, 2026-11-22):
   raised storeys and subfloors alike (one geometry builder, Floor
   `buildTileGeometry`, for the game, the editor's game look and its
   schematic slabs).
+- **One press places an entity with its floor** (ruled 2026-11-25): with
+  a type chosen, ✕ / Enter / a click on empty space builds the tile and
+  places it, one undo step. With NO type chosen ("Floor only": a toolbar
+  button, Esc / ○, a stop on the L1 / R1 ring) it builds floor, held a
+  range.
+- **Walls are one storey tall and their tops are floor** (ruled
+  2026-11-25, tile-built levels): a wall at storey N is walkable floor at
+  N + 1 — walked onto from N + 1 floor or a ramp, stopping at its edges
+  like any floor, creatures released and the waystone gate aimed onto it.
+  Joined walls look like ONE piece: no faces or lines between neighbouring
+  blocks or stacked storeys, the top continuous with floor beside it at
+  that height, edge lines only on outer edges. Older levels' walls (their
+  perimeter included) are NOT walkable on top; they only lose their seams
+  (and grow from 2.5 to 3 tall, matching gates).
+- **Wall boxes** (ruled 2026-11-25): Wall chosen, holding ✕ draws a box —
+  moved for its footprint, L2 + ↑/↓ for its storeys — and letting go
+  builds only its outline at every storey: a hollow container, floor
+  brought only under its bottom ring, one undo step.
 - **Subfloors** (ruled 2026-11-24): storeys below the ground (negative,
   down to -9 in the editor) work like any other — ramps, walls, creatures,
   the spawn, the pole's sight (the floor above a subfloor blocks the sight

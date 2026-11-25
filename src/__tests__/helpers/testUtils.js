@@ -50,6 +50,7 @@ import creatureElevationBlocked from '../fixtures/puzzles/creature-elevation-blo
 import creatureWallSlide from '../fixtures/puzzles/creature-wall-slide.json';
 import floorTilesBasic from '../fixtures/puzzles/floor-tiles-basic.json';
 import floorTilesSubfloor from '../fixtures/puzzles/floor-tiles-subfloor.json';
+import floorTilesWalltop from '../fixtures/puzzles/floor-tiles-walltop.json';
 import portalA from '../fixtures/puzzles/portal-a.json';
 import portalB from '../fixtures/puzzles/portal-b.json';
 import portalLiveA from '../fixtures/puzzles/portal-live-a.json';
@@ -152,6 +153,7 @@ const TEST_PUZZLES = {
   'creature-wall-slide': creatureWallSlide,
   'floor-tiles-basic': floorTilesBasic,
   'floor-tiles-subfloor': floorTilesSubfloor,
+  'floor-tiles-walltop': floorTilesWalltop,
   'portal-a': portalA,
   'portal-b': portalB,
   'portal-live-a': portalLiveA,

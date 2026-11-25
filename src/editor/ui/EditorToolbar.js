@@ -35,13 +35,21 @@ const padName = (buttons) =>
 
 const SHORTCUTS = [
   ['Arrows', 'Move the cursor (they follow the camera)'],
-  ['Click a tile', 'Cursor there; no floor: build it, else select what stands on it'],
+  [
+    'Click a tile',
+    'Cursor there; no floor: place the chosen type with its floor (floor only: the tile); else select',
+  ],
   ['P C G W R L', 'Place spawn / creature / gate / wall / ramp / waystone (brings its floor)'],
   ['Shift + Arrows', 'Move the entity under the cursor'],
   ['Option + Up/Down', 'Storey up / down'],
   ['Shift + Option + Up/Down', 'Carry the entity up / down a storey'],
-  ['Enter', 'No floor: build it (hold + arrows: a range, built on release)'],
-  ['Enter on floor', "The entity's menu (song, links); with a tool chosen, place it"],
+  [
+    'Enter',
+    'Empty: place the chosen type with its floor; floor only: floor (held + arrows: a range)',
+  ],
+  ['Enter held, Wall', 'A hollow box: arrows size it, Option + Up/Down its storeys, let go builds'],
+  ['Enter on an entity', "The entity's menu (song, links)"],
+  ['Esc / Floor only', 'No type chosen: Enter / a click builds floor'],
   ['Double-click', "Edit a creature's or gate's song"],
   ['A', 'Play / stop the song under the cursor (its creature lights)'],
   ['Delete / Backspace', 'Delete the entity; on bare floor, the floor tile'],

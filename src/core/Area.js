@@ -114,9 +114,11 @@ class Area {
     this.entityManager.clear();
     if (this.staticWalls) {
       this.group.remove(this.staticWalls);
-      // Frees the instance buffers only — the geometry is Wall's shared
-      // static; the material is in ownedMaterials (freed below)
+      // Frees the instance buffers, and the batch's own geometry (it carries
+      // the per-wall face masks: Wall.buildBatch); the material is in
+      // ownedMaterials (freed below)
       this.staticWalls.dispose();
+      if (this.staticWalls.userData.ownsGeometry) this.staticWalls.geometry.dispose();
       this.staticWalls = null;
     }
     for (const material of this.ownedMaterials) material.dispose();

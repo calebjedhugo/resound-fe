@@ -82,6 +82,14 @@ describe('EntityPlacer', () => {
       expect(undoManager.hasTile(0, 0, 0)).toBe(true); // its first cell keeps its floor
     });
 
+    it("on a wall's top (floor a storey up) it stacks no tile", () => {
+      placer.placeEntity('wall', 2, 2, 0); // brings its tile at E0
+      const id = placer.placeEntity('creature', 2, 2, 1);
+      expect(undoManager.getEntity(id)).toMatchObject({ x: 2, y: 1, z: 2 });
+      expect(undoManager.getTiles()).toEqual([{ x: 2, y: 0, z: 2 }]);
+      expect(undoManager.hasFloor(2, 1, 2)).toBe(true);
+    });
+
     it('the player spawn brings its floor too', () => {
       placer.placeEntity('player', 6, 6, 0);
       expect(undoManager.hasTile(6, 0, 6)).toBe(true);

@@ -32,6 +32,8 @@ const READ_METHODS = [
   'getPlayerSpawn',
   'getTiles',
   'hasTile',
+  'hasFloor',
+  'isWallTop',
   'getEntities',
   'getEntity',
   'getEntitiesAt',

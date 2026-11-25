@@ -44,6 +44,7 @@ import gameState from 'core/GameState';
 import memoizeOnEntityList from 'core/entityListMemo';
 import { messiaenColourCached } from 'core/messiaenColour';
 import { WALL_HIDE_GLSL } from 'core/portalMath';
+import { WALL_HEIGHT } from 'core/constants';
 import { harmonyLightInto, HARMONY_COLOUR_TAU } from 'entities/CreatureLook';
 
 // ---- Palette (sRGB hex; the shaders work in linear and encode on output) --
@@ -709,9 +710,12 @@ export const NO_LIGHT = new AreaLight();
 
 // ---- Walls ----------------------------------------------------------------
 
-// Wall boxes are 2.5 tall, their mesh centred 1.25 above their floor
-const WALL_HEIGHT = 2.5;
-
+// Wall boxes are one storey (WALL_HEIGHT) tall, their mesh centred half of
+// it above their floor. In a batch (Wall.buildBatch) each instance carries
+// which of its faces show: a side against a neighbouring wall, the bottom,
+// and (a tile-built level: the Floor draws it as walkable floor) the top are
+// left out, so a run of walls is ONE solid with no seams; its rim (the pale
+// top edge) is off where the Floor's edge lines take over.
 const WALL_VERTEX = /* glsl */ `
   uniform vec4 uHideA;
   uniform float uHideLatA;
@@ -720,8 +724,14 @@ const WALL_VERTEX = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormalW;
   varying float vUp;
+  varying float vRim;
   #include <common>
   #include <clipping_planes_pars_vertex>
+  #ifdef USE_INSTANCING
+    attribute vec4 aSideHide; // the +x, -x, +z, -z sides: 1 = left out
+    attribute vec2 aTopHide; // the top left out; the rim off
+    attribute vec2 aStack; // walls under this one in its column; the column's height
+  #endif
   ${WALL_HIDE_GLSL}
 
   void main() {
@@ -733,13 +743,31 @@ const WALL_VERTEX = /* glsl */ `
     vWorld = world.xyz;
     vNormalW = normal; // wall boxes are never rotated
     vUp = (position.y + ${(WALL_HEIGHT / 2).toFixed(3)}) / ${WALL_HEIGHT.toFixed(3)};
+    vRim = 1.0;
+    #ifdef USE_INSTANCING
+      // Up the whole COLUMN of stacked walls, not each block: its foot
+      // darkens and its rim sits only at the column's top (no bands)
+      if (aStack.y > 0.5) vUp = (aStack.x + vUp) / aStack.y;
+    #endif
     vec4 mvPosition = viewMatrix * world;
     gl_Position = projectionMatrix * mvPosition;
     #ifdef USE_INSTANCING
       // A door pass's eye-side walls (PortalView.wallHide): collapsed, so
       // the instance draws nothing — as hiding its own mesh did
       vec2 centre = (model * vec4(0.0, 0.0, 0.0, 1.0)).xz;
-      if (wallHiddenBy(uHideA, uHideLatA, centre) || wallHiddenBy(uHideB, uHideLatB, centre)) {
+      // ...and the faces inside a run of walls (or under the Floor's top)
+      float faceHidden = 1.0; // the bottom: never seen
+      if (normal.x > 0.5) faceHidden = aSideHide.x;
+      else if (normal.x < -0.5) faceHidden = aSideHide.y;
+      else if (normal.z > 0.5) faceHidden = aSideHide.z;
+      else if (normal.z < -0.5) faceHidden = aSideHide.w;
+      else if (normal.y > 0.5) faceHidden = aTopHide.x;
+      vRim = 1.0 - aTopHide.y;
+      if (
+        faceHidden > 0.5 ||
+        wallHiddenBy(uHideA, uHideLatA, centre) ||
+        wallHiddenBy(uHideB, uHideLatB, centre)
+      ) {
         gl_Position = vec4(0.0, 0.0, -2.0, 1.0);
       }
     #endif
@@ -754,6 +782,7 @@ const WALL_FRAGMENT = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormalW;
   varying float vUp;
+  varying float vRim;
   #include <common>
   #include <clipping_planes_pars_fragment>
   ${PALETTE_GLSL}
@@ -783,7 +812,7 @@ const WALL_FRAGMENT = /* glsl */ `
       // brighter in total for being widened
       float fw = fwidth(vUp);
       float width = max(0.018, fw * 1.2);
-      float rim = smoothstep(1.0 - width - fw, 1.0 - width, vUp) * (0.018 / width);
+      float rim = smoothstep(1.0 - width - fw, 1.0 - width, vUp) * (0.018 / width) * vRim;
       col = mix(col, WALL_RIM * (1.0 + 0.4 * uFlash), clamp(rim, 0.0, 1.0));
       col += FLASH * uFlash * 0.05 * vUp;
     }

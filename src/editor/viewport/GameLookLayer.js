@@ -48,7 +48,7 @@ const SPAWN_COLOR = 0xdde6f7;
 const OUTLINE_SIZES = {
   creature: [2.4, 2.8, 2.4],
   gate: [3, 3, 3],
-  wall: [3, 2.5, 3],
+  wall: [3, 3, 3],
   ramp: [3, 3, 3],
   waystone: [2.8, 0.25, 2.8],
   fountain: [3, 2.5, 3],
@@ -308,7 +308,8 @@ export default class GameLookLayer {
       z: w.z * WORLD_SCALE,
     }));
     this._wallMaterial = Wall.createBatchMaterial(this.light);
-    this._walls = Wall.buildBatch(positions, this._wallMaterial);
+    // The Floor draws the wall tops as walkable floor (a tile-built level)
+    this._walls = Wall.buildBatch(positions, this._wallMaterial, { floorTops: true });
     this.root.add(this._walls);
   }
 
@@ -321,6 +322,7 @@ export default class GameLookLayer {
     if (this._walls) {
       this.root.remove(this._walls);
       if (this._walls.dispose) this._walls.dispose();
+      if (this._walls.userData.ownsGeometry) this._walls.geometry.dispose();
       this._wallMaterial.dispose(); // flagged shared for Entity.dispose: ours to free
       this._walls = null;
       this._wallMaterial = null;

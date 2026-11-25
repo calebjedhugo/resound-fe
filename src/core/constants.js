@@ -85,6 +85,10 @@ export const CLOSED_DOOR_LEAK_DISTANCE = 6.0;
 // Equal to WORLD_SCALE so one elevation step = one grid cell vertically
 export const ELEVATION_HEIGHT = 3.0;
 
+// A wall stands one storey tall, so its top is the floor of the storey above
+// (a tile-built level walks on it: ElevationGrid.addWallTops)
+export const WALL_HEIGHT = ELEVATION_HEIGHT;
+
 // Maximum elevation difference (in levels) at which entities still collide
 // Entities more than this apart vertically are on different floors and pass through each other
 export const ELEVATION_COLLISION_THRESHOLD = 0.5;

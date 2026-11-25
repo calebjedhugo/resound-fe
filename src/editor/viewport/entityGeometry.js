@@ -22,7 +22,9 @@ export function createEntityGeometry(type) {
         16
       );
     case 'wall':
-      return new THREE.BoxGeometry(WORLD_SCALE * 0.95, WORLD_SCALE, WORLD_SCALE * 0.95);
+      // The whole cell, one storey tall: neighbouring walls meet face to
+      // face and read as one solid (their top is the floor above)
+      return new THREE.BoxGeometry(WORLD_SCALE, WORLD_SCALE, WORLD_SCALE);
     case 'ramp':
       return new THREE.BoxGeometry(WORLD_SCALE * 0.9, WORLD_SCALE * 0.5, WORLD_SCALE * 0.9);
     case 'waystone':

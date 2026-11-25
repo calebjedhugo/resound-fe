@@ -39,6 +39,7 @@ export default class EditorScene {
     this._createAxes();
     this._createHoverMesh();
     this._createFloorRangeMesh();
+    this._createWallRangeMesh();
   }
 
   /** The middle of what is built (the origin cell in an empty level). */
@@ -136,6 +137,59 @@ export default class EditorScene {
     this._positionFloorRange();
   }
 
+  _createWallRangeMesh() {
+    // A unit box scaled to the wall box being drawn (✕ held with Wall
+    // chosen): its whole footprint and every storey it spans, translucent
+    this._wallRange = null;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffaa44,
+      transparent: true,
+      opacity: 0.25,
+      depthWrite: false,
+    });
+    this._wallRangeMesh = new THREE.Mesh(geo, mat);
+    this._wallRangeMesh.visible = false;
+    this._scene.add(this._wallRangeMesh);
+  }
+
+  /**
+   * Show the wall box being drawn: the rectangle from `anchor` to the
+   * cursor, from storey `from` to storey `to` (either way), walls one
+   * storey tall each.
+   */
+  setWallRange(anchor, from, to) {
+    this._wallRange = { anchor: { x: anchor.x, z: anchor.z }, from, to };
+    this._positionWallRange();
+  }
+
+  clearWallRange() {
+    this._wallRange = null;
+    if (this._wallRangeMesh) this._wallRangeMesh.visible = false;
+  }
+
+  _positionWallRange() {
+    if (!this._wallRange || !this._wallRangeMesh) return;
+    const { anchor, from, to } = this._wallRange;
+    const c = this._cursorCell;
+    const x1 = Math.min(anchor.x, c.x);
+    const x2 = Math.max(anchor.x, c.x);
+    const z1 = Math.min(anchor.z, c.z);
+    const z2 = Math.max(anchor.z, c.z);
+    const low = Math.min(from, to);
+    const storeys = Math.abs(to - from) + 1;
+    const width = (x2 - x1 + 1) * WORLD_SCALE;
+    const depth = (z2 - z1 + 1) * WORLD_SCALE;
+    const height = storeys * ELEVATION_HEIGHT;
+    this._wallRangeMesh.scale.set(width, height, depth);
+    this._wallRangeMesh.position.set(
+      (x1 + (x2 - x1 + 1) / 2) * WORLD_SCALE,
+      low * ELEVATION_HEIGHT + height / 2,
+      (z1 + (z2 - z1 + 1) / 2) * WORLD_SCALE
+    );
+    this._wallRangeMesh.visible = true;
+  }
+
   clearFloorRange() {
     this._floorRange = null;
     if (this._floorRangeMesh) this._floorRangeMesh.visible = false;
@@ -179,6 +233,7 @@ export default class EditorScene {
     // the cursor every frame.
     this._positionCursorMesh();
     this._positionFloorRange();
+    this._positionWallRange();
   }
 
   /** The currently selected cell — always a valid { x, z } (never null). */

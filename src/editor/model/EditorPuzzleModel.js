@@ -83,6 +83,19 @@ export default class EditorPuzzleModel {
     return this._tiles.has(tileKey(x, y, z));
   }
 
+  /**
+   * Is there floor to stand on at (x, y, z): a built tile, or the top of a
+   * wall a storey below (a wall's top is walkable floor; ruled 2026-11-24)?
+   */
+  hasFloor(x, y, z) {
+    return this.hasTile(x, y, z) || this.isWallTop(x, y, z);
+  }
+
+  /** Is (x, y, z) the top of a wall standing at (x, y - 1, z)? */
+  isWallTop(x, y, z) {
+    return this._entities.some((e) => e.type === 'wall' && e.x === x && e.y === y - 1 && e.z === z);
+  }
+
   /** Every floor tile, {x, y, z}, sorted by storey, z, x. */
   getTiles() {
     return [...this._tiles]

@@ -101,6 +101,8 @@ jest.mock('editor/viewport/EditorScene', () =>
     cellToContainerXY: jest.fn(() => ({ x: 0, y: 0 })),
     setFloorRange: jest.fn(),
     clearFloorRange: jest.fn(),
+    setWallRange: jest.fn(),
+    clearWallRange: jest.fn(),
     setCursor: jest.fn(),
     activeElevation: 0,
     _groundPlane: null,
@@ -995,6 +997,169 @@ describe('EditorApp wiring', () => {
   });
 
   // □ / Delete: the entity first, then (bare floor) the floor tile under it
+  // One press of ✕ / Enter / a click on empty space with an entity type
+  // chosen places it WITH its floor (EntityPlacer brings the tile in the
+  // same undo step); floor only (no type chosen) builds floor, ranges too
+  describe('placing on empty space: one press, entity and floor', () => {
+    const key = (type, k, opts = {}) =>
+      document.dispatchEvent(
+        new KeyboardEvent(type, { key: k, bubbles: true, cancelable: true, ...opts })
+      );
+    const choose = (type) => {
+      app.entityToolbar.deselect();
+      while (app.entityToolbar.activeTool !== type) app.entityToolbar.cycle(1);
+    };
+
+    it('Enter on a cell with no floor places the chosen type there, starting no floor range', () => {
+      choose('creature');
+      key('keydown', 'Enter');
+      key('keyup', 'Enter');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('creature', 7, 7, 0);
+      expect(app.editorScene.setFloorRange).not.toHaveBeenCalled();
+      expect(app.undoManager.getTiles()).toEqual([]); // the tile is the placer's, with the entity
+    });
+
+    it('a click on empty space places the chosen type too', () => {
+      choose('gate');
+      app.editorScene.gridFromEvent.mockReturnValue({ x: 3, z: -2 });
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 3, z: -2 });
+      document.getElementById('editor-viewport').click();
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('gate', 3, -2, 0);
+      expect(app.undoManager.getTiles()).toEqual([]);
+    });
+
+    it('floor only (no type: Esc, the Floor only button) builds floor as before', () => {
+      choose('creature');
+      document.querySelector('.tool-floor').click();
+      expect(app.entityToolbar.activeTool).toBeNull();
+      key('keydown', 'Enter');
+      key('keyup', 'Enter');
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: 0, z: 7 }]);
+      expect(app.entityPlacer.placeEntity).not.toHaveBeenCalled();
+    });
+
+    it("a wall's top is floor: nothing is built there, and the chosen type goes on it", () => {
+      app.undoManager.addTiles([{ x: 7, y: 0, z: 7 }]);
+      app.undoManager.addEntity('wall', 7, 0, 7, {});
+      app.editorScene.activeElevation = 1;
+      key('keydown', 'Enter'); // floor only: not bare, nothing to build
+      key('keyup', 'Enter');
+      expect(app.undoManager.getTiles()).toEqual([{ x: 7, y: 0, z: 7 }]);
+      choose('creature');
+      key('keydown', 'Enter');
+      key('keyup', 'Enter');
+      expect(app.entityPlacer.placeEntity).toHaveBeenCalledWith('creature', 7, 7, 1);
+    });
+
+    it('a floor range over a wall top builds no tile on it', () => {
+      app.undoManager.addTiles([{ x: 8, y: 0, z: 7 }]);
+      app.undoManager.addEntity('wall', 8, 0, 7, {});
+      app.editorScene.activeElevation = 1;
+      key('keydown', 'Enter'); // (7, 7) at E1: bare
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 9, z: 7 });
+      key('keyup', 'Enter');
+      const upper = app.undoManager.getTiles().filter((t) => t.y === 1);
+      expect(upper).toEqual([
+        { x: 7, y: 1, z: 7 },
+        { x: 9, y: 1, z: 7 },
+      ]);
+    });
+  });
+
+  // Wall chosen: ✕ / Enter held draws a box — moved for its footprint,
+  // Option/L2 + ↑/↓ for its storeys — and letting go builds its OUTLINE at
+  // every storey (a hollow container), one undo step
+  describe('wall boxes', () => {
+    const key = (type, k, opts = {}) =>
+      document.dispatchEvent(
+        new KeyboardEvent(type, { key: k, bubbles: true, cancelable: true, ...opts })
+      );
+    const cursorAt = (x, z) => app.editorScene.getHoveredGrid.mockReturnValue({ x, z });
+    const walls = () => app.undoManager.getEntities().filter((e) => e.type === 'wall');
+    const wallAt = (x, y, z) => walls().some((w) => w.x === x && w.y === y && w.z === z);
+    beforeEach(() => {
+      while (app.entityToolbar.activeTool !== 'wall') app.entityToolbar.cycle(1);
+      cursorAt(0, 0);
+    });
+
+    it('a tap places one wall, bringing its floor tile, as one undo step', () => {
+      key('keydown', 'Enter');
+      key('keyup', 'Enter');
+      expect(walls()).toHaveLength(1);
+      expect(app.undoManager.getTiles()).toEqual([{ x: 0, y: 0, z: 0 }]);
+      app._undo();
+      expect(walls()).toHaveLength(0);
+      expect(app.undoManager.getTiles()).toEqual([]);
+    });
+
+    it('held and moved: only the outline of the rectangle, the inside left empty', () => {
+      key('keydown', 'Enter');
+      expect(app.editorScene.setWallRange).toHaveBeenLastCalledWith({ x: 0, z: 0 }, 0, 0);
+      cursorAt(3, 2);
+      key('keyup', 'Enter');
+      expect(walls()).toHaveLength(4 * 3 - 2 * 1); // 10 of the 12 cells: the ring
+      expect(wallAt(1, 0, 1) || wallAt(2, 0, 1)).toBe(false);
+      // Floor only under the ring, none inside
+      expect(app.undoManager.getTiles()).toHaveLength(10);
+      expect(app.undoManager.hasTile(1, 0, 1)).toBe(false);
+    });
+
+    it('Option + ↑ while held stacks storeys: walls on walls, no floor above the bottom ring, one undo step', () => {
+      key('keydown', 'Enter');
+      key('keydown', 'ArrowUp', { altKey: true });
+      key('keydown', 'ArrowUp', { altKey: true });
+      expect(app.editorScene.setWallRange).toHaveBeenLastCalledWith({ x: 0, z: 0 }, 0, 2);
+      expect(app.editorScene.activeElevation).toBe(0); // the storey stays the box's first
+      cursorAt(2, 2);
+      key('keyup', 'Enter');
+      expect(walls()).toHaveLength(8 * 3);
+      [0, 1, 2].forEach((y) => expect(wallAt(2, y, 0) && !wallAt(1, y, 1)).toBe(true));
+      expect(app.undoManager.getTiles().every((t) => t.y === 0)).toBe(true);
+      expect(app.undoManager.getTiles()).toHaveLength(8);
+      app._undo();
+      expect(walls()).toHaveLength(0);
+      expect(app.undoManager.getTiles()).toEqual([]);
+    });
+
+    it('extends downward too (into subfloors), each wall bringing floor only where it stands on none', () => {
+      key('keydown', 'Enter');
+      key('keydown', 'ArrowDown', { altKey: true });
+      cursorAt(1, 0); // a 2 x 1 line
+      key('keyup', 'Enter');
+      expect(walls()).toHaveLength(4);
+      // The lower walls stand on new tiles; the upper ones on their tops
+      expect(app.undoManager.getTiles()).toEqual([
+        { x: 0, y: -1, z: 0 },
+        { x: 1, y: -1, z: 0 },
+      ]);
+    });
+
+    it('skips cells that already hold a wall', () => {
+      app.undoManager.addTiles([{ x: 1, y: 0, z: 0 }]);
+      app.undoManager.addEntity('wall', 1, 0, 0, {});
+      key('keydown', 'Enter');
+      cursorAt(2, 2);
+      key('keyup', 'Enter');
+      expect(walls()).toHaveLength(8); // the old one + 7 new
+      expect(walls().filter((w) => w.x === 1 && w.z === 0)).toHaveLength(1);
+    });
+
+    it('a 1-wide box is a line of walls', () => {
+      key('keydown', 'Enter');
+      cursorAt(0, 4);
+      key('keyup', 'Enter');
+      expect(walls()).toHaveLength(5);
+    });
+
+    it('Escape calls the box off', () => {
+      key('keydown', 'Enter');
+      key('keydown', 'Escape');
+      key('keyup', 'Enter');
+      expect(walls()).toHaveLength(0);
+      expect(app.editorScene.clearWallRange).toHaveBeenCalled();
+    });
+  });
+
   describe('Delete removes the entity, then its floor', () => {
     const press = (key) =>
       document.dispatchEvent(
@@ -1413,12 +1578,38 @@ describe('EditorApp wiring', () => {
       expect(app.entityToolbar.activeTool).toBe('creature');
       tap('l1');
       tap('l1');
+      expect(app.entityToolbar.activeTool).toBeNull(); // floor only, between the ends
+      expect(document.querySelector('.tool-floor').classList.contains('active')).toBe(true);
+      tap('l1');
       expect(app.entityToolbar.activeTool).toBe('waystone'); // wraps round
 
-      tap('r1'); // back to the player spawn
+      tap('r1'); // floor only
+      tap('r1'); // the player spawn
       tap('r1'); // the creature
       tap('cross');
       expect(app.entityPlacer.placeEntity).toHaveBeenLastCalledWith('creature', 7, 7, 0);
+    });
+
+    it('Cross on empty space with a type chosen places it (with its floor) in one press', () => {
+      tap('r1'); // the player spawn
+      tap('r1'); // the creature
+      tap('cross');
+      expect(app.entityPlacer.placeEntity).toHaveBeenLastCalledWith('creature', 7, 7, 0);
+      expect(app.editorScene.setFloorRange).not.toHaveBeenCalled();
+    });
+
+    it('Wall chosen: Cross held, L2 + up adds a storey, let go builds the hollow box', () => {
+      while (app.entityToolbar.activeTool !== 'wall') tap('r1');
+      hold('cross');
+      hold('l2');
+      tap('up');
+      letGo('l2');
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 9, z: 9 });
+      letGo('cross');
+      const walls = app.undoManager.getEntities().filter((e) => e.type === 'wall');
+      expect(walls).toHaveLength(8 * 2);
+      expect(walls.some((w) => w.x === 8 && w.z === 8)).toBe(false);
+      expect(app.editorScene.activeElevation).toBe(0);
     });
 
     it('Cross on an entity selects it, again opens its menu, which the d-pad and Cross play', () => {

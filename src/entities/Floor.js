@@ -120,7 +120,7 @@ function addTile(builder, grid, tile) {
  * tiles, every tile's storey counts (the ground's edge too), and nothing
  * is off the grid: the built floor's edge is a cliff.
  */
-function addCliffEdges(builder, grid, ramps, walls, tiles, gridSize = 0) {
+function addCliffEdges(builder, grid, ramps, walls, tiles, gridSize = 0, wallTops = []) {
   const rampAt = new Map(ramps.map((r) => [`${r.x},${r.z}`, r]));
   const wallAt = new Set(walls.map((w) => `${w.x},${w.z},${w.y}`));
   const rampJoins = (x, z, toward, level) => {
@@ -150,6 +150,7 @@ function addCliffEdges(builder, grid, ramps, walls, tiles, gridSize = 0) {
   };
   if (tiles) {
     for (const tile of tiles) edgesOf(tile.x, tile.z, tile.y);
+    for (const top of wallTops) edgesOf(top.x, top.z, top.y);
     return;
   }
   for (let z = 0; z < gridSize; z += 1) {
@@ -198,19 +199,58 @@ function addEdgeLine(builder, x, z, side, top) {
  * SLAB_THICKNESS with its top at its storey's walk height, a side face
  * wherever no tile of the same storey continues (empty space, or a lower or
  * higher floor beside it), and the pale cliff line along each such side —
- * the same at every storey, ground and subfloors included. The game's Floor
- * and the editor's schematic slabs (editor/viewport/TileSlabs) both build
- * from here.
+ * the same at every storey, ground and subfloors included. A wall's top is
+ * floor too (ElevationGrid.addWallTops): its top surface, flush with the
+ * storey above, joins the tiles and wall tops beside it with no line, and
+ * gets the same edge line where nothing continues (the wall's sides below
+ * are the wall's: Wall.buildBatch with `floorTops`). The game's Floor and
+ * the editor's schematic slabs (editor/viewport/TileSlabs) both build from
+ * here.
  * @param {{x: number, y: number, z: number}[]} tiles
- * @param {object} [options] - elevationGrid, ramps, walls (as Floor's)
+ * @param {object} [options] - elevationGrid (with its wall tops), ramps,
+ *   walls (as Floor's)
  * @returns {THREE.BufferGeometry}
  */
 export function buildTileGeometry(tiles, { elevationGrid, ramps = [], walls = [] } = {}) {
-  const grid = elevationGrid || ElevationGrid.fromTiles(tiles);
+  let grid = elevationGrid;
+  if (!grid) {
+    grid = ElevationGrid.fromTiles(tiles);
+    grid.addWallTops(walls);
+  }
   const builder = new FloorGeometryBuilder();
   for (const tile of tiles) addTile(builder, grid, tile);
-  addCliffEdges(builder, grid, ramps, walls, tiles);
+  // Each wall's top, unless a tile or another wall already stands there
+  const taken = new Set([
+    ...tiles.map((t) => `${t.x},${t.y},${t.z}`),
+    ...walls.map((w) => `${w.x},${w.y},${w.z}`),
+  ]);
+  const wallTops = [];
+  for (const wall of walls) {
+    const top = { x: wall.x, y: wall.y + 1, z: wall.z };
+    const key = `${top.x},${top.y},${top.z}`;
+    if (!taken.has(key)) {
+      taken.add(key);
+      wallTops.push(top);
+      addWallTop(builder, top);
+    }
+  }
+  addCliffEdges(builder, grid, ramps, walls, tiles, 0, wallTops);
   return builder.build();
+}
+
+/** A wall's top: its upper face, at the walk height of the storey above. */
+function addWallTop(builder, top) {
+  const half = WORLD_SCALE / 2;
+  const y = top.y * ELEVATION_HEIGHT;
+  const cx = top.x * WORLD_SCALE;
+  const cz = top.z * WORLD_SCALE;
+  builder.quad(
+    [cx - half, y, cz - half],
+    [cx + half, y, cz - half],
+    [cx + half, y, cz + half],
+    [cx - half, y, cz + half],
+    [0, 1, 0]
+  );
 }
 
 class Floor extends Entity {
@@ -253,8 +293,13 @@ class Floor extends Entity {
     this.tiles = tiles;
     let grid = elevationGrid;
     if (!grid) {
-      grid = tiles ? ElevationGrid.fromTiles(tiles) : new ElevationGrid(gridSize);
-      if (!tiles) grid.applyFloors(floors);
+      if (tiles) {
+        grid = ElevationGrid.fromTiles(tiles);
+        grid.addWallTops(walls);
+      } else {
+        grid = new ElevationGrid(gridSize);
+        grid.applyFloors(floors);
+      }
     }
     let geometry;
     if (tiles) {

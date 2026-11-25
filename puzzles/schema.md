@@ -119,7 +119,11 @@ cells and packs them into rectangles on save (row runs, stacked runs
 merged; deterministic), so a built room is one line. Rectangles may
 overlap (a cell counts once).
 
-- **Walls** are only the `wall` entities the designer placed.
+- **Walls** are only the `wall` entities the designer placed. A wall is
+  one storey tall, and its TOP is floor: a wall at `position.y` N makes
+  its cell walkable at N + 1 (entities and the spawn may stand there with
+  no tile; a tile there would be stacked, so the editor never writes one).
+  Joined walls draw as one solid.
 - **Storeys are independent**: a cell may carry tiles at several storeys
   (you walk under the upper one), or an upper tile with nothing beneath.
 - **Subfloors**: a storey may be NEGATIVE — below the ground (the editor
@@ -144,7 +148,8 @@ overlap (a cell counts once).
 ]
 ```
 
-**Older levels (no `tiles`)** load as they always have: elevation 0 over the
+**Older levels (no `tiles`)** load as they always have (their walls are
+not walkable on top; they are drawn one storey tall and seamless now): elevation 0 over the
 whole `gridSize` square, the `floors` regions below on top, and perimeter
 walls generated just outside the grid (rows/columns -1 and `gridSize`). The
 editor opens such a level as tiles (the grid, its regions, the perimeter

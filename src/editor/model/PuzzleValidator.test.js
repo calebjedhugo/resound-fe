@@ -63,6 +63,19 @@ describe('PuzzleValidator', () => {
       expect(warnings.some((w) => /ramp/i.test(w))).toBe(false);
     });
 
+    it("counts a wall's top as floor: entities and the spawn may stand on it", () => {
+      model.addEntity('wall', 3, 0, 3, {});
+      model.setPlayerSpawn(3, 1, 3);
+      model.addEntity('creature', 3, 1, 3, { song: [{ pitch: 'C4', length: '1/4' }] });
+      model.addEntity('wall', 3, 2, 3, {}); // nothing under it: a storey too high
+
+      const { errors } = validatePuzzle(model);
+
+      expect(errors.filter((e) => /no floor/.test(e))).toEqual([
+        expect.stringMatching(/wall .* E2/),
+      ]);
+    });
+
     it('reports error when the player spawn has no floor under it', () => {
       model.setPlayerSpawn(30, 0, 30);
 

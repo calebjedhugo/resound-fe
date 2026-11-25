@@ -151,6 +151,9 @@ class PuzzleLoader {
       .filter((e) => e.type === 'ramp')
       .map((e) => ({ ...e.position, direction: e.direction || 'north' }));
     const walls = puzzleData.entities.filter((e) => e.type === 'wall').map((e) => e.position);
+    // A tile-built level walks on its walls' tops: a wall at storey N is
+    // floor at N + 1 (an older level's walls, its perimeter's included, are not)
+    if (tiles) elevationGrid.addWallTops(walls);
     const floor = new Floor(puzzleData.gridSize, tiles ? [] : puzzleData.floors || [], {
       light: area.light,
       tiles,
@@ -272,7 +275,8 @@ class PuzzleLoader {
       // pass by its doors (and freed with it: Area.dispose)
       const material = Wall.createBatchMaterial(area.light);
       area.ownedMaterials.push(material);
-      area.setStaticWalls(Wall.buildBatch(wallPositions, material));
+      // A tile-built level's Floor draws the wall tops (walkable floor)
+      area.setStaticWalls(Wall.buildBatch(wallPositions, material, { floorTops: Boolean(tiles) }));
     }
 
     // Its creatures' voices, built in idle time

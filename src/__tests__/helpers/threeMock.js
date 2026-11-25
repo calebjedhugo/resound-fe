@@ -378,6 +378,20 @@ class ShaderMaterial extends Material {
 class Geometry {
   constructor() {
     this.userData = {}; // like three: Entity.dispose reads userData.shared
+    this.attributes = {};
+  }
+
+  setAttribute(name, attribute) {
+    this.attributes[name] = attribute;
+    return this;
+  }
+
+  // Like three: a new geometry (its own attributes; userData copied)
+  clone() {
+    const copy = new this.constructor();
+    copy.attributes = { ...this.attributes };
+    copy.userData = { ...this.userData };
+    return copy;
   }
 
   // three calls this once per program re-derivation (FrameProfiler counts it)
@@ -415,6 +429,14 @@ class BufferGeometry {
 
   computeVertexNormals() {}
   dispose() {}
+}
+
+class InstancedBufferAttribute {
+  constructor(array, itemSize) {
+    this.array = array;
+    this.itemSize = itemSize;
+    this.isInstancedBufferAttribute = true;
+  }
 }
 
 class Float32BufferAttribute {
@@ -715,6 +737,7 @@ module.exports = {
   RingGeometry,
   BufferGeometry,
   Float32BufferAttribute,
+  InstancedBufferAttribute,
   Material,
   MeshStandardMaterial,
   MeshBasicMaterial,

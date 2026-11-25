@@ -240,15 +240,33 @@ edits show up in the game on a manual reload.
   the drawn grid follows the cursor, the click plane is huge). The camera
   frames the built level (`gridUtils.levelBounds` / `levelCenterCell`; the
   origin when empty) on open and on L2+L3.
-- **✕ / Enter on a cell with no floor at the active storey builds it**
-  (`EditorApp._startFloorRangeAtCursor`): held, the cursor moving, the
-  gold rectangle from the press to the cursor previews (`EditorScene`
-  `setFloorRange`); let go (`padConfirmEnd`, Enter keyup) builds every cell
-  of it that has none in ONE `addTiles` (one undo step). Esc, a storey
-  change, a load, window blur or the pad leaving call it off. A click on a
-  cell with no floor builds its tile too (a click on floor only selects).
-  On bare floor ✕ / Enter place the chosen type, on an entity select /
-  open its menu, as before.
+- **✕ / Enter / a click on empty space** (ruled 2026-11-25; one entry
+  point, `EditorApp._startRangeAtCursor`, then the tap path):
+  - **A type chosen**: places it there WITH its floor tile, one press, one
+    undo step (`EntityPlacer._withFloor`). On bare floor: placed as before.
+  - **Floor only** (no type: the toolbar's "Floor only" button, Esc / ○,
+    or the stop between the ends of the L1 / R1 ring;
+    `EntityToolbar.cycle`): on a cell with no floor it builds floor — held,
+    the cursor moving, the gold rectangle from the press to the cursor
+    previews (`EditorScene.setFloorRange`); let go (`padConfirmEnd`, Enter
+    keyup) builds every cell of it that has none in ONE `addTiles`. A
+    click builds one tile. Floor ranges stay one storey.
+  - **Wall chosen, held**: a WALL BOX (`_startWallRangeAtCursor`): moved
+    for its footprint, Option/L2 + ↑/↓ while held for its storeys (up or
+    down; the active storey and cursor stay on the first), previewed as a
+    translucent box (`EditorScene.setWallRange`). Let go builds only its
+    OUTLINE at every storey — a hollow container, nothing inside, no floor
+    inside — skipping cells that hold a wall (or anything), each wall
+    bringing a tile only where it would stand on nothing (the bottom ring;
+    walls above stand on the tops below), ONE undo step
+    (`_commitWallRange`, `UndoManager.batch`). A 1-wide box is a line; a
+    tap is one wall.
+  - On an entity: select / open its menu, as before. Esc, a storey change
+    (floor range), a load, window blur or the pad leaving call a hold off.
+- **A wall's top is floor** (ruled 2026-11-25): a wall at storey N makes
+  N + 1 floor there (`EditorPuzzleModel.hasFloor` = a tile or a wall top,
+  `isWallTop`): entities go on it with NO tile stacked, the validator
+  counts it, ✕ there never builds floor, floor ranges skip it.
 - **Anything placed brings its floor** (`EntityPlacer._withFloor`):
   placing, moving (Shift+arrows, the property panel's X/Z), carrying to
   another storey or placing the spawn on a cell with no tile builds it in
@@ -270,7 +288,10 @@ edits show up in the game on a manual reload.
   floor), the same at every storey. ONE geometry builder,
   `entities/Floor` `buildTileGeometry`, draws the game's floor (and so the
   game look's) and the schematic look's slabs (`viewport/TileSlabs`: that
-  geometry, flat colour per storey, edge lines pale).
+  geometry, flat colour per storey, edge lines pale). Wall tops are part
+  of that floor; walls draw only their exposed sides, a column of stacked
+  walls as one face (`Wall.buildBatch`, see the root CLAUDE.md), so joined
+  walls read as one solid; the schematic wall boxes fill their cells.
 - The validator errors on an entity or spawn with no tile under it, warns
   on a ramp whose high end leads onto no tile.
 
@@ -400,11 +421,11 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 | Left stick | pan camera; the cursor rides on the cell at the view's middle (`viewCentreCell`: the sight line through the orbit target meets the active storey; any cell, any storey) | | |
 | Right stick | orbit camera (inverted, both axes) | | |
 | R3 / L3 | zoom in / out (a step; held, keeps going) | centre camera on cursor / reset camera | |
-| Cross | no floor: build it (held + moved: a range, built on release); bare floor: place chosen type; entity: select / its menu | — | — |
+| Cross | empty: place the chosen type with its floor (Wall held: a hollow box, L2+↑/↓ its storeys; floor only: floor, held a range); entity: select / its menu | — | — |
 | Square | delete the entity, else the floor tile under the cursor | — (freed) | — |
 | Triangle | song editor | play/stop the song (A) | — |
 | Circle | back (Esc) | | |
-| L1 / R1 | palette prev / next | | carry entity down / up a storey (brings its floor) |
+| L1 / R1 | palette prev / next (floor only between the ends) | | carry entity down / up a storey (brings its floor) |
 | L2 + R2 + d-pad ↑/↓ | carry entity a storey | | |
 | Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, Undo, Redo, look, sharp rendering | | |
 | Share | game ↔ schematic look | | |

@@ -38,6 +38,7 @@ class ElevationGrid {
     grid._cells = new Map(); // "x,z" -> sorted levels
     grid._ramps = new Map(); // "x,z" -> ramp
     grid._tiles = new Set(); // "x,y,z"
+    grid._wallTops = new Set(); // "x,y,z": levels that are a wall's top
     for (const cell of cells) grid._addLevel(cell.x, cell.z, cell.y);
     return grid;
   }
@@ -54,6 +55,26 @@ class ElevationGrid {
       levels.sort((a, b) => a - b);
       this._tiles.add(tileKey(x, level, z));
     }
+  }
+
+  /**
+   * A tile-built level's walls are floor on top (ruled 2026-11-24): a wall
+   * at storey N ({x, y, z}, grid units) makes its cell walkable at N + 1,
+   * with nothing below that but the wall. Older levels' walls stay
+   * unwalkable (call this only on a grid made by fromTiles).
+   * @param {{x: number, y: number, z: number}[]} walls
+   */
+  addWallTops(walls) {
+    if (!this.sparse) return;
+    for (const wall of walls) {
+      this._addLevel(wall.x, wall.z, wall.y + 1);
+      this._wallTops.add(tileKey(wall.x, wall.y + 1, wall.z));
+    }
+  }
+
+  /** Is level `level` of a cell the top of a wall (not a built tile)? */
+  isWallTop(gridX, level, gridZ) {
+    return Boolean(this._wallTops) && this._wallTops.has(tileKey(gridX, level, gridZ));
   }
 
   applyFloors(floors) {

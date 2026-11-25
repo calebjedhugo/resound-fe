@@ -1,0 +1,15 @@
+{
+  "id": "floor-tiles-walltop",
+  "name": "Floor Tiles - Wall Tops",
+  "difficulty": 1,
+  "tempo": 120,
+  "playerStart": { "x": 1, "y": 0, "z": 2 },
+  "tiles": [{ "elevation": 0, "x1": 0, "z1": 0, "x2": 6, "z2": 3 }],
+  "entities": [
+    { "type": "ramp", "position": { "x": 1, "y": 0, "z": 0 }, "direction": "east" },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": 0 } }
+  ]
+}

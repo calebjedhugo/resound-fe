@@ -393,7 +393,14 @@ instead of "fixing" it.
   `PortalView.wallHide(camera)` → `Area.hideWalls(spec, approachSpec)` →
   `portalMath.wallHiddenBy` (JS) / `WALL_HIDE_GLSL` (its twin — change
   both); `Area.isWallHidden(wall)` answers for tests. `Area.staticWalls`
-  holds the batch. The floor is ONE merged mesh per area too (`Floor`:
+  holds the batch. **Walls join** (2026-11-25): one storey tall
+  (`WALL_HEIGHT`); each batch has its OWN geometry (freed with it) whose
+  instance attributes leave out faces against a neighbouring wall, the
+  bottom, the top under a stacked wall (`aSideHide`/`aTopHide`) and shade
+  a column as one face (`aStack`); in a tile-built level the Floor draws
+  every wall top as walkable floor (`ElevationGrid.addWallTops`,
+  `Floor.buildTileGeometry`) and the batch leaves tops and rims out
+  (`floorTops`). The floor is ONE merged mesh per area too (`Floor`:
   ground + slabs + cliff-edge lines)
 - **Environment look** (`entities/EnvironmentLook.js`, DESIGN.md
   "Environment look", APPROVED direction): sky (one shared mesh per

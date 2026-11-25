@@ -21,16 +21,15 @@
 import gameState from 'core/GameState';
 import CameraController from 'core/CameraController';
 import memoizeOnEntityList from 'core/entityListMemo';
-import { CREATURE_HOVER_HEIGHT, ELEVATION_HEIGHT, WORLD_SCALE } from 'core/constants';
+import { CREATURE_HOVER_HEIGHT, ELEVATION_HEIGHT, WALL_HEIGHT, WORLD_SCALE } from 'core/constants';
 
 // Half the pole's horizontal cone, radians: 40° either side of the heading,
 // well inside the view's own half-width (~53° at 16:9) — a creature at the
 // edge of the screen is not one you are facing (judged in-game 2026-11-23)
 export const REACH_HALF_ANGLE = (40 * Math.PI) / 180;
 
-// How tall a wall's box stands above its floor (entities/Wall: 2.5) and a
-// gate's (entities/Gate: one cell)
-const WALL_HEIGHT = 2.5;
+// How tall a wall's box stands above its floor (one storey: WALL_HEIGHT) and
+// a gate's (entities/Gate: one cell)
 const GATE_HEIGHT = WORLD_SCALE;
 
 // What can block a sightline, by cell: "gx,gz" -> [{ y, height, entity }].

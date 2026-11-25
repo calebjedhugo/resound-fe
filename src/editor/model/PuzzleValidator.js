@@ -51,7 +51,8 @@ export function validatePuzzle(model) {
   const errors = [];
   const warnings = [];
   const entities = model.getEntities();
-  const hasFloorAt = (x, z, y) => model.hasTile(x, y, z);
+  // A tile, or the top of a wall a storey below (walkable floor)
+  const hasFloorAt = (x, z, y) => model.hasFloor(x, y, z);
 
   // --- Errors ---
 
