@@ -319,13 +319,20 @@ automated playtesters can observe them.)
     PortalManager consumes the crossing; backing out of a refused commit
     consumes nothing). A door can therefore never close on an occupant, and
     the old "occupied overtime" state is gone.
-  - **Held open by performers**: if a correct performance is in progress or
-    a completion just landed (`Gate.HELD_AFTER_COMPLETION_BEATS`) at exit
-    time, the close is DEFERRED until the hold lapses — a parked creature
-    singing the song keeps the door open behind you for as long as it
-    stands there (its in-progress + just-completed windows chain into a
-    continuous hold; verified live: a door with the poc-push pusher parked
-    beside it stays open 100% of the time).
+  - **Held open by its openers** (ruled 2026-11-25, replacing the 3-beat
+    completion hold): "So long as the creatures used to open the gate are
+    still in range of the gate, the gate does not close behind the player.
+    The gate only closes behind the player if any creatures are no longer
+    in range." The gate remembers which creatures sang the take that opened
+    it (the take's note sources); when the player walks through, the close
+    is DEFERRED while every one of them can still be heard there (the
+    hearing rule: within the creature's audible range of the gate, or of
+    its door partner, through a door as sound goes) — however long they
+    rest between songs. The moment one is out of range, taken by the pole
+    or gone, the gate closes (once nobody stands in it). Their later songs
+    don't cancel a waiting close. A gate opened by nothing (a test's
+    `open()`) closes as the player walks through. Across an area prune the
+    openers are remembered as places and found again there on rebuild.
   - **An open gate has NO shell at all — no green tint** (ruled 2026-07-11,
     round 4): transparency is the game's vocabulary for "open", for linked
     doors and plain gates alike, so `isOpen` drives collision + full

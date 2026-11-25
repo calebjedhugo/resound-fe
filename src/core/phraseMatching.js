@@ -93,8 +93,10 @@ function groupNear(groups, used, beat) {
  * @returns {true|'in-progress'|'mismatch'|false} true = a completed
  *   performance matches (its window — the target's span from its first
  *   onset — has closed). `listener._completedTake` is set to
- *   `{ endMs, lastNoteMs }`: when that window closed, and the last note of
- *   the take (so its owner can consume the take and no more). 'in-progress' = a
+ *   `{ endMs, lastNoteMs, sources }`: when that window closed, the last
+ *   note of the take (so its owner can consume the take and no more), and
+ *   the ids of the sources whose notes made it (a Set: the creatures that
+ *   hold a gate open behind the player). 'in-progress' = a
  *   correct performance is UNDERWAY (every onset due so far matches, nothing
  *   extra, the trailing silence hasn't elapsed yet) — used by play-to-pass
  *   gates to open AS the song is performed. 'mismatch' = a wrong note just
@@ -272,14 +274,17 @@ function judge(listener, tempo, nowMs, horizon) {
       if (!extras) {
         if (windowClosed) {
           let lastNoteMs = -Infinity;
+          const sources = new Set();
           used.forEach((g) =>
             g.notes.forEach((n) => {
               if (n.timestamp > lastNoteMs) lastNoteMs = n.timestamp;
+              if (n.source !== undefined && n.source !== null) sources.add(n.source);
             })
           );
           listener._completedTake = {
             endMs: listener.listeningStartTime + endBeat * msPerBeat,
             lastNoteMs,
+            sources,
           };
           return true;
         }

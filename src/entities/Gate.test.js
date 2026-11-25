@@ -5,8 +5,9 @@ import { drawnObjects } from '../__tests__/helpers/drawList';
 
 // Gates latch (ruled 2026-07-10): they open when their song is performed to
 // COMPLETION, stay open with no timer, and close only when the player walks
-// through — unless a performance is actively holding them. These guard the
-// state machine, especially the material/flash bookkeeping.
+// through — unless the creatures that opened them are all still in range
+// (entities/GateHeldOpen.test.js). These guard the state machine,
+// especially the material/flash bookkeeping.
 describe('Gate latch state (open on completion, close on walk-through)', () => {
   const song = [{ pitch: 'C4', length: '1/4' }];
 
@@ -33,28 +34,6 @@ describe('Gate latch state (open on completion, close on walk-through)', () => {
     gate.update(0.016);
     expect(gate.isOpen).toBe(false);
     expect(gate.mesh.material.opacity).toBe(1); // sealed again
-  });
-
-  it('a performance holding the door keeps it open behind the player', () => {
-    // A parked performer's completions chain into a continuous hold: walking
-    // out does NOT consume the opening while the hold lasts.
-    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
-    gate.open();
-    gate._lastCompletionMs = Date.now(); // a completion just landed
-    gameState.player.position = { x: 30, y: 1.8, z: 30 };
-    gameState.player.elevation = 0;
-    gate.update(0.016);
-    gameState.player.position = { x: 30, y: 1.8, z: 36 }; // steps out
-    gate.update(0.016);
-    expect(gate.isOpen).toBe(true); // held by the fresh completion
-
-    // Once the hold lapses, the next walk-through closes it
-    gate._lastCompletionMs = -Infinity;
-    gameState.player.position = { x: 30, y: 1.8, z: 30 };
-    gate.update(0.016);
-    gameState.player.position = { x: 30, y: 1.8, z: 36 };
-    gate.update(0.016);
-    expect(gate.isOpen).toBe(false);
   });
 
   it('an alwaysOpen face starts open and never closes', () => {

@@ -23,12 +23,9 @@ class Gate extends Entity {
   // the longest target phrase at the slowest supported tempo)
   static CAPTURE_RETENTION_MS = 30000;
 
-  // How long a COMPLETION keeps counting as "actively performed" when the
-  // player steps out, in beats. With a parked performer, in-progress and
-  // just-completed windows overlap into a continuous hold, so a door with a
-  // singer beside it never closes behind you — no knowledge of the
-  // performer's cycle needed (ruled 2026-07-10).
-  static HELD_AFTER_COMPLETION_BEATS = 3;
+  // How near a rebuilt creature must stand to where an opener was saved to
+  // be that opener again (world units: positions are restored exactly)
+  static OPENER_MATCH_DISTANCE = 0.05;
 
   // While a correct performance is underway, the closed shell FADES from
   // opaque to FULLY transparent in step with the song's own progress — a
@@ -84,7 +81,12 @@ class Gate extends Entity {
     // Arriving through this gate ends the demo: the crossing callback shows
     // the "thanks for playing" overlay (see puzzles/schema.md "Gate Links").
     this.ending = Boolean(data.ending);
-    this._lastCompletionMs = -Infinity;
+    // The creatures whose song opened it (the last completed take): while
+    // every one of them is still in range, it doesn't close behind the
+    // player (isHeldOpen). Saved as places, not creatures, by saveState
+    // (a rebuilt creature is a new object) and found again by _openersNow.
+    this._openers = [];
+    this._openerPlaces = null;
     this._inProgress = false;
     this._fade = 0;
     this._wasPlayerInside = false;
@@ -148,20 +150,11 @@ class Gate extends Entity {
     // arrives via the doorway: sourcePosition is the door on OUR side and
     // extraDistance is the source->partner-gate leg (+ closed-door leak) —
     // this is how a song can be completed by singing on both sides of a door.
-    let distance =
-      (noteEvent.extraDistance || 0) + getDistance(this.position, noteEvent.sourcePosition);
     // One door, two ears (ruled 2026-07-11): a SAME-AREA pair shares its
     // heard-note state — the note also counts from the partner face, with no
     // leak between the faces. (Cross-area pairs get the same treatment in
     // PortalManager's seam router.)
-    const partner = this._sameAreaPartner();
-    if (partner) {
-      distance = Math.min(
-        distance,
-        (noteEvent.extraDistance || 0) + getDistance(partner.position, noteEvent.sourcePosition)
-      );
-    }
-    if (distance > (noteEvent.sourceRange ?? this.audibleRange)) return; // Too far, ignore
+    if (!this._reaches(noteEvent)) return; // Too far, ignore
 
     // Capture the note
     this.capturedNotes.push(noteEvent);
@@ -202,9 +195,9 @@ class Gate extends Entity {
    * Update gate state (ruled 2026-07-10, superseding play-to-pass grace):
    * a gate opens when its song has been performed TO COMPLETION, LATCHES
    * open with no timer, and closes only when the player walks through it —
-   * unless a correct performance is still holding it (a parked performer's
-   * in-progress + just-completed windows chain into a continuous hold, so
-   * a door with a singer beside it stays open behind you). While closed, a
+   * and then only once a creature that opened it is out of range
+   * (isHeldOpen, ruled 2026-11-25: a door with its singers beside it stays
+   * open behind you, however long they rest between songs). While closed, a
    * correct performance in progress FADES the shell toward transparency
    * (wordless "it hears you" — previewing the open state); a wrong note
    * snaps it back to solid with the red flash.
@@ -237,11 +230,13 @@ class Gate extends Entity {
 
     this._inProgress = result === 'in-progress';
     if (result === true) {
-      this._lastCompletionMs = Date.now();
+      this._openers = this._creaturesOf(this._completedTake);
+      this._openerPlaces = null;
       this._consumeTake(this._completedTake);
-      // A fresh completion earns a fresh opening — any deferred close from a
-      // previous crossing is superseded.
-      this._closePending = false;
+      // A close waiting behind the player STAYS waiting: what decides it is
+      // whether these openers are in range (a parked singer re-completes
+      // every loop — clearing it here kept a door open forever after the
+      // singer walked off, 2026-11-25)
       this.open();
     } else if (result === 'mismatch') {
       // A wrong note snaps the gate back to solid (then the red flash lands)
@@ -260,17 +255,16 @@ class Gate extends Entity {
     this._updateFade(deltaTime);
 
     // Close-on-exit for PLAIN (unlinked) gates: the player walking out of
-    // the cell consumes the opening — unless a performance is actively
-    // holding the door, in which case the close is DEFERRED until the hold
-    // lapses (a parked performer keeps the way open; a hold from the
-    // player's own just-finished performance must not leave the door open
-    // forever). Linked doors are consumed by PortalManager when the player
+    // the cell consumes the opening — unless the creatures that opened it
+    // are all still in range, in which case the close is DEFERRED until any
+    // of them is not (ruled 2026-11-25). Linked doors are consumed by
+    // PortalManager when the player
     // steps out of the DESTINATION face (the origin face "exiting" is just
     // the teleport, and a refused commit must not consume anything).
     if (!this.link) {
       const inside = this._playerInside();
       if (this._wasPlayerInside && !inside && this.isOpen) {
-        if (this.isHeldByPerformance()) this._closePending = true;
+        if (this.isHeldOpen()) this._closePending = true;
         else this.close();
       }
       this._wasPlayerInside = inside;
@@ -279,19 +273,110 @@ class Gate extends Entity {
     // A consumed-but-held door closes as soon as nothing holds it anymore
     // (and nobody is standing in it).
     if (this._closePending && this.isOpen) {
-      if (!this.isHeldByPerformance() && !this._playerInside()) this.close();
+      if (!this.isHeldOpen() && !this._playerInside()) this.close();
     }
   }
 
   /**
-   * Is a correct performance actively holding this face open? True while a
-   * correct rendition is underway or a completion just landed. A parked
-   * performer's cycles chain these windows continuously.
+   * Does it stay open behind the player? Ruled 2026-11-25: "So long as the
+   * creatures used to open the gate are still in range of the gate, the
+   * gate does not close behind the player." True while EVERY creature that
+   * sang the take that opened it is still in the world, singing (not taken
+   * by the pole), and near enough to be heard here (_hears: the hearing
+   * rule, a door included). A gate opened by nothing (open() called
+   * directly) holds nothing. While an opener's area isn't loaded (pruned,
+   * not yet rebuilt) it can't be judged: held, nothing changes.
    */
-  isHeldByPerformance() {
-    const tempo = gameState.musicalClock ? gameState.musicalClock.tempo : 120;
-    const heldMs = Gate.HELD_AFTER_COMPLETION_BEATS * (60000 / tempo);
-    return this._inProgress || Date.now() - this._lastCompletionMs < heldMs;
+  isHeldOpen() {
+    const openers = this._openersNow();
+    if (openers === null) return true;
+    return openers.length > 0 && openers.every((c) => this._hears(c));
+  }
+
+  /** The live creatures among the sources of a completed take. */
+  // eslint-disable-next-line class-methods-use-this
+  _creaturesOf(take) {
+    const ids = take && take.sources;
+    if (!ids || ids.size === 0) return [];
+    return ListeningManager.listeners.filter((e) => e.type === 'creature' && ids.has(e.id));
+  }
+
+  /**
+   * The openers as they are now: after a rebuild, the creatures standing at
+   * the saved places (each in its own area); null while an opener's area
+   * isn't loaded yet (it can't be judged — nothing changes). A saved place
+   * with no creature there any more is an opener gone: an empty list.
+   */
+  _openersNow() {
+    const { world } = gameState;
+    // An opener whose area was pruned (a door's far side) is remembered
+    // where it stood, like a rebuilt gate's: found again when that area is
+    // rebuilt, not mistaken for one gone meanwhile
+    if (
+      !this._openerPlaces &&
+      world &&
+      world.getArea &&
+      this._openers.some((c) => c.area && world.getArea(c.area.id) !== c.area)
+    ) {
+      this._openerPlaces = this._placesOf(this._openers);
+    }
+    if (!this._openerPlaces) return this._openers;
+    const found = [];
+    for (const place of this._openerPlaces) {
+      const loaded = world && world.getArea ? world.getArea(place.areaId) : null;
+      if (!loaded) return null;
+      const creature = ListeningManager.listeners.find(
+        (e) =>
+          e.type === 'creature' &&
+          e.area === loaded &&
+          getDistance(e.position, place) < Gate.OPENER_MATCH_DISTANCE
+      );
+      if (!creature) return [];
+      found.push(creature);
+    }
+    this._openers = found;
+    this._openerPlaces = null;
+    return found;
+  }
+
+  /**
+   * Would a note `creature` sings reach this gate? Its own area: within the
+   * creature's audible range of this face (or a same-area partner face);
+   * another area: through the connecting door, as ListeningManager routes
+   * it (none: no). Taken by the pole, or gone from the world: no.
+   */
+  _hears(creature) {
+    if (creature.held || creature.silenced) return false;
+    if (!ListeningManager.listeners.includes(creature)) return false;
+    let event = {
+      sourcePosition: creature.position,
+      sourceRange: creature.audibleRange,
+      sourceArea: creature.area,
+    };
+    const here = this.area || gameState.activeArea;
+    if (creature.area && here && creature.area !== here) {
+      if (!ListeningManager.seamRouter) return false;
+      event = ListeningManager.seamRouter(event, creature.area, here, this);
+      if (!event) return false;
+    }
+    return this._reaches(event);
+  }
+
+  /**
+   * Is a sound within its range of this gate (or of a same-area partner
+   * face: one door, two ears)? The rule every heard note goes by.
+   */
+  _reaches(noteEvent) {
+    let distance =
+      (noteEvent.extraDistance || 0) + getDistance(this.position, noteEvent.sourcePosition);
+    const partner = this._sameAreaPartner();
+    if (partner) {
+      distance = Math.min(
+        distance,
+        (noteEvent.extraDistance || 0) + getDistance(partner.position, noteEvent.sourcePosition)
+      );
+    }
+    return distance <= (noteEvent.sourceRange ?? this.audibleRange);
   }
 
   /**
@@ -463,7 +548,8 @@ class Gate extends Entity {
     this.capturedNotes = [];
     this._trimHorizonMs = Date.now();
     this._lastJudgedStartBeat = undefined;
-    this._lastCompletionMs = -Infinity;
+    this._openers = [];
+    this._openerPlaces = null;
     this._inProgress = false;
     this._fade = 0;
     this._inProgressSinceMs = null;
@@ -474,19 +560,31 @@ class Gate extends Entity {
 
   /**
    * What it has become, for core/WorldMemory (its area is being pruned):
-   * open or not, a close waiting on a performer, how often it has opened,
-   * and when a song last completed it (what holds a performed door open).
+   * open or not, a close waiting on its openers, how often it has opened,
+   * and where the creatures that opened it stand (what holds it open behind
+   * the player; a rebuilt creature is a new object, found again there).
    * What it was hearing is not kept: a performance doesn't outlive its
    * listener's area.
-   * @returns {{isOpen: boolean, closePending: boolean, openings: number, lastCompletionMs: number}}
+   * @returns {{isOpen: boolean, closePending: boolean, openings: number, openers: Array}}
    */
   saveState() {
+    const openers = this._openersNow();
     return {
       isOpen: this.isOpen,
       closePending: Boolean(this._closePending),
       openings: this.openings,
-      lastCompletionMs: this._lastCompletionMs,
+      openers: this._openerPlaces
+        ? this._openerPlaces.map((p) => ({ ...p }))
+        : this._placesOf(openers || []),
     };
+  }
+
+  /** Where creatures stand, each with its area's id (saveState, _openersNow). */
+  // eslint-disable-next-line class-methods-use-this
+  _placesOf(creatures) {
+    return creatures
+      .filter((c) => c.area)
+      .map((c) => ({ areaId: c.area.id, x: c.position.x, y: c.position.y, z: c.position.z }));
   }
 
   /**
@@ -498,7 +596,8 @@ class Gate extends Entity {
     this.isOpen = this.alwaysOpen || Boolean(state.isOpen);
     this._closePending = this.isOpen && Boolean(state.closePending);
     this.openings = state.openings || 0;
-    this._lastCompletionMs = state.lastCompletionMs ?? -Infinity;
+    this._openers = [];
+    this._openerPlaces = Array.isArray(state.openers) ? state.openers.map((p) => ({ ...p })) : null;
     this._applyLook();
   }
 

@@ -240,7 +240,8 @@ instead of "fixing" it.
 ### Gates & elevation
 - **Gates LATCH**: they open on the COMPLETED song, stay open with NO timer,
   and close when the player walks through (`Gate.update` for plain gates;
-  `PortalManager` consumes linked crossings). The notation never hides. No
+  `PortalManager` consumes linked crossings) — deferred while the creatures
+  that opened it are all still in range (`Gate.isHeldOpen`). The notation never hides. No
   permanent `isActivated` on gates (fountains still latch). Collision/hints
   key off `isOpen`. See DESIGN.md.
 - **Gates can link across puzzles (portals)**: `link: {puzzleId, gateId}` on
@@ -385,8 +386,11 @@ instead of "fixing" it.
   "Onboarding" (incl. the v5 relaxed pull/push guards awaiting a ruling).
 - **Gates open on the COMPLETED song, LATCH open (no timer), and close when
   the player walks through** — a correct in-progress performance only FADES
-  the shell toward (bounded) transparency, never opens it; a parked
-  performer's completions keep a door open behind you; `alwaysOpen: true`
+  the shell toward (bounded) transparency, never opens it; behind the
+  player it stays open while EVERY creature that sang the opening take is
+  still in range (`Gate.isHeldOpen`: the take's note `source`s, the hearing
+  rule incl. doors; pole-held or gone = out; saved as places across a
+  prune, ruled 2026-11-25), closing the moment one isn't; `alwaysOpen: true`
   marks a permanently-open face (one-way doors). See DESIGN.md; don't "fix"
   a door that ignores a correct first note or one that "won't close".
 - **Walls render BATCHED**: ALL of an area's walls draw as ONE

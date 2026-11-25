@@ -205,7 +205,7 @@ describe('Two creatures singing a two-voice gate song, back to back', () => {
     while (Date.now() < until) {
       // eslint-disable-next-line no-await-in-loop
       await frame();
-      if (!gate.isHeldByPerformance()) lapses.push(Date.now() - beatZeroMs);
+      if (!gate.isHeldOpen()) lapses.push(Date.now() - beatZeroMs);
     }
     expect(lapses).toEqual([]);
 

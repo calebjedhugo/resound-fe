@@ -1747,6 +1747,40 @@ describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () 
     expect(gate.isOpen).toBe(true);
   });
 
+  it('a door opened by a singer on the far side stays open behind the player while it stays in range', async () => {
+    // Ruled 2026-11-25: the door closes behind the player only once a
+    // creature that opened it is out of range. The singer stands in area B
+    // beside door-b (3 units, heard to 15) and sings the door's C4 every 8
+    // beats; the player crosses from A into B and steps clear.
+    loadWithSinger({
+      position: { x: 5, y: 0, z: 6 },
+      song: [{ pitch: 'C4', length: '1/4' }],
+      interval: 8,
+      audibleRange: 15,
+    });
+    await jest.runAllTimersAsync();
+    const [doorA] = ctx.getGates();
+    await ctx.advanceBeats(4);
+    expect(doorA.isOpen).toBe(true);
+
+    await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1); // into door-a: standing in door-b
+    const areaB = PortalManager.getArea('portal-live-b');
+    expect(gameState.activeArea).toBe(areaB);
+    const [doorB] = areaB.entityManager.getByType('gate');
+    const [singer] = areaB.entityManager.getByType('creature');
+    await stepTo(5 * WORLD_SCALE, 7 * WORLD_SCALE + 5.5); // out of door-b, clear of it
+    await ctx.tick(32);
+    await ctx.advanceBeats(12); // songs and the silences between them
+    expect(doorB.isOpen).toBe(true);
+    expect(doorA.isOpen).toBe(true);
+
+    singer.position.x = 9 * WORLD_SCALE; // ~22 from door-b: out of range
+    singer.position.z = 1 * WORLD_SCALE;
+    await ctx.tick(32);
+    expect(doorB.isOpen).toBe(false);
+    expect(doorA.isOpen).toBe(false);
+  });
+
   it('a SAME-AREA pair shares ears too: a note beside one face reaches the other', async () => {
     installFetchMock({});
     ctx.loadPuzzle('portal-self'); // doors 18 units apart

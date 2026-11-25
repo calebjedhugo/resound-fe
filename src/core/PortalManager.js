@@ -2000,20 +2000,20 @@ class PortalManager {
 
   /**
    * A crossing was consumed (the player walked out of the destination face):
-   * close BOTH faces of the door — unless either face is still held open by
-   * a performance (a parked performer keeps the way back open), or a face is
-   * permanently open (alwaysOpen faces never close).
+   * close BOTH faces of the door — unless either face is still held open
+   * (the creatures that opened it all still in range: Gate.isHeldOpen), or
+   * a face is permanently open (alwaysOpen faces never close).
    */
   _closeUsedDoor(gate) {
     const door = this._doorOf.get(gate);
     if (!door) {
-      if (gate.isHeldByPerformance()) gate._closePending = true;
+      if (gate.isHeldOpen()) gate._closePending = true;
       else gate.close();
       return;
     }
-    if (door.gateA.isHeldByPerformance() || door.gateB.isHeldByPerformance()) {
-      // Consumed but held (e.g. a parked performer): defer — each face
-      // closes itself once nothing holds it anymore.
+    if (door.gateA.isHeldOpen() || door.gateB.isHeldOpen()) {
+      // Consumed but held (its openers still in range): defer — each face
+      // closes itself once any of them is not.
       door.gateA._closePending = true;
       door.gateB._closePending = true;
       return;
