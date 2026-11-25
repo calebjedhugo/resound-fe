@@ -411,7 +411,11 @@ instead of "fixing" it.
   answer to gate solving ticked by main.js `update`
   (`tickEnvironment(dt, activeArea)`, `calmStorm()` at world entry). All
   unlit ShaderMaterials in DISPLAY values (no output encode), all honour
-  clip planes; a new one needs a `standInMaterials` entry (ShaderPrewarm)
+  clip planes; a new one needs a `standInMaterials` entry (ShaderPrewarm).
+  The floor, wall, gate, ramp and creature shaders also carry the EDITOR's
+  cutaway (`entities/CutawayLook`: shared `CUT_UNIFORMS` + per-object
+  `uGhost`, all OFF by default) — **the game never writes them**; see
+  `src/editor/CLAUDE.md` "The cutaway"
 - **The storm answers gate solving** (DESIGN.md): `Gate.solveProgress`
   (the shell fade) of the active area's gates, the furthest along (nearer
   counts more), builds `WORLD_UNIFORMS` uStorm/uDeckTime/uStormCol/uStrike

@@ -40,6 +40,7 @@ import * as THREE from 'three';
 import { WORLD_SCALE, ELEVATION_HEIGHT } from 'core/constants';
 import { skipOutputEncode } from 'core/passContext';
 import { DOORWAY_OFFSET, PANEL_EPSILON } from 'core/portalMath';
+import { CUT_FRAGMENT_GLSL } from 'entities/CutawayLook';
 import {
   WORLD_UNIFORMS,
   PALETTE_GLSL,
@@ -228,6 +229,7 @@ const GATE_FRAGMENT = /* glsl */ `
   uniform float uOpacity; // the slab (1 sealed, fading with the song)
   uniform float uProgress; // how far a correct performance has come, 0..1
   uniform float uLockout; // the wrong note's red, decaying over the lockout
+  uniform float uGhost; // the editor's cutaway (CutawayLook): 1 = a ghost
   uniform float uEnvTime;
   uniform float uFlash;
   uniform vec3 uStormCol;
@@ -242,6 +244,7 @@ const GATE_FRAGMENT = /* glsl */ `
   ${KEY_GLSL}
   ${LIGHT_GLSL}
   ${FINISH_GLSL}
+  ${CUT_FRAGMENT_GLSL}
 
   // An edge line, \`dist\` from it: never thinner than about a pixel (no
   // shimmer far off), and no brighter in total for being widened
@@ -268,6 +271,8 @@ const GATE_FRAGMENT = /* glsl */ `
     vec3 lines = shown * vec3(edgeLine(d.x), edgeLine(d.y), edgeLine(d.z));
     vec3 near = shown * exp(-d * 14.0);
     float lit = max(lines.x, max(lines.y, lines.z));
+    // The editor's cutaway: a ghost keeps its edges and a screen door of the rest
+    if (uGhost > 0.5 && lit < 0.5 && cutDropped()) discard;
     float shimmer = 0.85 + 0.15 * sin(uEnvTime * 2.3 + (vLocal.x + vLocal.y + vLocal.z) * 2.1);
 
     // Dark glass, darker at the foot, with faint veils deep inside that
@@ -303,6 +308,9 @@ const GATE_FRAGMENT = /* glsl */ `
     // The slab fades with the song; its edges hold on until it ends
     float alpha = max(uOpacity, lit * (1.0 - uProgress * uProgress * uProgress));
     gl_FragColor = vec4(finish(col, creatureLight(vWorld, n) * 1.2).rgb, alpha);
+    if (uGhost > 0.5) {
+      gl_FragColor.rgb = mix(mix(gl_FragColor.rgb, GHOST_EDGE, 0.3), GHOST_EDGE, clamp(lit, 0.0, 1.0));
+    }
   }
 `;
 
@@ -322,6 +330,7 @@ export function createGateMaterial(light = NO_LIGHT) {
       uOpacity: { value: 1 },
       uProgress: { value: 0 },
       uLockout: { value: 0 },
+      uGhost: { value: 0 }, // only the editor's cutaway sets it
     },
     vertexShader: GATE_VERTEX,
     fragmentShader: GATE_FRAGMENT,
@@ -581,6 +590,7 @@ const RAMP_FRAGMENT = /* glsl */ `
   uniform float uEnvTime;
   uniform float uFlash;
   uniform vec3 uStrike;
+  uniform float uGhost; // the editor's cutaway (CutawayLook): 1 = a ghost
   varying vec3 vLocal;
   varying vec3 vLocalNormal;
   varying vec3 vWorld;
@@ -592,12 +602,14 @@ const RAMP_FRAGMENT = /* glsl */ `
   ${KEY_GLSL}
   ${LIGHT_GLSL}
   ${FINISH_GLSL}
+  ${CUT_FRAGMENT_GLSL}
 
   void main() {
     #include <clipping_planes_fragment>
     vec3 n = normalize(vNormalW);
     vec3 v = normalize(cameraPosition - vWorld);
     vec3 col;
+    float ghostEdge = vPart; // a ghost keeps its posts and side lines whole
     if (vPart > 0.5) {
       // A marker post: pale light, brightest at its tip
       col = RAMP_POST * (0.75 + 0.35 * smoothstep(${ELEVATION_HEIGHT.toFixed(1)}, ${(
@@ -621,20 +633,25 @@ const RAMP_FRAGMENT = /* glsl */ `
       float fx = fwidth(across);
       float side = smoothstep(0.955 - fx, 0.955, across);
       col = mix(col, CLIFF_EDGE * (1.0 + 0.3 * uFlash), side);
+      ghostEdge = side;
     } else if (vLocalNormal.y < -0.5) {
       col = SLAB_UNDER;
     } else {
       col = SLAB_SIDE * (0.8 + 0.3 * max(dot(n, KEY_DIR), 0.0));
     }
     col += uStrike * 0.06;
+    if (uGhost > 0.5 && ghostEdge < 0.5 && cutDropped()) discard;
     gl_FragColor = finish(col, creatureLight(vWorld, n));
+    if (uGhost > 0.5) {
+      gl_FragColor.rgb = mix(mix(gl_FragColor.rgb, GHOST_EDGE, 0.3), GHOST_EDGE, clamp(ghostEdge, 0.0, 1.0));
+    }
   }
 `;
 
 // ONE material for every ramp. Its creature light is the area's being drawn:
 // each ramp mesh binds its own area's before it draws (bindRampLight).
 export const RAMP_MATERIAL = new THREE.ShaderMaterial({
-  uniforms: { ...WORLD_UNIFORMS, ...NO_LIGHT.uniforms },
+  uniforms: { ...WORLD_UNIFORMS, ...NO_LIGHT.uniforms, uGhost: { value: 0 } },
   vertexShader: RAMP_VERTEX,
   fragmentShader: RAMP_FRAGMENT,
   clipping: true,
@@ -644,13 +661,16 @@ RAMP_MATERIAL.userData.shared = true;
 
 /**
  * Before a ramp draws (its mesh's onBeforeRender, which three runs ahead of
- * program setup): light the shared material by that ramp's area.
+ * program setup): light the shared material by that ramp's area, and ghost
+ * it or not (the editor's cutaway; never in the game).
  * uniformsNeedUpdate makes three upload them even when the previous draw
  * used the same material (CreatureLook does the same).
  * @param {?import('core/Area').default} area
+ * @param {boolean} [ghost]
  */
-export function bindRampLight(area) {
+export function bindRampLight(area, ghost = false) {
   bindAreaLight(RAMP_MATERIAL, area ? area.light : NO_LIGHT);
+  RAMP_MATERIAL.uniforms.uGhost.value = ghost ? 1 : 0;
   RAMP_MATERIAL.uniformsNeedUpdate = true;
 }
 

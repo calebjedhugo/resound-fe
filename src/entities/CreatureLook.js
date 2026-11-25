@@ -32,6 +32,7 @@
  */
 import * as THREE from 'three';
 import { CREATURE_HOVER_HEIGHT } from 'core/constants';
+import { CUT_FRAGMENT_GLSL } from 'entities/CutawayLook';
 
 // Gentle bob of the floating visual (world units, seconds)
 const BOB_AMPLITUDE = 0.08;
@@ -178,6 +179,7 @@ const BODY_FRAGMENT = /* glsl */ `
   uniform vec3 uRefl2;
   uniform vec3 uReflW;
   uniform float uSuck;
+  uniform float uGhost; // the editor's cutaway (CutawayLook): 1 = a ghost
   varying vec3 vObj;
   varying vec3 vNormalV;
   varying vec3 vViewV;
@@ -185,6 +187,7 @@ const BODY_FRAGMENT = /* glsl */ `
   #include <common>
   #include <clipping_planes_pars_fragment>
   ${NOISE_GLSL}
+  ${CUT_FRAGMENT_GLSL}
 
   vec3 rotY(vec3 p, float a) {
     float c = cos(a);
@@ -198,6 +201,9 @@ const BODY_FRAGMENT = /* glsl */ `
     vec3 n = normalize(vNormalV);
     vec3 v = normalize(vViewV);
     float ndv = clamp(dot(n, v), 0.0, 1.0);
+    // The editor's cutaway: a ghost keeps its rim (its outline) and a
+    // screen door of the rest
+    if (uGhost > 0.5 && ndv > 0.35 && cutDropped()) discard;
     float rim = 1.0 - ndv;
     float fres = rim * rim * rim;
     float edge = pow(rim, 2.5); // the bubble's rim is a little wider: findable
@@ -372,13 +378,16 @@ const HALO_FRAGMENT = /* glsl */ `
   uniform vec3 uRefl1;
   uniform vec3 uRefl2;
   uniform vec3 uReflW;
+  uniform float uGhost;
   varying vec2 vUv;
   varying float vWorldY;
   #include <common>
   #include <clipping_planes_pars_fragment>
+  ${CUT_FRAGMENT_GLSL}
 
   void main() {
     #include <clipping_planes_fragment>
+    if (uGhost > 0.5 && cutDropped()) discard;
     vec2 q = vUv * 2.0 - 1.0;
     float r = length(q);
     if (r >= 1.0) discard;
@@ -429,6 +438,7 @@ const BODY_MATERIAL = new THREE.ShaderMaterial({
     uSeed: { value: 0 },
     uSuck: { value: 0 },
     uTip: { value: new THREE.Vector3(0, 0, 1) },
+    uGhost: { value: 0 },
     ...colourUniforms(),
   },
   vertexShader: BODY_VERTEX,
@@ -443,6 +453,7 @@ const HALO_MATERIAL = new THREE.ShaderMaterial({
     uIntensity: { value: 0 },
     uFloorY: { value: 0 },
     uPull: { value: 1 },
+    uGhost: { value: 0 },
     ...colourUniforms(),
   },
   vertexShader: HALO_VERTEX,
@@ -495,6 +506,7 @@ function bindBody(look) {
   to.uExcite.value = from.uExcite.value;
   to.uSeed.value = from.uSeed.value;
   to.uSuck.value = from.uSuck.value;
+  to.uGhost.value = from.uGhost.value;
   if (from.uSuck.value > 0) to.uTip.value.copy(from.uTip.value);
   // The rest is read only by the lit branch (uExcite > 0) and the pole's
   // glow (uSuck > 0): a silent bubble leaves the last lit creature's values
@@ -513,6 +525,7 @@ function bindHalo(look) {
   to.uIntensity.value = from.uIntensity.value;
   to.uFloorY.value = from.uFloorY.value;
   to.uPull.value = from.uPull.value;
+  to.uGhost.value = from.uGhost.value;
   copyHaloColours(to, from);
   HALO_MATERIAL.uniformsNeedUpdate = true;
 }
@@ -758,6 +771,7 @@ class CreatureLook {
       uPull: { value: size },
       uSuck: { value: 0 },
       uTip: { value: new THREE.Vector3(0, 0, 1) },
+      uGhost: { value: 0 }, // the editor's cutaway only (setGhost)
       ...colourUniforms(),
     };
 
@@ -1055,6 +1069,20 @@ class CreatureLook {
     this.halo.scale.set(haloRadius, haloRadius, haloRadius);
     this.halo.visible = glow > 0.002;
     if (this._suck > 0) this._writeSuck();
+  }
+
+  /**
+   * Draw it as a ghost (the editor's cutaway, entities/CutawayLook: a screen
+   * door keeping its rim) or whole. The game never calls it.
+   * @param {boolean} ghosted
+   */
+  setGhost(ghosted) {
+    this._uniforms.uGhost.value = ghosted ? 1 : 0;
+  }
+
+  /** Whether it is drawn as a ghost (setGhost). */
+  get ghosted() {
+    return this._uniforms.uGhost.value > 0.5;
   }
 
   /** The colour of the light it glows with now (linear rgb), written into `out[0..2]`. */

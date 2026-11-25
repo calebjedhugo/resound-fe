@@ -8,6 +8,8 @@ class Ramp extends Entity {
     super('ramp', position, data);
     this.direction = data.direction || 'north';
     this.elevation = Math.round(position.y / ELEVATION_HEIGHT);
+    // A ghost in the editor's cutaway (entities/CutawayLook); never in the game
+    this.ghost = false;
     this.createMesh();
   }
 
@@ -31,7 +33,7 @@ class Ramp extends Entity {
     };
     this.mesh.rotation.y = rotations[this.direction] || 0;
     // Lit by its own area's creatures (the material is shared)
-    this.mesh.onBeforeRender = () => bindRampLight(this.area);
+    this.mesh.onBeforeRender = () => bindRampLight(this.area, this.ghost);
   }
 
   /**

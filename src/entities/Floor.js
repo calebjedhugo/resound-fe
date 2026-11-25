@@ -28,15 +28,29 @@ const RAMP_UP = {
   west: { dx: -1, dz: 0 },
 };
 
+// The cut's owner of a piece no cell owns (an older level's whole ground):
+// a storey far below any, so the editor's cutaway never ghosts it
+const NO_OWNER = [0, 0, -1000, 0];
+
 /**
- * Triangles in world space, built up quad by quad: positions, normals and
- * `aEdge` (1 on a cliff edge's line, 0 elsewhere).
+ * Triangles in world space, built up quad by quad: positions, normals,
+ * `aEdge` (1 on a cliff edge's line, 0 elsewhere) and `aCut` — the piece's
+ * OWNER for the editor's cutaway (entities/CutawayLook): its cell x, z, its
+ * storey and 1 when it is a wall's (a wall top belongs to the wall under
+ * it, a storey below the floor it is). The game never reads it.
  */
 class FloorGeometryBuilder {
   constructor() {
     this.positions = [];
     this.normals = [];
     this.edges = [];
+    this.cuts = [];
+    this.owner = NO_OWNER;
+  }
+
+  /** The quads that follow belong to cell (x, z) of `storey` (a wall's: wallLike). */
+  ownedBy(x, z, storey, wallLike = false) {
+    this.owner = [x, z, storey, wallLike ? 1 : 0];
   }
 
   /**
@@ -55,6 +69,7 @@ class FloorGeometryBuilder {
       this.positions.push(corner[0], corner[1], corner[2]);
       this.normals.push(normal[0], normal[1], normal[2]);
       this.edges.push(edge);
+      this.cuts.push(this.owner[0], this.owner[1], this.owner[2], this.owner[3]);
     }
   }
 
@@ -73,6 +88,7 @@ class FloorGeometryBuilder {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(this.normals, 3));
     geometry.setAttribute('aEdge', new THREE.Float32BufferAttribute(this.edges, 1));
+    geometry.setAttribute('aCut', new THREE.Float32BufferAttribute(this.cuts, 4));
     if (geometry.computeBoundingSphere) geometry.computeBoundingSphere();
     return geometry;
   }
@@ -93,6 +109,7 @@ function addTile(builder, grid, tile) {
   const x1 = cx + half;
   const z0 = cz - half;
   const z1 = cz + half;
+  builder.ownedBy(tile.x, tile.z, tile.y);
   builder.quad([x0, top, z0], [x1, top, z0], [x1, top, z1], [x0, top, z1], [0, 1, 0]);
   builder.quad([x0, bottom, z0], [x1, bottom, z0], [x1, bottom, z1], [x0, bottom, z1], [0, -1, 0]);
   for (const side of SIDES) {
@@ -149,8 +166,15 @@ function addCliffEdges(builder, grid, ramps, walls, tiles, gridSize = 0, wallTop
     }
   };
   if (tiles) {
-    for (const tile of tiles) edgesOf(tile.x, tile.z, tile.y);
-    for (const top of wallTops) edgesOf(top.x, top.z, top.y);
+    for (const tile of tiles) {
+      builder.ownedBy(tile.x, tile.z, tile.y);
+      edgesOf(tile.x, tile.z, tile.y);
+    }
+    // A wall top's edge lines are its wall's, as the top is
+    for (const top of wallTops) {
+      builder.ownedBy(top.x, top.z, top.y - 1, true);
+      edgesOf(top.x, top.z, top.y);
+    }
     return;
   }
   for (let z = 0; z < gridSize; z += 1) {
@@ -244,6 +268,8 @@ function addWallTop(builder, top) {
   const y = top.y * ELEVATION_HEIGHT;
   const cx = top.x * WORLD_SCALE;
   const cz = top.z * WORLD_SCALE;
+  // The wall's: solid or a ghost with the wall under it (CutawayLook)
+  builder.ownedBy(top.x, top.z, top.y - 1, true);
   builder.quad(
     [cx - half, y, cz - half],
     [cx + half, y, cz - half],
