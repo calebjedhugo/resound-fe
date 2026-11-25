@@ -84,9 +84,18 @@ describe('A creature sings ties and dots as written', () => {
     await ctx.advanceBeats(10); // one song (it starts within a beat; the next at 16)
 
     const beatMs = 60000 / gameState.musicalClock.tempo;
-    // One song: E4 struck once, for both its tied beats; G4 then A4 around it
-    expect(starts.map(([pitch, ms]) => [pitch, Math.round((ms / beatMs) * 1000) / 1000])).toEqual([
-      ['C4', 1.75],
+    // One song: E4 struck once, for both its tied beats; G4 then A4 around
+    // it. C4 starts on the first frame past its beat, and the song is drawn
+    // back onto the grid by as much: it sounds its double-dotted 1.75 beats
+    // less that frame (heard as written, below)
+    const [first, ...rest] = starts.map(([pitch, ms]) => [
+      pitch,
+      Math.round((ms / beatMs) * 1000) / 1000,
+    ]);
+    expect(first[0]).toBe('C4');
+    expect(first[1]).toBeLessThanOrEqual(1.75);
+    expect(first[1]).toBeGreaterThan(1.65);
+    expect(rest).toEqual([
       ['D4', 0.25],
       ['E4', 2],
       ['G4', 1],

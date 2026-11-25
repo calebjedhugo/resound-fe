@@ -275,6 +275,152 @@ describe('Releasing the second voice on the first one’s downbeat', () => {
   });
 });
 
+describe('A one-element song sung back to back stays on the beat, loop after loop', () => {
+  // poc-jam's B5 jammer: one whole note, interval 4 — its period IS the
+  // song, so each song starts as the last one ends. Nothing in a one-note
+  // song comes after the first note to draw back onto the grid: the
+  // lateness has to come off the note itself, or each song ends as late as
+  // it started and the next starts a frame later still
+  const LOOPS = 48;
+  const PERIOD = 4;
+  // An onset sounds on the first frame at or past its beat, late by its own
+  // timers so far; never by the loops before it
+  const LIMIT_MS = 17 + 8 * TIMER_LATE_MS;
+
+  /** Where each loop's first heard note lands against its beat (ms). */
+  const driftOf = (creature, firstBeat, eventsPerLoop) => {
+    const beatZeroMs = Date.now() - gameState.musicalClock.getCurrentBeat() * MS_PER_BEAT;
+    return () => {
+      const notes = notesOf(creature);
+      const drift = [];
+      for (let i = 0; i < notes.length; i += eventsPerLoop) {
+        const k = i / eventsPerLoop;
+        const loop = notes.slice(i, i + eventsPerLoop);
+        // A chord's members are heard together
+        loop.forEach((note) => expect(note.timestamp).toBe(loop[0].timestamp));
+        drift.push(loop[0].timestamp - (beatZeroMs + (firstBeat + k * PERIOD) * MS_PER_BEAT));
+      }
+      return drift;
+    };
+  };
+
+  /** A singer put down in the world now: it sings from the next whole beat. */
+  const singer = (song) => {
+    const creature = new Creature(
+      { x: 2, y: 0, z: 2 },
+      { song, interval: PERIOD, audibleRange: 8, size: 0.9, maxSpeed: 8 }
+    );
+    gameState.activeArea.entityManager.add(creature);
+    return creature;
+  };
+
+  const expectOnTheGrid = (drift, label) => {
+    expect(drift.length).toBeGreaterThanOrEqual(LOOPS);
+    const worst = drift.slice(0, LOOPS).reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0);
+    // eslint-disable-next-line no-console
+    if (process.env.DRIFT_REPORT) console.log(label, 'worst drift ms', worst, 'loop 47', drift[47]);
+    drift.slice(0, LOOPS).forEach((off, k) => {
+      if (off < -2 || off > LIMIT_MS)
+        throw new Error(`${label}: loop ${k} is ${off} ms off its beat`);
+    });
+  };
+
+  beforeEach(() => {
+    ctx.loadPuzzle('two-voice-gate-empty');
+  });
+
+  it('one note: every song starts on its beat', async () => {
+    const firstBeat = Math.ceil(gameState.musicalClock.getCurrentBeat());
+    const creature = singer([{ pitch: 'B5', length: '1/1' }]);
+    expect(creature.period).toBe(PERIOD);
+    const read = driftOf(creature, firstBeat, 1);
+    await runFor((LOOPS + 0.5) * PERIOD * MS_PER_BEAT);
+    expectOnTheGrid(read(), 'one note');
+  });
+
+  it('one chord: every song starts on its beat, its members together', async () => {
+    const firstBeat = Math.ceil(gameState.musicalClock.getCurrentBeat());
+    const creature = singer([
+      [
+        { pitch: 'B4', length: '1/1' },
+        { pitch: 'D5', length: '1/1' },
+      ],
+    ]);
+    const read = driftOf(creature, firstBeat, 2);
+    await runFor((LOOPS + 0.5) * PERIOD * MS_PER_BEAT);
+    expectOnTheGrid(read(), 'one chord');
+  });
+
+  it('one tied note (a song ending in a tie): on its beat, and held as one sound', async () => {
+    const firstBeat = Math.ceil(gameState.musicalClock.getCurrentBeat());
+    const creature = singer([
+      { pitch: 'C5', length: '1/2', tie: 'start' },
+      { pitch: 'C5', length: '1/2', tie: 'stop' },
+    ]);
+    const read = driftOf(creature, firstBeat, 1);
+    await runFor((LOOPS + 0.5) * PERIOD * MS_PER_BEAT);
+    const notes = notesOf(creature);
+    // The tie is held: one onset a song, heard as the whole run (it sounds
+    // that less the frame it started late by)
+    notes.forEach((note) => {
+      expect(note.tie).toBe('start');
+      expect(note.durationBeats).toBeCloseTo(PERIOD, 6);
+    });
+    expectOnTheGrid(read(), 'one tied note');
+  });
+
+  it('one note, a stalled frame: no song dropped, its note keeps half its length, back on the grid two songs on', async () => {
+    const firstBeat = Math.ceil(gameState.musicalClock.getCurrentBeat());
+    const creature = singer([{ pitch: 'B5', length: '1/1' }]);
+    const sounded = [];
+    const startNote = creature.instrument.startNote.bind(creature.instrument);
+    jest.spyOn(creature.instrument, 'startNote').mockImplementation((pitch, ms, ...rest) => {
+      sounded.push(ms);
+      return startNote(pitch, ms, ...rest);
+    });
+    const read = driftOf(creature, firstBeat, 1);
+    // Up to just before the third song's beat, then one frame 1.5 s long:
+    // that song starts 3 beats late, more than half its note can take back
+    const beatMs = (b) => (b - gameState.musicalClock.getCurrentBeat()) * MS_PER_BEAT;
+    await runFor(beatMs(firstBeat + 2 * PERIOD) - 30);
+    await jest.advanceTimersByTimeAsync(1530);
+    gameState.musicalClock.update(1.53);
+    await runFor(6 * PERIOD * MS_PER_BEAT);
+
+    const drift = read();
+    expect(drift.length).toBeGreaterThanOrEqual(8); // every song sung
+    expect(drift[2]).toBeGreaterThan(2.9 * MS_PER_BEAT); // the stalled one, late
+    // It sounds half its whole note (2 beats), the next one 3 beats, ending
+    // on the grid: from the song after, every one is on its beat
+    expect(sounded[2]).toBeCloseTo(2 * MS_PER_BEAT, -1);
+    expect(sounded[3]).toBeLessThan(4 * MS_PER_BEAT);
+    sounded.forEach((ms) => expect(ms).toBeGreaterThanOrEqual(2 * MS_PER_BEAT - 1));
+    drift.slice(4, 8).forEach((off) => {
+      expect(off).toBeGreaterThanOrEqual(-2);
+      expect(off).toBeLessThanOrEqual(LIMIT_MS);
+    });
+  });
+
+  it('released a moment past a beat (the late grace): its songs stay on that beat', async () => {
+    ctx.face(-Math.PI / 2);
+    // Pressed 0.08 beat past beat 4: it sings on beat 4, at once
+    await framesUntil(() => gameState.musicalClock.getCurrentBeat() >= 4.08, 4000);
+    const pressBeat = gameState.musicalClock.getCurrentBeat();
+    expect(pressBeat - 4).toBeLessThan(0.1);
+    ctx.setInventorySlot(0, { ...specOf([{ pitch: 'B5', length: '1/1' }]), interval: PERIOD });
+    ctx.pressKey('space');
+    const [creature] = ctx.getCreatures();
+    expect(creature.nextSingBeat).toBe(4);
+    const read = driftOf(creature, 4, 1);
+    await runFor((LOOPS + 0.5) * PERIOD * MS_PER_BEAT);
+    const drift = read();
+    // Its first song sounds at the press, late by the grace it was given...
+    expect(drift[0]).toBeGreaterThan(0.07 * MS_PER_BEAT);
+    // ...and every one after on its beat
+    expectOnTheGrid([0, ...drift.slice(1)], 'released');
+  });
+});
+
 describe('A two-voice gate hearing one source sing both voices (pins)', () => {
   // The whole two-voice song as one source plays it: its voices lined up
   // into chords (a chord lasts its shortest note; longer notes sound on)

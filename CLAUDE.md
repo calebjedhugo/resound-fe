@@ -182,17 +182,22 @@ instead of "fixing" it.
   (`Gate._consumeTake`), so a back-to-back performer's next take counts
 - **A released creature sings its first note on the beat of the press**
   (ruled 2026-11-23, replacing clapping): within `RELEASE_LATE_GRACE_BEATS`
-  (0.1) past a beat it is that beat (sounds at once, the rest of that song
-  snapped back onto the grid via note offsets), else the next; its schedule
+  (0.1) past a beat it is that beat (sounds at once, that song drawn back
+  onto the grid via note offsets), else the next; its schedule
   restarts there (`Creature` `data.firstSingBeat`; `releaseBeatFor`). A
   creature REBUILT after a prune keeps its PHASE instead (`toSpec` `phase`:
   next sing beat modulo its `period`, from the world clock, core/WorldMemory).
   **Every song is on the beat** (2026-11-24): `nextSingBeat` advances by
   `period` and never slips; each song's lateness (a frame, or the last
   song's timers when back to back) is drawn back onto the grid, by at most
-  half the first note; a stall janks but NEVER drops a note (the late song
-  is sung whole and catches up) — so creatures released on the
-  beat stay together loop after loop. No clapping (C
+  half the first note: the WHOLE song (every element's `offset`), so its
+  first note sounds that much shorter and the song ENDS on the grid —
+  a one-note or one-chord back-to-back singer too (it drifted a frame a
+  loop when only the notes after the first were drawn back, 2026-11-25;
+  resound-sound's overdue elements). Heard notes still report their
+  written value (matching reads it). A stall janks but NEVER drops a note
+  (the late song is sung whole and catches up) — so creatures released on
+  the beat stay together loop after loop. No clapping (C
   does nothing in the world; Circle only backs out of menus)
 - Matching tolerates sounds AFTER the aligned window but a foreign note
   INSIDE it corrupts, and (ruled 2026-07-16) a wrong note is judged

@@ -535,10 +535,11 @@ describe('A released creature sings its first note on the beat it is let out', (
     });
   });
 
-  it('a song begun in the late grace snaps its later notes back onto the grid', async () => {
+  it('a song begun in the late grace is drawn back onto the grid whole', async () => {
     // (The harness runs an instrument's timers all at once, so what it is
     // told to play is checked here: the resound-sound instrument plays each
-    // note at its place in the song plus its offset)
+    // note at its place in the song plus its offset — the first, overdue,
+    // at once for what is left of it — and ends the song on the grid)
     const run = [
       { pitch: 'C4', length: '1/4' },
       { pitch: 'D4', length: '1/4' },
@@ -563,10 +564,10 @@ describe('A released creature sings its first note on the beat it is let out', (
     const offsetOf = (element) => (Array.isArray(element) ? element[0] : element).offset || 0;
     const ms = (beats) => gameState.musicalClock.beatsToMs(beats);
     expect(played).toHaveLength(1);
-    expect(offsetOf(played[0][0])).toBe(0); // the first note: now
-    const back = offsetOf(played[0][1]); // the rest: drawn back onto the grid
+    const back = offsetOf(played[0][0]); // every note drawn back onto the grid
     expect(back).toBeLessThanOrEqual(-ms(late) + 1e-6);
     expect(back).toBeGreaterThan(-ms(late + 0.05));
+    expect(offsetOf(played[0][1])).toBe(back);
     played[0][2].forEach((note) => expect(note.offset).toBe(back));
     expect(late).toBeGreaterThan(0.01);
     expect(creature.song[1].offset).toBeUndefined(); // its song itself untouched

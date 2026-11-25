@@ -271,13 +271,20 @@ automated playtesters can observe them.)
   as that or longer, the song itself rounded up to a whole beat (it sings
   back to back). Each starts on its beat of that grid: the first note on
   the first frame at or past it (or, back to back, when the last song
-  ends), the rest drawn back onto the grid by as much (the release's late-
-  grace snap, now every song), by at most half the first note. A song
-  later than that (a stalled frame) is still sung whole: a stall janks, it
-  never drops a note (designer, 2026-11-24). A back-to-back singer catches
-  up over its next songs; one with a gap is on the grid with the next. It used to start each song whenever the last one ended, a
+  ends), the whole song drawn back onto the grid by as much (the release's
+  late-grace snap, now every song), by at most half the first note: the
+  first note sounds that much shorter, the rest on their beats, and the
+  song ENDS on the grid, so the next one, back to back, starts on its beat.
+  A song later than that (a stalled frame) is still sung whole: a stall
+  janks, it never drops a note (designer, 2026-11-24). A back-to-back
+  singer catches up over its next songs; one with a gap is on the grid
+  with the next. It used to start each song whenever the last one ended, a
   frame or more late, so a back-to-back singer drifted off the beat a frame
-  a loop — and off another creature released on the beat beside it.
+  a loop — and off another creature released on the beat beside it. Until
+  2026-11-25 only the notes AFTER the first were drawn back, so a song of
+  one note or one chord (poc-jam's B5 jammer, poc-pull's C5) ended as late
+  as it started and still drifted ~10 ms a loop (0.47 beat late by beat
+  811); now its note is cut short instead.
 - **Gates open on the COMPLETED song, LATCH, and close when you walk
   through** (ruled 2026-07-10, superseding the 2026-07-05 play-to-pass grace
   and its multi-note caveat). The full rule:
