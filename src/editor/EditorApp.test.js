@@ -1512,6 +1512,26 @@ describe('EditorApp wiring', () => {
       expect(app.look).toBe('game');
     });
 
+    it('Options menu: sharp rendering on and off', () => {
+      localStorage.clear();
+      expect(app.sharp).toBe(false);
+      const highlighted = () => document.querySelector('.context-menu-item.active');
+      tap('options');
+      tap('up'); // wraps to the last item, Game mode...
+      tap('up'); // ...and the one above it
+      expect(highlighted().textContent).toBe('Sharp rendering: off');
+      tap('cross');
+      expect(app.sharp).toBe(true);
+
+      tap('options');
+      tap('up');
+      tap('up');
+      expect(highlighted().textContent).toBe('Sharp rendering: on');
+      tap('cross');
+      expect(app.sharp).toBe(false);
+      localStorage.clear();
+    });
+
     it('Options opens the editor menu, Play first', () => {
       tap('options');
       const items = [...document.querySelectorAll('.context-menu-item')].map((b) => b.textContent);
@@ -1544,8 +1564,10 @@ describe('EditorApp wiring', () => {
       expect(app.padContext()).toBe('song');
       const song = () => app.undoManager.getEntity(id).data.song;
 
-      tap('cross'); // the edit cursor opens at the end, on C4: C4 off -> a rest
+      tap('left'); // it opens past the C4: ← onto it
+      tap('cross'); // C4 off -> a rest
       expect(song()).toEqual([{ length: '1/4' }]);
+      tap('right'); // past it: the end
       tap('l2'); // L2 / R2 alone do nothing
       tap('r2');
       expect(song()).toEqual([{ length: '1/4' }]);
@@ -1556,6 +1578,7 @@ describe('EditorApp wiring', () => {
       letGo('r2');
       expect(song()).toHaveLength(2);
 
+      tap('left'); // onto the new rest
       tap('up'); // the pitch cursor a step up: D4
       tap('cross'); // the rest takes it
       expect(song()[1]).toEqual({ pitch: 'D4', length: '1/4' });
@@ -2655,5 +2678,122 @@ describe('EditorApp draws the game look calm at 30 fps', () => {
     app.gameLook.animates = false;
     vsyncs(2);
     expect(drawsOver(60)).toBe(0);
+  });
+});
+
+describe('EditorApp renders as the game does, or sharp (Options menu)', () => {
+  /* eslint-disable global-require */
+  const { WebGLRenderer } = require('three');
+  const { OrbitControls } = require('three/examples/jsm/controls/OrbitControls');
+  /* eslint-enable global-require */
+  let app;
+  let frames;
+
+  const lastRenderer = () => WebGLRenderer.mock.results.at(-1).value;
+  const flushFrames = () => {
+    for (let i = 0; i < 10 && frames.length > 0; i += 1) {
+      frames.splice(0).forEach((callback) => callback(i * 17));
+    }
+  };
+
+  function boot() {
+    app = new EditorApp();
+    app.init();
+    flushFrames();
+  }
+
+  beforeEach(() => {
+    setupEditorDOM();
+    localStorage.clear();
+    frames = [];
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    WebGLRenderer.mockClear();
+  });
+
+  afterEach(() => {
+    if (app) app.dispose();
+    app = null;
+    document.body.innerHTML = '';
+    localStorage.clear();
+    jest.restoreAllMocks();
+  });
+
+  it('renders as the game does by default: 1x, no antialiasing', () => {
+    boot();
+    expect(app.sharp).toBe(false);
+    expect(WebGLRenderer).toHaveBeenCalledTimes(1);
+    expect(WebGLRenderer).toHaveBeenLastCalledWith({ antialias: false });
+    expect(app.renderer.setPixelRatio).toHaveBeenCalledWith(1);
+  });
+
+  it('sharp builds the renderer again on a new canvas, antialiased at the screen ratio', () => {
+    boot();
+    const old = app.renderer;
+    const oldControls = app.controls;
+    oldControls.target.set(4, 0, -6);
+    const viewport = document.getElementById('editor-viewport');
+
+    app.toggleSharp();
+
+    expect(app.sharp).toBe(true);
+    expect(WebGLRenderer).toHaveBeenLastCalledWith({ antialias: true });
+    expect(app.renderer).toBe(lastRenderer());
+    expect(app.renderer.setPixelRatio).toHaveBeenCalledWith(window.devicePixelRatio);
+    // The new canvas takes the old one's place; the old renderer is freed
+    expect(viewport.contains(app.renderer.domElement)).toBe(true);
+    expect(viewport.contains(old.domElement)).toBe(false);
+    expect(old.dispose).toHaveBeenCalled();
+    // Orbit controls listen on the new canvas, round the same target
+    expect(oldControls.dispose).toHaveBeenCalled();
+    expect(OrbitControls).toHaveBeenLastCalledWith(app.camera, app.renderer.domElement);
+    const { x, y, z } = app.controls.target;
+    expect([x, y, z]).toEqual([4, 0, -6]);
+    // Play reaches the new ones (it reads them from the editor when used)
+    expect(app.preview._host.renderer).toBe(app.renderer);
+    expect(app.preview._host.controls).toBe(app.controls);
+    // ...and still draw the view when the camera moves
+    const onChange = app.controls.addEventListener.mock.calls.find(([t]) => t === 'change')[1];
+    flushFrames();
+    app.renderer.render.mockClear();
+    onChange();
+    flushFrames();
+    expect(app.renderer.render).toHaveBeenCalledTimes(1);
+  });
+
+  it('is remembered: the next visit opens sharp, and back off', () => {
+    boot();
+    app.setSharp(true);
+    app.dispose();
+    setupEditorDOM();
+    WebGLRenderer.mockClear();
+    boot();
+    expect(app.sharp).toBe(true);
+    expect(WebGLRenderer).toHaveBeenLastCalledWith({ antialias: true });
+
+    app.setSharp(false);
+    expect(WebGLRenderer).toHaveBeenLastCalledWith({ antialias: false });
+    expect(lastRenderer().setPixelRatio).toHaveBeenCalledWith(1);
+  });
+
+  it('asking for what it already is builds nothing', () => {
+    boot();
+    app.setSharp(false);
+    expect(WebGLRenderer).toHaveBeenCalledTimes(1);
+  });
+
+  it('still works when storage is blocked (off, and switchable this visit)', () => {
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    boot();
+    expect(app.sharp).toBe(false);
+    app.toggleSharp();
+    expect(app.sharp).toBe(true);
   });
 });

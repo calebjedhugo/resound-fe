@@ -439,8 +439,85 @@ describe('NotationEditor note entry', () => {
     keydown(empty.editor, 'Enter');
     expect(empty.changes.at(-1)).toEqual([{ pitch: 'C5', length: '1/4' }]);
     expect(empty.editor.status).toBe('');
-    keydown(empty.editor, 'Enter'); // on its own pitch: it comes off, the rest stays
+    keydown(empty.editor, 'ArrowLeft'); // onto it: Enter on its own pitch takes it off
+    keydown(empty.editor, 'Enter');
     expect(empty.changes.at(-1)).toEqual([{ length: '1/4' }]);
+  });
+
+  it('past the last entry (where a song opens) ✕ writes a new note, and again, and again: a melody', () => {
+    const { editor, changes } = makeEditor({ song: [{ pitch: 'C4', length: '1/4' }] });
+    expect(editor.cursorPosition).toBe(1); // past the C4
+    editor.movePitchCursor(1);
+    editor.cross(); // D4 after it
+    editor.movePitchCursor(1);
+    editor.cross(); // E4 after that
+    editor.insertRest(); // a rest ...
+    editor.cross(); // ... and E4 again after the rest (✕ never pitches the rest just entered)
+    expect(changes.at(-1)).toEqual([
+      { pitch: 'C4', length: '1/4' },
+      { pitch: 'D4', length: '1/4' },
+      { pitch: 'E4', length: '1/4' },
+      { length: '1/4' },
+      { pitch: 'E4', length: '1/4' },
+    ]);
+    expect(editor.cursorPosition).toBe(5);
+    // The dot, the accidental and □ still reach the note just entered
+    editor.stepAccidental(-1);
+    expect(changes.at(-1)[4]).toEqual({ pitch: 'Eb4', length: '1/4' });
+  });
+
+  it('← onto a note, then ✕ adds a chord tone (✕ again, another); → back to the end appends again', () => {
+    const { editor, changes } = makeEditor({ song: [{ pitch: 'C4', length: '1/4' }] });
+    editor.moveCursor(-1); // onto the C4
+    editor.movePitchCursor(2);
+    editor.cross(); // E4 joins
+    editor.movePitchCursor(2);
+    editor.cross(); // G4 joins
+    expect(changes.at(-1)).toEqual([
+      [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'E4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ],
+    ]);
+    editor.moveCursor(1); // past it again: the end
+    editor.cross(); // a new G4 after the chord
+    expect(changes.at(-1)).toHaveLength(2);
+    expect(changes.at(-1)[1]).toEqual({ pitch: 'G4', length: '1/4' });
+  });
+
+  it('⇧Enter (the pad’s L2+✕) puts a new note BEFORE the entry the cursor is on', () => {
+    const { editor, changes } = makeEditor({
+      song: [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ],
+    });
+    keydown(editor, 'ArrowLeft'); // onto the G4
+    keydown(editor, 'ArrowDown'); // F4
+    keydown(editor, 'Enter', { shiftKey: true });
+    expect(changes.at(-1).map((e) => e.pitch)).toEqual(['C4', 'F4', 'G4']);
+    expect(editor.cursorPosition).toBe(2); // past the F4, before the G4
+    keydown(editor, 'ArrowRight'); // onto the G4 ...
+    keydown(editor, 'ArrowRight'); // ... and past it: the end
+    keydown(editor, 'Enter', { shiftKey: true }); // past the end: appended, as Enter
+    expect(changes.at(-1).map((e) => e.pitch)).toEqual(['C4', 'F4', 'G4', 'F4']);
+  });
+
+  it('mid-song, past an entry just put in, ✕ writes the next note after it, at the cursor', () => {
+    const { editor, changes } = makeEditor({
+      song: [
+        { pitch: 'C4', length: '1/4' },
+        { pitch: 'G4', length: '1/4' },
+      ],
+    });
+    editor.moveCursor(-1); // onto the G4
+    editor.insertRest(); // a rest goes in before it; the cursor is past the rest
+    editor.movePitchCursor(-1);
+    editor.cross(); // F4 goes in after the rest, before the G4
+    editor.movePitchCursor(-1);
+    editor.cross(); // E4 after it
+    expect(changes.at(-1).map((e) => e.pitch || 'rest')).toEqual(['C4', 'rest', 'F4', 'E4', 'G4']);
   });
 
   it('the new note is the chosen duration, in the key, and must fit in the measure', () => {
@@ -589,11 +666,12 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
   const nextFrame = () => jest.advanceTimersByTime(16);
   const last = (changes) => changes.at(-1);
 
-  it('a rest goes in first; Enter puts the pitch cursor’s pitch on it, again takes it off', () => {
+  it('← onto a rest, Enter puts the pitch cursor’s pitch on it, again takes it off', () => {
     const { editor, changes } = makeEditor({ song: [] });
     expect(editor.pitchCursor).toBe('B4'); // the treble staff's middle line, nothing written
     editor.insertRest();
     expect(last(changes)).toEqual([{ length: '1/4' }]);
+    keydown(editor, 'ArrowLeft'); // onto the rest
     keydown(editor, 'ArrowUp');
     keydown(editor, 'ArrowUp'); // D5
     keydown(editor, 'Enter');
@@ -604,6 +682,7 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
 
   it('builds chords at the pitch cursor — no pitch twice — and the last pitch off leaves a rest', () => {
     const { editor, changes } = makeEditor({ song: [{ length: '1/2' }] });
+    editor.moveCursor(-1); // onto the rest
     editor.cross(); // B4
     editor.movePitchCursor(-2);
     editor.cross(); // G4 joins: low to high
@@ -623,6 +702,7 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
 
   it('a chord holds a pitch once, however it is spelled', () => {
     const { editor, changes } = makeEditor({ song: [[{ pitch: 'E#4', length: '1/4' }]] });
+    editor.moveCursor(-1);
     editor.movePitchCursor(1); // F4: sounds as E#4
     expect(editor.pitchCursor).toBe('F4');
     expect(editor.cross()).toBe(false);
@@ -636,13 +716,22 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
       polyphonic: false,
     });
     expect(editor.pitchCursor).toBe('C5'); // the cursor starts on the last pitch written
+    editor.moveCursor(-1); // onto the note
     editor.movePitchCursor(-1);
     editor.cross();
     expect(last(changes)).toEqual([{ pitch: 'B4', length: '1/4' }]);
+    editor.moveCursor(1); // past it: ✕ writes the creature's next note
+    editor.movePitchCursor(-1);
+    editor.cross();
+    expect(last(changes)).toEqual([
+      { pitch: 'B4', length: '1/4' },
+      { pitch: 'A4', length: '1/4' },
+    ]);
   });
 
   it('a pitch goes on in the key: the F line in D major is F sharp', () => {
     const { editor, changes } = makeEditor({ song: [{ length: '1/4' }], keySignature: 'D' });
+    editor.moveCursor(-1);
     editor.movePitchCursor(-3); // F4
     editor.cross();
     expect(last(changes)).toEqual([{ pitch: 'F#4', length: '1/4' }]);
@@ -904,6 +993,14 @@ describe('NotationEditor rest-first entry (the designer, 2026-11-24)', () => {
   it('draws the pitch cursor at the edit cursor, ringing a note there, naming the pitch', () => {
     const { editor } = makeEditor({ song: [C4] });
     let cursor = editor._staffEl.querySelector('.pitch-cursor');
+    // Past the C4 (where the song opens): where ✕ writes the next note
+    expect(cursor.classList.contains('on-note')).toBe(false);
+    const ringX = (el) => Number(el.querySelector('.pitch-cursor-ring').getAttribute('x'));
+    const pastX = ringX(cursor);
+    keydown(editor, 'ArrowLeft'); // onto it
+    nextFrame();
+    cursor = editor._staffEl.querySelector('.pitch-cursor');
+    expect(ringX(cursor)).toBeLessThan(pastX);
     expect(cursor.classList.contains('on-note')).toBe(true); // on C4, below the staff
     expect(cursor.querySelector('.pitch-cursor-label').textContent).toBe('C4');
     expect(cursor.querySelectorAll('.pitch-cursor-ledger')).toHaveLength(1); // C4's ledger line

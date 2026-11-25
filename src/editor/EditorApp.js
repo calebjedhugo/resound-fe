@@ -37,7 +37,7 @@ import {
   releaseLinkBeforeDelete,
 } from 'editor/io/portalLinks';
 import { importPuzzle } from 'editor/io/importPuzzle';
-import { loadLook, saveLook } from 'editor/io/lookPreference';
+import { loadLook, saveLook, loadSharp, saveSharp } from 'editor/io/lookPreference';
 import SongAudition from 'editor/audio/SongAudition';
 import { editorRequest } from 'core/playLink';
 import PlayPreview from 'editor/play/PlayPreview';
@@ -109,6 +109,7 @@ export default class EditorApp {
   }
 
   init() {
+    this._sharp = loadSharp();
     this._setupRenderer();
     this._setupCamera();
     this._setupControls();
@@ -296,10 +297,16 @@ export default class EditorApp {
     this._setupRenderInvalidation();
     this._setupGamepad();
     // Play: the level in the game, in this tab (editor/play/PlayPreview)
+    const app = this;
     this.preview = new PlayPreview({
       camera: this.camera,
-      renderer: this.renderer,
-      controls: this.controls,
+      // Read when used: sharp rendering builds both again (setSharp)
+      get renderer() {
+        return app.renderer;
+      },
+      get controls() {
+        return app.controls;
+      },
       requestFrame: () => this._requestFrame(),
       suspend: () => this._standAside(),
       resume: () => this._comeBack(),
@@ -867,6 +874,10 @@ export default class EditorApp {
         label: this._look === 'game' ? 'Schematic look' : 'Game look',
         action: () => this.toggleLook(),
       },
+      {
+        label: this._sharp ? 'Sharp rendering: on' : 'Sharp rendering: off',
+        action: () => this.toggleSharp(),
+      },
       { label: 'Game mode (main menu)', action: () => this.openGame() }
     );
     const container = document.getElementById('editor-viewport');
@@ -1375,10 +1386,7 @@ export default class EditorApp {
 
   _setupRenderer() {
     const container = document.getElementById('editor-viewport');
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x0a0a1a);
+    this.renderer = this._createRenderer();
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -1401,13 +1409,74 @@ export default class EditorApp {
     this.camera.lookAt(x, 0, z);
   }
 
+  /**
+   * The viewport's renderer. By default it renders as the game does: 1x,
+   * no antialiasing. SHARP (`setSharp`, the Options menu; remembered) is the
+   * screen's pixel ratio with antialiasing: crisper, about 2.5x the GPU work
+   * per frame on a 2x screen.
+   */
+  _createRenderer() {
+    const container = document.getElementById('editor-viewport');
+    const renderer = new THREE.WebGLRenderer({ antialias: this._sharp });
+    renderer.setPixelRatio(this._sharp ? window.devicePixelRatio : 1);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setClearColor(0x0a0a1a);
+    return renderer;
+  }
+
   _setupControls() {
     const { x, z } = this._levelCenterWorld();
+    this._createControls({ x, y: 0, z });
+  }
+
+  /** Orbit controls on the canvas, orbiting `target`. */
+  _createControls(target) {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(x, 0, z);
+    this.controls.target.set(target.x, target.y, target.z);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.1;
     this.controls.update();
+  }
+
+  /** Whether the viewport renders sharp (screen pixel ratio + antialiasing). */
+  get sharp() {
+    return this._sharp;
+  }
+
+  /** Sharp rendering on / off (the Options menu), remembered. */
+  toggleSharp() {
+    this.setSharp(!this._sharp);
+  }
+
+  /**
+   * Render sharp (the screen's pixel ratio, antialiased) or as the game does
+   * (1x, no antialiasing: the default). Antialiasing is fixed when a WebGL
+   * context is made, so the renderer is built again on a new canvas, and the
+   * orbit controls with it (they listen on the canvas); the scene, camera
+   * and orbit target stay, and the scene's GPU resources upload again to the
+   * new context on its first frame. Not while Play is under way.
+   * @param {boolean} sharp
+   */
+  setSharp(sharp) {
+    const on = Boolean(sharp);
+    if (on === this._sharp || (this.preview && this.preview.active)) return;
+    this._sharp = on;
+    saveSharp(on);
+    const old = this.renderer;
+    this.renderer = this._createRenderer();
+    old.domElement.replaceWith(this.renderer.domElement);
+    old.dispose();
+    if (old.forceContextLoss) old.forceContextLoss(); // free its GPU memory now
+
+    const { target, enabled } = this.controls;
+    this.controls.removeEventListener('change', this._invalidateRender);
+    this.controls.dispose();
+    this._createControls(target);
+    this.controls.enabled = enabled;
+    this.controls.addEventListener('change', this._invalidateRender);
+
+    this._showToast(on ? 'Sharp rendering' : 'Rendering as the game does', 'success');
+    this._requestFrame();
   }
 
   /** Raycast the viewport event position against entity meshes. */

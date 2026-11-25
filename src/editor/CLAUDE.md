@@ -17,17 +17,27 @@ Files (`ui/` + `model/`):
   (`_drawSelection`), any other key draws nothing. A staff resize re-engraves
   through the same path: the editor owns the ResizeObserver; the renderer's
   is OFF (`observeContainer: false` — it re-engraved without the overlay).
-  **Entry (designer's rulings 2026-11-24)**: ✕ / Enter with NOTHING at the
-  edit cursor (an empty song) enters a NOTE at the pitch cursor
-  (`insertNote`, the palette's duration; no rest first, and no "nothing at
-  the cursor" message any more: □, the accidental, the dot and the tie
-  quietly do nothing there). A rest of the palette's duration goes in with
-  `insertRest` (R2+✕, a duration key 2–7, r). Either goes in ONLY if it
-  fits in what is left of its measure
+  **Entry (designer's rulings 2026-11-24)**: the edit cursor is either ON
+  an entry (stepped onto with ←/→ or clicked: cursor = selected,
+  `_onEntry`) or PAST one (the end of the song — where a song OPENS — just
+  after the entry put in, or an empty song). ✕ / Enter PAST an entry
+  writes a NEW note at the pitch cursor there (`insertNote`, the palette's
+  duration) and the cursor goes past it: ✕ ✕ ✕ writes a melody, on a
+  creature too (no rest first; never a pitch onto a rest just entered —
+  ← onto it first). There is no "nothing at the cursor" message: with an
+  empty song □, the accidental, the dot and the tie quietly do nothing.
+  Past an entry, □ / dot / tie / accidental / value still act on the entry
+  just put in (the selected one). **L2+✕ / ⇧Enter** (`insertNote` ON an
+  entry too) put a new note BEFORE the entry the cursor is on, the cursor
+  then past it (so ✕ goes on writing there); past the end they append, as
+  ✕. A rest of the palette's duration goes in
+  with `insertRest` (R2+✕, a duration key 2–7, r). Either goes in ONLY if
+  it fits in what is left of its measure
   (`_roomAt`, barred as SongModel bars; a full measure starts a new one;
   refusals say why in the status line). The PITCH CURSOR (a staff line /
-  space, ↑/↓; cyan ring + name + dashed ledger guides) then puts pitches on
-  and off the entry at the edit cursor (`cross`: ✕ / Enter): on a rest it
+  space, ↑/↓; cyan ring + name + dashed ledger guides; drawn past the
+  last note when the cursor is past it) puts pitches on and off the entry
+  the cursor is ON (← onto it; `cross`: ✕ / Enter): on a rest it
   becomes that note, on a note's own pitch it comes off (the last one off
   leaves the rest), elsewhere it joins the chord (sorted, never the same
   sounding pitch twice) — a creature (`polyphonic: false`) moves its one
@@ -54,7 +64,7 @@ Files (`ui/` + `model/`):
   redo, or a load (those don't go through the edit methods).
   **No pitch ever goes in on the editor's own initiative**
   (no default notes/pitches; new entities' songs are `[]`). The edit cursor
-  OPENS AT THE END (on the last entry); an entry goes in at the cursor and
+  OPENS AT THE END (past the last entry, which is selected); an entry goes in at the cursor and
   the cursor goes AFTER it (mid-song too); a CLICK puts a note at the
   clicked pitch in at the edit cursor (⇧-click: pitch on/off, as ✕). Each
   action is a public method the keyboard and `SongEditorModal.padAction`
@@ -98,8 +108,11 @@ Files (`ui/` + `model/`):
   Done). **Options** (footer button / the pad's Options) toggles a popover
   with the clef dropdown, **Copy song from** and Clear, walked by the pad
   with `PadFocus` (context `song-options`). Copy song from
-  (`songSources`, `copySongFrom`) lists the level's OTHER gates that have
-  a song (by gate id, "(grand staff)", and the first four pitches) and
+  (`songSources`, `copySongFrom`) lists EVERY OTHER entity of the level
+  that has a song — gates (gate-id order), then creatures, then fountains
+  — named by type (`Gate 2` from its gate id, `Creature 5` / `Fountain 8`
+  by entity id, as the validator names them), "(grand staff)", and the
+  first four pitches; any direction (gate ↔ creature ↔ fountain). It
   copies the chosen one's song in place of this one's: both staves +
   `staffGroups`, or the one staff + its clef (time/key are the level's).
   Over a song with notes it asks first (`.song-copy-dialog`, Replace /
@@ -289,6 +302,19 @@ edits show up in the game on a manual reload.
   and any other request (input, camera damping, a glide, an edit) draw on
   the next vsync (ruled for the fan, 2026-11-24: the 60 fps loop was ~half
   the GPU while idle). The schematic look keeps the on-demand rendering.
+- **Resolution: as the game renders by default** (ruled 2026-11-24): 1x
+  pixel ratio, no antialiasing (`_createRenderer`). **Sharp rendering**
+  (screen pixel ratio + antialiasing, the editor's old look, ~7x the GPU
+  time per frame on a 2x screen) is opt-in from the Options menu (pad
+  reachable; `toggleSharp` / `setSharp`), remembered per browser
+  (`io/lookPreference` `loadSharp`/`saveSharp`, key `resound-editor-sharp`,
+  try/catch). Antialiasing is fixed at WebGL context creation, so switching
+  builds a NEW renderer on a new canvas (old one disposed +
+  `forceContextLoss`) and new OrbitControls on it (target and `enabled`
+  kept, the 'change' invalidation re-added); the scene re-uploads to the new
+  context on its first frame. Refused while Play is under way. Anything
+  holding the renderer or controls must read them from the app when used
+  (`PlayPreview`'s host has getters), never keep its own reference.
 - **Songs light their creature** — `GameLookLayer.noteOn(id, pitch, seconds)`
   lights it note by note with Creature.updateLook's rule (messiaenColour over
   its sounding notes: a lone note is pearl, as in game) and its light falls on
@@ -380,7 +406,7 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 | Circle | back (Esc) | | |
 | L1 / R1 | palette prev / next | | carry entity down / up a storey (brings its floor) |
 | L2 + R2 + d-pad ↑/↓ | carry entity a storey | | |
-| Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, Undo, Redo, look | | |
+| Options | editor menu: Play, Edit/Play song, Properties, Open puzzle…, World map, Undo, Redo, look, sharp rendering | | |
 | Share | game ↔ schematic look | | |
 | Touchpad | sidebar focus (`PadFocus`) | | |
 
@@ -391,8 +417,10 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
   World-map nodes carry `data-pad-focus`.
 - **Song editor** (`SongEditorModal.padAction`; `SONG_ACTIONS` +
   `SONG_ACTIONS_L2/_R2`, the NotationEditor's own methods; ruled
-  2026-11-24): ←/→ edit cursor, ↑/↓ pitch cursor, ✕ pitch on/off at the
-  pitch cursor (nothing at the edit cursor: ✕ enters a NOTE there; the palette's dot chosen: the dots, none → one → two →
+  2026-11-24): ←/→ edit cursor (← onto a note, → back to the end), ↑/↓
+  pitch cursor, ✕ past an entry (the end, where it opens) a NEW note at
+  the pitch cursor, on an entry (after ←) its pitch on/off — a chord tone,
+  a creature's note moved (the palette's dot chosen: the dots, none → one → two →
   none; its tie chosen: tie / untie the note under the pitch cursor), R2+✕
   a rest of the chosen duration (if it fits; the designer asked for R2+✕ =
   tie, but it stays insert-rest by their earlier ruling — the tie card is
@@ -400,8 +428,10 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
   note under the pitch cursor, L1/R1 the PALETTE only, a card left / right
   (32nd … whole, dot, tie: R1 is longer), L2+L1 / R2+R1 the note at the
   cursor shorter / longer (the palette's way), L3 undo, R3 redo,
-  △ play/stop, Share other staff, Options the popover (clef, copy a gate's
-  song, Clear; d-pad walks, ←/→ steps a dropdown, ✕ commits, ○/Options
+  L2+✕ a new note BEFORE the entry the cursor is on (past the end:
+  appended, as ✕), △ play/stop, Share other staff, Options the popover
+  (clef, copy a song from any other gate / creature / fountain, Clear;
+  d-pad walks, ←/→ steps a dropdown, ✕ commits, ○/Options
   back), ○ close. L2 / R2
   alone do nothing; the legend shows `song+l2` / `song+r2` while held.
 - **Menus** (ContextMenu): d-pad ↑/↓, ✕ choose, ○ close.

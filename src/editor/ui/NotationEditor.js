@@ -441,7 +441,8 @@ export default class NotationEditor {
     hint.textContent = [
       '2–7 or r: a rest (32nd … whole)',
       '↑/↓ pitch cursor',
-      'Enter: the pitch on / off (nothing there: a note)',
+      'Enter: a new note (← onto a note first: the pitch on / off it)',
+      '⇧Enter: a new note before the one the cursor is on',
       '⇧↑/⇧↓ accidental',
       '←/→ move',
       '. dot (twice: double dot)',
@@ -666,27 +667,42 @@ export default class NotationEditor {
   /**
    * ✕: with the dot chosen, the entry at the cursor's dots step (none →
    * one → two → none); with the tie chosen, the note under the pitch
-   * cursor ties to (or unties from) the same pitch in the next entry; else
-   * the pitch at the pitch cursor goes on (a rest becomes that note; a note
-   * gains it as a chord tone — a creature's single note moves there) or,
-   * already there, comes off (the last pitch off leaves a rest). With
-   * nothing at the cursor, ✕ enters a NOTE at the pitch cursor, of the
-   * chosen duration (if it fits in the measure) — never a refusal for want
-   * of a rest. The dot or the tie with nothing there do nothing.
+   * cursor ties to (or unties from) the same pitch in the next entry. Else,
+   * with the cursor PAST an entry (the end of the song, where it opens; just
+   * after the note entered; an empty song) ✕ writes a NEW note at the pitch
+   * cursor, of the chosen duration (if it fits in the measure), and the
+   * cursor goes past it — so ✕ ✕ ✕ writes a melody. With the cursor ON an
+   * entry (← onto it), the pitch at the pitch cursor goes on it (a rest
+   * becomes that note; a note gains it as a chord tone — a creature's single
+   * note moves there) or, already there, comes off (the last pitch off
+   * leaves a rest). The designer's ruling, 2026-11-24.
    */
   cross() {
     if (this._palette.dotSelected) return this.toggleDot();
     if (this._palette.tieSelected) return this.toggleTie();
-    const model = this._activeModel();
-    const i = model._selectedIndex;
-    if (i === null || i >= model._notes.length) return this.insertNote();
+    if (this._onEntry(this._activeModel()) === null) return this.insertNote();
     return this._act((m) => this._togglePitch(m, this.pitchCursor));
+  }
+
+  /**
+   * The index of the entry the edit cursor stands ON (stepped onto with ←/→
+   * or a click: the cursor at it, it selected), else null: the cursor is
+   * past an entry — just after the one entered, at the end of the song (where
+   * a song opens), or the song is empty — so ✕ writes a new note there.
+   */
+  _onEntry(model) {
+    const i = model._selectedIndex;
+    if (i === null || i >= model._notes.length || model._cursorPosition !== i) return null;
+    return i;
   }
 
   /**
    * A note at the pitch cursor (in the key), of the chosen duration (default
    * the palette's), at the edit cursor — refused, saying why, when it won't
-   * fit in what is left of the measure. It sounds.
+   * fit in what is left of the measure. It sounds. ✕ past an entry calls
+   * it; L2+✕ / ⇧Enter call it ON an entry too, so the note goes in BEFORE
+   * that entry (the cursor then past the new note, so ✕ goes on writing
+   * there); past the end it appends, as ✕.
    */
   insertNote(length = this._palette.activeLength) {
     return this._act((model) => {
@@ -1155,16 +1171,22 @@ export default class NotationEditor {
   _drawPitchCursor(svg, entries, model, voiceId) {
     if (this._pitchCursorEl) this._pitchCursorEl.remove();
     this._pitchCursorEl = null;
-    const selected = model._selectedIndex !== null ? entries[model._selectedIndex] : null;
+    // ON an entry: centred on its heads (the renderer centres them on its
+    // x). Past one: where ✕ writes the new note — past the final note, or on
+    // the insertion line mid-song
+    const on = this._onEntry(model);
+    const selected = on !== null ? entries[on] : null;
     const group = selected
       ? selected.group
       : this._cursorGroup(svg, entries, model._cursorPosition, voiceId);
     if (!group) return;
-    // On an entry: centred on its heads (the renderer centres them on its x)
-    const x = selected ? selected.x : this._cursorX(entries, model._cursorPosition, group) + 18;
+    const atEnd = model._cursorPosition >= model._notes.length;
+    const x = selected
+      ? selected.x
+      : this._cursorX(entries, model._cursorPosition, group) + (atEnd ? 18 : 0);
     const position = this.pitchCursor;
     const y = pitchToStaffY(position, this._activeClef());
-    const entry = model._selectedIndex !== null ? model._notes[model._selectedIndex] : null;
+    const entry = on !== null ? model._notes[on] : null;
     const onNote =
       entry && !isRestEntry(entry)
         ? membersOf(entry).find((n) => staffPitch(n.pitch) === position)
@@ -1335,7 +1357,9 @@ export default class NotationEditor {
       }
       case 'Enter':
         e.preventDefault();
-        this.cross();
+        // ⇧Enter (the pad's L2+✕): a new note before the entry the cursor is on
+        if (e.shiftKey) this.insertNote();
+        else this.cross();
         break;
       case 'Tab':
         if (this._isGrandStaff) {

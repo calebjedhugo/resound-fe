@@ -91,7 +91,7 @@ export const EDITOR_MAPPING = {
     ['l1/r1', 'Choose what to place'],
     ['l2', 'Hold: storeys, undo, song, camera'],
     ['r2', 'Hold: carry the entity'],
-    ['options', 'Menu: Play, puzzles, undo, look…'],
+    ['options', 'Menu: Play, puzzles, undo, look, sharp…'],
     ['share', 'Game look / schematic look'],
     ['touchpad', 'The sidebar panels'],
   ],
@@ -125,24 +125,25 @@ export const EDITOR_MAPPING = {
     ['circle', 'Close the map'],
   ],
   song: [
-    ['leftright', 'Move the edit cursor (through time)'],
+    ['leftright', 'Move the edit cursor (← onto a note; → back to the end)'],
     ['updown', 'Move the pitch cursor (lines and spaces)'],
     [
       'cross',
-      'Pitch on / off at the pitch cursor (nothing there: a note; dot chosen: dot, double, none; tie chosen: tie / untie)',
+      'A new note at the pitch cursor (on a note, after ←: pitch on / off it; dot chosen: dot, double, none; tie chosen: tie / untie)',
     ],
     ['square', 'Note → rest; rest → gone'],
     ['l1/r1', 'Palette: shorter / longer (32nd … whole, dot, tie)'],
     ['triangle', 'Play / stop (the creature lights)'],
-    ['l2', 'Hold: accidental, note duration'],
+    ['l2', 'Hold: insert a note, accidental, note duration'],
     ['r2', 'Hold: a rest, note duration'],
     ['l3/r3', 'Undo / redo'],
-    ['options', 'Clef, copy a gate’s song, Clear… (the popover)'],
+    ['options', 'Clef, copy another song (gate / creature), Clear… (the popover)'],
     ['share', 'Other staff (grand staff)'],
     ['circle', 'Close'],
   ],
   'song+l2': [
     ['updown', 'Accidental of the note there: ♯ / ♭'],
+    ['cross', 'A new note before the one the cursor is on (at the end: after it)'],
     ['l1/r1', 'The note: shorter / longer'],
   ],
   'song+r2': [
@@ -177,7 +178,13 @@ const SONG_ACTIONS = {
   share: 'voice',
   circle: 'close',
 };
-const SONG_ACTIONS_L2 = { up: 'sharpen', down: 'flatten', l1: 'noteShorter', r1: 'noteLonger' };
+const SONG_ACTIONS_L2 = {
+  up: 'sharpen',
+  down: 'flatten',
+  cross: 'insertNote',
+  l1: 'noteShorter',
+  r1: 'noteLonger',
+};
 const SONG_ACTIONS_R2 = { cross: 'rest', l1: 'noteShorter', r1: 'noteLonger' };
 
 const dominant = (x, y) => {

@@ -856,17 +856,16 @@ describe('SongEditorModal', () => {
 
     it('Cmd+Z undoes the last note and Shift+Cmd+Z redoes it, on the staff too', () => {
       const id = openCreature();
-      press('5');
-      press('Enter'); // a quarter rest, then its pitch
-      press('5');
+      press('Enter'); // a new C4 after the C4
+      press('5'); // a quarter rest after that
       expect(env.undoManager.getEntity(id).data.song).toHaveLength(3);
 
       press('z', { metaKey: true });
       expect(env.undoManager.getEntity(id).data.song).toHaveLength(2);
       jest.advanceTimersByTime(16);
       expect(notesShown()).toBe(2);
-      press('z', { metaKey: true }); // the pitch comes off: a rest again
-      expect(env.undoManager.getEntity(id).data.song[1]).toEqual({ length: '1/4' });
+      press('z', { metaKey: true }); // the new note goes too
+      expect(env.undoManager.getEntity(id).data.song).toEqual([C4]);
 
       press('z', { metaKey: true, shiftKey: true });
       press('z', { metaKey: true, shiftKey: true });
@@ -944,7 +943,8 @@ describe('SongEditorModal', () => {
       expect(song()).toEqual([{ pitch: 'C5', length: '1/4' }]);
       modal.padAction('pitchDown');
       modal.padAction('pitchDown');
-      modal.padAction('cross'); // A4 joins the chord
+      modal.padAction('left'); // back onto the C5 ...
+      modal.padAction('cross'); // ... A4 joins the chord
       expect(song()).toEqual([
         [
           { pitch: 'A4', length: '1/4' },
@@ -992,9 +992,71 @@ describe('SongEditorModal', () => {
 
     it('a creature’s ✕ elsewhere moves its single note', () => {
       const id = open('creature', { song: [{ pitch: 'C4', length: '1/4' }] });
+      modal.padAction('left'); // onto the note (it opens past it)
       modal.padAction('pitchUp');
       modal.padAction('cross');
       expect(env.undoManager.getEntity(id).data.song).toEqual([{ pitch: 'D4', length: '1/4' }]);
+    });
+
+    it('L2+✕ puts a new note BEFORE the entry the cursor is on; at the end it appends', () => {
+      const id = open('creature', {
+        song: [
+          { pitch: 'C4', length: '1/4' },
+          { pitch: 'G4', length: '1/4' },
+        ],
+      });
+      const song = () => env.undoManager.getEntity(id).data.song.map((e) => e.pitch);
+      modal.padAction('insertNote'); // past the end: appended, at the pitch cursor (G4)
+      expect(song()).toEqual(['C4', 'G4', 'G4']);
+      modal.padAction('left');
+      modal.padAction('left'); // onto the first G4
+      modal.padAction('pitchDown');
+      modal.padAction('insertNote'); // F4 in before it
+      modal.padAction('pitchDown');
+      modal.padAction('cross'); // past the F4: ✕ goes on writing there, E4
+      expect(song()).toEqual(['C4', 'F4', 'E4', 'G4', 'G4']);
+      modal.padAction('palettePrev');
+      modal.padAction('palettePrev'); // a 16th
+      modal.padAction('left');
+      modal.padAction('left');
+      modal.padAction('left'); // onto the C4
+      modal.padAction('insertNote');
+      expect(env.undoManager.getEntity(id).data.song[0]).toEqual({ pitch: 'E4', length: '1/16' });
+    });
+
+    it('L2+✕ keeps the measure-room rule', () => {
+      const id = open('gate', {
+        song: [
+          { pitch: 'C4', length: '1/2' },
+          { pitch: 'D4', length: '1/4' },
+        ],
+      });
+      modal.padAction('left'); // onto the D4: two beats left before it in the measure
+      for (let i = 0; i < 2; i += 1) modal.padAction('paletteNext'); // a whole note
+      modal.padAction('insertNote');
+      expect(env.undoManager.getEntity(id).data.song).toHaveLength(2);
+      expect(modal.notationEditor.status).toMatch(/No room: that note needs 4 beats/);
+    });
+
+    it('opens past the last entry: ✕ ✕ ✕ writes a melody, ← then ✕ adds to a note', () => {
+      const id = open('gate', { song: [{ pitch: 'C4', length: '1/4' }] });
+      const song = () => env.undoManager.getEntity(id).data.song;
+      ['pitchUp', 'cross', 'pitchUp', 'cross', 'pitchUp', 'cross'].forEach((a) =>
+        modal.padAction(a)
+      );
+      expect(song().map((e) => e.pitch)).toEqual(['C4', 'D4', 'E4', 'F4']);
+      modal.padAction('left'); // onto the F4
+      modal.padAction('pitchDown');
+      modal.padAction('pitchDown');
+      modal.padAction('cross'); // D4 joins it
+      expect(song()[3]).toEqual([
+        { pitch: 'D4', length: '1/4' },
+        { pitch: 'F4', length: '1/4' },
+      ]);
+      modal.padAction('right'); // past it: the end again
+      modal.padAction('cross');
+      expect(song()).toHaveLength(5);
+      expect(song()[4]).toEqual({ pitch: 'D4', length: '1/4' });
     });
 
     it('L3 undoes and R3 redoes, only what this opening did', () => {
@@ -1184,12 +1246,15 @@ describe('SongEditorModal', () => {
       expect(lit).toHaveBeenLastCalledWith(id, 'B4', 0.5);
       modal.padAction('pitchUp');
       modal.padAction('pitchUp');
+      modal.padAction('left'); // onto the B4
       modal.padAction('cross'); // D5 joins the chord
       expect(voice.startNote).toHaveBeenLastCalledWith('D5', 500);
       expect(voice.startNote).toHaveBeenCalledTimes(2);
       modal.padAction('cross'); // D5 comes off: silent
       expect(voice.startNote).toHaveBeenCalledTimes(2);
+      modal.padAction('right'); // the end
       modal.padAction('rest'); // a rest: silent
+      modal.padAction('left'); // onto it
       modal.padAction('cross'); // the rest becomes D5
       expect(voice.startNote).toHaveBeenLastCalledWith('D5', 500);
       expect(voice.startNote).toHaveBeenCalledTimes(3);
@@ -1202,6 +1267,14 @@ describe('SongEditorModal', () => {
       expect(voice.startNote).toHaveBeenCalledTimes(1);
       expect(voice.startNote.mock.calls[0][0]).toBe('D4');
       expect(voice.startNote.mock.calls[0][1]).toBeCloseTo((60 / 90) * 1000);
+    });
+
+    it('a note put in with L2+✕ sounds too', () => {
+      openWithVoice('gate', { song: [{ pitch: 'C4', length: '1/4' }] });
+      modal.padAction('left');
+      modal.padAction('pitchUp');
+      modal.padAction('insertNote');
+      expect(voice.startNote).toHaveBeenCalledWith('D4', 500);
     });
 
     it('never on undo, redo or a load', () => {
@@ -1219,7 +1292,7 @@ describe('SongEditorModal', () => {
 
   // -- copying another gate's song ---------------------------------------------
 
-  describe('copying a gate’s song (Options → Copy song from)', () => {
+  describe('copying another song (Options → Copy song from)', () => {
     const tune = [
       { pitch: 'C4', length: '1/4' },
       [
@@ -1255,6 +1328,16 @@ describe('SongEditorModal', () => {
         singer: env.undoManager.addEntity('creature', 5, 0, 1, {
           song: [{ pitch: 'D4', length: '1/4' }],
         }),
+        hummer: env.undoManager.addEntity('creature', 6, 0, 1, {
+          song: [
+            { pitch: 'G4', length: '1/2' },
+            { pitch: 'E4', length: '1/2' },
+          ],
+        }),
+        mute: env.undoManager.addEntity('creature', 7, 0, 1, { song: [] }),
+        spring: env.undoManager.addEntity('fountain', 8, 0, 1, {
+          song: [{ pitch: 'A3', length: '1/1' }],
+        }),
       };
     }
 
@@ -1269,15 +1352,18 @@ describe('SongEditorModal', () => {
       picker().onchange();
     };
 
-    it('lists the level’s other gates that have a song, by id and first notes', () => {
+    it('lists every other entity with a song — gates, creatures, fountains — named by type', () => {
       level();
       openOn(ids.bare);
       const labels = [...picker().options].map((o) => o.textContent);
       expect(labels).toEqual([
-        'Choose a gate…',
-        'gate-2 — C4 E4+G4 F♯4 A4',
-        'gate-4 — C3',
-        'gate-10 (grand staff) — E5',
+        'Choose a song…',
+        'Gate 2 — C4 E4+G4 F\u266f4 A4',
+        'Gate 4 — C3',
+        'Gate 10 (grand staff) — E5',
+        `Creature ${ids.singer} — D4`,
+        `Creature ${ids.hummer} — G4 E4`,
+        `Fountain ${ids.spring} — A3`,
       ]);
       modal.close();
       openOn(ids.tune); // never itself
@@ -1321,7 +1407,7 @@ describe('SongEditorModal', () => {
       choose(ids.tune);
       const dialog = env.root.querySelector('.song-copy-dialog');
       expect(dialog.hidden).toBe(false);
-      expect(dialog.textContent).toMatch(/Replace this song with gate-2’s/);
+      expect(dialog.textContent).toMatch(/Replace this song with Gate 2’s/);
       expect(document.activeElement.dataset.copy).toBe('cancel');
       dialog.querySelector('[data-copy="cancel"]').click();
       expect(env.undoManager.getEntity(ids.bass).data.song).toEqual([
@@ -1339,6 +1425,9 @@ describe('SongEditorModal', () => {
       level();
       openOn(ids.singer);
       choose(ids.tune);
+      expect(env.root.querySelector('.song-copy-dialog').textContent).toMatch(
+        /A creature sings one note at a time: each chord gives its top note/
+      );
       env.root.querySelector('.song-copy-dialog [data-copy="replace"]').click();
       expect(env.undoManager.getEntity(ids.singer).data.song).toEqual([
         { pitch: 'C4', length: '1/4' },
@@ -1365,11 +1454,51 @@ describe('SongEditorModal', () => {
       expect(modal.panelOpen).toBe(false);
     });
 
-    it('with no other gate song, the picker says so and is skipped', () => {
+    it('a creature’s song copies to a gate, and to another creature', () => {
+      level();
+      openOn(ids.bare);
+      choose(ids.hummer); // empty gate: at once
+      expect(env.undoManager.getEntity(ids.bare).data).toEqual({
+        gateId: 'gate-3',
+        song: [
+          { pitch: 'G4', length: '1/2' },
+          { pitch: 'E4', length: '1/2' },
+        ],
+      });
+      modal.close();
+      openOn(ids.mute);
+      choose(ids.hummer);
+      expect(env.undoManager.getEntity(ids.mute).data.song).toEqual(
+        env.undoManager.getEntity(ids.hummer).data.song
+      );
+      modal.close();
+      openOn(ids.singer); // a creature with a song: asks, named as a creature
+      choose(ids.hummer);
+      expect(env.root.querySelector('.song-copy-dialog').textContent).toMatch(
+        new RegExp(`Replace this song with Creature ${ids.hummer}’s`)
+      );
+    });
+
+    it('a fountain’s song copies too (gate → fountain as well)', () => {
+      level();
+      openOn(ids.mute);
+      choose(ids.spring);
+      expect(env.undoManager.getEntity(ids.mute).data.song).toEqual([
+        { pitch: 'A3', length: '1/1' },
+      ]);
+      modal.close();
+      openOn(ids.spring);
+      choose(ids.grand);
+      env.root.querySelector('.song-copy-dialog [data-copy="replace"]').click();
+      expect(env.undoManager.getEntity(ids.spring).data.staffGroups).toEqual(grandSong.staffGroups);
+    });
+
+    it('with no other song in the level, the picker says so and is skipped', () => {
       const id = env.undoManager.addEntity('gate', 1, 0, 1, { gateId: 'gate-1', song: [] });
+      env.undoManager.addEntity('creature', 2, 0, 1, { song: [] });
       openOn(id);
       expect(picker().disabled).toBe(true);
-      expect(picker().options[0].textContent).toBe('No other gate has a song');
+      expect(picker().options[0].textContent).toBe('Nothing else here has a song');
     });
   });
 
