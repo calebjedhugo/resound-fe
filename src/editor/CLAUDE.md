@@ -454,7 +454,7 @@ help read — change it there. Context (`EditorApp.padContext()`): song editor
 | Left stick | pan camera; the cursor rides on the cell at the view's middle (`viewCentreCell`: the sight line through the orbit target meets the active storey; any cell, any storey) | | |
 | Right stick | orbit camera (inverted, both axes) | | |
 | R3 / L3 | zoom in / out (a step; held, keeps going) | centre camera on cursor / reset camera | |
-| Cross | empty: place the chosen type with its floor (Wall held: a hollow box, L2+↑/↓ its storeys; floor only: floor, held a range); entity: select / its menu | — | — |
+| Cross | empty: place the chosen type with its floor (Wall held: a hollow box, L2+↑/↓ its storeys; floor only: floor, held a range); entity: select / its menu; Teleport pick (a gate's menu): the gate at the cursor is the partner (`_pickLinkTargetAtCursor`; a wrong cell keeps picking, ○ cancels) | — | — |
 | Square | delete the entity, else the floor tile under the cursor | — (freed) | — |
 | Triangle | song editor | play/stop the song (A) | — |
 | Circle | back (Esc) | | |

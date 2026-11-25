@@ -542,6 +542,51 @@ describe('EditorApp wiring', () => {
       expect(linkOf(idA)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-2' });
     });
 
+    it('without the mouse: in pick mode, ✕ on the other gate links both; a wrong cell keeps picking', async () => {
+      const cursorAt = (x, z) => app.editorScene.getHoveredGrid.mockReturnValue({ x, z });
+      app._startLinkPick(idA);
+
+      // A wrong cell on the way keeps the pick going
+      cursorAt(6, 3);
+      app.padConfirm();
+      expect(toastText()).toBe('Put the cursor on another gate to link it (○ / Esc cancels)');
+      cursorAt(5, 3);
+      app.padConfirm();
+      expect(toastText()).toBe("A gate can't link to itself — pick a different gate");
+
+      cursorAt(8, 3);
+      app.padConfirm();
+      await flushAsync();
+      expect(linkOf(idA)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-2' });
+      expect(linkOf(idB)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-1' });
+      expect(toastText()).toBe('Gates linked (both sides)');
+    });
+
+    it('Enter at the cursor picks the partner gate too', async () => {
+      app._startLinkPick(idA);
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 8, z: 3 });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await flushAsync();
+      expect(linkOf(idA)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-2' });
+    });
+
+    it('the Teleport menu item chosen with ✕ starts the pick, the next ✕ links', async () => {
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 5, z: 3 });
+      app.padConfirm(); // select
+      app.padConfirm(); // menu
+      const items = [...container().querySelectorAll('.context-menu-item')];
+      const teleport = items.findIndex((b) => b.textContent.startsWith('Teleport:'));
+      for (let i = 0; i < teleport; i += 1) app.pressKey('ArrowDown');
+      app.pressKey('Enter'); // the pad's ✕ in a menu
+      expect(app.contextMenu.isOpen).toBe(false);
+      expect(app._linkPickSourceId).toBe(idA);
+
+      app.editorScene.getHoveredGrid.mockReturnValue({ x: 8, z: 3 });
+      app.padConfirm();
+      await flushAsync();
+      expect(linkOf(idB)).toEqual({ puzzleId: 'test-puzzle', gateId: 'gate-1' });
+    });
+
     it('"Link by id…" with a gate id links both sides of the pair', async () => {
       jest.spyOn(window, 'prompt').mockReturnValue('gate-2');
 

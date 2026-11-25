@@ -377,7 +377,9 @@ export default class EditorApp {
       ? `Placing ${tool} — Enter (or ✕) places it at the cursor; Esc cancels`
       : '';
     const pickText =
-      this._linkPickSourceId !== null ? 'Teleport: click another gate to link (Esc cancels)' : '';
+      this._linkPickSourceId !== null
+        ? 'Teleport: move to another gate, ✕ / Enter (or click) links it — ○ / Esc cancels'
+        : '';
     let draftText = '';
     if (this._floorRange) {
       draftText = `Building floor E${this._floorRange.elevation} — move to size it, let go to build, Esc cancels`;
@@ -409,11 +411,17 @@ export default class EditorApp {
 
   // --- Gate linking (context-menu flows) ---------------------------------
 
-  /** Enter teleport-pick mode: the next clicked gate becomes the partner. */
+  /**
+   * Enter teleport-pick mode: the next gate clicked, or chosen with ✕ /
+   * Enter at the cursor, becomes the partner.
+   */
   _startLinkPick(sourceEntityId) {
     this.entityToolbar.deselect(); // placement and picking can't coexist
     this._linkPickSourceId = sourceEntityId;
-    this._showToast('Click another gate to link it (Esc cancels)', 'success');
+    this._showToast(
+      'Move to another gate and press ✕ / Enter (or click it) to link it — ○ / Esc cancels',
+      'success'
+    );
   }
 
   _cancelLinkPick(message) {
@@ -434,6 +442,32 @@ export default class EditorApp {
     if (targetId === sourceId) {
       this._showToast("A gate can't link to itself — pick a different gate");
       return; // stay in pick mode
+    }
+    this._linkPickSourceId = null;
+    const { id: puzzleId } = this.undoManager.getMetadata();
+    this._linkGateTo(sourceId, { puzzleId, gateId: target.data.gateId });
+  }
+
+  /**
+   * ✕ / Enter while in teleport-pick mode: the gate under the cursor (on
+   * the active storey) becomes the partner. Anything else keeps the pick
+   * going — the cursor is on its way to a gate, a wrong cell is no reason
+   * to start over.
+   */
+  _pickLinkTargetAtCursor() {
+    const sourceId = this._linkPickSourceId;
+    const cell = this.editorScene.getHoveredGrid();
+    const elevation = this.editorScene.activeElevation;
+    const target = this.undoManager
+      .getEntitiesAt(cell.x, elevation, cell.z)
+      .find((entity) => entity.type === 'gate');
+    if (!target) {
+      this._showToast('Put the cursor on another gate to link it (○ / Esc cancels)');
+      return;
+    }
+    if (target.id === sourceId) {
+      this._showToast("A gate can't link to itself — pick a different gate");
+      return;
     }
     this._linkPickSourceId = null;
     const { id: puzzleId } = this.undoManager.getMetadata();
@@ -829,6 +863,10 @@ export default class EditorApp {
    * On an entity it selects it, and on the selected one opens its menu.
    */
   padConfirm() {
+    if (this._linkPickSourceId !== null) {
+      this._pickLinkTargetAtCursor();
+      return;
+    }
     if (this._startRangeAtCursor()) return;
     const cell = this.editorScene.getHoveredGrid();
     const entityId = this._entityIdAtCell(cell);
@@ -2216,7 +2254,13 @@ export default class EditorApp {
           // sized with the arrows), Wall chosen draws a wall box (Option +
           // ↑/↓ for storeys) — built on keyup. A repeat of a held Enter
           // does nothing
-          if (e.repeat || this._startRangeAtCursor()) return;
+          if (e.repeat) return;
+          // Teleport pick: the gate at the cursor is the partner
+          if (this._linkPickSourceId !== null) {
+            this._pickLinkTargetAtCursor();
+            return;
+          }
+          if (this._startRangeAtCursor()) return;
           if (
             this.entityToolbar.activeTool &&
             this._entityIdAtCell(this.editorScene.getHoveredGrid()) === null
