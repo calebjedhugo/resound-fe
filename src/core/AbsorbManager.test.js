@@ -433,7 +433,9 @@ describe('Releasing a creature (Space)', () => {
     await ctx.advanceBeats(6);
 
     expect(onsetsOf(creature).length).toBeGreaterThan(0);
-    expect(ctx.isGateOpen(gate)).toBe(true);
+    // It opened the gate (a song every 4 beats isn't a loop: it closes
+    // between them — entities/GateLoop.test)
+    expect(gate.openings).toBeGreaterThan(0);
   });
 
   it('answers one press at a time: Space during a release is ignored', async () => {

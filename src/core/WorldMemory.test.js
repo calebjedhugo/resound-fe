@@ -131,7 +131,8 @@ describe('An area pruned and built again comes back as it was left', () => {
     await ctx.advanceBeats(2);
     ctx.stopSinging();
     const [opened] = ctx.getGates();
-    expect(ctx.isGateOpen(opened)).toBe(true);
+    expect(opened.openings).toBe(1);
+    opened.open(); // held open by fiat (no loop to stop)
     const { openings } = opened;
 
     await awayAndBack();
@@ -140,6 +141,21 @@ describe('An area pruned and built again comes back as it was left', () => {
     expect(gate).not.toBe(opened);
     expect(ctx.isGateOpen(gate)).toBe(true);
     expect(gate.openings).toBe(openings);
+  });
+
+  it('a gate its loop held comes back open long enough to hear the loop again', async () => {
+    const [opened] = ctx.getGates();
+    opened.open(Date.now() + 200); // a loop's next song due in 200 ms
+
+    await awayAndBack();
+
+    // Rebuilt: open for two of its song's spans (E4: a beat each), so a
+    // loop still going on (its singers keep their phase) is heard whole
+    const [gate] = ctx.getGates();
+    expect(ctx.isGateOpen(gate)).toBe(true);
+    // ...and no loop comes: closed
+    await ctx.advanceBeats(3);
+    expect(ctx.isGateOpen(gate)).toBe(false);
   });
 
   it('an activated fountain stays activated, its song not played again', async () => {

@@ -389,7 +389,10 @@ describe('A one-element song sung back to back stays on the beat, loop after loo
 
     const drift = read();
     expect(drift.length).toBeGreaterThanOrEqual(8); // every song sung
-    expect(drift[2]).toBeGreaterThan(2.9 * MS_PER_BEAT); // the stalled one, late
+    // The stalled one: 3 beats late, 2 of them drawn back — heard (its
+    // event stamped where it was written to start) 1 beat late
+    expect(drift[2]).toBeGreaterThan(0.9 * MS_PER_BEAT);
+    expect(drift[2]).toBeLessThan(1.2 * MS_PER_BEAT);
     // It sounds half its whole note (2 beats), the next one 3 beats, ending
     // on the grid: from the song after, every one is on its beat
     expect(sounded[2]).toBeCloseTo(2 * MS_PER_BEAT, -1);
@@ -414,10 +417,10 @@ describe('A one-element song sung back to back stays on the beat, loop after loo
     const read = driftOf(creature, 4, 1);
     await runFor((LOOPS + 0.5) * PERIOD * MS_PER_BEAT);
     const drift = read();
-    // Its first song sounds at the press, late by the grace it was given...
-    expect(drift[0]).toBeGreaterThan(0.07 * MS_PER_BEAT);
-    // ...and every one after on its beat
-    expectOnTheGrid([0, ...drift.slice(1)], 'released');
+    // Its first song sounds at the press, drawn back onto beat 4: heard on
+    // it (its event stamped where it was written to start), and every one
+    // after on its beat too
+    expectOnTheGrid(drift, 'released');
   });
 });
 

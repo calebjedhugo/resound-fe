@@ -295,9 +295,11 @@ automated playtesters can observe them.)
   one note or one chord (poc-jam's B5 jammer, poc-pull's C5) ended as late
   as it started and still drifted ~10 ms a loop (0.47 beat late by beat
   811); now its note is cut short instead.
-- **Gates open on the COMPLETED song, LATCH, and close when you walk
-  through** (ruled 2026-07-10, superseding the 2026-07-05 play-to-pass grace
-  and its multi-note caveat). The full rule:
+- **A gate is OPEN WHILE ITS SONG LOOPS** (ruled 2026-11-25, replacing the
+  2026-07-10 latch: "the door opens at the completion of the first loop and
+  stays open so long as the loop continues" — the puzzles play the door's
+  exact melody in a loop, and a door held by a loop makes a creature a
+  weight on a pressure plate, not a one-use key). The full rule:
   - **Open**: only when the whole song lands (`phraseMatching` returns
     `true` — since the 2026-07-11 matching ruling, that is the INSTANT the
     song's final note completes; no trailing-silence beat, so the old
@@ -313,26 +315,28 @@ automated playtesters can observe them.)
     the dissolving shell — the fade previews the real other side, not the
     dead space behind the gate box. This kills the prefix exploit for
     multi-note doors and unifies single- and multi-note behavior.
-  - **Stay open**: indefinitely. There is NO timer — an open gate waits.
-  - **Close**: when the player walks through (body fully clear of the cell;
-    for linked doors this means stepping out of the DESTINATION face —
-    PortalManager consumes the crossing; backing out of a refused commit
-    consumes nothing). A door can therefore never close on an occupant, and
-    the old "occupied overtime" state is gone.
-  - **Held open by its openers** (ruled 2026-11-25, replacing the 3-beat
-    completion hold): "So long as the creatures used to open the gate are
-    still in range of the gate, the gate does not close behind the player.
-    The gate only closes behind the player if any creatures are no longer
-    in range." The gate remembers which creatures sang the take that opened
-    it (the take's note sources); when the player walks through, the close
-    is DEFERRED while every one of them can still be heard there (the
-    hearing rule: within the creature's audible range of the gate, or of
-    its door partner, through a door as sound goes) — however long they
-    rest between songs. The moment one is out of range, taken by the pole
-    or gone, the gate closes (once nobody stands in it). Their later songs
-    don't cancel a waiting close. A gate opened by nothing (a test's
-    `open()`) closes as the player walks through. Across an area prune the
-    openers are remembered as places and found again there on rebuild.
+  - **Stays open while the loop goes on** (`Gate.isHeldOpen`): the next
+    loop begins where the last ended (its first note due at the completed
+    take's end, after the song's own leading rest if it has one, within
+    `Gate.LOOP_LATE_BEATS` 0.25) and every note so far is right (a
+    correct take in progress). Walking through consumes nothing.
+  - **Closes when the loop stops**: a loop that doesn't come on time, a
+    wrong note (it also locks out, as ever), a singer carried off by the
+    pole or out of range — all break it the same way, no rule of their
+    own. A singer whose interval is longer than its song isn't looping:
+    the door opens on each song and closes in the gap. A lapse must still
+    be there on the gate's next update (a stalled frame lets the singer
+    catch up first; its late song is heard where it was drawn back to —
+    resound-sound stamps an overdue note where it was written to start).
+  - **Never on the player**: a stopped loop closes the door only once nobody
+    stands in either face (body clear of the cell).
+  - **A door is one door**: either face's loop holds both faces (a
+    one-way pair, with an alwaysOpen face, is two independent faces).
+  - **Opened outright** (`open()` with no deadline: tests, scripted opens)
+    stays open until `close()`; a wrong note doesn't close it.
+  - **Across an area prune** a gate rebuilt open holds two of its song's
+    spans (`Gate.REBUILT_GRACE_LOOPS`) for its loop, still going on (the
+    world kept its singers' phase), to be heard whole again.
   - **An open gate has NO shell at all — no green tint** (ruled 2026-07-11,
     round 4): transparency is the game's vocabulary for "open", for linked
     doors and plain gates alike, so `isOpen` drives collision + full
@@ -344,15 +348,12 @@ automated playtesters can observe them.)
     seam where the door's view and the world blend. See "Entity look".)
   - The notation **stays displayed forever**; there is still no permanent
     `isActivated` on gates.
-    Fountains are unchanged (latch on the exact full match). Re-crossing a
-    consumed door costs a fresh performance, so "songs as keys you carry"
-    is intact.
-  - **Puzzle leverage gained**: open a door, then do something else — herd a
-    creature through the gap, set up a second performance — and only your
-    own crossing consumes it. Timed sprint-under-pressure gates were
-    deliberately traded away; if wanted later, a visually distinct
-    "sustain gate" (open only while its song sounds) can return as a rare
-    vocabulary element.
+    Fountains are unchanged (latch on the exact full match).
+  - **Puzzle leverage**: which doors to hold with the few creatures you
+    have, which to give up, and that taking a door's singer back closes
+    it (to carry it through, leave another behind to hold the door).
+    (The 2026-07-10 latch traded these away for "open a door, then do
+    something else"; the 2026-11-25 ruling takes them back.)
 
 - **(SUPERSEDED 2026-11-23 by "The inventory holds CREATURES" above: the
   strip, its cursor and → growth stand; R records, Space performs the tape
@@ -1018,9 +1019,9 @@ rulings, in the designer's words where it matters:
   the target file; clearing/renaming/deleting keeps the partner in sync
   (`editor/io/portalLinks.js`). Never hand-author a one-way link. The world
   graph is DERIVED by scanning puzzle files — there is no world.json.
-- **Linked gates follow the same latch rule as any gate** (complete the
-  song → opens → closes when you walk out of the destination face); the
-  link only changes what's on the other side. Your recordings come with
+- **Linked gates follow the same loop rule as any gate** (complete the
+  song → opens → stays open while it loops, the two faces as one door);
+  the link only changes what's on the other side. Your recordings come with
   you — areas are one world, so "gate songs as keys you carry" works
   across seams.
 - **Crossing commits ON ENTRY (ruled 2026-07-09; supersedes the 2026-07-08
@@ -1092,8 +1093,8 @@ rulings, in the designer's words where it matters:
   Star's east entry gets an x-axis facing; free-standing gates default to
   north).
 - **A door never closes on its occupant — body included, and a closed box
-  is OPEN FROM WITHIN (round-4 fix, 2026-07-11).** Gates latch, so a door
-  can no longer close around a body — but a ONE-WAY crossing (through an
+  is OPEN FROM WITHIN (round-4 fix, 2026-07-11).** A door never closes
+  around a body (a stopped loop waits until it is clear) — but a ONE-WAY crossing (through an
   alwaysOpen face) legally lands the player INSIDE the CLOSED partner
   face, and a box solid to its own occupant wedged them forever (Caleb got
   stuck in the warm-up door). A closed gate therefore never blocks the

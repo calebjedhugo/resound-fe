@@ -3,15 +3,13 @@ import gameState from 'core/GameState';
 import { renderMainView } from 'core/passContext';
 import { drawnObjects } from '../__tests__/helpers/drawList';
 
-// Gates latch (ruled 2026-07-10): they open when their song is performed to
-// COMPLETION, stay open with no timer, and close only when the player walks
-// through — unless the creatures that opened them are all still in range
-// (entities/GateHeldOpen.test.js). These guard the state machine,
+// A gate is open while its song loops (ruled 2026-11-25; the loop rule
+// itself: entities/GateLoop.test.js). These guard the state machine,
 // especially the material/flash bookkeeping.
-describe('Gate latch state (open on completion, close on walk-through)', () => {
+describe('Gate open/close state', () => {
   const song = [{ pitch: 'C4', length: '1/4' }];
 
-  it('opens (its slab gone), LATCHES with no timer, and closes when the player walks through', () => {
+  it('opened outright (no loop to stop) it stays open, walked through or not, until closed', () => {
     const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
     expect(gate.isOpen).toBe(false);
 
@@ -19,21 +17,36 @@ describe('Gate latch state (open on completion, close on walk-through)', () => {
     expect(gate.isOpen).toBe(true);
     expect(gate.mesh.material.opacity).toBe(0);
 
-    // No timer: updates with nobody around leave it open
     gameState.player.position = { x: 0, y: 1.8, z: 0 };
     gameState.player.elevation = 0;
     gate.update(0.016);
     gate.update(0.016);
     expect(gate.isOpen).toBe(true);
 
-    // The player walks through: in the cell, then fully clear on the far side
+    // Walking through consumes nothing
     gameState.player.position = { x: 30, y: 1.8, z: 30 };
     gate.update(0.016);
-    expect(gate.isOpen).toBe(true); // never closes on an occupant
     gameState.player.position = { x: 30, y: 1.8, z: 36 };
     gate.update(0.016);
+    expect(gate.isOpen).toBe(true);
+
+    gate.close();
     expect(gate.isOpen).toBe(false);
     expect(gate.mesh.material.opacity).toBe(1); // sealed again
+  });
+
+  it('a loop that stops closes it — never on the player standing in it', () => {
+    const gate = new Gate({ x: 30, y: 0, z: 30 }, { song });
+    gameState.player.position = { x: 30, y: 1.8, z: 30 }; // in it
+    gameState.player.elevation = 0;
+    gate.open(Date.now() - 1); // its next loop was due a moment ago
+    gate.update(0.016);
+    gate.update(0.016);
+    expect(gate.isOpen).toBe(true); // occupied
+
+    gameState.player.position = { x: 30, y: 1.8, z: 36 }; // clear
+    gate.update(0.016);
+    expect(gate.isOpen).toBe(false);
   });
 
   it('an alwaysOpen face starts open and never closes', () => {
@@ -41,7 +54,7 @@ describe('Gate latch state (open on completion, close on walk-through)', () => {
     expect(gate.isOpen).toBe(true);
     gate.close();
     expect(gate.isOpen).toBe(true);
-    // Walking through does not consume it either
+    // Nothing closes it, walked through or not
     gameState.player.position = { x: 30, y: 1.8, z: 30 };
     gameState.player.elevation = 0;
     gate.update(0.016);

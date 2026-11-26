@@ -1114,12 +1114,12 @@ describe('PortalManager live neighbor (stage 3)', () => {
 
     expect(partnerGate.isOpen).toBe(true);
 
-    // Doors LATCH: time alone never closes them (ruled 2026-07-10)
+    // Opened outright (no loop to stop): time alone never closes it
     await ctx.advanceBeats(12);
     expect(gate.isOpen).toBe(true);
     expect(partnerGate.isOpen).toBe(true);
 
-    // Closing one face (a consumed crossing) mirrors the partner closed
+    // Closing one face (its loop stopped) mirrors the partner closed
     gate.close();
     await ctx.tick(16);
     expect(gate.isOpen).toBe(false);
@@ -1134,8 +1134,9 @@ describe('PortalManager live neighbor (stage 3)', () => {
     ctx.startSinging({ data: [{ pitch: 'C4', length: '1/4' }] });
     await ctx.advanceBeats(4);
 
-    expect(gate.isOpen).toBe(true);
-    expect(partnerGate.isOpen).toBe(true);
+    // Both faces opened (sung once: closed again since — no next loop)
+    expect(gate.openings).toBe(1);
+    expect(partnerGate.openings).toBe(1);
   });
 
   it('a NEIGHBOR gate never treats the player as its occupant (coordinates are per-area)', async () => {
@@ -1150,7 +1151,7 @@ describe('PortalManager live neighbor (stage 3)', () => {
     ctx.setPlayerPosition({ x: 5 * WORLD_SCALE, z: 3 * WORLD_SCALE });
     await ctx.tick(32);
 
-    expect(partnerGate.isOpen).toBe(true); // still latched: nobody crossed it
+    expect(partnerGate.isOpen).toBe(true); // opened outright: nothing closes it
   });
 
   it('cross-seam sources reach creatures as forces aimed at the doorway', () => {
@@ -1282,20 +1283,18 @@ describe('PortalManager same-puzzle door (in-level teleporter)', () => {
     expect(gameState.entities).toBe(entitiesBefore);
   });
 
-  it('the door stays open around its occupant and is consumed when they step clear', async () => {
-    doorA.open();
+  it('a door whose loop stops stays open around its occupant, and closes once they step clear', async () => {
+    doorA.open(Date.now() + 100); // its loop's next song due in 100 ms — and it never comes
     await ctx.tick(16); // one door, two faces: door-b mirrors open
     await stepTo(5 * WORLD_SCALE, 2 * WORLD_SCALE + 1); // entry commits: standing in door-b
 
-    // No timer: the door stays fully open around its occupant (a door can
-    // never close on a body — closure only happens on exit)
+    // The loop has stopped, but a door never closes on a body
     await ctx.advanceBeats(12);
     expect(doorB.isOpen).toBe(true);
     expect(doorA.isOpen).toBe(true);
 
     // Stepping fully clear (BODY included — closing while the player's
-    // radius still overlaps the box would wedge them) consumes the crossing:
-    // both faces close
+    // radius still overlaps the box would wedge them): both faces close
     await stepTo(5 * WORLD_SCALE, 8 * WORLD_SCALE + 2.5);
     await ctx.tick(32);
     expect(doorB.isOpen).toBe(false);
@@ -1744,18 +1743,18 @@ describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () 
     ctx.startSinging({ data: [{ pitch: 'C4', length: '1/4' }] });
     await ctx.advanceBeats(6);
 
-    expect(gate.isOpen).toBe(true);
+    expect(gate.openings).toBe(1);
   });
 
-  it('a door opened by a singer on the far side stays open behind the player while it stays in range', async () => {
-    // Ruled 2026-11-25: the door closes behind the player only once a
-    // creature that opened it is out of range. The singer stands in area B
-    // beside door-b (3 units, heard to 15) and sings the door's C4 every 8
-    // beats; the player crosses from A into B and steps clear.
+  it('a singer looping the song on the far side holds the door open; carried out of range, it closes', async () => {
+    // Open while its song loops (2026-11-25): the singer stands in area B
+    // beside door-b (3 units, heard to 15) singing the door's C4 back to
+    // back (interval = the song's length); the player crosses from A into
+    // B, steps clear, and the door stays open while the loop goes on.
     loadWithSinger({
       position: { x: 5, y: 0, z: 6 },
       song: [{ pitch: 'C4', length: '1/4' }],
-      interval: 8,
+      interval: 1,
       audibleRange: 15,
     });
     await jest.runAllTimersAsync();
@@ -1769,14 +1768,13 @@ describe('One door, two faces: the pair SHARES ITS EARS (ruled 2026-07-11)', () 
     const [doorB] = areaB.entityManager.getByType('gate');
     const [singer] = areaB.entityManager.getByType('creature');
     await stepTo(5 * WORLD_SCALE, 7 * WORLD_SCALE + 5.5); // out of door-b, clear of it
-    await ctx.tick(32);
-    await ctx.advanceBeats(12); // songs and the silences between them
+    await ctx.advanceBeats(12);
     expect(doorB.isOpen).toBe(true);
     expect(doorA.isOpen).toBe(true);
 
     singer.position.x = 9 * WORLD_SCALE; // ~22 from door-b: out of range
     singer.position.z = 1 * WORLD_SCALE;
-    await ctx.tick(32);
+    await ctx.advanceBeats(2);
     expect(doorB.isOpen).toBe(false);
     expect(doorA.isOpen).toBe(false);
   });
@@ -1859,11 +1857,12 @@ describe('PortalManager one-way same-area pair (the warm-up door)', () => {
     ctx.releaseKey('w');
     expect(gameState.player.position.z).toBeCloseTo(5 * WORLD_SCALE - 0.3, 0);
 
-    // Continue north, fully clear: the crossing is consumed (vestibule
-    // closes; the alwaysOpen hall face stays open forever)
+    // Continue north, fully clear; then the vestibule's loop stops and it
+    // closes (the alwaysOpen hall face stays open forever)
     ctx.holdKey('w');
     await ctx.tick(800);
     ctx.releaseKey('w');
+    vestibule.close();
     await ctx.tick(32);
     expect(vestibule.isOpen).toBe(false);
     expect(hall.isOpen).toBe(true);
@@ -2033,7 +2032,7 @@ describe('Walked door crossings (real player input through the movement stack)',
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1.2);
   });
 
-  it('the occupant walks freely inside and back out; stepping clear consumes the door', async () => {
+  it('the occupant walks freely inside and back out; walking through consumes nothing', async () => {
     installFetchMock({});
     ctx.loadPuzzle('portal-self');
     const [doorA, doorB] = ctx.getGates();
@@ -2056,9 +2055,9 @@ describe('Walked door crossings (real player input through the movement stack)',
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE - 1);
     expect(doorB.isOpen).toBe(true);
 
-    // ...and straight back out at full stride. Backing out still EXITED the
-    // destination (the crossing committed on entry), so stepping fully clear
-    // consumes the opening: both faces close.
+    // ...and straight back out at full stride. Walking through consumes
+    // nothing (2026-11-25: a door is open while its song loops — this one
+    // was opened outright, so it stays open).
     ctx.holdKey('s');
     await ctx.tick(625); // 2.5 units south
     ctx.releaseKey('s');
@@ -2067,8 +2066,8 @@ describe('Walked door crossings (real player input through the movement stack)',
     // (precision 0: the arrival-offset clamp trims up to ~0.15 units)
     expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE + 2.5, 0);
     await ctx.tick(32);
-    expect(doorB.isOpen).toBe(false);
-    expect(doorA.isOpen).toBe(false);
+    expect(doorB.isOpen).toBe(true);
+    expect(doorA.isOpen).toBe(true);
   });
 
   it('walking on through the crossed door is plain movement — no second teleport', async () => {
@@ -2093,10 +2092,10 @@ describe('Walked door crossings (real player input through the movement stack)',
     expect(gameState.player.position.x).toBeCloseTo(5 * WORLD_SCALE);
     // (precision 0: the arrival-offset clamp trims up to ~0.15 units)
     expect(gameState.player.position.z).toBeCloseTo(8 * WORLD_SCALE - 3, 0);
-    // Clear of the box: the crossing is consumed — both faces close
+    // Clear of the box: still open (walking through consumes nothing)
     await ctx.tick(32);
-    expect(doorB.isOpen).toBe(false);
-    expect(doorA.isOpen).toBe(false);
+    expect(doorB.isOpen).toBe(true);
+    expect(doorA.isOpen).toBe(true);
   });
 });
 

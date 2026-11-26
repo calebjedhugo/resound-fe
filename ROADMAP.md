@@ -121,11 +121,10 @@ Bigger architectural ideas (exploratory, likely the backbone of the game):
     occupant's body). View panels sit on the cell's FAR planes (no dead
     frame at the threshold), clip at the window, and never pop with eye
     position. See DESIGN.md "Gate links / portals"
-  - ✅ Gate latch rule (ruled 2026-07-10, superseding play-to-pass grace):
+  - ✅ Gate loop rule (ruled 2026-11-25, replacing the 2026-07-10 latch):
     gates open on the COMPLETED song, fade toward transparency while a
-    correct performance is underway (bounded — still solid), LATCH open
-    with no timer, and close when the player walks through — deferred
-    while a parked performer holds them.
+    correct performance is underway (bounded — still solid), and stay open
+    while the song loops; a stopped loop closes them (never on the player).
     Occupied-overtime state removed. Plus `alwaysOpen` faces (one-way /
     permanently-open doors — escape hatches; built, not yet used in POC).
 - ❌ **Fountains reroute gates** — a fountain becomes a **toggle** (it PERSISTS

@@ -30,12 +30,11 @@ describe('Gates and Fountains recognizing songs', () => {
       // A singer at the player's position sings it
       ctx.startSinging(song);
 
-      // Gates open AS the song is performed; check within the open window
-      // (the song sounds, then a short step-through grace).
+      // A gate opens on a completed loop of its song (and, sung once,
+      // closes again when no next loop comes: entities/GateLoop.test)
       await ctx.advanceBeats(2);
 
-      // Assert: gate should now be open
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
+      expect(gates[0].openings).toBe(1);
     });
 
     it('opens gate when correct multi-note song is played', async () => {
@@ -57,12 +56,11 @@ describe('Gates and Fountains recognizing songs', () => {
       // Multi-note gates commit only on the COMPLETED song: a correct
       // prefix must NOT crack the door open mid-performance...
       await ctx.advanceBeats(2);
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0);
 
-      // ...but once the full song and its trailing silence land, it opens
-      // (and the step-through grace holds it).
+      // ...but once the full song lands, it opens
       await ctx.advanceBeats(3);
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
+      expect(gates[0].openings).toBe(1);
     });
 
     it('does not open gate when wrong song is played', async () => {
@@ -81,7 +79,7 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.advanceBeats(8);
 
       // Assert: gate should still be closed
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
 
     it('does not open gate when player is out of audible range', async () => {
@@ -101,7 +99,7 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.advanceBeats(8);
 
       // Assert: gate should still be closed (player too far)
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
 
     it('opens gate when player moves into range and plays', async () => {
@@ -125,64 +123,41 @@ describe('Gates and Fountains recognizing songs', () => {
       expect(ctx.isGateOpen(gates[0])).toBe(true);
     });
 
-    it('gate LATCHES open (no timer) and closes when the player walks through', async () => {
+    it('sung once, the gate opens and then closes: no next loop holds it', async () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
       const song = [{ pitch: 'C4', length: '1/4' }];
-
       const gates = ctx.getGates();
 
-      // Open the gate with a correct performance
+      // Opens on the completed song (2026-11-25: open while it loops)...
       ctx.startSinging(song);
       await ctx.advanceBeats(2);
-
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
-
-      // No timer: it stays open for as long as nobody crosses (ruled
-      // 2026-07-10 — close on exit, not on a grace)
-      await ctx.advanceBeats(12);
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
-
-      // Walking through consumes the opening: into the cell (grid 5,4 ->
-      // world 15,12), then fully clear on the far side
-      ctx.setPlayerPosition({ x: 15, z: 12 });
-      await ctx.tick(32);
-      expect(ctx.isGateOpen(gates[0])).toBe(true); // never closes on an occupant
-      ctx.setPlayerPosition({ x: 15, z: 6 });
-      await ctx.tick(32);
+      expect(gates[0].openings).toBe(1);
+      // ...and with no next loop on time, it is closed again
       expect(ctx.isGateOpen(gates[0])).toBe(false);
     });
 
-    it('gate reopens for a fresh performance after a crossing consumed it', async () => {
+    it('opens again for every fresh performance', async () => {
       ctx.loadPuzzle('listening-gate-basic');
       await ctx.tick(16);
 
       const song = [{ pitch: 'C4', length: '1/4' }];
-
       const gates = ctx.getGates();
 
       ctx.startSinging(song);
-      await ctx.advanceBeats(2);
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
-
-      // Outwait the just-completed hold (a fresh completion keeps the door
-      // open through an immediate crossing), then walk through: consumed
       await ctx.advanceBeats(4);
-      ctx.setPlayerPosition({ x: 15, z: 12 });
-      await ctx.tick(32);
-      ctx.setPlayerPosition({ x: 15, z: 6 });
-      await ctx.tick(32);
+      expect(gates[0].openings).toBe(1);
       expect(ctx.isGateOpen(gates[0])).toBe(false);
 
       // Play it again — the gate answers every correct performance. (Let a
       // beat pass first: closing trims heard history, and a phrase whose
       // leading-silence margin reaches into the trimmed region is
-      // unjudgeable by design. Then completion + trailing silence opens it.)
+      // unjudgeable by design.)
       await ctx.advanceBeats(2);
       ctx.startSinging(song);
       await ctx.advanceBeats(4);
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
+      expect(gates[0].openings).toBe(2);
     });
   });
 
@@ -296,7 +271,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
 
     it('opens gate when player is exactly at audible range boundary', async () => {
@@ -315,7 +290,7 @@ describe('Gates and Fountains recognizing songs', () => {
       await ctx.advanceBeats(2);
 
       // Should be within range (boundary inclusive)
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
+      expect(gates[0].openings).toBe(1);
     });
   });
 
@@ -374,7 +349,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
 
     it('requires exact length match', async () => {
@@ -389,7 +364,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
 
     it('requires correct note count', async () => {
@@ -407,7 +382,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(5);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
 
     it('requires correct note order', async () => {
@@ -426,7 +401,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(8);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
   });
 
@@ -447,7 +422,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(3);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
 
     it('opens on the song at the START of a phrase — trailing surplus is still fine', async () => {
@@ -465,7 +440,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(3);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(true);
+      expect(gates[0].openings).toBe(1);
     });
 
     it('does not open when the right pitch comes at the wrong length', async () => {
@@ -480,7 +455,7 @@ describe('Gates and Fountains recognizing songs', () => {
       ctx.startSinging(song);
       await ctx.advanceBeats(4);
 
-      expect(ctx.isGateOpen(gates[0])).toBe(false);
+      expect(gates[0].openings).toBe(0); // never opened (not just closed now)
     });
   });
 });

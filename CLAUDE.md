@@ -238,10 +238,10 @@ instead of "fixing" it.
   every look, in every state, against them (extend its looks)
 
 ### Gates & elevation
-- **Gates LATCH**: they open on the COMPLETED song, stay open with NO timer,
-  and close when the player walks through (`Gate.update` for plain gates;
-  `PortalManager` consumes linked crossings) — deferred while the creatures
-  that opened it are all still in range (`Gate.isHeldOpen`). The notation never hides. No
+- **Gates are OPEN WHILE THEIR SONG LOOPS** (ruled 2026-11-25, replacing the
+  latch): open on the COMPLETED song, held while the next loop comes on
+  time (`Gate.isHeldOpen`), closed when it stops — never on the player in
+  it; walking through consumes nothing. The notation never hides. No
   permanent `isActivated` on gates (fountains still latch). Collision/hints
   key off `isOpen`. See DESIGN.md.
 - **Gates can link across puzzles (portals)**: `link: {puzzleId, gateId}` on
@@ -384,15 +384,19 @@ instead of "fixing" it.
   E2, clap pair at E1), never opaque walls. Ends with the `ending: true`
   finale portal into area I (thanks-for-playing overlay). See DESIGN.md
   "Onboarding" (incl. the v5 relaxed pull/push guards awaiting a ruling).
-- **Gates open on the COMPLETED song, LATCH open (no timer), and close when
-  the player walks through** — a correct in-progress performance only FADES
-  the shell toward (bounded) transparency, never opens it; behind the
-  player it stays open while EVERY creature that sang the opening take is
-  still in range (`Gate.isHeldOpen`: the take's note `source`s, the hearing
-  rule incl. doors; pole-held or gone = out; saved as places across a
-  prune, ruled 2026-11-25), closing the moment one isn't; `alwaysOpen: true`
+- **Gates open on the COMPLETED song and stay open while it LOOPS** (ruled
+  2026-11-25) — a correct in-progress performance only FADES the shell
+  toward (bounded) transparency, never opens it; each completed loop sets
+  when the next must begin (`Gate.open(holdUntilMs)`: the take's end +
+  the song's leading rest + `LOOP_LATE_BEATS`), a take in progress holds
+  it too; a lapse closes it on the NEXT update (a stall's late song gets
+  heard first), only once nobody stands in either face; a door's faces
+  hold together (`_partner`, `PortalManager.partnerOf`, mirror via
+  `openAsPartner`); `open()` with no deadline = open until `close()`
+  (tests); crossings consume nothing; `alwaysOpen: true`
   marks a permanently-open face (one-way doors). See DESIGN.md; don't "fix"
-  a door that ignores a correct first note or one that "won't close".
+  a door that ignores a correct first note, or one that closes between the
+  songs of a singer that rests (it isn't looping).
 - **Walls render BATCHED**: ALL of an area's walls draw as ONE
   `InstancedMesh` (`PuzzleLoader.buildArea`; one mesh per wall was the
   dominant frame cost — profiled 2026-07-16; walls near doors stayed

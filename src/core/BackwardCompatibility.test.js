@@ -126,7 +126,7 @@ describe('Backward compatibility', () => {
     // Gates open AS the song is performed; check within the open window
     await ctx.advanceBeats(2);
 
-    // Gate should now be open
-    expect(ctx.isGateOpen(gates[0])).toBe(true);
+    // It opened on the completed song
+    expect(gates[0].openings).toBe(1);
   });
 });

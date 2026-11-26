@@ -353,17 +353,11 @@ class PortalManager {
 
     if (this._insideDoor) {
       // Occupying a doorway cell (normally the destination face after a
-      // swap): roam freely; re-arm once fully out. Stepping out of a
-      // CROSSED door consumes its opening (close-on-exit, ruled
-      // 2026-07-10) — unless a performance is holding it, or the player
-      // merely backed out of a refused commit (no crossing happened).
-      // The exit check includes the player's BODY (negative inset): closing
-      // while their radius still overlaps the box would wedge them against
-      // the newly solid face.
+      // swap): roam freely; re-arm once fully out (BODY included: negative
+      // inset). Walking through consumes nothing (2026-11-25): a door is
+      // open while its song loops (Gate.isHeldOpen), whoever passes.
       if (this._playerInCell(this._insideDoor.gate, -PLAYER_COLLISION_RADIUS - 0.05)) return;
-      const { gate, crossed } = this._insideDoor;
       this._insideDoor = null;
-      if (crossed) this._closeUsedDoor(gate);
       return;
     }
 
@@ -1438,10 +1432,10 @@ class PortalManager {
   }
 
   /**
-   * One door, two faces: gates latch open on a completed song and close
-   * when the player walks through, so mirroring propagates the CHANGE a
-   * face made this frame — a completion on either side opens both faces, a
-   * consumed crossing closes both. A pair containing a permanently-open
+   * One door, two faces: a door is open while its song loops (Gate), so
+   * mirroring propagates the CHANGE a face made this frame — a completion
+   * on either side opens both faces (the partner held by that face's loop:
+   * Gate.openAsPartner), a stopped loop closes both. A pair containing a permanently-open
    * face (alwaysOpen) is deliberately NOT mirrored: that is the one-way
    * door mechanic — each face keeps its own openness.
    */
@@ -1457,18 +1451,18 @@ class PortalManager {
       const bChanged = gateB.isOpen !== (door._prevOpenB ?? gateB.isOpen);
       if (gateA.isOpen !== gateB.isOpen) {
         if (aChanged && !bChanged) {
-          if (gateA.isOpen) gateB.open();
+          if (gateA.isOpen) gateB.openAsPartner();
           else gateB.close();
         } else if (bChanged && !aChanged) {
-          if (gateB.isOpen) gateA.open();
+          if (gateB.isOpen) gateA.openAsPartner();
           else gateA.close();
         } else if (gateA.isOpen) {
           // Both changed at once, or a steady-state disagreement (e.g. a
           // face opened before its partner's area loaded): open wins — one
           // door, two faces.
-          gateB.open();
+          gateB.openAsPartner();
         } else {
-          gateA.open();
+          gateA.openAsPartner();
         }
       }
       door._prevOpenA = gateA.isOpen;
@@ -1999,29 +1993,15 @@ class PortalManager {
   }
 
   /**
-   * A crossing was consumed (the player walked out of the destination face):
-   * close BOTH faces of the door — unless either face is still held open
-   * (the creatures that opened it all still in range: Gate.isHeldOpen), or
-   * a face is permanently open (alwaysOpen faces never close).
+   * The other face of `gate`'s door (Gate reads its partner's loop and
+   * occupant: one door, two faces), or null while it has none loaded.
+   * @param {Gate} gate
+   * @returns {?Gate}
    */
-  _closeUsedDoor(gate) {
+  partnerOf(gate) {
     const door = this._doorOf.get(gate);
-    if (!door) {
-      if (gate.isHeldOpen()) gate._closePending = true;
-      else gate.close();
-      return;
-    }
-    if (door.gateA.isHeldOpen() || door.gateB.isHeldOpen()) {
-      // Consumed but held (its openers still in range): defer — each face
-      // closes itself once any of them is not.
-      door.gateA._closePending = true;
-      door.gateB._closePending = true;
-      return;
-    }
-    door.gateA.close();
-    door.gateB.close();
-    door._prevOpenA = door.gateA.isOpen;
-    door._prevOpenB = door.gateB.isOpen;
+    if (!door) return null;
+    return door.gateA === gate ? door.gateB : door.gateA;
   }
 
   /** True if at least one side of the partner gate is open floor to walk out. */
