@@ -21,7 +21,8 @@ Elements taught so far:
   note; only the pushed creature's own song activates it. Non-stuck: one note
   ever needed, always re-recordable. See DESIGN.md.
 
-- ✅ **The POC world (2026-07-10; restructured same day on designer feedback;
+- ✅ **The POC world** (DELETED 2026-11-25 for new levels; last in 9b81962)
+  **(2026-07-10; restructured same day on designer feedback;
   redesigned 2026-07-11 across rounds 2–4)** — the playable proof of
   concept and the boot entry: NINE small portal-linked areas as of v5
   (`poc-threshold` → `poc-two-keys` → `poc-duet` → `poc-jam` → `poc-dance`

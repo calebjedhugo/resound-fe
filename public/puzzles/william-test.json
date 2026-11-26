@@ -1,0 +1,278 @@
+{
+  "id": "william-test",
+  "name": "william-test",
+  "difficulty": 1,
+  "tempo": 120,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": { "x": -7, "y": 0, "z": 3 },
+  "tiles": [
+    { "elevation": 0, "x1": 1, "z1": -20, "x2": 20, "z2": -19 },
+    { "elevation": 0, "x1": -2, "z1": -18, "x2": 20, "z2": -8 },
+    { "elevation": 0, "x1": -6, "z1": -7, "x2": 20, "z2": 0 },
+    { "elevation": 0, "x1": -10, "z1": 1, "x2": 20, "z2": 1 },
+    { "elevation": 0, "x1": -10, "z1": 2, "x2": 2, "z2": 7 },
+    { "elevation": 0, "x1": -10, "z1": 8, "x2": 0, "z2": 8 },
+    { "elevation": 0, "x1": -9, "z1": 9, "x2": -7, "z2": 10 },
+    { "elevation": 0, "x1": -3, "z1": 9, "x2": -1, "z2": 14 },
+    { "elevation": 3, "x1": 6, "z1": -25, "x2": 6, "z2": -24 },
+    { "elevation": 3, "x1": 6, "z1": -23, "x2": 22, "z2": -20 },
+    { "elevation": 3, "x1": 6, "z1": -19, "x2": 23, "z2": -2 },
+    { "elevation": 3, "x1": 6, "z1": -1, "x2": 6, "z2": 4 },
+    { "elevation": 3, "x1": 11, "z1": 1, "x2": 11, "z2": 1 }
+  ],
+  "entities": [
+    {
+      "type": "creature",
+      "position": { "x": -9, "y": 0, "z": 1 },
+      "data": {
+        "song": [
+          { "pitch": "B4", "length": "1/4" },
+          { "pitch": "A4", "length": "1/4" },
+          { "pitch": "C5", "length": "1/4" },
+          { "pitch": "F4", "length": "1/4" },
+          { "pitch": "E5", "length": "1/4" },
+          { "pitch": "G3", "length": "1/4" }
+        ],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    {
+      "type": "creature",
+      "position": { "x": -2, "y": 0, "z": 14 },
+      "data": {
+        "song": [
+          { "pitch": "E6", "length": "1/4" },
+          { "pitch": "G3", "length": "1/4" },
+          { "pitch": "E4", "length": "1/4" },
+          { "pitch": "G4", "length": "1/4" },
+          { "pitch": "E4", "length": "1/4" },
+          { "pitch": "F5", "length": "1/4" }
+        ],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 3 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 2 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 6 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 4 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 3 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 2 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 1 } },
+    {
+      "type": "gate",
+      "position": { "x": -10, "y": 0, "z": 5 },
+      "song": [
+        { "pitch": "E6", "length": "1/4" },
+        { "pitch": "G3", "length": "1/4" },
+        { "pitch": "E4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" },
+        { "pitch": "E4", "length": "1/4" },
+        { "pitch": "F5", "length": "1/4" }
+      ],
+      "id": "gate-1",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-2" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 2, "y": 0, "z": 4 },
+      "song": [
+        { "pitch": "E6", "length": "1/4" },
+        { "pitch": "G3", "length": "1/4" },
+        { "pitch": "E4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" },
+        { "pitch": "E4", "length": "1/4" },
+        { "pitch": "F5", "length": "1/4" }
+      ],
+      "id": "gate-2",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-1" }
+    },
+    { "type": "wall", "position": { "x": -5, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": 8 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": -7, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": -9, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": -10, "y": 0, "z": 7 } },
+    { "type": "wall", "position": { "x": -10, "y": 0, "z": 8 } },
+    {
+      "type": "gate",
+      "position": { "x": 0, "y": 0, "z": 8 },
+      "song": [
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "F4", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "G3", "length": "1/4" }
+      ],
+      "id": "gate-3",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-4" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": -8, "y": 0, "z": 10 },
+      "song": [
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "F4", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "G3", "length": "1/4" }
+      ],
+      "id": "gate-4",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-3" }
+    },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": -1, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": -3, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": 5 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": -7 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": -7 } },
+    { "type": "wall", "position": { "x": -3, "y": 0, "z": -7 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -7 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": -6 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -6 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": -5 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -5 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": -4 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -4 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": -2 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -2 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": -1 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": -1 } },
+    { "type": "wall", "position": { "x": -6, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": -5, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": -4, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": -3, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": -2, "y": 0, "z": 0 } },
+    {
+      "type": "gate",
+      "position": { "x": -5, "y": 0, "z": -7 },
+      "song": [
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "E6", "length": "1/4" }
+      ],
+      "id": "gate-5",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-6" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 20, "y": 0, "z": 1 },
+      "song": [
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "E6", "length": "1/4" }
+      ],
+      "id": "gate-6",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-5" }
+    },
+    { "type": "wall", "position": { "x": 11, "y": 3, "z": 1 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": -6 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": -6 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": -5 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": -5 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": -4 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": -4 } },
+    { "type": "wall", "position": { "x": 1, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": -1 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 2, "y": 0, "z": 1 } },
+    { "type": "wall", "position": { "x": 0, "y": 0, "z": -6 } },
+    {
+      "type": "gate",
+      "position": { "x": -1, "y": 0, "z": -6 },
+      "song": [
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "D5", "length": "1/4" }
+      ],
+      "id": "gate-7",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-8" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 20, "y": 0, "z": -13 },
+      "song": [
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "C5", "length": "1/4" },
+        { "pitch": "B4", "length": "1/4" },
+        { "pitch": "A4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" },
+        { "pitch": "G4", "length": "1/4" },
+        { "pitch": "E5", "length": "1/4" },
+        { "pitch": "D5", "length": "1/4" }
+      ],
+      "id": "gate-8",
+      "facing": "north",
+      "link": { "puzzleId": "william-test", "gateId": "gate-7" }
+    },
+    {
+      "type": "creature",
+      "position": { "x": 5, "y": 0, "z": -2 },
+      "data": {
+        "song": [
+          { "pitch": "B4", "length": "1/4" },
+          { "pitch": "B4", "length": "1/4" },
+          { "pitch": "B4", "length": "1/4" },
+          { "pitch": "C5", "length": "1/4" },
+          { "pitch": "B4", "length": "1/4" },
+          { "pitch": "A4", "length": "1/4" },
+          { "pitch": "G4", "length": "1/4" },
+          { "pitch": "G4", "length": "1/4" },
+          { "pitch": "E5", "length": "1/4" },
+          { "pitch": "D5", "length": "1/4" }
+        ],
+        "interval": 8,
+        "audibleRange": 15
+      }
+    },
+    { "type": "wall", "position": { "x": 3, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": 5, "y": 0, "z": -1 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": -2 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": -1 } },
+    { "type": "wall", "position": { "x": 4, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": 1 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": 0 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": -1 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": -2 } },
+    { "type": "wall", "position": { "x": 7, "y": 0, "z": -3 } },
+    { "type": "wall", "position": { "x": 6, "y": 0, "z": -3 } }
+  ]
+}

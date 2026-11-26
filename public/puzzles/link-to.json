@@ -1,0 +1,21 @@
+{
+  "id": "link-to",
+  "name": "link-to",
+  "difficulty": 1,
+  "gridSize": 15,
+  "tempo": 120,
+  "keySignature": "C",
+  "timeSignature": [4, 4],
+  "playerStart": { "x": 0, "y": 0, "z": 0 },
+  "floors": [],
+  "entities": [
+    {
+      "type": "gate",
+      "position": { "x": 7, "y": 0, "z": 7 },
+      "song": [{ "pitch": "C4", "length": "1/1" }],
+      "id": "gate-3",
+      "facing": "north",
+      "link": { "puzzleId": "middle-c", "gateId": "gate-3" }
+    }
+  ]
+}

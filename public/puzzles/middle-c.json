@@ -29,6 +29,14 @@
       "id": "gate-2",
       "facing": "north",
       "link": { "puzzleId": "middle-c", "gateId": "gate-1" }
+    },
+    {
+      "type": "gate",
+      "position": { "x": 9, "y": 0, "z": 2 },
+      "song": [{ "pitch": "C4", "length": "1/1" }],
+      "id": "gate-3",
+      "facing": "north",
+      "link": { "puzzleId": "link-to", "gateId": "gate-3" }
     }
   ]
 }

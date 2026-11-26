@@ -368,22 +368,9 @@ instead of "fixing" it.
   built-in constraint checker: `node puzzles/gen-awakening.js
   public/puzzles/awakening.json`). Edit the generator + rerun; don't hand-edit
   `public/puzzles/awakening.json`.
-- **The POC world (`poc-*`, NINE portal-linked areas, the boot entry) is
-  now HAND-EDITED in the editor** (designer pass 173fd15) — the files drift
-  from `puzzles/gen-poc.js` BY DESIGN. `node puzzles/gen-poc.js` is
-  CHECK-ONLY (builds the model + runs asserts, writes nothing); **NEVER pass
-  `--write`: it REWRITES all nine JSONs and clobbers the hand edits** (a
-  then-unflagged run did, on 2026-07-16 — recovered from git). The generator
-  + its 480+-assert checker are kept as v5 reference only. v5 chain (round-4 restructure):
-  threshold → two-keys → duet → jam → dance → pull → push → clap → return
-  ("The Star"); `poc-climb` was cut. STRICT element economy: every exit's
-  (pitch, length) elements are recordable in its own area or earlier, never
-  from earlier alone; the finale's fresh elements (incl. the two HALF notes
-  ending each Twinkle phrase) exist only in area IX; F4|1/4 is IX-only.
-  Creatures are always VISIBLE — penning is a cliff-edged plinth (jam at
-  E2, clap pair at E1), never opaque walls. Ends with the `ending: true`
-  finale portal into area I (thanks-for-playing overlay). See DESIGN.md
-  "Onboarding" (incl. the v5 relaxed pull/push guards awaiting a ruling).
+- **The POC world (`poc-*`, nine portal-linked areas) was DELETED
+  2026-11-25** with its generator `puzzles/gen-poc.js`; new levels replace
+  it. Its history lives in DESIGN.md and git (last in 9b81962).
 - **Gates open on the COMPLETED song and stay open while it LOOPS** (ruled
   2026-11-25) — a correct in-progress performance only FADES the shell
   toward (bounded) transparency, never opens it; each completed loop sets
@@ -502,7 +489,7 @@ instead of "fixing" it.
   all hints eligible (dev levels); the editor round-trips the field. POC:
   `clap` at the clap is now a dead id (no clap hint since 2026-11-23;
   `slots`, the grow hint, retired the same day)
-- Game boots into the FIRST manifest puzzle (`poc-threshold`), not the menu;
+- Game boots into the FIRST manifest puzzle (`awakening` since the POC levels went), not the menu;
   `?puzzle=<id>` deep link wins (`&from=editor`, the editor's Play, adds the
   pause menu's Back to Editor: `core/playLink`). Inside the editor's iframe
   (`editorFrame`) the game builds only once told LANDED, keeps its start
@@ -685,7 +672,9 @@ instead of "fixing" it.
   `EditorApp.openGame` lands the last edit first); the game's main menu and
   pause menu offer "Editor" (to the editor on the level played). Gated on
   `import.meta.env.DEV` in main.js, so the shipped game has neither
-- **Deployment:** **POC build is LIVE at https://resound.calebhugo.com** (Pi
+- **Deployment:** **POC build is LIVE at https://resound.calebhugo.com** (the
+  last deploy; with no `poc-*` levels left, `build-poc.mjs` refuses to stage
+  until new levels ship under that prefix or the stage is changed) (Pi
   static hosting, nginx `127.0.0.1:8100` behind the `calebhugo` Cloudflare
   Tunnel — same house pattern as the other `*.calebhugo.com` apps). Deploy with
   `./deploy/deploy.sh`: it builds the game alone (`RESOUND_BUILD=game`),

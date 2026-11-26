@@ -1,14 +1,5 @@
 {
   "puzzles": [
-    { "id": "poc-threshold", "name": "I. Threshold", "difficulty": 1 },
-    { "id": "poc-two-keys", "name": "II. Two Keys", "difficulty": 1 },
-    { "id": "poc-duet", "name": "III. The Duet", "difficulty": 1 },
-    { "id": "poc-jam", "name": "IV. The Jam", "difficulty": 1 },
-    { "id": "poc-dance", "name": "V. The Dance", "difficulty": 1 },
-    { "id": "poc-pull", "name": "VI. The Pull", "difficulty": 1 },
-    { "id": "poc-push", "name": "VII. The Push", "difficulty": 1 },
-    { "id": "poc-clap", "name": "VIII. The Clap", "difficulty": 1 },
-    { "id": "poc-return", "name": "IX. The Star", "difficulty": 1 },
     { "id": "awakening", "name": "Awakening", "difficulty": 1 },
     { "id": "the-lure", "name": "The Lure", "difficulty": 1 },
     { "id": "test-001", "name": "First Steps", "difficulty": 1 },
@@ -24,6 +15,12 @@
     { "id": "teleport", "name": "teleport", "difficulty": 1 },
     { "id": "colour-gallery", "name": "Colour Gallery (dev)", "difficulty": 1 },
     { "id": "colour-harmony", "name": "Colour Harmony (dev)", "difficulty": 1 },
-    { "id": "middle-c", "name": "middle-c", "difficulty": 1 }
+    { "id": "middle-c", "name": "middle-c", "difficulty": 1 },
+    { "id": "link-to", "name": "link-to", "difficulty": 1 },
+    { "id": "control-test", "name": "control-test", "difficulty": 1 },
+    { "id": "control-test-2", "name": "control-test-2", "difficulty": 1 },
+    { "id": "control-test-3", "name": "control-test-3", "difficulty": 1 },
+    { "id": "william-test", "name": "william-test", "difficulty": 1 },
+    { "id": "first-species-counterpoint", "name": "first-species-counterpoint", "difficulty": 1 }
   ]
 }

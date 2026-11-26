@@ -1189,9 +1189,10 @@ rulings, in the designer's words where it matters:
 - **Boot straight into the world, not the menu.** The first manifest entry
   is the intro level and the game's front door; the menu is reachable via
   Esc → Main Menu. The `?puzzle=<id>` editor deep link wins over the default.
-  As of 2026-07-10 the front door is `poc-threshold`, area I of the POC
-  world (below); `awakening` and `the-lure` remain in the manifest.
-- **The POC world (added 2026-07-10; v5 restructure after the designer's
+  From 2026-07-10 to 2026-11-25 the front door was `poc-threshold`, area I
+  of the POC world (below); with it deleted, `awakening` leads the manifest.
+- **The POC world** — DELETED 2026-11-25 (the levels and `gen-poc.js`;
+  last in 9b81962), kept here as history. **(Added 2026-07-10; v5 restructure after the designer's
   round-4 playtest, 2026-07-11)** is a chain of NINE small portal-linked
   areas teaching every element except fountains, wordlessly and non-stuck.
   `poc-climb` was CUT ("if the puzzle doesn't NEED a ramp, there should be

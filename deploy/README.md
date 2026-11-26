@@ -2,8 +2,10 @@
 
 Public POC build of Resound, hosted on the Pi (nginx + the existing `calebhugo`
 Cloudflare Tunnel), same house pattern as the other `*.calebhugo.com` static
-apps. Ships **only the nine POC levels** and the game — no editor, no dev/test
-puzzles.
+apps. Ships **only the `poc-*` levels** and the game — no editor, no dev/test
+puzzles. **The POC levels were deleted 2026-11-25:** the live site keeps the
+last deploy, and `build-poc.mjs` refuses to stage until `poc-*` levels exist
+again (or the stage picks a new set).
 
 - **Live:** https://resound.calebhugo.com
 - **Pi web root:** `/var/www/resound.calebhugo.com/`

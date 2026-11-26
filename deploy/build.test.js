@@ -28,10 +28,24 @@ import PuzzleLoader from 'core/PuzzleLoader';
 const ROOT = path.resolve(__dirname, '..');
 const BUILD_TIMEOUT_MS = 120000;
 
-// The levels the POC stage ships, as build-poc.mjs picks them
-const POC_LEVELS = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/puzzles/manifest.json')))
-  .puzzles.map(({ id }) => id)
-  .filter((id) => id.startsWith('poc-'));
+// The levels the POC stage ships (build-poc.mjs keeps the manifest's `poc-*`
+// entries): two portal-linked test areas, seeded into each build's puzzles
+// beside the real ones, so the stage is tested whatever levels public/ holds
+const FIXTURES = path.join(ROOT, 'src/__tests__/fixtures/puzzles');
+const POC_LEVELS = ['poc-a', 'poc-b'];
+const asPoc = (json) => json.replace(/"(portal-[ab])"/g, (_, id) => `"poc-${id.slice(-1)}"`);
+
+function seedPocLevels(buildDir) {
+  const puzzles = path.join(buildDir, 'puzzles');
+  for (const id of POC_LEVELS) {
+    const source = fs.readFileSync(path.join(FIXTURES, `portal-${id.slice(-1)}.json`), 'utf8');
+    fs.writeFileSync(path.join(puzzles, `${id}.json`), asPoc(source));
+  }
+  const manifestFile = path.join(puzzles, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  manifest.puzzles.unshift(...POC_LEVELS.map((id) => ({ id, name: id, difficulty: 1 })));
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+}
 
 let tmp;
 let full; // npm run build: game + editor
@@ -78,6 +92,8 @@ beforeAll(() => {
   tuned = viteBuild(path.join(tmp, 'tuned'), { tune: true });
   reordered = viteBuild(path.join(tmp, 'reordered'), { reorder: true });
   game = viteBuild(path.join(tmp, 'game'), { gameOnly: true });
+  seedPocLevels(path.join(tmp, 'game'));
+  seedPocLevels(path.join(tmp, 'full'));
   stagePoc('game', 'poc');
   stagePoc('full', 'poc-from-full');
 }, BUILD_TIMEOUT_MS);
